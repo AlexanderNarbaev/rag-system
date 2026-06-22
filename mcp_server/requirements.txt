@@ -1,0 +1,2 @@
+mcp[cli]>=1.0,<2
+qdrant-client>=1.10.0

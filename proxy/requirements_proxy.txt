@@ -1,13 +1,36 @@
-# RAG System Proxy Requirements
-fastapi>=0.111.0
-uvicorn>=0.30.0
-langgraph>=0.2.0
-langchain>=0.3.0
-qdrant-client>=1.9.0
-redis>=5.0.0
-neo4j>=5.20.0
-sentence-transformers>=2.7.0
-openai>=1.35.0
-pydantic>=2.7.0
-pyyaml>=6.0
-httpx>=0.27.0
+# proxy/requirements_proxy.txt
+# Зависимости для RAG-прокси (FastAPI, Qdrant, эмбеддеры, реранкеры, LangGraph)
+
+# Веб-фреймворк
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+sse-starlette>=1.6.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# Векторная база и эмбеддинги
+qdrant-client>=1.10.0
+sentence-transformers>=2.2.0
+cross-encoder>=1.0.0
+
+# Кэш (Redis)
+redis>=4.5.0
+aiohttp>=3.8.0  # для асинхронных запросов к LLM
+
+# Агентная оркестрация (LangGraph)
+langgraph>=0.0.20
+langchain-core>=0.1.0  # требуется для LangGraph
+
+# Граф знаний (Neo4j, опционально)
+neo4j>=5.14.0
+
+# Утилиты
+requests>=2.31.0
+tiktoken>=0.5.0  # для точной токенизации (опционально)
+filelock>=3.12.0
+
+# Для работы с датами
+python-dateutil>=2.8.2
+
+# Observability
+prometheus-client>=0.19.0

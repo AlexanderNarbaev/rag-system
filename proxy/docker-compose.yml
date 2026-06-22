@@ -1,0 +1,145 @@
+# proxy/docker-compose.yml
+# Docker Compose для RAG-прокси с зависимостями
+# Запуск: docker-compose up -d
+# Остановка: docker-compose down
+
+version: '3.8'
+
+services:
+  # Векторная база Qdrant (горячий слой)
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"      # HTTP API
+      - "6334:6334"      # gRPC (опционально)
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # Графовая база Neo4j (для GraphRAG)
+  neo4j:
+    image: neo4j:5-enterprise
+    container_name: rag-neo4j
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/var/lib/neo4j/import
+      - neo4j_plugins:/plugins
+    ports:
+      - "7474:7474"      # HTTP Browser
+      - "7687:7687"      # Bolt
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}:${NEO4J_PASSWORD:-password}
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # Кэш Redis
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # LLM сервер (vLLM) для Gemma-4-26B
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: rag-vllm
+    volumes:
+      - /path/to/models:/models:ro   # замените на путь к вашим GGUF или HF моделям
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGINGFACE_HUB_CACHE=/models/cache
+    command: >
+      --model /models/gemma-4-26b-it-GGUF
+      --api-key ${LLM_API_KEY:-}
+      --port 8000
+      --max-model-len 130000
+      --tensor-parallel-size 1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # RAG прокси (FastAPI)
+  rag-proxy:
+    build:
+      context: ..
+      dockerfile: proxy/Dockerfile
+    container_name: rag-proxy
+    ports:
+      - "8080:8080"
+    volumes:
+      - /path/to/model_cache:/app/cache:ro           # скачанные модели эмбеддера/реранкера
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro                           # переменные окружения
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - NEO4J_URI=bolt://neo4j:7687
+      - REDIS_URL=redis://redis:6379
+      - LLM_ENDPOINT=http://vllm:8000/v1
+      - USE_REDIS=true
+      - USE_LANGGRAPH=true
+      - GRAPH_ENABLED=true
+    depends_on:
+      - qdrant
+      - neo4j
+      - redis
+      - vllm
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # HITL дашборд (Streamlit)
+  hitl-dashboard:
+    build:
+      context: ../hitl_dashboard
+      dockerfile: Dockerfile.dashboard   # если есть, либо используем образ
+    container_name: rag-hitl
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./logs:/app/logs       # доступ к логам взаимодействий
+    environment:
+      - LOG_DIR=/app/logs
+      - STREAMLIT_SERVER_PORT=8501
+    depends_on:
+      - rag-proxy
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+volumes:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
+  redis_data:
+
+networks:
+  rag-network:
+    driver: bridge

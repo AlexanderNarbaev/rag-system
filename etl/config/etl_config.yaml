@@ -1,0 +1,95 @@
+# etl/config/etl_config.yaml
+# Конфигурация ETL-пайплайна для RAG-системы
+# Замените значения на реальные для вашей инфраструктуры
+
+# Общие настройки WAL (единая точка контроля прогресса)
+wal:
+  wal_file: "./wal/etl_wal.json"        # путь к файлу WAL
+  use_lock: true                         # использовать файловую блокировку
+  lock_timeout: 30                       # таймаут блокировки (сек)
+
+# Confluence (Self-Hosted)
+confluence:
+  url: "https://confluence.internal.company.com"
+  username: "etl_bot"
+  token: "your_personal_access_token"    # или пароль
+  space_keys:                            # список ключей пространств (None = все)
+    - "DEV"
+    - "OPS"
+    - "QA"
+  output_dir: "./raw_data/confluence"
+  incremental: true
+  download_attachments: true
+  max_versions: 0                        # 0 = все версии
+  api_version: "2"                       # "2" или "1"
+
+# Jira (Self-Hosted)
+jira:
+  url: "https://jira.internal.company.com"
+  username: "etl_bot"
+  token: "your_api_token"                # или пароль
+  jql: "project in (DEV, OPS) ORDER BY updated DESC"
+  output_dir: "./raw_data/jira"
+  incremental: true
+  download_attachments: true
+  max_issues_per_run: 0                  # 0 = без ограничений
+  fields: "*all"
+  expand: "changelog,renderedBody"
+
+# GitLab (Self-Hosted)
+gitlab:
+  url: "https://gitlab.internal.company.com"
+  token: "your_personal_access_token"
+  project_ids: null                      # null = все проекты, либо список [1,2,3]
+  output_dir: "./raw_data/gitlab"
+  incremental: true
+  fetch_commits: true
+  fetch_files: true
+  fetch_merge_requests: true
+  max_commits_per_project: 1000          # ограничение для больших репозиториев
+  since_date: null                       # ISO дата, например "2025-01-01T00:00:00Z"
+  file_paths_filter:                     # фильтр файлов для индексации кода
+    - "*.py"
+    - "*.md"
+    - "Dockerfile"
+    - "*.yaml"
+    - "*.yml"
+    - "*.sql"
+
+# Семантический чанкинг
+chunking:
+  max_tokens: 8000                       # максимальный размер чанка (для эмбеддера)
+  overlap_tokens: 200                    # перекрытие между чанками
+  min_chunk_tokens: 100                  # минимальный размер чанка (будет объединён)
+  use_slm: false                         # использовать SLM для обогащения (требуется эндпоинт)
+  slm_endpoint: "http://localhost:8080/v1/completions"  # если use_slm true
+  output_dir: "./chunks"                 # директория для сохранения чанков (JSON)
+
+# Гибридная индексация Qdrant
+indexing:
+  qdrant_host: "localhost"
+  qdrant_port: 6333
+  collection_name: "knowledge_base"
+  embedder_model: "BAAI/bge-m3"
+  embedder_device: "cpu"                 # или "cuda"
+  batch_size: 100
+  hot_dir: "./hot_chunks"                # горячее хранилище чанков (текущие версии)
+  cold_dir: "./cold_chunks"              # холодное хранилище (история Parquet)
+  lake_dir: "./cold_lake"                # LiveVectorLake cold storage
+  use_delta: false                       # использовать Delta Lake (требуется deltalake)
+  version_wal: "./wal/version_wal.json"  # WAL для версионирования чанков
+
+# Граф знаний (Neo4j) – опционально
+graph:
+  enabled: false                         # включить построение графа
+  use_spacy: true                        # использовать spaCy для NER
+  spacy_model: "ru_core_news_sm"         # или "en_core_web_sm"
+  use_slm: false                         # использовать SLM для извлечения отношений
+  slm_endpoint: "http://localhost:8080/v1/completions"
+  cache_dir: "./entity_cache"            # кэш сущностей
+  neo4j:
+    enabled: false
+    uri: "bolt://localhost:7687"
+    user: "neo4j"
+    password: "your_neo4j_password"
+    database: "neo4j"
