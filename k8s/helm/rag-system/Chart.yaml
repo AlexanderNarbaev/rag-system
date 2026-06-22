@@ -1,0 +1,22 @@
+apiVersion: v2
+name: rag-system
+description: RAG Knowledge Assistant — OpenAI-compatible proxy with Qdrant, Neo4j, Redis, Federation, MCP Server, Model Evolution
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - rag
+  - llm
+  - qdrant
+  - neo4j
+  - redis
+  - openai
+  - vector-search
+  - federation
+  - model-evolution
+  - mcp
+maintainers:
+  - name: RAG System Team
+home: https://github.com/AlexanderNarbaev/rag-system
+sources:
+  - https://github.com/AlexanderNarbaev/rag-system

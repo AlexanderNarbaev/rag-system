@@ -1,0 +1,30 @@
+[project]
+name = "rag-system"
+version = "2.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "e2e: End-to-end tests requiring running services",
+    "benchmark: Performance and load tests",
+    "chaos: Resilience and chaos engineering tests",
+    "asyncio: Tests using asyncio for async code paths",
+    "slow: Tests that take longer than 5 seconds to complete",
+    "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
+]

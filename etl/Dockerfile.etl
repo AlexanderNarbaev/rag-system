@@ -1,0 +1,48 @@
+# etl/Dockerfile.etl
+# Docker-образ для запуска ETL-пайплайна RAG-системы
+# Предварительно необходимо скачать модели:
+#   python -m spacy download ru_core_news_sm
+#   python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
+#   и скопировать кэш в /model_cache при сборке (см. ниже)
+
+FROM python:3.14-slim
+
+# Установка системных зависимостей (для компиляции некоторых пакетов)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Копирование файла зависимостей
+COPY requirements_etl.txt .
+
+# Установка Python-пакетов
+RUN pip install --no-cache-dir -r requirements_etl.txt
+
+# Копирование исходного кода ETL
+COPY etl/ /app/etl/
+COPY scripts/ /app/scripts/  # если есть вспомогательные скрипты
+
+# Создание директорий для данных
+RUN mkdir -p /data/raw /data/chunks /data/hot_chunks /data/cold_chunks /data/cold_lake /data/entity_cache /wal
+
+# Переменные окружения для Python (отключаем байткод и буферизацию логов)
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Копирование предварительно скачанных кэшей моделей (офлайн)
+# Для этого нужно заранее скачать модели на хост и скопировать в образ:
+#   - spaCy: /root/.local/share/spacy/...
+#   - sentence-transformers: /root/.cache/huggingface/hub/...
+# Используйте --build-arg MODEL_CACHE=/path/to/cache на хосте
+ARG MODEL_CACHE_HOST=/tmp/model_cache
+COPY ${MODEL_CACHE_HOST} /root/.cache/
+# Для spaCy модели могут быть в /usr/local/lib/python3.11/site-packages/en_core_web_sm, но лучше копировать в /root/.cache
+
+# Точка входа – основной оркестратор
+ENTRYPOINT ["python", "-m", "etl.scheduler.run_etl"]
+# Параметры по умолчанию (можно переопределить через командную строку)
+CMD ["--config", "/app/etl/config/etl_config.yaml"]

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2932.00" height="814.98" viewBox="0 0 2932.00 814.98">
+<defs>
+    <marker id="arr-495057" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#495057"/></marker>
+  </defs>
+<rect width="2932.00" height="814.98" fill="#ffffff"/>
+<rect x="1286.00" y="40.00" width="265.00" height="116.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2" opacity="1.00"/>
+<rect x="548.50" y="236.00" width="1415.00" height="134.00" rx="8" fill="#d0ebff" stroke="#1864ab" stroke-width="2" opacity="1.00"/>
+<rect x="1238.10" y="242.00" width="35.80" height="21.00" rx="8" fill="#e9ecef" stroke="#1864ab" stroke-width="1" opacity="1.00"/>
+<rect x="40.00" y="664.98" width="220.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2" opacity="1.00"/>
+<rect x="135.40" y="670.98" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1" opacity="1.00"/>
+<rect x="380.00" y="664.98" width="202.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2" opacity="1.00"/>
+<rect x="466.40" y="670.98" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1" opacity="1.00"/>
+<rect x="702.00" y="664.98" width="238.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2" opacity="1.00"/>
+<rect x="806.40" y="670.98" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1" opacity="1.00"/>
+<rect x="1060.00" y="664.98" width="265.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2" opacity="1.00"/>
+<rect x="1177.90" y="670.98" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1" opacity="1.00"/>
+<rect x="1445.00" y="664.98" width="265.00" height="110.00" rx="8" fill="#d0ebff" stroke="#1864ab" stroke-width="2" opacity="1.00"/>
+<rect x="1559.60" y="670.98" width="35.80" height="21.00" rx="8" fill="#e9ecef" stroke="#1864ab" stroke-width="1" opacity="1.00"/>
+<rect x="907.00" y="43.00" width="319.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2" opacity="1.00"/>
+<rect x="1051.90" y="49.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1" opacity="1.00"/>
+<rect x="1780.00" y="664.98" width="301.00" height="110.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2" opacity="1.00"/>
+<rect x="1915.90" y="670.98" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1" opacity="1.00"/>
+<rect x="2251.00" y="673.98" width="247.00" height="92.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2" opacity="1.00"/>
+<rect x="2618.00" y="664.98" width="274.00" height="110.00" rx="8" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2" opacity="1.00"/>
+<rect x="2730.50" y="670.98" width="49.00" height="21.00" rx="8" fill="#e9ecef" stroke="#c92a2a" stroke-width="1" opacity="1.00"/>
+<path d="M 1294.00,156.00 L 1489.17,236.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 711.94,370.00 L 412.98,487.99 L 252.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 867.39,370.00 L 676.69,487.99 L 574.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1022.83,370.00 L 932.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1178.28,370.00 L 1256.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1333.72,370.00 L 1453.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1218.00,153.00 L 1022.83,236.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1489.17,370.00 L 1683.41,487.99 L 1788.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1644.61,370.00 L 2043.96,491.59 L 2259.00,673.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<path d="M 1800.06,370.00 L 2336.92,487.99 L 2626.00,664.98" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+<text x="1418.50" y="58.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1418.50" dy="16.00">User / Developer</tspan><tspan x="1418.50" dy="20.00">[Person]</tspan><tspan x="1418.50" dy="20.00">Uses OpenWebUI, OpenCode,</tspan><tspan x="1418.50" dy="20.00">custom clients</tspan></text>
+<text x="1256.00" y="271.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1256.00" dy="16.00">RAG System</tspan><tspan x="1256.00" dy="20.00">[Software System]</tspan><tspan x="1256.00" dy="20.00">OpenAI-compatible RAG Proxy</tspan><tspan x="1256.00" dy="20.00">with ETL pipeline</tspan></text>
+<text x="1256.00" y="245.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1256.00" dy="12.00">K8s</tspan></text>
+<text x="150.00" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="150.00" dy="16.00">Confluence</tspan><tspan x="150.00" dy="20.00">[External System]</tspan><tspan x="150.00" dy="20.00">Wiki &amp; documentation</tspan></text>
+<text x="150.00" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="150.00" dy="12.00">LB</tspan></text>
+<text x="481.00" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="481.00" dy="16.00">Jira</tspan><tspan x="481.00" dy="20.00">[External System]</tspan><tspan x="481.00" dy="20.00">Issues &amp; workflows</tspan></text>
+<text x="481.00" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="481.00" dy="12.00">LB</tspan></text>
+<text x="821.00" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="821.00" dy="16.00">GitLab</tspan><tspan x="821.00" dy="20.00">[External System]</tspan><tspan x="821.00" dy="20.00">Code, MRs, discussions</tspan></text>
+<text x="821.00" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="821.00" dy="12.00">LB</tspan></text>
+<text x="1192.50" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1192.50" dy="16.00">External Documents</tspan><tspan x="1192.50" dy="20.00">[External System]</tspan><tspan x="1192.50" dy="20.00">Books, docs, chat history</tspan></text>
+<text x="1192.50" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1192.50" dy="12.00">LB</tspan></text>
+<text x="1577.50" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1577.50" dy="16.00">GPUStack Cluster</tspan><tspan x="1577.50" dy="20.00">[External System]</tspan><tspan x="1577.50" dy="20.00">LLM &amp; embedding inference</tspan></text>
+<text x="1577.50" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1577.50" dy="12.00">K8s</tspan></text>
+<text x="1066.50" y="76.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1066.50" dy="16.00">Expert Dashboard</tspan><tspan x="1066.50" dy="20.00">[External System]</tspan><tspan x="1066.50" dy="20.00">HITL feedback &amp; quality control</tspan></text>
+<text x="1066.50" y="52.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1066.50" dy="12.00">LB</tspan></text>
+<text x="1930.50" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1930.50" dy="16.00">Qdrant</tspan><tspan x="1930.50" dy="20.00">[Database]</tspan><tspan x="1930.50" dy="20.00">Vector storage, hybrid search</tspan></text>
+<text x="1930.50" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1930.50" dy="12.00">DB</tspan></text>
+<text x="2374.50" y="689.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="2374.50" dy="16.00">Neo4j</tspan><tspan x="2374.50" dy="20.00">[Database]</tspan><tspan x="2374.50" dy="20.00">Entity &amp; relation graph</tspan></text>
+<text x="2755.00" y="697.98" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="2755.00" dy="16.00">Redis</tspan><tspan x="2755.00" dy="20.00">[Database]</tspan><tspan x="2755.00" dy="20.00">Embedding &amp; response cache</tspan></text>
+<text x="2755.00" y="673.98" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="2755.00" dy="12.00">Cache</tspan></text>
+<rect x="1306.74" y="185.25" width="169.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1391.59" y="187.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1391.59" dy="14.00">Sends API requests to</tspan></text>
+<rect x="408.69" y="462.16" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="451.19" y="464.16" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="451.19" dy="14.00">Reads from</tspan></text>
+<rect x="642.54" y="472.08" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="685.04" y="474.08" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="685.04" dy="14.00">Reads from</tspan></text>
+<rect x="934.91" y="506.74" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="977.41" y="508.74" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="977.41" dy="14.00">Reads from</tspan></text>
+<rect x="1174.64" y="506.74" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1217.14" y="508.74" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1217.14" dy="14.00">Reads from</tspan></text>
+<rect x="1327.76" y="506.74" width="131.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1393.36" y="508.74" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1393.36" dy="14.00">Queries LLM from</tspan></text>
+<rect x="1058.66" y="183.75" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1120.41" y="185.75" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1120.41" dy="14.00">Reads logs from</tspan></text>
+<rect x="1604.69" y="471.61" width="138.90" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1674.14" y="473.61" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1674.14" dy="14.00">Indexes &amp; queries</tspan></text>
+<rect x="1886.61" y="461.11" width="185.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1979.16" y="463.11" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1979.16" dy="14.00">Indexes &amp; queries graph</tspan></text>
+<rect x="2195.37" y="454.62" width="77.30" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="2234.02" y="456.62" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="2234.02" dy="14.00">Caches to</tspan></text>
+</svg>

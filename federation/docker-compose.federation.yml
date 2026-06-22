@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  federation:
+    build:
+      context: ..
+      dockerfile: federation/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - FEDERATION_MODE=merge
+      - FEDERATION_INSTANCES_JSON=[{"id":"hr","name":"HR KB","proxy_url":"http://proxy:8000/v1","weight":1.0,"access_groups":["admin"],"is_primary":true}]
+    depends_on:
+      - proxy

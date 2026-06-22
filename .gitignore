@@ -24,6 +24,17 @@ wal/
 .DS_Store
 Thumbs.db
 
+# Logs
+logs/
+
+# Backup artifacts
+*.bak
+*~
+*.orig
+
 # Models
 models/
 *.gguf
+deepseek-chat-*.json
+deepseek-chat-*.json
+site/
