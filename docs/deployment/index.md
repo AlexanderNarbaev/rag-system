@@ -9,8 +9,8 @@ The RAG System is deployed as two separate components that communicate over the 
 
 | Guide | Description |
 |-------|-------------|
-| [Proxy Deployment](deploy_proxy.md) | Docker Compose setup, configuration, scaling, air-gapped deployment |
-| [ETL Deployment](deploy_etl.md) | Pipeline configuration, scheduling, source system setup |
+| [Proxy Deployment](../deploy_proxy.md) | Docker Compose setup, configuration, scaling, air-gapped deployment |
+| [ETL Deployment](../deploy_etl.md) | Pipeline configuration, scheduling, source system setup |
 
 ## Architecture
 

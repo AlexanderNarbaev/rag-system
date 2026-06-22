@@ -29,3 +29,4 @@ models/
 *.gguf
 deepseek-chat-*.json
 deepseek-chat-*.json
+site/

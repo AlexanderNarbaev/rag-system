@@ -50,22 +50,22 @@ nav:
   - Home: index.md
   - Architecture Decision Records:
     - adr/index.md
-    - ADR-001: BAAI/bge-m3 Embedding Model: adr/ADR-001-bge-m3-embedding-model.md
-    - ADR-002: Qdrant Hybrid Search: adr/ADR-002-qdrant-hybrid-search.md
-    - ADR-003: Dual-LLM Architecture: adr/ADR-003-dual-llm-architecture.md
-    - ADR-004: OpenAI-Compatible Proxy: adr/ADR-004-openai-compatible-proxy.md
-    - ADR-005: Version-Aware Indexing: adr/ADR-005-version-aware-indexing.md
-    - ADR-006: Agentic RAG with LangGraph: adr/ADR-006-agentic-rag-langgraph.md
-    - ADR-007: HITL Feedback System: adr/ADR-007-hitl-feedback-system.md
+    - "ADR-001: BAAI/bge-m3 Embedding Model": adr/ADR-001-bge-m3-embedding-model.md
+    - "ADR-002: Qdrant Hybrid Search": adr/ADR-002-qdrant-hybrid-search.md
+    - "ADR-003: Dual-LLM Architecture": adr/ADR-003-dual-llm-architecture.md
+    - "ADR-004: OpenAI-Compatible Proxy": adr/ADR-004-openai-compatible-proxy.md
+    - "ADR-005: Version-Aware Indexing": adr/ADR-005-version-aware-indexing.md
+    - "ADR-006: Agentic RAG with LangGraph": adr/ADR-006-agentic-rag-langgraph.md
+    - "ADR-007: HITL Feedback System": adr/ADR-007-hitl-feedback-system.md
   - C4 Architecture Diagrams:
     - diagrams/index.md
   - Design Guides:
     - guides/index.md
     - RAG Maturity Assessment: guides/rag-maturity-assessment.md
     - Production Readiness Checklist: guides/best-practices-checklist.md
-    - Performance & Quality: guides/performance-quality.md
-    - Extensibility: Adding Data Sources: guides/extensibility-data-sources.md
-    - Access Control & RBAC: guides/access-control-rbac.md
+    - "Performance & Quality": guides/performance-quality.md
+    - "Extensibility: Adding Data Sources": guides/extensibility-data-sources.md
+    - "Access Control & RBAC": guides/access-control-rbac.md
     - Knowledge Graph Strategy: guides/knowledge-graph-strategy.md
     - Integration with OpenCode: guides/integration-opencode.md
     - Development Roadmap: guides/roadmap.md
