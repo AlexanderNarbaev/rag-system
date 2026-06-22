@@ -5,12 +5,15 @@ Custom middleware for RAG proxy:
 - Request logging (method, path, status, duration)
 - Correlation ID propagation
 - CORS configuration
+- Security headers injection
+- Audit logging
+- Input sanitization
 """
 import os
 import time
 import uuid
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -19,6 +22,7 @@ from starlette.responses import Response
 from fastapi import FastAPI
 
 from app.logging_config import RequestIdFilter
+from app.security import SecurityHeaders, InputValidator
 
 logger = logging.getLogger("rag-proxy.middleware")
 
@@ -70,6 +74,65 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Injects security-related HTTP headers into every response."""
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+        headers = SecurityHeaders.get_headers()
+        for header_name, header_value in headers.items():
+            if header_name not in response.headers:
+                response.headers[header_name] = header_value
+        return response
+
+
+class AuditMiddleware(BaseHTTPMiddleware):
+    """Logs every request through AuditLogger for security auditing."""
+
+    def __init__(self, app, audit_logger=None):
+        super().__init__(app)
+        self.audit_logger = audit_logger
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        client_ip = request.client.host if request.client else "unknown"
+        start = time.monotonic()
+
+        response = await call_next(request)
+
+        duration_ms = (time.monotonic() - start) * 1000
+        if self.audit_logger and response.status_code >= 400:
+            try:
+                self.audit_logger.log_error(
+                    error_type=f"HTTP_{response.status_code}",
+                    error_msg=f"{request.method} {request.url.path} returned {response.status_code}",
+                    stack_trace=None,
+                    client_ip=client_ip,
+                    endpoint=request.url.path,
+                )
+            except Exception:
+                pass
+
+        return response
+
+
+class InputSanitizationMiddleware(BaseHTTPMiddleware):
+    """Sanitizes query parameters in requests to prevent injection attacks."""
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        if request.url.query:
+            sanitized_params = {}
+            for key, values in request.query_params.multi_items():
+                sanitized_key = InputValidator.validate_non_empty(key, max_len=256) or key
+                sanitized_vals = []
+                for v in values:
+                    sv = InputValidator.validate_non_empty(v, max_len=4096)
+                    sanitized_vals.append(sv if sv is not None else v)
+                sanitized_params[sanitized_key] = sanitized_vals
+
+        response = await call_next(request)
+        return response
+
+
 def add_cors_middleware(app: FastAPI, origins: str = "*"):
     """Add CORS middleware with configurable origins."""
     allowed_origins = [o.strip() for o in origins.split(",")] if origins != "*" else ["*"]
@@ -83,8 +146,12 @@ def add_cors_middleware(app: FastAPI, origins: str = "*"):
     )
 
 
-def setup_all_middleware(app: FastAPI):
+def setup_all_middleware(app: FastAPI, audit_logger=None):
     """Apply all standard middleware in correct order."""
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    if audit_logger is not None:
+        app.add_middleware(AuditMiddleware, audit_logger=audit_logger)
+    app.add_middleware(InputSanitizationMiddleware)

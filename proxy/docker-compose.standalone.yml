@@ -1,0 +1,267 @@
+# proxy/docker-compose.standalone.yml
+# Production standalone deployment — all services in one stack.
+#
+# Usage:
+#   COMPOSE_PROFILES=gpu docker compose -f docker-compose.standalone.yml up -d
+#   COMPOSE_PROFILES=cpu docker compose -f docker-compose.standalone.yml up -d
+#
+# Required .env variables (set in .env or exported):
+#   NEO4J_PASSWORD, API_KEY (optional), MODEL_NAME_LLM, MODEL_CACHE_DIR
+
+version: "3.8"
+
+services:
+  # ── Vector Database ───────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.10.0
+    container_name: rag-qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6333/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+          cpus: "4"
+    networks:
+      - rag-net
+
+  # ── Graph Database (optional — disable by commenting out) ─────────────────
+  neo4j:
+    image: neo4j:5.25-community
+    container_name: rag-neo4j
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/import
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD:-password}"
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_pagecache_size: 512M
+      NEO4J_dbms_memory_heap_initial__size: 512M
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'RETURN 1' | cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-password} || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2"
+    networks:
+      - rag-net
+
+  # ── Cache ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.4-alpine
+    container_name: rag-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1"
+    networks:
+      - rag-net
+
+  # ── LLM Runtime (GPU — vLLM) ──────────────────────────────────────────────
+  vllm:
+    image: vllm/vllm-openai:v0.6.4
+    container_name: rag-vllm
+    volumes:
+      - ${MODEL_CACHE_DIR:-./model_cache}:/models:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      VLLM_API_KEY: "${API_KEY:-}"
+      HUGGINGFACE_HUB_CACHE: /models/cache
+    command: >
+      --model /models/${MODEL_NAME_LLM:-gemma-4-26b-it}
+      --port 8000
+      --host 0.0.0.0
+      --max-model-len 65536
+      --gpu-memory-utilization 0.90
+      --dtype auto
+      --enforce-eager
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 48g
+          cpus: "16"
+    runtime: nvidia
+    networks:
+      - rag-net
+    profiles:
+      - gpu
+
+  # ── LLM Runtime (CPU fallback — llama.cpp) ────────────────────────────────
+  vllm-cpu:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    container_name: rag-vllm-cpu
+    volumes:
+      - ${MODEL_CACHE_DIR:-./model_cache}:/models:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: >
+      --model /models/${MODEL_NAME_LLM:-gemma-4-26b-it-GGUF}.gguf
+      --host 0.0.0.0
+      --port 8000
+      --ctx-size 65536
+      --n-gpu-layers 0
+      --threads ${CPU_THREADS:-8}
+      --batch-size 512
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 240s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64g
+          cpus: "16"
+    networks:
+      - rag-net
+    profiles:
+      - cpu
+
+  # ── RAG Proxy (FastAPI) ───────────────────────────────────────────────────
+  rag-proxy:
+    build:
+      context: ..
+      dockerfile: proxy/Dockerfile
+    container_name: rag-proxy
+    volumes:
+      - ${MODEL_CACHE_DIR:-./model_cache}:/models:ro
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      NEO4J_URI: bolt://neo4j:7687
+      REDIS_URL: redis://redis:6379
+      LLM_ENDPOINT: http://vllm:8000/v1
+      USE_REDIS: ${USE_REDIS:-true}
+      USE_LANGGRAPH: ${USE_LANGGRAPH:-true}
+      GRAPH_ENABLED: ${GRAPH_ENABLED:-true}
+      USE_GRAPH_EXPANSION: ${USE_GRAPH_EXPANSION:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MAX_CONTEXT_TOKENS: ${MAX_CONTEXT_TOKENS:-8000}
+      RERANK_TOP_K: ${RERANK_TOP_K:-20}
+      WORKERS: 1
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+          cpus: "4"
+    networks:
+      - rag-net
+
+  # ── Reverse Proxy (NGINX + TLS) ───────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: rag-nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${CERT_DIR:-./certs}:/etc/nginx/certs:ro
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    depends_on:
+      rag-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - rag-net
+
+networks:
+  rag-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  qdrant_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  neo4j_import:
+    driver: local
+  redis_data:
+    driver: local

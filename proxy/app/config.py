@@ -79,6 +79,14 @@ RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
 # ============ CORS ============
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
 
+# ============ Authentication & RBAC ============
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
+TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "24"))
+AUTH_VALID_USERS = os.getenv("AUTH_VALID_USERS", "{}")  # JSON dict of valid users for login endpoint
+
 # ============ Настройки сервера ============
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))

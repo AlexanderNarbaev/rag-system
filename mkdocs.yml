@@ -1,0 +1,143 @@
+site_name: "RAG System — Corporate Knowledge Assistant"
+site_description: >-
+  OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab data ingestion
+  into Qdrant + Neo4j, served via Gemma LLM. Documentation for developers, operators, and integrators.
+site_author: "Alexander Narbaev"
+repo_url: https://github.com/AlexanderNarbaev/rag-system
+repo_name: AlexanderNarbaev/rag-system
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: light-blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+  logo: null
+
+nav:
+  - Home: index.md
+  - Architecture Decision Records:
+    - adr/index.md
+    - ADR-001: BAAI/bge-m3 Embedding Model: adr/ADR-001-bge-m3-embedding-model.md
+    - ADR-002: Qdrant Hybrid Search: adr/ADR-002-qdrant-hybrid-search.md
+    - ADR-003: Dual-LLM Architecture: adr/ADR-003-dual-llm-architecture.md
+    - ADR-004: OpenAI-Compatible Proxy: adr/ADR-004-openai-compatible-proxy.md
+    - ADR-005: Version-Aware Indexing: adr/ADR-005-version-aware-indexing.md
+    - ADR-006: Agentic RAG with LangGraph: adr/ADR-006-agentic-rag-langgraph.md
+    - ADR-007: HITL Feedback System: adr/ADR-007-hitl-feedback-system.md
+  - C4 Architecture Diagrams:
+    - diagrams/index.md
+  - Design Guides:
+    - guides/index.md
+    - RAG Maturity Assessment: guides/rag-maturity-assessment.md
+    - Production Readiness Checklist: guides/best-practices-checklist.md
+    - Performance & Quality: guides/performance-quality.md
+    - Extensibility: Adding Data Sources: guides/extensibility-data-sources.md
+    - Access Control & RBAC: guides/access-control-rbac.md
+    - Knowledge Graph Strategy: guides/knowledge-graph-strategy.md
+    - Integration with OpenCode: guides/integration-opencode.md
+    - Development Roadmap: guides/roadmap.md
+  - API Reference: api_reference.md
+  - Deployment:
+    - deployment/index.md
+    - Proxy Deployment: deploy_proxy.md
+    - ETL Deployment: deploy_etl.md
+  - Operations:
+    - Operations Guide: guides/operations-guide.md
+    - Troubleshooting: guides/troubleshooting.md
+  - MCP Server:
+    - mcp_server/index.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.details
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.keys
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-,:!=\[\]()"/]+'
+  - minify:
+      minify_html: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/AlexanderNarbaev/rag-system
+      name: RAG System on GitHub
+  version:
+    provider: mike
+    default: latest
+
+extra_css: []
+
+extra_javascript: []
+
+watch:
+  - docs
+  - README.md
+
+use_directory_urls: true
+
+strict: false
