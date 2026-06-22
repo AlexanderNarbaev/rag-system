@@ -126,9 +126,6 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/AlexanderNarbaev/rag-system
       name: RAG System on GitHub
-  version:
-    provider: mike
-    default: latest
 
 extra_css: []
 
