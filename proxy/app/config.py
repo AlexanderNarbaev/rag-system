@@ -103,6 +103,17 @@ RELOAD = os.getenv("RELOAD", "false").lower() == "true"
 WORKERS = int(os.getenv("WORKERS", "1"))
 
 
+# ============ Confidence Scoring ============
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
+MAX_VERIFY_LOOPS = int(os.getenv("MAX_VERIFY_LOOPS", "2"))
+
+# ============ Self-Enrichment ============
+ENRICHMENT_ENABLED = os.getenv("ENRICHMENT_ENABLED", "false").lower() == "true"
+
+# ============ Admin Alerts ============
+ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
+ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")
+
 # ============ Вспомогательная функция для отладки ============
 def print_config():
     """Выводит текущую конфигурацию (скрывая секреты)."""
