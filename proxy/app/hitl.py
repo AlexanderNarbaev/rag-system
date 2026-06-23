@@ -11,6 +11,7 @@ Human-in-the-Loop модуль для сбора обратной связи.
 import json
 import logging
 import os
+import uuid
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
@@ -19,6 +20,11 @@ from typing import Any
 from app.config import LOG_DIR, LOG_REQUESTS
 
 logger = logging.getLogger(__name__)
+
+
+def generate_feedback_id() -> str:
+    """Generate a unique feedback ID for tracking user feedback on a response."""
+    return f"fb_{uuid.uuid4().hex[:12]}"
 
 
 class FeedbackType(str, Enum):
