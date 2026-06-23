@@ -4,10 +4,10 @@
 Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline for Confluence, Jira, GitLab data ingestion into Qdrant + Neo4j, served via configurable LLM backend.
 
 ## Language
-English for code and comments. Russian for discussions.
+English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language switcher. See `docs/en/` and `docs/ru/`.
 
 ## Current State
-- **Version:** v0.3 (June 2026)
+- **Version:** v0.4 (June 2026)
 - **Tests:** 505 total, 483 passing (96% pass rate), 21 failing, 1 collection error
 - **Maturity:** RAG Level 4 (Agentic) operational, Level 5 (Self-Correcting) partially designed
 - **Production readiness:** 45% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
