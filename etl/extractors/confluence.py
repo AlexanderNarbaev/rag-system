@@ -78,7 +78,7 @@ class ConfluenceExtractor:
     def _request(self, endpoint: str, params: dict = None) -> dict:
         """Выполняет GET запрос к Confluence API."""
         url = urljoin(self.url, endpoint)
-        resp = self.session.get(url, params=params)
+        resp = self.session.get(url, params=params, timeout=30)
         resp.raise_for_status()
         return resp.json()
 
@@ -102,7 +102,7 @@ class ConfluenceExtractor:
                 # Используем URL следующей страницы
                 next_url = data["_links"]["next"]
                 if next_url.startswith("http"):
-                    resp = self.session.get(next_url)
+                    resp = self.session.get(next_url, timeout=30)
                     resp.raise_for_status()
                     data = resp.json()
                 else:
@@ -141,7 +141,7 @@ class ConfluenceExtractor:
         """Скачивает файл вложения и возвращает путь к сохранённому файлу."""
         download_url = f"/rest/api/content/{page_id}/child/attachment/{attachment_id}/download"
         try:
-            resp = self.session.get(urljoin(self.url, download_url), stream=True)
+            resp = self.session.get(urljoin(self.url, download_url), stream=True, timeout=60)
             resp.raise_for_status()
             safe_name = "".join(c for c in filename if c.isalnum() or c in ".-_").strip()
             if not safe_name:
