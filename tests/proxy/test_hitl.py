@@ -51,7 +51,7 @@ class TestInteractionLogger:
             user_query="How to set up CI?",
             context="Some context",
             response="Use .gitlab-ci.yml",
-            metadata={"model": "gemma"}
+            metadata={"model": "test-model"}
         )
         assert logger.interactions_file.exists()
         with open(logger.interactions_file) as f:

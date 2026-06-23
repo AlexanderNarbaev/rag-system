@@ -291,6 +291,6 @@ class TestRequestTracker:
 
     def test_start_with_metadata(self):
         tracker = RequestTracker()
-        tracker.start("req_m", metadata={"user": "alice", "model": "gemma"})
+        tracker.start("req_m", metadata={"user": "alice", "model": "test-model"})
         tracker.complete("req_m")
         assert tracker.active_requests == 0

@@ -1,6 +1,6 @@
 # Proxy Deployment Guide
 
-The RAG Proxy is the core serving layer — a FastAPI application exposing an OpenAI-compatible API. It connects to Qdrant (vector search), Neo4j (knowledge graph), Redis (cache), and vLLM/llama.cpp (LLM inference).
+The RAG Proxy is the core serving layer — a FastAPI application exposing an OpenAI-compatible API. It connects to Qdrant (vector search), Neo4j (knowledge graph), Redis (cache), and an LLM backend (vLLM, llama.cpp, or any OpenAI-compatible endpoint).
 
 ---
 
@@ -70,7 +70,7 @@ docker-compose up -d
 
 # 3. Check status
 docker-compose ps
-# Expected: qdrant, neo4j, redis, vllm, rag-proxy, hitl-dashboard — all "Up"
+# Expected: qdrant, neo4j, redis, llm, rag-proxy, hitl-dashboard — all "Up"
 
 # 4. Verify health
 curl http://localhost:8080/v1/health
@@ -98,13 +98,13 @@ QDRANT_HOST=qdrant
 QDRANT_PORT=6333
 COLLECTION_NAME=knowledge_base
 
-# LLM endpoint (vLLM or llama.cpp)
-LLM_ENDPOINT=http://vllm:8000/v1
-LLM_MODEL_NAME=gemma-4-26b-it
-LLM_API_KEY=           # optional; must match vLLM --api-key if set
+# LLM endpoint (vLLM, llama.cpp, or any OpenAI-compatible backend)
+LLM_ENDPOINT=http://llm:8000/v1
+LLM_MODEL_NAME=your-model-name
+LLM_API_KEY=           # optional; must match backend --api-key if set
 
 # Embedding model
-EMBEDDER_MODEL=BAAI/bge-m3
+EMBEDDER_MODEL=your-embedding-model
 EMBEDDER_DEVICE=cpu    # "cpu" or "cuda"
 
 # Reranker
@@ -142,8 +142,8 @@ RATE_LIMIT_PER_MINUTE=60
 RATE_LIMIT_BURST=10
 
 # SLM (small model for query routing)
-SLM_ENDPOINT=http://vllm:8000/v1
-SLM_MODEL_NAME=gemma-2b-it
+SLM_ENDPOINT=http://llm:8000/v1
+SLM_MODEL_NAME=your-slm-model-name
 SLM_MAX_TOKENS=256
 ```
 
@@ -203,7 +203,7 @@ The `docker-compose.yml` defines these services:
 │               └──────┬──────┘                    │
 │                      │                            │
 │               ┌──────┴──────┐                    │
-│               │    vllm     │                    │
+│               │    llm      │                    │
 │               │    :8000    │                    │
 │               └─────────────┘                    │
 │                                                   │
@@ -221,7 +221,7 @@ The `docker-compose.yml` defines these services:
 | **qdrant** | `qdrant/qdrant:latest` | 6333, 6334 | No | Vector database for hybrid search |
 | **redis** | `redis:7-alpine` | 6379 | No | Multi-tier cache (embeddings, rerank, responses) |
 | **neo4j** | `neo4j:5-enterprise` | 7474, 7687 | No | Knowledge graph for entity relationships |
-| **vllm** | `vllm/vllm-openai:latest` | 8000 | **Yes** | LLM inference server (Gemma-4-26B) |
+| **llm** | Custom or `vllm/vllm-openai:latest` | 8000 | **Yes** | LLM inference server (your model) |
 | **rag-proxy** | Custom (FastAPI) | 8080 | No | OpenAI-compatible API with RAG pipeline |
 | **hitl-dashboard** | Custom (Streamlit) | 8501 | No | Expert review and feedback dashboard |
 
@@ -236,7 +236,7 @@ The proxy is designed to never crash on component failure. Each dependency fails
 | **Qdrant** | Retrieval returns empty results; LLM responds without context |
 | **Neo4j** | Graph expansion skipped; retrieval falls back to vector-only |
 | **Redis** | Falls back to in-memory cache; no persistence, lower hit rate |
-| **vLLM** | `/v1/health` returns 503; all completions fail with 503 |
+| **LLM backend** | `/v1/health` returns 503; all completions fail with 503 |
 | **Reranker OOM** | Uses raw hybrid scores instead of cross-encoder scores |
 
 Health check (`/v1/health`) reports degraded status with per-component details.
@@ -288,7 +288,7 @@ server {
 ### Production Security Checklist
 
 - [ ] Change all default passwords (Neo4j, Qdrant API key if set)
-- [ ] Set `LLM_API_KEY` and configure vLLM with `--api-key`
+- [ ] Set `LLM_API_KEY` and configure the LLM backend with `--api-key`
 - [ ] Use reverse proxy with TLS in front of port 8080
 - [ ] Enable firewall: only expose 8080 and 8501 externally
 - [ ] Set `LOG_FORMAT=json` for structured audit logs
@@ -311,7 +311,7 @@ cd rag-system
 python scripts/download_models_offline.py \
   --output-dir ./offline_models \
   --models embedder reranker spacy_ru spacy_en slm \
-  --gguf-url https://huggingface.co/bartowski/gemma-4-26b-it-GGUF/resolve/main/gemma-4-26b-it-Q4_K_M.gguf
+  --gguf-url https://huggingface.co/your-org/your-model-GGUF/resolve/main/your-model.gguf
 
 # Package
 tar -czf offline_models.tar.gz offline_models/
@@ -325,7 +325,7 @@ scp offline_models.tar.gz user@airgap-machine:/opt/rag-system/
 docker pull qdrant/qdrant:latest
 docker pull neo4j:5-enterprise
 docker pull redis:7-alpine
-docker pull vllm/vllm-openai:latest
+docker pull vllm/vllm-openai:latest  # or your LLM backend image
 docker pull python:3.11-slim
 
 docker save qdrant/qdrant:latest neo4j:5-enterprise redis:7-alpine \
@@ -356,12 +356,12 @@ cd /opt/rag-system
 tar -xzf offline_models.tar.gz
 
 # Update docker-compose.yml volume mounts:
-#   vllm: /opt/rag-system/offline_models:/models:ro
+#   llm: /opt/rag-system/offline_models:/models:ro
 #   rag-proxy: /opt/rag-system/offline_models/cache:/app/cache:ro
 
 # Edit proxy/.env with your settings
 # QDRANT_HOST=qdrant (docker service name)
-# LLM_ENDPOINT=http://vllm:8000/v1
+# LLM_ENDPOINT=http://llm:8000/v1
 
 cd proxy
 docker-compose up -d
@@ -373,11 +373,11 @@ docker-compose up -d
 
 ### Vertical Scaling
 
-Increase resources for the vLLM container:
+Increase resources for the LLM container:
 
 ```yaml
 # docker-compose.yml
-vllm:
+llm:
   deploy:
     resources:
       reservations:
@@ -386,7 +386,7 @@ vllm:
             count: 2              # Use 2 GPUs
             capabilities: [gpu]
   command: >
-    --model /models/gemma-4-26b-it-Q4_K_M.gguf
+    --model /models/your-model.gguf
     --tensor-parallel-size 2     # Split across 2 GPUs
     --max-model-len 65536
     --max-num-seqs 16
@@ -406,7 +406,7 @@ docker-compose up -d --scale rag-proxy=3
 #   }
 ```
 
-**Note:** vLLM handles concurrency internally (up to 16 concurrent sequences). The proxy can scale horizontally, but each replica must share Redis for cache coherence.
+**Note:** The LLM backend handles concurrency internally (up to 16 concurrent sequences). The proxy can scale horizontally, but each replica must share Redis for cache coherence.
 
 ---
 
@@ -422,7 +422,7 @@ curl http://localhost:8080/v1/health
 curl http://localhost:6333/health               # Qdrant
 docker exec rag-neo4j cypher-shell -u neo4j -p password "RETURN 1"  # Neo4j
 docker exec rag-redis redis-cli PING           # Redis
-curl http://localhost:8000/health               # vLLM
+curl http://localhost:8000/health               # LLM backend
 ```
 
 ### Prometheus Metrics
@@ -450,9 +450,9 @@ groups:
           summary: "Cache hit ratio below 30%"
 
       - alert: LLMDown
-        expr: up{job="vllm"} == 0
+        expr: up{job="llm"} == 0
         annotations:
-          summary: "vLLM instance is down"
+          summary: "LLM backend is down"
 ```
 
 ### Container Health
@@ -465,7 +465,7 @@ docker-compose ps
 
 # View specific container logs
 docker-compose logs -f rag-proxy
-docker-compose logs -f vllm --tail 100
+docker-compose logs -f llm --tail 100
 ```
 
 ---
@@ -537,27 +537,27 @@ ls -la proxy/.env
 docker run --rm -v $(pwd)/.env:/app/.env:ro rag-proxy python -c "from app.config import print_config; print_config()"
 ```
 
-### vLLM Won't Start
+### LLM Backend Won't Start
 
 ```bash
 # Check GPU access
 docker run --rm --gpus all vllm/vllm-openai:latest nvidia-smi
 
 # Check model file
-ls -la /opt/rag-system/offline_models/gemma-4-26b-it-Q4_K_M.gguf
+ls -la /opt/rag-system/offline_models/your-model.gguf
 
 # Check logs
-docker-compose logs vllm --tail 50
+docker-compose logs llm --tail 50
 
-# Common vLLM OOM fix — reduce context window:
-# Edit docker-compose.yml vllm command:
+# Common OOM fix — reduce context window:
+# Edit docker-compose.yml llm command:
 #   --max-model-len 32768  (instead of 130000)
 ```
 
 ### OOM (Out of Memory)
 
 ```bash
-# vLLM OOM: reduce model context, use smaller quant
+# LLM backend OOM: reduce model context, use smaller quant
 --max-model-len 32768
 --gpu-memory-utilization 0.80
 
@@ -576,7 +576,7 @@ RERANKER_BATCH_SIZE=8
 
 ```bash
 # Verify embedder model
-grep EMBEDDER_MODEL proxy/.env   # Must be BAAI/bge-m3
+grep EMBEDDER_MODEL proxy/.env
 
 # Verify collection schema (dense + sparse)
 curl http://localhost:6333/collections/knowledge_base | python -m json.tool

@@ -2,9 +2,9 @@
 
 import hashlib
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import AsyncIterator, Dict, List, Optional
+from datetime import UTC, datetime
 
 
 @dataclass
@@ -16,7 +16,7 @@ class ExtractorConfig:
     max_pages: int = 1000
     batch_size: int = 50
     timeout: int = 30
-    exclude_patterns: List[str] = field(default_factory=list)
+    exclude_patterns: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -26,15 +26,15 @@ class ExtractedDocument:
     title: str
     content: str
     content_type: str  # html, markdown, text
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
     access_level: str = "internal"
     version: str = ""
     extracted_at: str = ""
-    links: List[Dict] = field(default_factory=list)
+    links: list[dict] = field(default_factory=list)
 
     def __post_init__(self):
         if not self.extracted_at:
-            self.extracted_at = datetime.now(timezone.utc).isoformat()
+            self.extracted_at = datetime.now(UTC).isoformat()
 
 
 class BaseExtractor(ABC):

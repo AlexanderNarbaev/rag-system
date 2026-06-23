@@ -8,9 +8,9 @@ Evaluates the quality of retrieved chunks and triggers corrective actions:
 - EXPAND: expand search scope (graph, synonyms)
 - FALLBACK: no useful results, use alternative strategy
 """
-import re
+
 import logging
-from typing import List, Dict, Any, Tuple
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +22,7 @@ class RetrievalEvaluator:
     MEDIUM_THRESHOLD = 0.4
     LOW_THRESHOLD = 0.2
 
-    def evaluate_quality(
-        self,
-        query: str,
-        retrieved_chunks: List[Dict]
-    ) -> float:
+    def evaluate_quality(self, query: str, retrieved_chunks: list[dict]) -> float:
         """
         Return confidence score 0.0-1.0 based on:
         - Average similarity scores (if present)
@@ -59,17 +55,13 @@ class RetrievalEvaluator:
         result_count_factor = min(1.0, len(scores) / 5.0)
 
         decay = 1.0 / (1.0 + variance)
-        confidence = (avg_score * 0.4 + coverage_ratio * 0.3 + result_count_factor * 0.2 + decay * 0.1)
+        confidence = avg_score * 0.4 + coverage_ratio * 0.3 + result_count_factor * 0.2 + decay * 0.1
 
         return min(1.0, max(0.0, confidence))
 
-    def _compute_text_overlap_scores(
-        self,
-        query: str,
-        chunks: List[Dict]
-    ) -> List[float]:
+    def _compute_text_overlap_scores(self, query: str, chunks: list[dict]) -> list[float]:
         """Fallback: compute simple Jaccard-like overlap between query and chunk text."""
-        query_tokens = set(re.findall(r'\w+', query.lower()))
+        query_tokens = set(re.findall(r"\w+", query.lower()))
         if not query_tokens:
             return []
 
@@ -79,7 +71,7 @@ class RetrievalEvaluator:
             if not text:
                 scores.append(0.0)
                 continue
-            text_tokens = set(re.findall(r'\w+', text.lower()))
+            text_tokens = set(re.findall(r"\w+", text.lower()))
             if not text_tokens:
                 scores.append(0.0)
                 continue
@@ -106,7 +98,7 @@ class RetrievalEvaluator:
         else:
             return "FALLBACK"
 
-    def decompose_chunks(self, chunks: List[Dict]) -> List[Dict]:
+    def decompose_chunks(self, chunks: list[dict]) -> list[dict]:
         """
         Decompose-then-recompose: filter noise, keep key information.
         Removes chunks with very low scores and near-duplicate content.
@@ -137,7 +129,7 @@ class RetrievalEvaluator:
         for i, chunk in enumerate(cleaned):
             text = chunk.get("text", "")
             if len(text) > 3000:
-                sentences = re.split(r'(?<=[.!?])\s+', text)
+                sentences = re.split(r"(?<=[.!?])\s+", text)
                 key_sentences = []
                 for s in sentences:
                     if len(s) > 15:
@@ -148,11 +140,7 @@ class RetrievalEvaluator:
 
         return cleaned
 
-    def evaluate_and_act(
-        self,
-        query: str,
-        retrieved_chunks: List[Dict]
-    ) -> Tuple[float, str, List[Dict]]:
+    def evaluate_and_act(self, query: str, retrieved_chunks: list[dict]) -> tuple[float, str, list[dict]]:
         """
         Combined: evaluate quality, get action, and optionally clean chunks.
         Returns (confidence, action, processed_chunks).

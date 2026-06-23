@@ -8,17 +8,19 @@
 - Генерация ID запросов
 - Работа с датами
 """
+
 import hashlib
 import json
 import re
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from datetime import UTC, datetime
+from typing import Any
 
 # Попытка импорта tiktoken для точной токенизации
 try:
     import tiktoken
+
     TIKTOKEN_AVAILABLE = True
 except ImportError:
     TIKTOKEN_AVAILABLE = False
@@ -32,7 +34,7 @@ def compute_hash(data: Any) -> str:
         content = data
     else:
         content = json.dumps(data, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def estimate_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
@@ -76,7 +78,7 @@ def generate_request_id() -> str:
     return f"rag_{timestamp}_{short_uuid}"
 
 
-def format_metadata(metadata: Dict[str, Any]) -> str:
+def format_metadata(metadata: dict[str, Any]) -> str:
     """
     Форматирует метаданные для включения в контекст.
     """
@@ -93,7 +95,7 @@ def now_iso() -> str:
     """
     Возвращает текущее время в ISO формате.
     """
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def safe_json_loads(s: str, default=None) -> Any:
@@ -106,15 +108,15 @@ def safe_json_loads(s: str, default=None) -> Any:
         return default
 
 
-def extract_issue_keys(text: str) -> List[str]:
+def extract_issue_keys(text: str) -> list[str]:
     """
     Извлекает Jira-like issue ключи из текста (например, PROJ-123).
     """
-    pattern = r'\b[A-Z][A-Z0-9]+-\d+\b'
+    pattern = r"\b[A-Z][A-Z0-9]+-\d+\b"
     return re.findall(pattern, text)
 
 
-def extract_urls(text: str) -> List[str]:
+def extract_urls(text: str) -> list[str]:
     """
     Извлекает URL из текста.
     """
@@ -122,7 +124,7 @@ def extract_urls(text: str) -> List[str]:
     return re.findall(pattern, text)
 
 
-def mask_sensitive_data(text: str, secrets: List[str] = None) -> str:
+def mask_sensitive_data(text: str, secrets: list[str] = None) -> str:
     """
     Маскирует чувствительные данные (токены, пароли) в логах.
     По умолчанию маскирует строки, похожие на токены (40+ символов).
@@ -130,19 +132,19 @@ def mask_sensitive_data(text: str, secrets: List[str] = None) -> str:
     if not text:
         return text
     # Маскировка последовательностей из 40+ алфавитно-цифровых символов (предположительно токены)
-    masked = re.sub(r'\b[A-Za-z0-9]{40,}\b', '[REDACTED_TOKEN]', text)
+    masked = re.sub(r"\b[A-Za-z0-9]{40,}\b", "[REDACTED_TOKEN]", text)
     if secrets:
         for secret in secrets:
             if secret and secret in masked:
-                masked = masked.replace(secret, '[REDACTED]')
+                masked = masked.replace(secret, "[REDACTED]")
     return masked
 
 
-def chunk_list(lst: List[Any], chunk_size: int) -> List[List[Any]]:
+def chunk_list(lst: list[Any], chunk_size: int) -> list[list[Any]]:
     """
     Разбивает список на чанки указанного размера.
     """
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+    return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def safe_divide(a: float, b: float, default: float = 0.0) -> float:
@@ -156,7 +158,7 @@ if __name__ == "__main__":
     # Примеры использования
     print(f"Hash: {compute_hash({'key': 'value'})}")
     print(f"Tokens estimate: {estimate_tokens('Пример текста для оценки токенов.')}")
-    print(f"Truncated: {truncate_by_tokens('Длинный текст '*100, 50)}")
+    print(f"Truncated: {truncate_by_tokens('Длинный текст ' * 100, 50)}")
     print(f"Request ID: {generate_request_id()}")
     print(f"Issue keys: {extract_issue_keys('Связано с PROJ-123 и TEST-456')}")
     print(f"Masked: {mask_sensitive_data('My token: abcdef1234567890abcdef1234567890abcdef12')}")

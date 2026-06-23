@@ -8,13 +8,14 @@ Provides:
 - with_retry: decorator for exponential backoff retry
 - with_fallback: decorator for graceful fallback
 """
-import time
+
 import asyncio
 import inspect
 import logging
+import time
+from collections.abc import Callable
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,7 @@ def get_circuit_breaker(service_name: str) -> CircuitBreaker:
 
 def with_circuit_breaker(service_name: str):
     """Decorator for circuit breaker protection."""
+
     def decorator(func: Callable) -> Callable:
         breaker = get_circuit_breaker(service_name)
 
@@ -164,21 +166,21 @@ def with_circuit_breaker(service_name: str):
 
 def with_retry(max_retries: int = 3, backoff_factor: float = 1.0, exceptions: tuple = (Exception,)):
     """Decorator for exponential backoff retry."""
+
     def decorator(func: Callable) -> Callable:
 
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
-            last_exception: Optional[Exception] = None
+            last_exception: Exception | None = None
             for attempt in range(max_retries + 1):
                 try:
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
                     if attempt < max_retries:
-                        delay = backoff_factor * (2 ** attempt)
+                        delay = backoff_factor * (2**attempt)
                         logger.warning(
-                            f"Retry {attempt + 1}/{max_retries} for {func.__name__}: {e}. "
-                            f"Waiting {delay:.1f}s"
+                            f"Retry {attempt + 1}/{max_retries} for {func.__name__}: {e}. Waiting {delay:.1f}s"
                         )
                         await asyncio.sleep(delay)
             if last_exception is not None:
@@ -187,17 +189,16 @@ def with_retry(max_retries: int = 3, backoff_factor: float = 1.0, exceptions: tu
 
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
-            last_exception: Optional[Exception] = None
+            last_exception: Exception | None = None
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
                     last_exception = e
                     if attempt < max_retries:
-                        delay = backoff_factor * (2 ** attempt)
+                        delay = backoff_factor * (2**attempt)
                         logger.warning(
-                            f"Retry {attempt + 1}/{max_retries} for {func.__name__}: {e}. "
-                            f"Waiting {delay:.1f}s"
+                            f"Retry {attempt + 1}/{max_retries} for {func.__name__}: {e}. Waiting {delay:.1f}s"
                         )
                         time.sleep(delay)
             if last_exception is not None:
@@ -213,6 +214,7 @@ def with_retry(max_retries: int = 3, backoff_factor: float = 1.0, exceptions: tu
 
 def with_fallback(fallback_func: Callable):
     """Decorator for graceful fallback."""
+
     def decorator(func: Callable) -> Callable:
 
         @wraps(func)

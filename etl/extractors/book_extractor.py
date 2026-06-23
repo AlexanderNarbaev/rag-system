@@ -1,13 +1,10 @@
 """Book extractor supporting EPUB, PDF, DOCX formats."""
 
-import hashlib
-import json
 import logging
 import re
-import os
-from datetime import datetime, timezone
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any
 
 from etl.extractors.base_extractor import BaseExtractor, ExtractedDocument, ExtractorConfig
 
@@ -25,7 +22,7 @@ class BookExtractor(BaseExtractor):
     def __init__(self, config: ExtractorConfig):
         super().__init__(config)
         self._validated = False
-        self._source_files: List[Path] = []
+        self._source_files: list[Path] = []
 
     async def validate_connection(self) -> bool:
         """Validate that source files exist and are accessible."""
@@ -45,8 +42,7 @@ class BookExtractor(BaseExtractor):
 
         if self.config.exclude_patterns:
             self._source_files = [
-                f for f in self._source_files
-                if not any(p in str(f) for p in self.config.exclude_patterns)
+                f for f in self._source_files if not any(p in str(f) for p in self.config.exclude_patterns)
             ]
 
         self._validated = len(self._source_files) > 0
@@ -78,10 +74,10 @@ class BookExtractor(BaseExtractor):
             except Exception as e:
                 logger.error(f"Failed to extract {file_path}: {e}", exc_info=True)
 
-    async def _extract_epub(self, file_path: Path) -> List[ExtractedDocument]:
+    async def _extract_epub(self, file_path: Path) -> list[ExtractedDocument]:
         """Extract content from an EPUB file."""
         try:
-            from ebooklib import epub, ITEM_DOCUMENT
+            from ebooklib import ITEM_DOCUMENT, epub
         except ImportError:
             logger.warning("ebooklib not installed, skipping EPUB extraction")
             return []
@@ -92,7 +88,7 @@ class BookExtractor(BaseExtractor):
         isbn = self._get_epub_identifier(book)
 
         documents = []
-        chapters: List[Dict[str, Any]] = []
+        chapters: list[dict[str, Any]] = []
         section_counter = 0
 
         for item in book.get_items_of_type(ITEM_DOCUMENT):
@@ -108,20 +104,24 @@ class BookExtractor(BaseExtractor):
                 for heading_text, heading_level, section_text in heading_info:
                     section_counter += 1
                     section_title = heading_text or f"Section {section_counter}"
-                    chapters.append({
-                        "title": section_title,
-                        "content": section_text,
-                        "level": heading_level,
-                        "index": section_counter,
-                    })
+                    chapters.append(
+                        {
+                            "title": section_title,
+                            "content": section_text,
+                            "level": heading_level,
+                            "index": section_counter,
+                        }
+                    )
             else:
                 section_counter += 1
-                chapters.append({
-                    "title": f"Chapter {section_counter}",
-                    "content": cleaned,
-                    "level": 1,
-                    "index": section_counter,
-                })
+                chapters.append(
+                    {
+                        "title": f"Chapter {section_counter}",
+                        "content": cleaned,
+                        "level": 1,
+                        "index": section_counter,
+                    }
+                )
 
         for ch in chapters:
             doc = ExtractedDocument(
@@ -146,7 +146,7 @@ class BookExtractor(BaseExtractor):
 
         return documents
 
-    async def _extract_pdf(self, file_path: Path) -> List[ExtractedDocument]:
+    async def _extract_pdf(self, file_path: Path) -> list[ExtractedDocument]:
         """Extract text content from a PDF file."""
         try:
             from pypdf import PdfReader
@@ -156,7 +156,7 @@ class BookExtractor(BaseExtractor):
 
         reader = PdfReader(str(file_path))
         metadata = reader.metadata or {}
-        title = (metadata.get("/Title") or file_path.stem)
+        title = metadata.get("/Title") or file_path.stem
         author = metadata.get("/Author", "")
 
         full_text_parts = []
@@ -172,7 +172,7 @@ class BookExtractor(BaseExtractor):
             doc = ExtractedDocument(
                 source_id=f"book_pdf_{file_path.stem}_s{idx}",
                 source_type="book",
-                title=f"{title} — {section_title or f'Section {idx+1}'}",
+                title=f"{title} — {section_title or f'Section {idx + 1}'}",
                 content=section_text,
                 content_type="text",
                 metadata={
@@ -189,7 +189,7 @@ class BookExtractor(BaseExtractor):
 
         return documents
 
-    async def _extract_docx(self, file_path: Path) -> List[ExtractedDocument]:
+    async def _extract_docx(self, file_path: Path) -> list[ExtractedDocument]:
         """Extract content from a DOCX file."""
         try:
             from docx import Document
@@ -208,7 +208,7 @@ class BookExtractor(BaseExtractor):
         paragraphs_text = []
         current_chapter_title = ""
         chapter_text = ""
-        chapters: List[Tuple[str, str]] = []
+        chapters: list[tuple[str, str]] = []
 
         for para in docx.paragraphs:
             text = para.text.strip()
@@ -218,8 +218,7 @@ class BookExtractor(BaseExtractor):
             style_name = para.style.name if para.style else ""
 
             if style_name and any(
-                level in style_name.lower()
-                for level in ("heading", "title", "heading1", "heading2", "heading3")
+                level in style_name.lower() for level in ("heading", "title", "heading1", "heading2", "heading3")
             ):
                 if chapter_text.strip():
                     chapters.append((current_chapter_title or title, chapter_text.strip()))
@@ -305,7 +304,7 @@ class BookExtractor(BaseExtractor):
         return "\n".join(lines)
 
     @staticmethod
-    def _extract_headings(text: str) -> List[Tuple[str, int, str]]:
+    def _extract_headings(text: str) -> list[tuple[str, int, str]]:
         """Extract headings and their section content from HTML text."""
         heading_pattern = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
         matches = list(heading_pattern.finditer(text))
@@ -325,7 +324,7 @@ class BookExtractor(BaseExtractor):
         return sections
 
     @staticmethod
-    def _split_into_sections(text: str) -> List[Tuple[str, str]]:
+    def _split_into_sections(text: str) -> list[tuple[str, str]]:
         """Split text into sections by common chapter patterns."""
         chapter_patterns = [
             r"^(?:Chapter|CHAPTER|Глава|ГЛАВА)\s+\d+",

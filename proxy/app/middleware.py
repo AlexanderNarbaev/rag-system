@@ -9,20 +9,19 @@ Custom middleware for RAG proxy:
 - Audit logging
 - Input sanitization
 """
-import os
+
+import logging
 import time
 import uuid
-import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
+from app.logging_config import RequestIdFilter
+from app.security import InputValidator, SecurityHeaders
+from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from fastapi import FastAPI
-
-from app.logging_config import RequestIdFilter
-from app.security import SecurityHeaders, InputValidator
 
 logger = logging.getLogger("rag-proxy.middleware")
 

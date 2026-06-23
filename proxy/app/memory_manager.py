@@ -7,11 +7,12 @@ Three-tier memory:
 2. ConversationMemory - episodic, conversation history with summarization
 3. QueryCache - semantic query cache for similar queries
 """
-import json
-import time
-import logging
+
 import hashlib
-from typing import Any, Dict, List, Optional
+import json
+import logging
+import time
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class WorkingMemoryStore:
     """Working memory with TTL, backed by Redis or in-memory."""
 
     def __init__(self):
-        self._store: Dict[str, tuple[Any, float]] = {}
+        self._store: dict[str, tuple[Any, float]] = {}
 
     def _now(self) -> float:
         return time.monotonic()
@@ -28,7 +29,7 @@ class WorkingMemoryStore:
     def remember(self, key: str, value: Any, ttl: float = 300):
         self._store[key] = (value, self._now() + ttl)
 
-    def recall(self, key: str) -> Optional[Any]:
+    def recall(self, key: str) -> Any | None:
         if key not in self._store:
             return None
         value, expire_at = self._store[key]
@@ -67,19 +68,21 @@ class ConversationMemory:
     """Episodic memory for conversation context."""
 
     def __init__(self, max_turns_stored: int = 100):
-        self._turns: List[Dict[str, Any]] = []
-        self._summaries: List[str] = []
+        self._turns: list[dict[str, Any]] = []
+        self._summaries: list[str] = []
         self._max_turns_stored = max_turns_stored
 
-    def add_turn(self, role: str, content: str, metadata: Optional[Dict] = None):
-        self._turns.append({
-            "role": role,
-            "content": content,
-            "timestamp": time.time(),
-            "metadata": metadata or {},
-        })
+    def add_turn(self, role: str, content: str, metadata: dict | None = None):
+        self._turns.append(
+            {
+                "role": role,
+                "content": content,
+                "timestamp": time.time(),
+                "metadata": metadata or {},
+            }
+        )
         if len(self._turns) > self._max_turns_stored:
-            self._turns = self._turns[-self._max_turns_stored:]
+            self._turns = self._turns[-self._max_turns_stored :]
 
     def get_context(self, max_turns: int = 10, max_tokens: int = 2000) -> str:
         turns = self._turns[-max_turns:]
@@ -88,7 +91,7 @@ class ConversationMemory:
             lines.append(f"{t['role']}: {t['content']}")
         result = "\n".join(lines)
         if len(result) > max_tokens * 4:
-            result = result[:max_tokens * 4] + "..."
+            result = result[: max_tokens * 4] + "..."
         return result
 
     def summarize_older_turns(self, keep_recent: int = 5):
@@ -102,7 +105,7 @@ class ConversationMemory:
         self._summaries.append("[SUMMARY] " + " | ".join(summary_parts))
         self._turns = recent
 
-    def get_summaries(self) -> List[str]:
+    def get_summaries(self) -> list[str]:
         return list(self._summaries)
 
     def clear(self):
@@ -117,10 +120,10 @@ class QueryCache:
     """Semantic query cache: returns cached response for similar queries."""
 
     def __init__(self):
-        self._cache: Dict[str, tuple[str, float]] = {}
-        self._embeddings: Dict[str, List[float]] = {}
+        self._cache: dict[str, tuple[str, float]] = {}
+        self._embeddings: dict[str, list[float]] = {}
 
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         if not a or not b or len(a) != len(b):
             return 0.0
         dot = sum(x * y for x, y in zip(a, b))
@@ -130,11 +133,11 @@ class QueryCache:
             return 0.0
         return dot / (norm_a * norm_b)
 
-    def _hash_embedding(self, embedding: List[float]) -> str:
+    def _hash_embedding(self, embedding: list[float]) -> str:
         raw = json.dumps([round(x, 6) for x in embedding]).encode()
         return hashlib.md5(raw).hexdigest()
 
-    def find_similar(self, query_embedding: List[float], threshold: float = 0.95) -> Optional[str]:
+    def find_similar(self, query_embedding: list[float], threshold: float = 0.95) -> str | None:
         now = time.monotonic()
         best_key = None
         best_score = 0.0
@@ -152,7 +155,7 @@ class QueryCache:
             return self._cache[best_key][0]
         return None
 
-    def store(self, query_embedding: List[float], response: str, ttl: float = 3600):
+    def store(self, query_embedding: list[float], response: str, ttl: float = 3600):
         key = self._hash_embedding(query_embedding)
         self._embeddings[key] = query_embedding
         self._cache[key] = (response, time.monotonic() + ttl)
@@ -173,7 +176,7 @@ class MemoryManager:
         self.conversation_memory = ConversationMemory()
         self.query_cache = QueryCache()
 
-    def add_turn(self, role: str, content: str, metadata: Optional[Dict] = None):
+    def add_turn(self, role: str, content: str, metadata: dict | None = None):
         self.conversation_memory.add_turn(role, content, metadata)
 
     def get_full_context(self, max_turns: int = 10, max_tokens: int = 2000) -> str:

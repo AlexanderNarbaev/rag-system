@@ -1,14 +1,13 @@
 # proxy/app/audit.py
 """Audit logging and tracking for all RAG operations."""
-import json
-import hashlib
+
 import datetime
-from datetime import timezone
-import os
+import hashlib
+import json
 import logging
+import os
 import time
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 
 logger = logging.getLogger("rag-proxy.audit")
 
@@ -16,19 +15,20 @@ logger = logging.getLogger("rag-proxy.audit")
 @dataclass
 class AuditEvent:
     """Single auditable event in the RAG system."""
+
     event_id: str
     timestamp: str
     event_type: str  # query, login, access_denied, config_change, error
-    user_id: Optional[str]
+    user_id: str | None
     client_ip: str
     endpoint: str
     request_hash: str
-    details: Dict = field(default_factory=dict)
-    duration_ms: Optional[float] = None
-    tokens_used: Optional[int] = None
+    details: dict = field(default_factory=dict)
+    duration_ms: float | None = None
+    tokens_used: int | None = None
     result_status: str = "unknown"
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         data = asdict(self)
         return {k: v for k, v in data.items() if v is not None}
 
@@ -63,7 +63,7 @@ class AuditLogger:
 
     def log_query(
         self,
-        user_id: Optional[str],
+        user_id: str | None,
         query: str,
         response_preview: str,
         chunks: int,
@@ -72,12 +72,12 @@ class AuditLogger:
         client_ip: str = "unknown",
         endpoint: str = "/v1/chat/completions",
         result_status: str = "success",
-        metadata: Optional[Dict] = None,
+        metadata: dict | None = None,
     ):
         """Log a query event."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
-            timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
             event_type="query",
             user_id=user_id,
             client_ip=client_ip,
@@ -95,11 +95,11 @@ class AuditLogger:
         )
         self._write_event(event)
 
-    def log_access_denied(self, user_id: Optional[str], resource: str, reason: str, client_ip: str = "unknown"):
+    def log_access_denied(self, user_id: str | None, resource: str, reason: str, client_ip: str = "unknown"):
         """Log an access denied event."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
-            timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
             event_type="access_denied",
             user_id=user_id,
             client_ip=client_ip,
@@ -113,8 +113,11 @@ class AuditLogger:
         )
         self._write_event(event)
 
-    def log_config_change(self, user_id: Optional[str], key: str, old_value: str, new_value: str, client_ip: str = "unknown"):
+    def log_config_change(
+        self, user_id: str | None, key: str, old_value: str, new_value: str, client_ip: str = "unknown"
+    ):
         """Log configuration changes (values masked)."""
+
         def mask_val(v: str) -> str:
             if v is None:
                 return "***"
@@ -124,7 +127,7 @@ class AuditLogger:
 
         event = AuditEvent(
             event_id=self._generate_event_id(),
-            timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
             event_type="config_change",
             user_id=user_id,
             client_ip=client_ip,
@@ -143,15 +146,15 @@ class AuditLogger:
         self,
         error_type: str,
         error_msg: str,
-        stack_trace: Optional[str],
-        context: Optional[Dict] = None,
+        stack_trace: str | None,
+        context: dict | None = None,
         client_ip: str = "unknown",
         endpoint: str = "unknown",
     ):
         """Log error events."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
-            timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
             event_type="error",
             user_id=context.get("user_id") if context else None,
             client_ip=client_ip,
@@ -167,11 +170,13 @@ class AuditLogger:
         )
         self._write_event(event)
 
-    def log_auth(self, user_id: Optional[str], action: str, success: bool, details: Optional[Dict] = None, client_ip: str = "unknown"):
+    def log_auth(
+        self, user_id: str | None, action: str, success: bool, details: dict | None = None, client_ip: str = "unknown"
+    ):
         """Log authentication events."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
-            timestamp=datetime.datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
             event_type="login" if action == "login" else "auth",
             user_id=user_id,
             client_ip=client_ip,
@@ -188,10 +193,10 @@ class AuditLogger:
 
     def query_history(
         self,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
         limit: int = 100,
-        start_time: Optional[str] = None,
-    ) -> List[Dict]:
+        start_time: str | None = None,
+    ) -> list[dict]:
         """Read audit log with filters."""
         results = []
         if not os.path.exists(self._audit_file):
@@ -206,7 +211,7 @@ class AuditLogger:
             cutoff = None
 
         try:
-            with open(self._audit_file, "r", encoding="utf-8") as f:
+            with open(self._audit_file, encoding="utf-8") as f:
                 lines = f.readlines()
         except Exception as e:
             logger.error(f"Failed to read audit log: {e}")
@@ -261,7 +266,7 @@ class AuditLogger:
             return json.dumps(report, ensure_ascii=False, indent=2)
 
         try:
-            with open(self._audit_file, "r", encoding="utf-8") as f:
+            with open(self._audit_file, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -270,11 +275,11 @@ class AuditLogger:
                         rec = json.loads(line)
                         ts = datetime.datetime.fromisoformat(rec["timestamp"])
                         if ts.tzinfo is None:
-                            ts = ts.replace(tzinfo=datetime.timezone.utc)
+                            ts = ts.replace(tzinfo=datetime.UTC)
                         if start_dt.tzinfo is None:
-                            start_dt = start_dt.replace(tzinfo=datetime.timezone.utc)
+                            start_dt = start_dt.replace(tzinfo=datetime.UTC)
                         if end_dt.tzinfo is None:
-                            end_dt = end_dt.replace(tzinfo=datetime.timezone.utc)
+                            end_dt = end_dt.replace(tzinfo=datetime.UTC)
                         if start_dt <= ts <= end_dt:
                             events.append(rec)
                     except (json.JSONDecodeError, KeyError, ValueError):
@@ -306,10 +311,10 @@ class RequestTracker:
     """Tracks request lifecycle: start -> processing -> complete."""
 
     def __init__(self):
-        self._active: Dict[str, Dict] = {}
+        self._active: dict[str, dict] = {}
         self._lock = None  # not async-safe; use in single-worker context
 
-    def start(self, request_id: str, metadata: Optional[Dict] = None):
+    def start(self, request_id: str, metadata: dict | None = None):
         """Record the start of a request."""
         self._active[request_id] = {
             "start_time": time.monotonic(),
@@ -317,7 +322,7 @@ class RequestTracker:
             "status": "processing",
         }
 
-    def complete(self, request_id: str, status: str = "success", tokens: int = 0) -> Optional[Dict]:
+    def complete(self, request_id: str, status: str = "success", tokens: int = 0) -> dict | None:
         """Record the completion of a request. Returns duration info or None."""
         entry = self._active.pop(request_id, None)
         if entry is None:

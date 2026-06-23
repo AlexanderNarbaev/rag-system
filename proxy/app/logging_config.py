@@ -3,17 +3,16 @@
 Structured logging configuration for RAG proxy.
 Supports JSON and text formats, request ID propagation, sensitive data masking.
 """
-import os
+
 import json
 import logging
+import os
 import re
-from datetime import datetime, timezone
-from typing import Optional
-
+from datetime import UTC, datetime
 
 SENSITIVE_PATTERNS = [
     re.compile(r'(api[_-]?key[=:]\s*["\']?)([^"\'&\s]+)', re.IGNORECASE),
-    re.compile(r'(Authorization:\s*Bearer\s+)([^\s]+)', re.IGNORECASE),
+    re.compile(r"(Authorization:\s*Bearer\s+)([^\s]+)", re.IGNORECASE),
     re.compile(r'(password[=:]\s*["\']?)([^"\'&\s]+)', re.IGNORECASE),
     re.compile(r'(secret[=:]\s*["\']?)([^"\'&\s]+)', re.IGNORECASE),
     re.compile(r'(token[=:]\s*["\']?)([^"\'&\s]+)', re.IGNORECASE),
@@ -34,7 +33,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": mask_sensitive_data(record.getMessage()),
@@ -52,7 +51,7 @@ class JsonFormatter(logging.Formatter):
 class RequestIdFilter(logging.Filter):
     """Injects request_id from context into log records."""
 
-    _request_id: Optional[str] = None
+    _request_id: str | None = None
 
     def filter(self, record: logging.LogRecord) -> bool:
         if RequestIdFilter._request_id:
@@ -62,7 +61,7 @@ class RequestIdFilter(logging.Filter):
         return True
 
     @classmethod
-    def set_request_id(cls, request_id: Optional[str]):
+    def set_request_id(cls, request_id: str | None):
         cls._request_id = request_id
 
 

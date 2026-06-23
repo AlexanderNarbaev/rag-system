@@ -5,7 +5,7 @@
 
 ## Context
 
-The RAG system must integrate with existing tools in the corporate environment — OpenWebUI, OpenCode, and custom internal clients — all of which speak the OpenAI chat completions API. Building a custom API would require adapting every client, adding maintenance burden and fragmentation. The system must support both streaming (real-time token generation) and non-streaming modes while internally performing RAG (retrieval, reranking, context assembly) before calling the LLM.
+The RAG system must integrate with existing tools in the corporate environment — OpenWebUI, OpenCode, and custom internal clients — all of which speak the OpenAI chat completions API. The proxy also supports multi-provider backends (OpenAI, Anthropic, Ollama, and generic OpenAI-compatible endpoints) through a pluggable adapter layer (`provider_adapter.py`), allowing LLM backend flexibility without changing the orchestration logic. Building a custom API would require adapting every client, adding maintenance burden and fragmentation. The system must support both streaming (real-time token generation) and non-streaming modes while internally performing RAG (retrieval, reranking, context assembly) before calling the LLM.
 
 Alternatives considered: **native LangChain integration** (ties clients to a specific framework), **custom REST API** (requires client-side changes), **gRPC service** (not supported by existing tools).
 

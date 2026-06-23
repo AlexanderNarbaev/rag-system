@@ -56,22 +56,23 @@ services:
     networks:
       - rag-network
 
-  # LLM сервер (vLLM) для Gemma-4-26B
+  # LLM server — any OpenAI-compatible backend (vLLM, llama.cpp, Ollama, etc.)
+  # Set MODEL_PATH and MODEL_NAME in .env or override below
   vllm:
     image: vllm/vllm-openai:latest
     container_name: rag-vllm
     volumes:
-      - /path/to/models:/models:ro   # замените на путь к вашим GGUF или HF моделям
+      - ${MODEL_PATH:-/path/to/models}:/models:ro
     ports:
       - "8000:8000"
     environment:
       - HUGGINGFACE_HUB_CACHE=/models/cache
     command: >
-      --model /models/gemma-4-26b-it-GGUF
+      --model /models/${MODEL_FILE:-model.gguf}
       --api-key ${LLM_API_KEY:-}
       --port 8000
-      --max-model-len 130000
-      --tensor-parallel-size 1
+      --max-model-len ${LLM_MAX_MODEL_LEN:-65536}
+      --tensor-parallel-size ${LLM_TP_SIZE:-1}
     deploy:
       resources:
         reservations:
