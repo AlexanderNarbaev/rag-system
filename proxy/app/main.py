@@ -219,6 +219,18 @@ class UserInfoResponse(BaseModel):
     is_authenticated: bool
 
 
+class FeedbackRequest(BaseModel):
+    feedback_id: str = Field(..., description="rag_feedback_id from the response")
+    rating: str = Field(..., pattern="^(positive|negative)$")
+    correction: str | None = Field(None, description="Corrected answer text")
+    comment: str | None = Field(None, description="Expert comment")
+
+
+class FeedbackResponse(BaseModel):
+    status: str
+    message: str
+
+
 # Вспомогательные функции
 def generate_request_id() -> str:
     return f"rag_{int(time.time())}_{os.urandom(4).hex()}"
@@ -693,6 +705,39 @@ async def chat_completions(
                 metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
             )
         return completion
+
+
+@app.post("/v1/feedback", response_model=FeedbackResponse)
+async def submit_feedback(request: FeedbackRequest, raw_request: Request):
+    """Submit feedback on a RAG response."""
+    from app.hitl import FeedbackType, get_logger
+
+    hlog = get_logger()
+
+    feedback_type = FeedbackType.POSITIVE if request.rating == "positive" else FeedbackType.NEGATIVE
+
+    try:
+        hlog.log_feedback(
+            request_id=request.feedback_id,
+            feedback_type=feedback_type,
+            comment=request.comment or "",
+            corrected_response=request.correction,
+        )
+
+        from app.config import ENRICHMENT_ENABLED
+
+        if ENRICHMENT_ENABLED and (request.rating == "positive" or request.correction):
+            try:
+                from app.enricher import enrich_from_feedback
+
+                await enrich_from_feedback(request)
+            except Exception as e:
+                logger.error(f"Enrichment failed (non-blocking): {e}")
+
+        return FeedbackResponse(status="ok", message="Feedback recorded")
+    except Exception as e:
+        logger.error(f"Failed to record feedback: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to record feedback: {e}") from e
 
 
 if __name__ == "__main__":

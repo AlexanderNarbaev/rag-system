@@ -200,6 +200,36 @@ def generate(state: RAGState) -> dict[str, Any]:
     return {"answer": answer}
 
 
+def check_confidence(state: dict) -> dict:
+    """Check confidence of generated answer and decide if escalation needed."""
+    from app.confidence import compute_confidence
+    from app.config import ADMIN_ALERT_ENABLED, CONFIDENCE_THRESHOLD, MAX_VERIFY_LOOPS
+
+    answer = state.get("answer", "")
+    context = state.get("context", "")
+    query = state.get("rewritten_query") or state.get("query", "")
+    rewrite_count = state.get("rewrite_count", 0)
+
+    if not answer:
+        return {"confidence": None, "needs_escalation": False}
+
+    report = compute_confidence(query=query, context=context, answer=answer)
+
+    needs_escalation = report.score < CONFIDENCE_THRESHOLD and rewrite_count < MAX_VERIFY_LOOPS
+    needs_admin_alert = (
+        report.score < CONFIDENCE_THRESHOLD and rewrite_count >= MAX_VERIFY_LOOPS and ADMIN_ALERT_ENABLED
+    )
+
+    if needs_admin_alert:
+        logger.warning(f"Low confidence answer — admin alert: query='{query[:80]}...', score={report.score}")
+
+    return {
+        "confidence": report.score,
+        "needs_escalation": needs_escalation,
+        "escalation_reason": "; ".join(report.uncertainties) if needs_escalation else "",
+    }
+
+
 # Строим граф
 def build_rag_graph() -> StateGraph:
     """Создаёт и компилирует граф RAG."""
@@ -225,7 +255,16 @@ def build_rag_graph() -> StateGraph:
     builder.add_conditional_edges("check_sufficiency", check_sufficiency, {"rewrite": "rewrite", "rerank": "rerank"})
 
     builder.add_edge("build_context", "generate")
-    builder.add_edge("generate", END)
+    builder.add_node("check_confidence", check_confidence)
+    builder.add_edge("generate", "check_confidence")
+    builder.add_conditional_edges(
+        "check_confidence",
+        lambda s: "escalate" if s.get("needs_escalation") else "done",
+        {
+            "escalate": "rewrite",
+            "done": END,
+        },
+    )
 
     # Добавляем графовое расширение как опциональный узел между rerank и build_context
     # В текущей архитектуре: retrieve -> check_sufficiency -> rerank -> graph_expand -> build_context
