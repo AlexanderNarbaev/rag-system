@@ -116,12 +116,13 @@ markdown_extensions:
 
 plugins:
   - i18n:
-      default_language: en
+      docs_structure: folder
       languages:
-        en:
+        - locale: en
+          default: true
           name: English
           build: true
-        ru:
+        - locale: ru
           name: Русский
           build: true
       nav_translations:
