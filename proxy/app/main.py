@@ -53,8 +53,9 @@ from app.config import (
     USE_LANGGRAPH,
     USE_REDIS,
 )
+from app.confidence import compute_confidence
 from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
-from app.hitl import log_interaction
+from app.hitl import log_interaction, generate_feedback_id
 from app.logging_config import setup_logging
 from app.metrics import init_metrics, metrics_endpoint
 from app.middleware import add_cors_middleware, setup_all_middleware
@@ -164,6 +165,8 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: list[ChatCompletionResponseChoice]
     usage: dict[str, int] = Field(default={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+    rag_feedback_id: str | None = None
+    rag_confidence: float | None = None
 
 
 class ModelInfo(BaseModel):
@@ -267,7 +270,7 @@ async def process_rag_query(
         cached = await cache_manager.get(cache_key)
         if cached:
             logger.info(f"Cache hit for query: {user_query[:50]}...")
-            return cached, True
+            return cached, "", True
 
     # 2. Гибридный поиск
     search_results = hybrid_search(query=user_query, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
@@ -366,13 +369,13 @@ async def process_rag_query(
 
     # 7. Вызов LLM
     if stream:
-        return context, messages_for_llm  # потоковая генерация обрабатывается отдельно
+        return context, messages_for_llm, False  # streaming handled separately
     else:
         response_text = await non_stream_completion(messages_for_llm, temperature=temperature, max_tokens=max_tokens)
         # Сохраняем в кэш
         if cache_manager and not force_refresh:
             await cache_manager.set(cache_key, response_text, ttl=3600)  # 1 час
-        return response_text, False
+        return response_text, context, False
 
 
 @app.get("/v1/health")
@@ -574,6 +577,9 @@ async def chat_completions(
             return StreamingResponse(final_response, media_type="text/event-stream")
         else:
             response_text = final_response["answer"]
+            context = final_response.get("context", "")
+            feedback_id = generate_feedback_id()
+            confidence = compute_confidence(query=user_query, context=context, answer=response_text)
             # Формируем ответ в OpenAI формате
             completion = ChatCompletionResponse(
                 id=request_id,
@@ -584,6 +590,8 @@ async def chat_completions(
                         index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
                     )
                 ],
+                rag_feedback_id=feedback_id,
+                rag_confidence=confidence.score,
             )
             duration_ms = (time.time() - start_time) * 1000
             request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -617,7 +625,7 @@ async def chat_completions(
         async def event_generator():
             try:
                 # Выполняем поиск и подготовку контекста (синхронно, но в потоке)
-                context, messages_for_llm = await process_rag_query(
+                context, messages_for_llm, _ = await process_rag_query(
                     user_query=user_query,
                     version=version,
                     force_refresh=request.rag_force_refresh,
@@ -660,7 +668,7 @@ async def chat_completions(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     else:
         # Non-streaming
-        response_text, from_cache = await process_rag_query(
+        response_text, rag_context, from_cache = await process_rag_query(
             user_query=user_query,
             version=version,
             force_refresh=request.rag_force_refresh,
@@ -670,6 +678,8 @@ async def chat_completions(
             other_messages=other_messages,
             user_context=user,
         )
+        feedback_id = generate_feedback_id()
+        confidence = compute_confidence(query=user_query, context=rag_context, answer=response_text)
         completion = ChatCompletionResponse(
             id=request_id,
             created=int(time.time()),
@@ -679,6 +689,8 @@ async def chat_completions(
                     index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
                 )
             ],
+            rag_feedback_id=feedback_id,
+            rag_confidence=confidence.score,
         )
         duration_ms = (time.time() - start_time) * 1000
         request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)

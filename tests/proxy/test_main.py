@@ -285,7 +285,7 @@ class TestProcessRagQuery:
 
         with patch("proxy.app.main.cache_manager", mock_cache), \
              patch("proxy.app.main.hybrid_search") as mock_search:
-            result, from_cache = await process_rag_query(
+            result, context, from_cache = await process_rag_query(
                 user_query="test query",
                 version=None,
                 force_refresh=False,
@@ -300,7 +300,7 @@ class TestProcessRagQuery:
         with patch("proxy.app.main.cache_manager", None), \
              patch("proxy.app.main.hybrid_search", return_value=[]), \
              patch("proxy.app.main.non_stream_completion", return_value="Answer from LLM"):
-            result, from_cache = await process_rag_query(
+            result, context, from_cache = await process_rag_query(
                 user_query="test",
                 stream=False,
             )
@@ -321,7 +321,7 @@ class TestProcessRagQuery:
              patch("proxy.app.main.deduplicate_chunks") as mock_dedup, \
              patch("proxy.app.main.build_context", return_value="Built context"):
             mock_dedup.return_value = [({"text": "chunk text"}, 0.95)]
-            context, messages = await process_rag_query(
+            context, messages, _ = await process_rag_query(
                 user_query="test",
                 stream=True,
             )
