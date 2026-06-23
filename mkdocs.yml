@@ -35,12 +35,14 @@ theme:
     - navigation.top
     - navigation.tracking
     - navigation.footer
+    - header.autohide
     - search.suggest
     - search.highlight
     - search.share
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
+    - content.tooltips
     - toc.follow
     - toc.integrate
   icon:
@@ -125,36 +127,6 @@ plugins:
         - locale: ru
           name: Русский
           build: true
-      nav_translations:
-        ru:
-          Home: Главная
-          "Architecture Decision Records": "Архитектурные решения (ADR)"
-          "C4 Architecture Diagrams": "C4 Диаграммы архитектуры"
-          "Design Guides": "Руководства"
-          "API Reference": "API Справка"
-          Deployment: Развёртывание
-          Operations: Эксплуатация
-          "MCP Server": "MCP Сервер"
-          "ADR-001: Embedding Model": "ADR-001: Модель эмбеддинга"
-          "ADR-002: Qdrant Hybrid Search": "ADR-002: Гибридный поиск Qdrant"
-          "ADR-003: Dual-LLM Architecture": "ADR-003: Двух-LLM архитектура"
-          "ADR-004: OpenAI-Compatible Proxy": "ADR-004: OpenAI-совместимый прокси"
-          "ADR-005: Version-Aware Indexing": "ADR-005: Версионная индексация"
-          "ADR-006: Agentic RAG with LangGraph": "ADR-006: Агентный RAG с LangGraph"
-          "ADR-007: HITL Feedback System": "ADR-007: Система обратной связи HITL"
-          "RAG Maturity Assessment": "Оценка зрелости RAG"
-          "Production Readiness Checklist": "Чеклист готовности к прод"
-          "Performance & Quality": "Производительность и качество"
-          "Extensibility: Adding Data Sources": "Расширяемость: источники данных"
-          "Access Control & RBAC": "Контроль доступа и RBAC"
-          "Knowledge Graph Strategy": "Стратегия графа знаний"
-          "Integration with OpenCode": "Интеграция с OpenCode"
-          "Development Roadmap": "Дорожная карта"
-          "Deployment Guide": "Руководство по развёртыванию"
-          "Operations Guide": "Руководство по эксплуатации"
-          Troubleshooting: "Устранение неполадок"
-          "Proxy Deployment": "Развёртывание прокси"
-          "ETL Deployment": "Развёртывание ETL"
   - search:
       lang: en
       separator: '[\s\-,:!=\[\]()"/]+'
@@ -174,7 +146,8 @@ extra:
       link: /ru/
       lang: ru
 
-extra_css: []
+extra_css:
+  - stylesheets/extra.css
 
 extra_javascript: []
 

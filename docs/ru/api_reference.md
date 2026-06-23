@@ -1,6 +1,6 @@
 # Справка по API
 
-RAG-прокси предоставляет **OpenAI-совместимый API** на порту `8080`. Любой OpenAI-клиент может использовать его как замену — достаточно указать `base_url` как `http://<host>:8080/v1`.
+RAG-прокси предоставляет **OpenAI-совместимый API** на порту `8080`. Любой OpenAI-клиент может использовать его как замену — достаточно указать `base_url` как `http://<host>:8080/v1`. Прокси также добавляет RAG-специфичные расширения для обратной связи, оценки уверенности и прослеживаемости источников.
 
 ---
 
@@ -10,142 +10,53 @@ RAG-прокси предоставляет **OpenAI-совместимый API*
 http://<proxy-host>:8080/v1
 ```
 
-Все эндпоинты используют префикс `/v1` в соответствии с соглашением OpenAI API.
-
----
-
-## Поддержка нескольких провайдеров
-
-Прокси поддерживает несколько LLM-провайдеров через переменную окружения `LLM_PROVIDER_TYPE`. Каждый провайдер обрабатывается отдельным адаптером, который прозрачно преобразует внутренний OpenAI-совместимый формат в формат API конкретного провайдера.
-
-### Поддерживаемые провайдеры
-
-| Провайдер | `LLM_PROVIDER_TYPE` | Описание |
-|-----------|---------------------|----------|
-| **OpenAI-совместимый** | `openai` | vLLM, llama.cpp, Ollama, LiteLLM и любые OpenAI-совместимые эндпоинты |
-| **Anthropic** | `anthropic` | Claude API через Anthropic Messages API |
-| **Ollama** | `ollama` | Нативный API Ollama (незначительные отличия от OpenAI-совместимого) |
-| **Generic** | `generic` | Пользовательский REST API с настраиваемыми преобразованиями запросов/ответов |
-
-### Настройка
-
-Настройте в `proxy/.env`:
-
-```bash
-# Тип провайдера (openai, anthropic, ollama, generic)
-LLM_PROVIDER_TYPE=openai
-
-# URL эндпоинта LLM
-LLM_ENDPOINT=http://localhost:8000/v1
-
-# Имя модели для запроса к провайдеру
-LLM_MODEL_NAME=your-model-name
-
-# API-ключ (если требуется провайдером)
-LLM_API_KEY=your-api-key
-```
-
-### Особенности провайдеров
-
-**Anthropic:**
-- Системный промпт передаётся через выделенное поле `system` (не как роль сообщения)
-- Вызовы инструментов преобразуются между форматом `tool_calls` OpenAI и блоками `tool_use` Anthropic
-- Потоковые SSE-чанки преобразуются из событий `content_block_delta` Anthropic
-- Путь эндпоинта — `/messages` (не `/chat/completions`)
-
-**Ollama:**
-- Использует поле `options` для параметров температуры и лимита токенов
-- Заголовок `Authorization` не требуется по умолчанию
-- OpenAI-совместимый эндпоинт доступен через `ollama serve`
-
-**Generic:**
-- Поддерживает пользовательские вызываемые объекты `request_transform` и `response_transform`
-- Возвращается к OpenAI-совместимому формату для всех провайдер-специфичных полей
+Все эндпоинты используют префикс `/v1` в соответствии с соглашением OpenAI API. Эндпоинт `/metrics` доступен на корневом уровне.
 
 ---
 
 ## Аутентификация
 
-Аутентификация доступна через JWT-токены. Если отключена (`AUTH_ENABLED=false`), прокси принимает все запросы без аутентификации.
+### Обзор
 
-Если аутентификация включена, добавляйте токен в запросы:
+Аутентификация реализована через JWT-токены. Если отключена (`AUTH_ENABLED=false`, по умолчанию), прокси принимает все запросы без аутентификации. При включении все эндпоинты, кроме `/v1/auth/login`, `/v1/health` и `/metrics`, требуют валидный JWT.
 
-```http
-Authorization: Bearer <your-jwt-token>
+### Жизненный цикл токена
+
+```
+Клиент                    Прокси                    Keycloak/LDAP
+  |                          |                           |
+  |-- POST /v1/auth/login -->|                           |
+  |   {username, password}   |-- валидация уч. данных -->|
+  |                          |<---- контекст польз. -----|
+  |<--- JWT токен ----------|                           |
+  |                          |                           |
+  |-- API запрос ----------->|                           |
+  |   Authorization: Bearer  |-- проверка JWT ---------->|
+  |                          |<---- валиден -------------|
+  |<--- ответ ---------------|                           |
+  |                          |                           |
+  |-- POST /v1/auth/refresh >|                           |
+  |   (до истечения)         |-- обновление JWT -------->|
+  |                          |<---- новый токен ---------|
+  |<--- новый JWT -----------|                           |
 ```
 
-### `POST /v1/auth/login`
+### Настройка
 
-Генерация JWT-токена по учётным данным. В production сценарии валидация выполняется через Keycloak/LDAP. Для автономных развёртываний используется хранилище учётных данных, настраиваемое через переменную `AUTH_VALID_USERS`.
+```bash
+# Включить аутентификацию
+AUTH_ENABLED=true
 
-#### Запрос
+# Секрет подписи JWT (сгенерируйте: openssl rand -hex 32)
+JWT_SECRET=your-256-bit-secret
 
-```json
-{
-  "username": "user",
-  "password": "pass",
-  "expires_in_hours": 24
-}
-```
+# Для автономных развёртываний (без Keycloak):
+# Список пар user:password_hash:role через запятую
+AUTH_VALID_USERS=admin:$2b$12$...:admin,viewer:$2b$12$...:viewer
 
-| Поле | Тип | Обязательное | По умолчанию | Описание |
-|------|-----|-------------|--------------|----------|
-| `username` | string | Да | — | Имя пользователя |
-| `password` | string | Да | — | Пароль |
-| `expires_in_hours` | number | Нет | `24` | Срок действия токена в часах |
-
-#### Ответ (200)
-
-```json
-{
-  "access_token": "eyJhbGciOi...",
-  "token_type": "bearer",
-  "expires_in": 86400,
-  "user_id": "user123",
-  "username": "user",
-  "roles": ["viewer"],
-  "groups": ["engineering"]
-}
-```
-
-### `POST /v1/auth/refresh`
-
-Обновление существующего JWT-токена. Проверяет текущий токен и выдаёт новый с теми же правами, но обновлённым сроком действия.
-
-#### Запрос
-
-```json
-{
-  "token": "eyJhbGciOi..."
-}
-```
-
-#### Ответ (200)
-
-```json
-{
-  "access_token": "eyJhbGciOi...",
-  "token_type": "bearer",
-  "expires_in": 86400
-}
-```
-
-### `GET /v1/auth/me`
-
-Возвращает контекст текущего аутентифицированного пользователя (роли, группы, уровень доступа).
-
-#### Ответ (200)
-
-```json
-{
-  "user_id": "user123",
-  "username": "user",
-  "roles": ["viewer"],
-  "groups": ["engineering"],
-  "access_level": "internal",
-  "is_admin": false,
-  "is_authenticated": true
-}
+# Настройки токена
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_HOURS=24
 ```
 
 ---
@@ -156,105 +67,136 @@ Authorization: Bearer <your-jwt-token>
 
 Чат-завершение с RAG-дополнением. Принимает стандартные параметры OpenAI и RAG-расширения.
 
-#### Запрос
+#### Схема запроса
 
 ```json
 {
-  "model": "your-model-name",
+  "model": "string (обязательно)",
   "messages": [
-    {"role": "system", "content": "You are a technical assistant."},
-    {"role": "user", "content": "How is authentication implemented in the backend?"}
+    {
+      "role": "string (system | user | assistant | tool)",
+      "content": "string | array (обязательно)",
+      "name": "string (опционально)",
+      "tool_call_id": "string (обязательно для роли tool)",
+      "tool_calls": [
+        {
+          "id": "string",
+          "type": "function",
+          "function": {
+            "name": "string",
+            "arguments": "string (JSON-строка)"
+          }
+        }
+      ]
+    }
   ],
-  "temperature": 0.2,
-  "top_p": 0.95,
-  "max_tokens": 4096,
-  "stream": false
+  "temperature": "number (0-2, по умолчанию: 0.2)",
+  "top_p": "number (0-1, по умолчанию: 0.95)",
+  "max_tokens": "integer (по умолчанию: 4096)",
+  "stream": "boolean (по умолчанию: false)",
+  "stop": ["string (опционально)"],
+  "presence_penalty": "number (-2.0 до 2.0, опционально)",
+  "frequency_penalty": "number (-2.0 до 2.0, опционально)",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "string",
+        "description": "string",
+        "parameters": "object (JSON Schema)"
+      }
+    }
+  ],
+  "tool_choice": "string | object (none | auto | {type: 'function', function: {name: '...'}})",
+  "rag_version": "string (опционально)",
+  "rag_force_refresh": "boolean (по умолчанию: false)"
 }
 ```
 
 #### Стандартные параметры
 
 | Поле | Тип | Обязательное | По умолчанию | Описание |
-|------|-----|-------------|--------------|----------|
-| `model` | string | Да | — | ID модели. Используйте настроенный `LLM_MODEL_NAME` или `rag-proxy` |
-| `messages` | array | Да | — | Сообщения чата. Системный промпт заменяется RAG-контекстом |
-| `temperature` | number | Нет | `0.2` | Температура сэмплирования (0–2) |
-| `top_p` | number | Нет | `0.95` | Nucleus-сэмплирование |
-| `max_tokens` | number | Нет | `4096` | Максимум токенов в ответе |
-| `stream` | boolean | Нет | `false` | Включить потоковую передачу SSE |
+|-------|------|----------|---------|-------------|
+| `model` | string | Да | — | ID модели. Используйте настроенный `LLM_MODEL_NAME` или виртуальную модель `rag-proxy` для полного RAG-конвейера |
+| `messages` | array | Да | — | Сообщения чата. Системный промпт включается в RAG-контекст |
+| `temperature` | number | Нет | `0.2` | Температура сэмплирования (0–2). Ниже = детерминированнее |
+| `top_p` | number | Нет | `0.95` | Порог nucleus-сэмплирования |
+| `max_tokens` | number | Нет | `4096` | Максимум токенов в сгенерированном ответе |
+| `stream` | boolean | Нет | `false` | Включить потоковую передачу Server-Sent Events |
+| `stop` | array | Нет | `null` | До 4 стоп-последовательностей |
+| `presence_penalty` | number | Нет | `null` | Штраф за повторение токенов (-2.0 до 2.0) |
+| `frequency_penalty` | number | Нет | `null` | Штраф за частые токены (-2.0 до 2.0) |
+| `tools` | array | Нет | `null` | Определения доступных инструментов/функций |
+| `tool_choice` | string/object | Нет | `"auto"` | Выбор инструмента: `"none"`, `"auto"` или конкретная функция |
 
-#### RAG-параметры
+#### RAG-специфичные параметры
+
+Эти параметры расширяют стандартную схему OpenAI. Они игнорируются стандартными OpenAI-клиентами и влияют на поведение только при прохождении запроса через RAG-прокси.
 
 | Поле | Тип | Обязательное | По умолчанию | Описание |
-|------|-----|-------------|--------------|----------|
-| `rag_version` | string | Нет | `null` | Запросить контекст конкретной версии документа (дата ISO или префикс SHA) |
-| `rag_force_refresh` | boolean | Нет | `false` | Пропустить кэш и принудительно выполнить поиск и генерацию |
+|-------|------|----------|---------|-------------|
+| `rag_version` | string | Нет | `null` | Запросить контекст конкретной версии документа. Принимает дату ISO (`"2026-01-15"`), префикс SHA-256 (`"a1b2c3d4"`) или тег версии (`"v2.1"`). Фильтрует найденные чанки по указанной версии. |
+| `rag_force_refresh` | boolean | Нет | `false` | Пропустить кэш ответов Redis. Принудительно выполняет новый поиск, реранкинг, сборку контекста и генерацию LLM. Полезно, когда документы обновлены, а кэшированные ответы устарели. |
 
-#### Параметры вызова инструментов/функций
-
-| Поле | Тип | Обязательное | По умолчанию | Описание |
-|------|-----|-------------|--------------|----------|
-| `tools` | array | Нет | `null` | Список доступных инструментов/функций |
-| `tool_choice` | string/object | Нет | `"auto"` | Режим выбора инструмента: `"none"`, `"auto"` или конкретная функция |
-
-Каждый объект инструмента соответствует формату вызова функций OpenAI:
+#### Схема ответа (без потока, 200 OK)
 
 ```json
 {
-  "type": "function",
-  "function": {
-    "name": "get_weather",
-    "description": "Get current weather for a city",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "city": {
-          "type": "string",
-          "description": "City name"
-        },
-        "units": {
-          "type": "string",
-          "enum": ["celsius", "fahrenheit"],
-          "description": "Temperature units"
-        }
-      },
-      "required": ["city"]
-    }
-  }
-}
-```
-
-Вызовы инструментов автоматически преобразуются между форматами провайдеров. Когда LLM запрашивает вызов инструмента, ответ содержит массив `tool_calls`. Прокси принимает сообщения с ролью `tool` и результатами для многошагового использования инструментов.
-
-#### Ответ (без потоковой передачи)
-
-```json
-{
-  "id": "rag_1719057600_a1b2c3d4",
+  "id": "string",
   "object": "chat.completion",
-  "created": 1719057600,
-  "model": "your-model-name",
+  "created": "integer (unix timestamp)",
+  "model": "string",
   "choices": [
     {
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "Authentication is implemented using JWT tokens with Redis-based session management...\n\nSources: [Confluence: Auth Service ADR], [src/auth/middleware.py:42]"
+        "content": "string | null (null при наличии tool_calls)",
+        "tool_calls": [
+          {
+            "id": "string",
+            "type": "function",
+            "function": {
+              "name": "string",
+              "arguments": "string (JSON-строка)"
+            }
+          }
+        ]
       },
-      "finish_reason": "stop"
+      "finish_reason": "string (stop | length | tool_calls | content_filter)"
     }
   ],
   "usage": {
-    "prompt_tokens": 1250,
-    "completion_tokens": 180,
-    "total_tokens": 1430
-  }
+    "prompt_tokens": "integer",
+    "completion_tokens": "integer",
+    "total_tokens": "integer"
+  },
+  "rag_feedback_id": "string | null",
+  "rag_confidence": "float (0.0–1.0) | null",
+  "rag_sources": [
+    {
+      "chunk_id": "string (SHA-256 хеш)",
+      "source": "string (название документа)",
+      "source_type": "string (confluence | jira | gitlab | document | book | chat)",
+      "version": "string (форматированная дата)",
+      "relevance_score": "float",
+      "url": "string | null"
+    }
+  ]
 }
 ```
 
-#### Ответ с вызовами инструментов
+#### RAG-расширения ответа
 
-Когда LLM запрашивает вызов инструмента, ответ содержит `tool_calls` в сообщении:
+| Поле | Тип | Описание |
+|-------|------|-------------|
+| `rag_feedback_id` | string | Уникальный ID для отправки экспертной обратной связи через `/v1/feedback`. Генерируется для каждого ответа. |
+| `rag_confidence` | float | Оценка уверенности (0.0–1.0). На основе достаточности контекста, соотношения длины ответа к контексту и обнаружения фраз неуверенности. Значения ниже 0.5 активируют флаг `needs_review`. |
+| `rag_sources` | array | Найденные чанки, использованные для генерации ответа. Каждая запись включает ID чанка, исходный документ, тип, версию, оценку релевантности и опциональный URL. Полезно для цитирования и аудита. |
+
+#### Ответ с вызовом инструментов
+
+Когда LLM запрашивает вызов инструмента, `content` равен `null`, а `tool_calls` заполнен:
 
 ```json
 {
@@ -273,65 +215,74 @@ Authorization: Bearer <your-jwt-token>
             "id": "call_abc123",
             "type": "function",
             "function": {
-              "name": "get_weather",
-              "arguments": "{\"city\":\"Moscow\",\"units\":\"celsius\"}"
+              "name": "search_knowledge_base",
+              "arguments": "{\"query\":\"процесс развёртывания\",\"max_results\":5}"
             }
           }
         ]
       },
       "finish_reason": "tool_calls"
     }
-  ]
+  ],
+  "rag_feedback_id": "fbk_1719057600_d4e5f6g7",
+  "rag_confidence": 0.85
 }
 ```
 
-Чтобы продолжить диалог с результатами инструмента, отправьте последующее сообщение с ролью `tool`:
+Для продолжения диалога с результатами инструмента отправьте последующее сообщение с ролью `tool`:
 
 ```json
 {
   "model": "your-model-name",
   "messages": [
-    {"role": "user", "content": "What is the weather in Moscow?"},
-    {"role": "assistant", "content": null, "tool_calls": [{"id": "call_abc123", "type": "function", "function": {"name": "get_weather", "arguments": "{\"city\":\"Moscow\"}"}}]},
-    {"role": "tool", "tool_call_id": "call_abc123", "name": "get_weather", "content": "{\"temperature\": 22, \"condition\": \"sunny\"}"}
+    {"role": "user", "content": "Как развернуть прокси?"},
+    {"role": "assistant", "content": null, "tool_calls": [
+      {"id": "call_abc123", "type": "function", "function": {"name": "search_knowledge_base", "arguments": "{\"query\":\"развёртывание\"}"}}
+    ]},
+    {"role": "tool", "tool_call_id": "call_abc123", "name": "search_knowledge_base", "content": "Прокси разворачивается через docker-compose up -d из директории proxy/..."}
   ]
 }
 ```
 
 #### Потоковый ответ (SSE)
 
-При `"stream": true` ответ передаётся через Server-Sent Events:
+При `"stream": true` ответ передаётся через Server-Sent Events с типом содержимого `text/event-stream`:
 
 ```
-data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{"role":"assistant","content":"Auth"},"finish_reason":null}]}
+data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
 
-data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{"content":"entication"},"finish_reason":null}]}
+data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{"content":"Прокси"},"finish_reason":null}]}
 
-...
+data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{"content":" разворачивается"},"finish_reason":null}]}
 
-data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+data: {"id":"rag_1719057600_a1b2c3d4","object":"chat.completion.chunk","created":1719057600,"model":"your-model-name","choices":[{"index":0,"delta":{},"finish_reason":"stop","rag_feedback_id":"fbk_1719057600_d4e5f6g7","rag_confidence":0.82,"rag_sources":[...]}]}
 
 data: [DONE]
 ```
 
-Каждый чанк следует формату OpenAI:
+**Особенности потоковой передачи:**
+
 - `delta` содержит инкрементальный контент (вместо `message`)
 - `finish_reason` равен `null` до финального чанка
+- RAG-расширения (`rag_feedback_id`, `rag_confidence`, `rag_sources`) появляются только в **финальном чанке**
+- Сигнал `[DONE]` завершает поток
+- При потоковой передаче вызовов инструментов `delta.tool_calls` заполняется инкрементально
 
 #### RAG-конвейер (под капотом)
 
 При поступлении запроса чат-завершения прокси выполняет:
 
-1. **Эмбеддирует** запрос пользователя с помощью настроенной модели эмбеддингов
-2. **Ищет** в Qdrant с гибридным поиском (dense + sparse, RRF-фьюжн) — до `MAX_CHUNKS_RETRIEVAL` результатов
-3. **Реранжирует** результаты с помощью cross-encoder — отбирает верхние `MAX_CHUNKS_AFTER_RERANK`
-4. **Дедуплицирует** чанки по SHA-256 хешу и фильтрует по версии
-5. **Оценивает** качество поиска (CRAG-стиль) — может вызвать расширение, fallback или обычную сборку
-6. **Собирает** контекст с интеллектуальным распределением бюджета токенов
-7. **Генерирует** ответ через настроенного LLM-провайдера
-8. **Кэширует** ответ в Redis (если не установлен `rag_force_refresh`)
-
-При включённом LangGraph (`USE_LANGGRAPH=true`) используется 7-узловой агентный граф состояний с многошаговым поиском и самокоррекцией.
+1. **Анализ запроса** — SLM классифицирует интент (5 классов: фактический, процедурный, сравнение, устранение неполадок, мета), опционально декомпозирует на подзапросы, извлекает сущности
+2. **Гибридный поиск** — Плотные (BGE-M3 1024-dim) + разреженные (лексические BM25-style) векторы ищутся в Qdrant с RRF-фьюжном (k=60). Возвращает до `MAX_CHUNKS_RETRIEVAL` (по умолчанию 50) чанков
+3. **Оценка качества поиска** — `RetrievalEvaluator` оценивает результаты (уверенность 0.0–1.0) на основе распределения score, коэффициента покрытия и количества результатов. Определяет действие: `USE`, `REWRITE`, `EXPAND` или `FALLBACK`
+4. **Переписывание запроса** (при необходимости) — SLM или LLM переписывает неоднозначные/неудачные запросы; до `MAX_RETRIEVAL_LOOPS=3` итераций
+5. **Cross-Encoder реранкинг** — MiniLM-L-6-v2 оценивает top-N кандидатов, отбирает верхние `MAX_CHUNKS_AFTER_RERANK` (по умолчанию 20)
+6. **Расширение графа** (опционально, `USE_GRAPH_EXPANSION=true`) — многошаговый обход Neo4j обогащает контекст связанными сущностями
+7. **Дедупликация и фильтрация версий** — чанки дедуплицируются по SHA-256 хешу; фильтруются по `rag_version`, если указана
+8. **Сборка контекста** — `TokenOptimizer` распределяет бюджет токенов между системным промптом, контекстом, историей и ответом. Применяет до 4 стратегий сжатия
+9. **Генерация LLM** — собранный промпт отправляется настроенному LLM-провайдеру (vLLM, llama.cpp, Anthropic, Ollama или generic OpenAI-compatible)
+10. **Оценка уверенности** — эвристика `compute_confidence()`: достаточность контекста (вес 0.4), соотношение контекст/ответ (0.3), обнаружение фраз неуверенности (0.2), проверка длины ответа (0.1)
+11. **Кэширование ответа** — ответ кэшируется в Redis (1ч TTL), если не установлен `rag_force_refresh=true`
 
 ---
 
@@ -339,36 +290,24 @@ data: [DONE]
 
 Список доступных моделей.
 
-#### Запрос
-
-```http
-GET /v1/models HTTP/1.1
-```
-
-#### Ответ
+#### Ответ (200 OK)
 
 ```json
 {
   "object": "list",
   "data": [
     {
-      "id": "your-model-name",
+      "id": "string",
       "object": "model",
-      "created": 1719057600,
-      "owned_by": "local"
-    },
-    {
-      "id": "rag-proxy",
-      "object": "model",
-      "created": 1719057600,
-      "owned_by": "local"
+      "created": "integer (unix timestamp)",
+      "owned_by": "string"
     }
   ]
 }
 ```
 
-- `your-model-name` — фактическая LLM
-- `rag-proxy` — виртуальный псевдоним модели для полного RAG-конвейера
+- `llama-3-70b-instruct` — фактическая LLM, настроенная через `LLM_MODEL_NAME`
+- `rag-proxy` — виртуальный псевдоним модели. При использовании прокси применяет полный RAG-конвейер перед вызовом LLM
 
 ---
 
@@ -376,183 +315,233 @@ GET /v1/models HTTP/1.1
 
 Проверка работоспособности прокси и его зависимостей.
 
-#### Запрос
-
-```http
-GET /v1/health HTTP/1.1
-```
-
-#### Ответ (здоров)
+#### Ответ (200 OK — Здоров)
 
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-06-22T10:00:00Z",
+  "timestamp": "string (ISO 8601)",
+  "version": "string",
   "components": {
     "qdrant": "ok",
-    "llm": "ok"
+    "llm": "ok",
+    "neo4j": "ok | disabled",
+    "redis": "ok | disabled",
+    "slm": "ok | disabled"
   }
 }
 ```
 
-**HTTP 200** когда все компоненты работают.
-
-#### Ответ (деградация)
+#### Ответ (503 — Деградация)
 
 ```json
 {
   "status": "degraded",
-  "timestamp": "2026-06-22T10:00:00Z",
+  "timestamp": "string (ISO 8601)",
+  "version": "string",
   "components": {
     "qdrant": "ok",
-    "llm": "error: Connection refused"
-  }
+    "llm": "error: Connection refused",
+    "neo4j": "disabled",
+    "redis": "ok",
+    "slm": "error: timeout"
+  },
+  "degraded_reason": "LLM backend unreachable"
 }
 ```
 
-**HTTP 503** когда любой компонент недоступен.
+**Значения статуса компонентов:**
 
-Прокси никогда не падает при отказе компонентов (graceful degradation). Если Qdrant недоступен, поиск возвращает пустые результаты. Если LLM недоступен, прокси возвращает 503 на `/v1/chat/completions`.
+| Значение | Описание |
+|----------|----------|
+| `ok` | Компонент ответил в пределах таймаута |
+| `error: <сообщение>` | Компонент недоступен или вернул ошибку |
+| `disabled` | Компонент не настроен (например, `USE_REDIS=false`) |
+
+**Graceful degradation:** Прокси никогда не падает при отказе компонентов. Если Qdrant недоступен, поиск возвращает пустые результаты. Если LLM недоступен, прокси возвращает 503 на `/v1/chat/completions`.
 
 ---
 
 ### `GET /metrics`
 
-Метрики Prometheus в формате OpenMetrics.
+Prometheus-метрики в формате OpenMetrics.
 
-#### Запрос
+#### Доступные метрики
 
-```http
-GET /metrics HTTP/1.1
+| Метрика | Тип | Метки | Описание |
+|--------|------|--------|-------------|
+| `rag_requests_total` | Counter | `endpoint`, `status` | Всего запросов по эндпоинтам и HTTP-статусам |
+| `rag_request_duration_seconds` | Histogram | `endpoint` | Распределение задержки запросов |
+| `rag_retrieval_chunks` | Histogram | — | Чанков найдено за запрос |
+| `rag_retrieval_duration_seconds` | Histogram | — | Задержка гибридного поиска + реранка |
+| `rag_rerank_duration_seconds` | Histogram | — | Задержка cross-encoder реранкера |
+| `rag_llm_duration_seconds` | Histogram | `provider` | Задержка генерации LLM по типу провайдера |
+| `rag_llm_tokens_total` | Counter | `type` (`prompt` \| `completion` \| `total`) | Всего потреблено токенов |
+| `rag_cache_hit_ratio` | Gauge | `cache_type` (`embedding` \| `rerank` \| `response`) | Коэффициент попадания в кэш |
+| `rag_errors_total` | Counter | `type` (`llm` \| `qdrant` \| `neo4j` \| `validation` \| `timeout` \| `internal`) | Количество ошибок по типам |
+| `rag_active_requests` | Gauge | — | Текущие выполняемые запросы |
+| `rag_confidence_score` | Histogram | — | Распределение оценок уверенности |
+| `rag_feedback_total` | Counter | `rating` (`positive` \| `negative`) | Всего отправлено отзывов |
+| `rag_rate_limit_hits_total` | Counter | `endpoint` | Превышений лимита запросов |
+
+---
+
+### `POST /v1/auth/login`
+
+Генерация JWT-токена по учётным данным.
+
+#### Схема запроса
+
+```json
+{
+  "username": "string (обязательно)",
+  "password": "string (обязательно)",
+  "expires_in_hours": "integer (опционально, по умолчанию: 24)"
+}
 ```
 
-#### Ответ (фрагмент)
+#### Схема ответа (200 OK)
 
-```
-# HELP rag_requests_total Total API requests
-# TYPE rag_requests_total counter
-rag_requests_total{endpoint="/v1/chat/completions"} 1423
-rag_requests_total{endpoint="/v1/models"} 89
-
-# HELP rag_request_duration_seconds Request latency
-# TYPE rag_request_duration_seconds histogram
-rag_request_duration_seconds_bucket{le="0.1"} 12
-rag_request_duration_seconds_bucket{le="0.5"} 87
-rag_request_duration_seconds_bucket{le="1.0"} 234
-rag_request_duration_seconds_bucket{le="5.0"} 1201
-rag_request_duration_seconds_bucket{le="+Inf"} 1423
-
-# HELP rag_llm_tokens_total Total tokens used
-# TYPE rag_llm_tokens_total counter
-rag_llm_tokens_total{type="prompt"} 1780000
-rag_llm_tokens_total{type="completion"} 256000
-
-# HELP rag_cache_hit_ratio Cache hit ratio
-# TYPE rag_cache_hit_ratio gauge
-rag_cache_hit_ratio 0.62
+```json
+{
+  "access_token": "string (JWT)",
+  "token_type": "bearer",
+  "expires_in": "integer (секунд)",
+  "user_id": "string",
+  "username": "string",
+  "roles": ["string"],
+  "groups": ["string"]
+}
 ```
 
-Ключевые метрики:
+### `POST /v1/auth/refresh`
 
-| Метрика | Тип | Описание |
-|--------|------|----------|
-| `rag_requests_total` | Counter | Всего запросов по эндпоинтам |
-| `rag_request_duration_seconds` | Histogram | Задержка запросов (p50/p95/p99) |
-| `rag_retrieval_chunks` | Histogram | Чанков, найденных за запрос |
-| `rag_rerank_duration_seconds` | Histogram | Задержка реранкера |
-| `rag_llm_duration_seconds` | Histogram | Задержка генерации LLM |
-| `rag_llm_tokens_total` | Counter | Использовано токенов (prompt + completion) |
-| `rag_cache_hit_ratio` | Gauge | Коэффициент попадания в кэш Redis |
-| `rag_errors_total` | Counter | Количество ошибок по типам |
+Обновление существующего JWT-токена.
+
+**Заголовки:** `Authorization: Bearer <текущий-токен>`
+
+```json
+{
+  "token": "string (обязательно)"
+}
+```
+
+### `GET /v1/auth/me`
+
+Контекст текущего аутентифицированного пользователя.
+
+```json
+{
+  "user_id": "string",
+  "username": "string",
+  "roles": ["string"],
+  "groups": ["string"],
+  "access_level": "string (internal | external | restricted)",
+  "is_admin": "boolean",
+  "is_authenticated": "boolean"
+}
+```
+
+---
+
+### `POST /v1/feedback`
+
+Отправка экспертной обратной связи на ответ RAG.
+
+#### Схема запроса
+
+```json
+{
+  "feedback_id": "string (обязательно)",
+  "rating": "string (positive | negative)",
+  "correction": "string (опционально)",
+  "comment": "string (опционально)"
+}
+```
+
+| Поле | Тип | Обязательное | Описание |
+|-------|------|----------|-------------|
+| `feedback_id` | string | Да | `rag_feedback_id` из исходного ответа чат-завершения |
+| `rating` | string | Да | `"positive"` или `"negative"` |
+| `correction` | string | Нет | Исправленный текст ответа. При `rating: "positive"` запускает индексацию обогащения |
+| `comment` | string | Нет | Свободный комментарий эксперта |
+
+#### Ответ (200 OK)
+
+```json
+{
+  "status": "ok",
+  "message": "Feedback recorded"
+}
+```
 
 ---
 
 ## Коды ошибок
 
-| HTTP Status | Значение | Типичная причина |
-|-------------|----------|------------------|
-| **200** | Успех | Нормальная работа |
-| **400** | Неверный запрос | Отсутствует `messages`, пустой запрос, невалидный JSON |
-| **401** | Не авторизован | Отсутствует или неверный API-ключ (при включённой аутентификации) |
-| **429** | Слишком много запросов | Превышен лимит запросов (при `RATE_LIMIT_ENABLED=true`) |
-| **500** | Внутренняя ошибка | Необработанное исключение в конвейере |
-| **503** | Сервис недоступен | LLM или Qdrant недоступны |
+| HTTP Status | Тип ошибки | Значение | Действие |
+|-------------|-----------|----------|----------|
+| **200** | — | Успех | — |
+| **400** | `bad_request` | Неверный запрос | Проверить тело запроса по схеме |
+| **400** | `validation_error` | Ошибка валидации ввода | Проверить входные поля |
+| **401** | `unauthorized` | Отсутствуют или неверные учётные данные | Повторный вход через `/v1/auth/login` |
+| **403** | `forbidden` | Недостаточно прав | Запросить доступ у администратора |
+| **404** | `not_found` | Ресурс не найден | Проверить `rag_feedback_id` из ответа |
+| **413** | `payload_too_large` | Тело запроса слишком велико | Уменьшить количество сообщений или длину контента |
+| **429** | `rate_limited` | Слишком много запросов | Подождать `Retry-After` секунд |
+| **500** | `internal_error` | Необработанное исключение | Проверить логи прокси; сообщить об ошибке |
+| **502** | `upstream_error` | LLM-бэкенд вернул невалидный ответ | Проверить здоровье LLM-бэкенда |
+| **503** | `service_unavailable` | Деградация компонентов | Проверить сервисы Docker; верифицировать сетевое подключение |
+| **504** | `timeout` | Таймаут запроса к LLM | Увеличить `REQUEST_TIMEOUT` или уменьшить `max_tokens` |
 
-### Ограничение частоты запросов
+---
 
-При включении (`RATE_LIMIT_ENABLED=true`) используется алгоритм token bucket:
+## Ограничение частоты запросов
+
+При включении (`RATE_LIMIT_ENABLED=true`) используется алгоритм token bucket на IP:
 
 | Переменная | По умолчанию | Описание |
 |-----------|-------------|----------|
 | `RATE_LIMIT_PER_MINUTE` | `60` | Устойчивых запросов в минуту на IP |
 | `RATE_LIMIT_BURST` | `10` | Ёмкость всплеска сверх устойчивой скорости |
 
-При превышении лимита прокси возвращает:
+HTTP-заголовки в каждом ответе (при активном ограничении):
 
-```json
-{
-  "detail": "Rate limit exceeded. Try again later."
-}
-```
+| Заголовок | Описание |
+|-----------|----------|
+| `X-RateLimit-Limit` | Максимум запросов в минуту |
+| `X-RateLimit-Remaining` | Оставшиеся токены в текущем окне |
+| `X-RateLimit-Reset` | Unix timestamp сброса окна |
+| `Retry-After` | Секунд до следующего разрешённого запроса (только для 429) |
 
 ---
 
-## Вызов инструментов и функций
+## Поддержка нескольких провайдеров
 
-Прокси поддерживает вызов функций/инструментов в формате OpenAI, позволяя LLM запрашивать выполнение внешних функций. Вызовы инструментов прозрачно преобразуются между всеми поддерживаемыми провайдерами.
+### Поддерживаемые провайдеры
 
-### Формат определения инструмента
+| Провайдер | `LLM_PROVIDER_TYPE` | Описание |
+|-----------|---------------------|----------|
+| **OpenAI-совместимый** | `openai` | vLLM, llama.cpp, Ollama, LiteLLM и любые OpenAI-совместимые эндпоинты |
+| **Anthropic** | `anthropic` | Claude API через Anthropic Messages API |
+| **Ollama** | `ollama` | Нативный API Ollama |
+| **Generic** | `generic` | Пользовательский REST API с настраиваемыми преобразованиями |
 
-```json
-{
-  "type": "function",
-  "function": {
-    "name": "search_documents",
-    "description": "Search the knowledge base for relevant documents",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The search query"
-        },
-        "max_results": {
-          "type": "integer",
-          "description": "Maximum number of results",
-          "default": 5
-        }
-      },
-      "required": ["query"]
-    }
-  }
-}
-```
+### Матрица трансляции провайдеров
 
-### Многошаговое использование инструментов
-
-Прокси поддерживает многошаговые диалоги с вызовами инструментов. Процесс:
-
-1. Пользователь отправляет запрос → LLM может вернуть `tool_calls`
-2. Клиент выполняет функцию и отправляет результаты с ролью `tool`
-3. LLM обрабатывает результаты и может запросить ещё инструменты или вернуть финальный ответ
-
-### Трансляция между провайдерами
-
-Прокси автоматически преобразует определения инструментов и ответы:
-
-| Формат | OpenAI | Anthropic |
-|--------|--------|-----------|
-| Ключ определения инструмента | `tools[].function` | `tools[].input_schema` |
-| ID вызова инструмента | `tool_calls[].id` | `content[].id` |
-| Имя вызова инструмента | `tool_calls[].function.name` | `content[].name` |
-| Аргументы вызова | `tool_calls[].function.arguments` (строка JSON) | `content[].input` (объект JSON) |
-| Результат инструмента | `role: "tool"`, `tool_call_id` | `role: "user"`, `content: [{type: "tool_result", ...}]` |
+| Формат | OpenAI | Anthropic | Ollama |
+|--------|--------|-----------|--------|
+| Системный промпт | `messages[].role: "system"` | Верхнеуровневое поле `system` | `messages[].role: "system"` |
+| Определение инструмента | `tools[].function` | `tools[].input_schema` | `tools[].function` |
+| ID вызова | `tool_calls[].id` | `content[].id` | `tool_calls[].id` |
+| Аргументы вызова | JSON-строка | JSON-объект | JSON-строка |
+| Результат инструмента | `role: "tool"`, `tool_call_id` | `role: "user"`, `content: [{type: "tool_result"}]` | `role: "tool"`, `tool_call_id` |
+| Потоковые события | `chat.completion.chunk` | `content_block_delta` | `chat.completion.chunk` |
+| Путь эндпоинта | `/v1/chat/completions` | `/v1/messages` | `/api/chat` |
 
 ---
 
 ## Справочник переменных окружения
-
-Вся конфигурация прокси через переменные окружения (см. `proxy/.env`).
 
 ### Обязательные
 
@@ -560,7 +549,7 @@ rag_cache_hit_ratio 0.62
 |-----------|-------------|----------|
 | `QDRANT_HOST` | `localhost` | Хост сервера Qdrant |
 | `QDRANT_PORT` | `6333` | gRPC-порт Qdrant |
-| `LLM_ENDPOINT` | `http://localhost:8000/v1` | Эндпоинт LLM-провайдера |
+| `LLM_ENDPOINT` | `http://localhost:8000/v1` | URL эндпоинта LLM-провайдера |
 | `LLM_MODEL_NAME` | (пусто) | Имя модели для запроса к LLM |
 | `LLM_PROVIDER_TYPE` | `openai` | Тип провайдера: `openai`, `anthropic`, `ollama`, `generic` |
 
@@ -573,11 +562,12 @@ rag_cache_hit_ratio 0.62
 | `REDIS_URL` | `redis://localhost:6379` | Строка подключения Redis |
 | `GRAPH_ENABLED` | `false` | Включить подключение к Neo4j |
 | `USE_GRAPH_EXPANSION` | `false` | Включить обогащение контекста через граф |
-| `METRICS_ENABLED` | `true` | Открыть эндпоинт метрик Prometheus |
+| `METRICS_ENABLED` | `true` | Открыть эндпоинт `/metrics` Prometheus |
 | `RATE_LIMIT_ENABLED` | `false` | Включить ограничение по IP |
 | `LOG_FORMAT` | `text` | Формат логов: `text` или структурированный `json` |
 | `AUTH_ENABLED` | `false` | Включить JWT-аутентификацию |
 | `LLM_API_KEY` | (пусто) | API-ключ для LLM-провайдера |
+| `ENRICHMENT_ENABLED` | `false` | Индексировать исправленные Q&A пары из обратной связи |
 
 ### Настройка
 
@@ -585,6 +575,8 @@ rag_cache_hit_ratio 0.62
 |-----------|-------------|----------|
 | `MAX_CHUNKS_RETRIEVAL` | `50` | Чанков для поиска в Qdrant |
 | `MAX_CHUNKS_AFTER_RERANK` | `20` | Чанков после реранжирования |
+| `MAX_RETRIEVAL_LOOPS` | `3` | Максимум итераций переписывания в LangGraph |
+| `SUFFICIENCY_THRESHOLD` | `0.6` | Порог оценки достаточности контекста |
 | `EMBEDDER_DEVICE` | `cpu` | Устройство для модели эмбеддингов: `cpu` или `cuda` |
 | `RERANKER_BATCH_SIZE` | `32` | Размер батча для cross-encoder |
 | `REQUEST_TIMEOUT` | `120` | Таймаут запроса к LLM в секундах |
@@ -597,26 +589,25 @@ rag_cache_hit_ratio 0.62
 
 | Переменная | По умолчанию | Описание |
 |-----------|-------------|----------|
-| `SLM_ENDPOINT` | (пусто) | Эндпоинт SLM для маршрутизации. Оставьте пустым для отключения. |
+| `SLM_ENDPOINT` | (пусто) | Эндпоинт SLM для маршрутизации. Оставьте пустым для отключения (fallback к regex-эвристикам). |
 | `SLM_MODEL_NAME` | (пусто) | Имя SLM-модели |
 | `SLM_API_KEY` | (пусто) | API-ключ для SLM |
 | `SLM_MAX_TOKENS` | `256` | Максимум токенов для ответов SLM |
-
-Полный справочник конфигурации: `proxy/app/config.py`
 
 ---
 
 ## Сводка эндпоинтов
 
-| Метод | Эндпоинт | Auth | Описание |
-|-------|----------|------|----------|
-| `POST` | `/v1/chat/completions` | Опционально | Чат-завершение с RAG |
-| `GET` | `/v1/models` | Нет | Список моделей |
-| `GET` | `/v1/health` | Нет | Проверка работоспособности |
-| `GET` | `/metrics` | Нет | Метрики Prometheus |
-| `POST` | `/v1/auth/login` | Нет | Генерация JWT-токена |
-| `POST` | `/v1/auth/refresh` | Да | Обновление токена |
-| `GET` | `/v1/auth/me` | Да | Информация о текущем пользователе |
+| Метод | Эндпоинт | Auth | Ограничение | Описание |
+|--------|----------|------|-------------|----------|
+| `POST` | `/v1/chat/completions` | Опционально | Да | Чат-завершение с RAG (потоковое и без) |
+| `GET` | `/v1/models` | Нет | Нет | Список моделей |
+| `GET` | `/v1/health` | Нет | Нет | Проверка здоровья |
+| `GET` | `/metrics` | Нет | Нет | Prometheus-метрики |
+| `POST` | `/v1/auth/login` | Нет | Да | Генерация JWT-токена |
+| `POST` | `/v1/auth/refresh` | Да | Нет | Обновление токена |
+| `GET` | `/v1/auth/me` | Да | Нет | Контекст пользователя |
+| `POST` | `/v1/feedback` | Нет | Нет | Отправка обратной связи |
 
 ---
 
@@ -632,11 +623,12 @@ client = OpenAI(
     api_key="not-needed"  # заглушка, если аутентификация отключена
 )
 
-# Без потоковой передачи
+# Без потоковой передачи с RAG-расширениями
 response = client.chat.completions.create(
-    model="your-model-name",
+    model="rag-proxy",
     messages=[
-        {"role": "user", "content": "What is the project structure?"}
+        {"role": "system", "content": "Ты — ассистент технической документации."},
+        {"role": "user", "content": "Какова структура проекта и как работает ETL-пайплайн?"}
     ],
     temperature=0.2,
     max_tokens=4096,
@@ -645,109 +637,70 @@ response = client.chat.completions.create(
         "rag_force_refresh": False
     }
 )
-print(response.choices[0].message.content)
+
+print(f"Ответ: {response.choices[0].message.content}")
+print(f"Уверенность: {response.rag_confidence}")
+print(f"ID обратной связи: {response.rag_feedback_id}")
 
 # Потоковая передача
 stream = client.chat.completions.create(
     model="your-model-name",
-    messages=[{"role": "user", "content": "Explain the ETL pipeline."}],
+    messages=[{"role": "user", "content": "Опиши процесс развёртывания."}],
     stream=True
 )
 for chunk in stream:
     if chunk.choices[0].delta.content:
         print(chunk.choices[0].delta.content, end="")
 
-# С вызовом инструментов
-response = client.chat.completions.create(
-    model="your-model-name",
-    messages=[{"role": "user", "content": "What is the weather in Moscow?"}],
-    tools=[{
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get current weather for a city",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "city": {"type": "string", "description": "City name"}
-                },
-                "required": ["city"]
-            }
-        }
-    }],
-    tool_choice="auto"
-)
-print(response.choices[0].message.tool_calls)
+# Отправка обратной связи
+import requests
+requests.post("http://localhost:8080/v1/feedback", json={
+    "feedback_id": response.rag_feedback_id,
+    "rating": "positive",
+    "comment": "Точный ответ с хорошими ссылками на источники."
+})
 ```
 
 ### cURL
 
 ```bash
-# Без потоковой передачи
+# Чат-завершение без потока
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "your-model-name",
-    "messages": [{"role": "user", "content": "How many ADRs are there?"}],
+    "model": "rag-proxy",
+    "messages": [
+      {"role": "system", "content": "Ты — ассистент документации."},
+      {"role": "user", "content": "Сколько ADR и что они охватывают?"}
+    ],
     "temperature": 0.2,
-    "max_tokens": 1024
-  }'
+    "max_tokens": 1024,
+    "rag_version": "2026-03",
+    "rag_force_refresh": false
+  }' | jq '.'
 
-# Потоковая передача
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream" \
-  -d '{
-    "model": "your-model-name",
-    "messages": [{"role": "user", "content": "Summarize the deployment process."}],
-    "stream": true
-  }'
-
-# С вызовом инструментов
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "your-model-name",
-    "messages": [{"role": "user", "content": "What is 25 + 17?"}],
-    "tools": [{
-      "type": "function",
-      "function": {
-        "name": "calculator",
-        "description": "Perform arithmetic operations",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "expression": {"type": "string", "description": "Arithmetic expression"}
-          },
-          "required": ["expression"]
-        }
-      }
-    }]
-  }'
-
-# Проверка работоспособности
-curl http://localhost:8080/v1/health
+# Проверка здоровья
+curl -s http://localhost:8080/v1/health | jq '.'
 
 # Список моделей
-curl http://localhost:8080/v1/models
+curl -s http://localhost:8080/v1/models | jq '.'
 
 # Метрики
-curl http://localhost:8080/metrics
+curl -s http://localhost:8080/metrics | head -20
 
 # Вход
 curl -X POST http://localhost:8080/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username": "user", "password": "pass"}'
+  -d '{"username": "admin", "password": "securepass"}' | jq '.'
 
-# Обновление токена
-curl -X POST http://localhost:8080/v1/auth/refresh \
+# Отправка обратной связи
+curl -X POST http://localhost:8080/v1/feedback \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <your-token>" \
-  -d '{"token": "<your-token>"}'
-
-# Информация о пользователе
-curl http://localhost:8080/v1/auth/me \
-  -H "Authorization: Bearer <your-token>"
+  -d '{
+    "feedback_id": "fbk_1719057600_a1b2c3d4",
+    "rating": "positive",
+    "comment": "Ответ точный и хорошо цитирован."
+  }' | jq '.'
 ```
 
 ### JavaScript / TypeScript
@@ -760,36 +713,19 @@ const client = new OpenAI({
   apiKey: "not-needed",
 });
 
-// Без потоковой передачи
 const completion = await client.chat.completions.create({
-  model: "your-model-name",
+  model: "rag-proxy",
   messages: [
-    { role: "user", content: "What database does the system use?" },
+    { role: "system", content: "Ты — ассистент документации." },
+    { role: "user", content: "Какую БД использует система для векторного поиска?" },
   ],
   temperature: 0.2,
+  max_tokens: 1024,
 });
-console.log(completion.choices[0].message.content);
 
-// С вызовом инструментов
-const toolCompletion = await client.chat.completions.create({
-  model: "your-model-name",
-  messages: [
-    { role: "user", content: "Search for deployment documentation." },
-  ],
-  tools: [{
-    type: "function",
-    function: {
-      name: "search_docs",
-      description: "Search the knowledge base",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Search query" },
-        },
-        required: ["query"],
-      },
-    },
-  }],
-});
-console.log(toolCompletion.choices[0].message.tool_calls);
+console.log("Ответ:", completion.choices[0].message.content);
+// @ts-expect-error — RAG-расширения
+console.log("Уверенность:", completion.rag_confidence);
+// @ts-expect-error — RAG-расширения
+console.log("Источники:", completion.rag_sources);
 ```
