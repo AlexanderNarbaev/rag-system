@@ -1,11 +1,10 @@
 # proxy/app/security.py
 """Security utilities for input validation, sanitization, and secrets management."""
-import re
+
 import hashlib
 import os
+import re
 import secrets
-import base64
-from typing import Optional, List, Dict
 
 
 class InputValidator:
@@ -24,14 +23,14 @@ class InputValidator:
         if not isinstance(query, str):
             return ""
 
-        query = query[:InputValidator.MAX_QUERY_LENGTH]
+        query = query[: InputValidator.MAX_QUERY_LENGTH]
         query = InputValidator._HTML_TAG_RE.sub("", query)
         query = InputValidator._CONTROL_CHARS_RE.sub("", query)
         query = InputValidator._MULTIPLE_SPACES_RE.sub(" ", query)
         return query.strip()
 
     @staticmethod
-    def validate_non_empty(s: str, max_len: int = 4096) -> Optional[str]:
+    def validate_non_empty(s: str, max_len: int = 4096) -> str | None:
         """Validate string is non-empty and within length. Returns sanitized or None."""
         if not isinstance(s, str) or not s.strip():
             return None
@@ -73,7 +72,7 @@ class InputValidator:
         return True
 
     @staticmethod
-    def sanitize_headers(headers: Dict) -> Dict:
+    def sanitize_headers(headers: dict) -> dict:
         """Sanitize HTTP headers dictionary for safe logging."""
         safe = {}
         sensitive_header_keys = {"authorization", "cookie", "x-api-key", "x-auth-token", "set-cookie"}
@@ -112,7 +111,7 @@ class SecretsManager:
         return SecretsManager.hash_secret(secret) == hashed
 
     @staticmethod
-    def mask_in_response(data: Dict) -> Dict:
+    def mask_in_response(data: dict) -> dict:
         """Mask sensitive fields in response data (deep copy)."""
         if not isinstance(data, dict):
             return data
@@ -123,10 +122,7 @@ class SecretsManager:
             if isinstance(value, dict):
                 result[key] = SecretsManager.mask_in_response(value)
             elif isinstance(value, list):
-                result[key] = [
-                    SecretsManager.mask_in_response(v) if isinstance(v, dict) else v
-                    for v in value
-                ]
+                result[key] = [SecretsManager.mask_in_response(v) if isinstance(v, dict) else v for v in value]
             elif any(sk in key_lower for sk in sensitive_keys):
                 result[key] = "***"
             else:
@@ -141,8 +137,7 @@ class SecretsManager:
     @staticmethod
     def constant_time_compare(a: str, b: str) -> bool:
         """Compare two strings in constant time to prevent timing attacks."""
-        return secrets.compare_digest(a.encode() if isinstance(a, str) else a,
-                                       b.encode() if isinstance(b, str) else b)
+        return secrets.compare_digest(a.encode() if isinstance(a, str) else a, b.encode() if isinstance(b, str) else b)
 
 
 class SecurityHeaders:
@@ -160,7 +155,7 @@ class SecurityHeaders:
     }
 
     @classmethod
-    def get_headers(cls, extra: Optional[Dict] = None) -> Dict[str, str]:
+    def get_headers(cls, extra: dict | None = None) -> dict[str, str]:
         headers = dict(cls.DEFAULT_HEADERS)
         if extra:
             headers.update(extra)
@@ -183,7 +178,7 @@ class DependencyScanner:
     }
 
     @staticmethod
-    def parse_requirements_line(line: str) -> Optional[tuple]:
+    def parse_requirements_line(line: str) -> tuple | None:
         """Parse a requirements.txt line into (package, version)."""
         line = line.strip()
         if not line or line.startswith("#") or line.startswith("-"):
@@ -197,14 +192,14 @@ class DependencyScanner:
         return None
 
     @classmethod
-    def scan_requirements(cls, req_file: str) -> List[Dict]:
+    def scan_requirements(cls, req_file: str) -> list[dict]:
         """Check requirements.txt against known vulnerabilities."""
         findings = []
         if not os.path.exists(req_file):
             return [{"error": f"File not found: {req_file}"}]
 
         try:
-            with open(req_file, "r", encoding="utf-8") as f:
+            with open(req_file, encoding="utf-8") as f:
                 lines = f.readlines()
         except Exception as e:
             return [{"error": str(e)}]
@@ -218,12 +213,14 @@ class DependencyScanner:
                 for known_version, vulns in cls.KNOWN_VULNERABILITIES[pkg].items():
                     if version == known_version or version == "any":
                         for vuln in vulns:
-                            findings.append({
-                                "package": pkg,
-                                "version": version,
-                                "vulnerability": vuln,
-                                "severity": "MEDIUM",
-                            })
+                            findings.append(
+                                {
+                                    "package": pkg,
+                                    "version": version,
+                                    "vulnerability": vuln,
+                                    "severity": "MEDIUM",
+                                }
+                            )
 
         return findings
 

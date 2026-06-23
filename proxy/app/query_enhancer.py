@@ -8,9 +8,10 @@ Supports:
 - Complex query decomposition: break complex queries into sub-queries
 - Metadata filter extraction: extract structured filters from natural language
 """
-import re
+
 import logging
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class QueryEnhancer:
         joined = " ".join(hyde_prefixes)
         return f"{joined} {query}"
 
-    def multi_query_expand(self, query: str, num_variants: int = 3) -> List[str]:
+    def multi_query_expand(self, query: str, num_variants: int = 3) -> list[str]:
         """Generate multiple query variants for fusion retrieval."""
         variants = [query]
         keywords = [w for w in query.split() if len(w) > 3]
@@ -82,13 +83,16 @@ class QueryEnhancer:
             variants.append(" ".join(keywords))
             variants.append(f"{keywords[0]} related to {keywords[1]}")
 
-        return list(dict.fromkeys(variants))[:num_variants + 1]
+        return list(dict.fromkeys(variants))[: num_variants + 1]
 
-    def decompose_complex_query(self, query: str) -> List[str]:
+    def decompose_complex_query(self, query: str) -> list[str]:
         """Break complex query into sub-queries."""
         delimiters = [
-            r"\band\b(?! so| then| also)", r";", r"\.(?=\s*[A-Z])",
-            r"\balso\b", r"\bplus\b",
+            r"\band\b(?! so| then| also)",
+            r";",
+            r"\.(?=\s*[A-Z])",
+            r"\balso\b",
+            r"\bplus\b",
         ]
         sub_queries = [query]
         for delim in delimiters:
@@ -101,9 +105,9 @@ class QueryEnhancer:
             sub_queries = [query]
         return sub_queries
 
-    def extract_metadata_filters(self, query: str) -> Dict[str, str]:
+    def extract_metadata_filters(self, query: str) -> dict[str, str]:
         """Extract metadata filters from natural language query."""
-        filters: Dict[str, str] = {}
+        filters: dict[str, str] = {}
         for field, patterns in self.METADATA_PATTERNS.items():
             for pattern in patterns:
                 match = re.search(pattern, query, re.IGNORECASE)
@@ -112,7 +116,7 @@ class QueryEnhancer:
                     break
         return filters
 
-    def enhance(self, query: str) -> Dict[str, Any]:
+    def enhance(self, query: str) -> dict[str, Any]:
         """Full enhancement: returns HyDE query, variants, sub-queries, and filters."""
         return {
             "hyde_query": self.hyde_enhance(query),

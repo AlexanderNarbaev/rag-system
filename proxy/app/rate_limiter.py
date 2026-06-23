@@ -3,14 +3,14 @@
 Token bucket rate limiter middleware.
 Supports per-IP and per-API-key rate limiting with configurable limits.
 """
-import time
-import asyncio
-from typing import Dict, Tuple, Optional
 
+import asyncio
+import time
+
+from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from fastapi import FastAPI
 
 
 class TokenBucket:
@@ -28,7 +28,7 @@ class TokenBucket:
         self.tokens = min(float(self.burst), self.tokens + elapsed * self.rate)
         self.last_refill = now
 
-    def consume(self, tokens: int = 1) -> Tuple[bool, float]:
+    def consume(self, tokens: int = 1) -> tuple[bool, float]:
         """Try to consume tokens. Returns (allowed, retry_after_seconds)."""
         self._refill()
         if self.tokens >= tokens:
@@ -44,7 +44,7 @@ class RateLimiter:
     def __init__(self, rate_per_minute: int = 60, burst: int = 10):
         self.rate_per_minute = rate_per_minute
         self.burst = burst
-        self._buckets: Dict[str, TokenBucket] = {}
+        self._buckets: dict[str, TokenBucket] = {}
         self._lock = asyncio.Lock()
 
     @property
@@ -57,7 +57,7 @@ class RateLimiter:
                 self._buckets[key] = TokenBucket(self.rate_per_second, self.burst)
             return self._buckets[key]
 
-    async def is_allowed(self, key: str) -> Tuple[bool, float]:
+    async def is_allowed(self, key: str) -> tuple[bool, float]:
         bucket = await self._get_bucket(key)
         return bucket.consume()
 
@@ -65,18 +65,15 @@ class RateLimiter:
         """Remove buckets not used for max_age seconds."""
         now = time.monotonic()
         async with self._lock:
-            expired = [
-                k for k, b in self._buckets.items()
-                if now - b.last_refill > max_age
-            ]
+            expired = [k for k, b in self._buckets.items() if now - b.last_refill > max_age]
             for k in expired:
                 del self._buckets[k]
 
 
-_limiter: Optional[RateLimiter] = None
+_limiter: RateLimiter | None = None
 
 
-def get_rate_limiter() -> Optional[RateLimiter]:
+def get_rate_limiter() -> RateLimiter | None:
     return _limiter
 
 

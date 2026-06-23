@@ -11,19 +11,25 @@ external provider-specific formats (Anthropic, Ollama, OpenRouter, etc.).
 - Tool/function calling across providers
 - Streaming translation across providers
 """
+
+import asyncio
 import json
 import logging
-import asyncio
-from typing import List, Dict, Any, AsyncIterator, Optional, Union, Callable
-from enum import Enum
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 import aiohttp
-from aiohttp import ClientTimeout, ClientError
-
+from aiohttp import ClientError, ClientTimeout
 from app.config import (
-    LLM_ENDPOINT, LLM_MODEL_NAME, LLM_API_KEY,
-    LLM_PROVIDER_TYPE, REQUEST_TIMEOUT, MAX_RETRIES, RETRY_DELAY
+    LLM_API_KEY,
+    LLM_ENDPOINT,
+    LLM_MODEL_NAME,
+    LLM_PROVIDER_TYPE,
+    MAX_RETRIES,
+    REQUEST_TIMEOUT,
+    RETRY_DELAY,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 class ProviderType(str, Enum):
     """Supported AI provider types."""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
@@ -40,26 +47,29 @@ class ProviderType(str, Enum):
 @dataclass
 class ToolDefinition:
     """Tool/function definition compatible with OpenAI function calling format."""
+
     name: str
     description: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ToolCall:
     """A tool call requested by the LLM."""
+
     id: str
     name: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ToolResult:
     """Result of a tool execution."""
+
     tool_call_id: str
     name: str
     content: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class ProviderAdapter:
@@ -73,25 +83,25 @@ class ProviderAdapter:
 
     def translate_request(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 4096,
-        tools: Optional[List[ToolDefinition]] = None,
+        tools: list[ToolDefinition] | None = None,
         stream: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Convert internal request to provider-specific payload."""
         raise NotImplementedError
 
-    def translate_response(self, response_data: Dict[str, Any]) -> Dict[str, Any]:
+    def translate_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
         """Convert provider response to OpenAI-compatible format."""
         raise NotImplementedError
 
-    def translate_stream_chunk(self, chunk: bytes) -> Optional[Dict[str, Any]]:
+    def translate_stream_chunk(self, chunk: bytes) -> dict[str, Any] | None:
         """Convert a raw stream chunk to OpenAI-compatible SSE chunk."""
         raise NotImplementedError
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         """HTTP headers for the provider."""
         raise NotImplementedError
 
@@ -100,16 +110,13 @@ class OpenAIAdapter(ProviderAdapter):
     """Adapter for OpenAI-compatible APIs (vLLM, llama.cpp, LiteLLM, etc.)."""
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         h = {"Content-Type": "application/json"}
         if LLM_API_KEY:
             h["Authorization"] = f"Bearer {LLM_API_KEY}"
         return h
 
-    def translate_request(
-        self, messages, temperature=0.2, max_tokens=4096,
-        tools=None, stream=False
-    ) -> Dict[str, Any]:
+    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
         payload = {
             "model": LLM_MODEL_NAME,
             "messages": messages,
@@ -125,18 +132,18 @@ class OpenAIAdapter(ProviderAdapter):
                         "name": t.name,
                         "description": t.description,
                         "parameters": t.parameters,
-                    }
+                    },
                 }
                 for t in tools
             ]
             payload["tool_choice"] = "auto"
         return payload
 
-    def translate_response(self, response_data: Dict[str, Any]) -> Dict[str, Any]:
+    def translate_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
         return response_data
 
-    def translate_stream_chunk(self, chunk: bytes) -> Optional[Dict[str, Any]]:
-        line = chunk.decode('utf-8').strip()
+    def translate_stream_chunk(self, chunk: bytes) -> dict[str, Any] | None:
+        line = chunk.decode("utf-8").strip()
         if not line or not line.startswith("data: "):
             return None
         data_str = line[6:]
@@ -155,17 +162,14 @@ class AnthropicAdapter(ProviderAdapter):
     """
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         return {
             "Content-Type": "application/json",
             "x-api-key": LLM_API_KEY or "",
             "anthropic-version": "2023-06-01",
         }
 
-    def translate_request(
-        self, messages, temperature=0.2, max_tokens=4096,
-        tools=None, stream=False
-    ) -> Dict[str, Any]:
+    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
         # Extract system message if present
         system = None
         anthropic_messages = []
@@ -181,21 +185,30 @@ class AnthropicAdapter(ProviderAdapter):
                     anthropic_msg["content"] = [
                         {"type": "text", "text": content} if content else None,
                         *[
-                            {"type": "tool_use", "id": tc.get("id", ""), "name": tc.get("function", {}).get("name", ""), "input": json.loads(tc.get("function", {}).get("arguments", "{}"))}
+                            {
+                                "type": "tool_use",
+                                "id": tc.get("id", ""),
+                                "name": tc.get("function", {}).get("name", ""),
+                                "input": json.loads(tc.get("function", {}).get("arguments", "{}")),
+                            }
                             for tc in tool_calls
-                        ]
+                        ],
                     ]
                     anthropic_msg["content"] = [c for c in anthropic_msg.get("content", []) if c is not None]
                 anthropic_messages.append(anthropic_msg)
             elif role == "tool":
-                anthropic_messages.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": msg.get("tool_call_id", ""),
-                        "content": msg.get("content", ""),
-                    }]
-                })
+                anthropic_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": msg.get("tool_call_id", ""),
+                                "content": msg.get("content", ""),
+                            }
+                        ],
+                    }
+                )
             else:
                 anthropic_messages.append({"role": "user", "content": msg.get("content", "")})
 
@@ -220,7 +233,7 @@ class AnthropicAdapter(ProviderAdapter):
             payload["stream"] = True
         return payload
 
-    def translate_response(self, response_data: Dict[str, Any]) -> Dict[str, Any]:
+    def translate_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
         """Convert Anthropic response to OpenAI format."""
         content = response_data.get("content", [])
         text_content = ""
@@ -230,40 +243,46 @@ class AnthropicAdapter(ProviderAdapter):
             if block.get("type") == "text":
                 text_content += block.get("text", "")
             elif block.get("type") == "tool_use":
-                tool_calls.append({
-                    "id": block.get("id", ""),
-                    "type": "function",
-                    "function": {
-                        "name": block.get("name", ""),
-                        "arguments": json.dumps(block.get("input", {})),
+                tool_calls.append(
+                    {
+                        "id": block.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": block.get("name", ""),
+                            "arguments": json.dumps(block.get("input", {})),
+                        },
                     }
-                })
+                )
 
         return {
             "id": response_data.get("id", ""),
             "object": "chat.completion",
             "created": 0,
             "model": response_data.get("model", LLM_MODEL_NAME),
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": text_content or None,
-                    "tool_calls": tool_calls or None,
-                },
-                "finish_reason": response_data.get("stop_reason", "stop"),
-            }],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": text_content or None,
+                        "tool_calls": tool_calls or None,
+                    },
+                    "finish_reason": response_data.get("stop_reason", "stop"),
+                }
+            ],
             "usage": {
                 "prompt_tokens": response_data.get("usage", {}).get("input_tokens", 0),
                 "completion_tokens": response_data.get("usage", {}).get("output_tokens", 0),
-                "total_tokens": (response_data.get("usage", {}).get("input_tokens", 0) +
-                                 response_data.get("usage", {}).get("output_tokens", 0)),
+                "total_tokens": (
+                    response_data.get("usage", {}).get("input_tokens", 0)
+                    + response_data.get("usage", {}).get("output_tokens", 0)
+                ),
             },
         }
 
-    def translate_stream_chunk(self, chunk: bytes) -> Optional[Dict[str, Any]]:
+    def translate_stream_chunk(self, chunk: bytes) -> dict[str, Any] | None:
         """Convert Anthropic SSE chunk to OpenAI format."""
-        line = chunk.decode('utf-8').strip()
+        line = chunk.decode("utf-8").strip()
         if not line or not line.startswith("data: "):
             return None
         data_str = line[6:]
@@ -285,36 +304,44 @@ class AnthropicAdapter(ProviderAdapter):
                 return {
                     "id": data.get("index", ""),
                     "object": "chat.completion.chunk",
-                    "choices": [{
-                        "index": 0,
-                        "delta": {"content": delta.get("text", "")},
-                        "finish_reason": None,
-                    }],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": delta.get("text", "")},
+                            "finish_reason": None,
+                        }
+                    ],
                 }
             elif delta.get("type") == "input_json_delta":
                 return {
                     "id": data.get("index", ""),
                     "object": "chat.completion.chunk",
-                    "choices": [{
-                        "index": 0,
-                        "delta": {
-                            "tool_calls": [{
-                                "index": 0,
-                                "function": {"arguments": delta.get("partial_json", "")},
-                            }]
-                        },
-                        "finish_reason": None,
-                    }],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "function": {"arguments": delta.get("partial_json", "")},
+                                    }
+                                ]
+                            },
+                            "finish_reason": None,
+                        }
+                    ],
                 }
         elif event_type == "message_delta":
             return {
                 "id": "",
                 "object": "chat.completion.chunk",
-                "choices": [{
-                    "index": 0,
-                    "delta": {},
-                    "finish_reason": data.get("delta", {}).get("stop_reason", "stop"),
-                }],
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": data.get("delta", {}).get("stop_reason", "stop"),
+                    }
+                ],
             }
 
         return None
@@ -327,13 +354,10 @@ class OllamaAdapter(OpenAIAdapter):
     """
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def headers(self) -> dict[str, str]:
         return {"Content-Type": "application/json"}
 
-    def translate_request(
-        self, messages, temperature=0.2, max_tokens=4096,
-        tools=None, stream=False
-    ) -> Dict[str, Any]:
+    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
         payload = super().translate_request(messages, temperature, max_tokens, tools, stream)
         # Ollama uses "options" for extra params
         payload["options"] = {
@@ -349,21 +373,17 @@ class GenericAdapter(OpenAIAdapter):
     Uses a configurable request/response transformation.
     """
 
-    def __init__(self, request_transform: Optional[Callable] = None,
-                 response_transform: Optional[Callable] = None):
+    def __init__(self, request_transform: Callable | None = None, response_transform: Callable | None = None):
         self._request_transform = request_transform
         self._response_transform = response_transform
 
-    def translate_request(
-        self, messages, temperature=0.2, max_tokens=4096,
-        tools=None, stream=False
-    ) -> Dict[str, Any]:
+    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
         payload = super().translate_request(messages, temperature, max_tokens, tools, stream)
         if self._request_transform:
             payload = self._request_transform(payload)
         return payload
 
-    def translate_response(self, response_data: Dict[str, Any]) -> Dict[str, Any]:
+    def translate_response(self, response_data: dict[str, Any]) -> dict[str, Any]:
         if self._response_transform:
             response_data = self._response_transform(response_data)
         return super().translate_response(response_data)
@@ -382,7 +402,7 @@ class MultiProviderRouter:
         ProviderType.GENERIC: GenericAdapter,
     }
 
-    def __init__(self, provider_type: Optional[str] = None):
+    def __init__(self, provider_type: str | None = None):
         provider_str = (provider_type or LLM_PROVIDER_TYPE or "openai").lower()
         try:
             self.provider_type = ProviderType(provider_str)
@@ -395,12 +415,12 @@ class MultiProviderRouter:
 
     async def _send_request(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 4096,
         stream: bool = False,
-        tools: Optional[List[ToolDefinition]] = None,
-        tool_results: Optional[List[ToolResult]] = None,
+        tools: list[ToolDefinition] | None = None,
+        tool_results: list[ToolResult] | None = None,
         retry: int = MAX_RETRIES,
     ) -> Any:
         """Send request through the appropriate adapter."""
@@ -408,16 +428,16 @@ class MultiProviderRouter:
         if tool_results:
             messages = list(messages)
             for tr in tool_results:
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tr.tool_call_id,
-                    "name": tr.name,
-                    "content": tr.content,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tr.tool_call_id,
+                        "name": tr.name,
+                        "content": tr.content,
+                    }
+                )
 
-        payload = self.adapter.translate_request(
-            messages, temperature, max_tokens, tools, stream
-        )
+        payload = self.adapter.translate_request(messages, temperature, max_tokens, tools, stream)
         headers = self.adapter.headers
         url = f"{self.endpoint}/chat/completions"
 
@@ -444,7 +464,7 @@ class MultiProviderRouter:
                             if "choices" not in translated or not translated["choices"]:
                                 raise LLMError("Invalid response format from LLM")
                             return translated
-            except (ClientError, asyncio.TimeoutError, LLMError) as e:
+            except (TimeoutError, ClientError, LLMError) as e:
                 logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
                 if attempt < retry:
                     delay = RETRY_DELAY * (attempt + 1)
@@ -454,11 +474,11 @@ class MultiProviderRouter:
 
     async def stream_completion(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 4096,
-        tools: Optional[List[ToolDefinition]] = None,
-    ) -> AsyncIterator[Dict[str, Any]]:
+        tools: list[ToolDefinition] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """Streaming completion with provider translation."""
         response = await self._send_request(messages, temperature, max_tokens, stream=True, tools=tools)
 
@@ -472,22 +492,21 @@ class MultiProviderRouter:
 
     async def non_stream_completion(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 4096,
-        tools: Optional[List[ToolDefinition]] = None,
-        tool_results: Optional[List[ToolResult]] = None,
-    ) -> Dict[str, Any]:
+        tools: list[ToolDefinition] | None = None,
+        tool_results: list[ToolResult] | None = None,
+    ) -> dict[str, Any]:
         """Non-streaming completion with provider translation.
         Returns full response dict including content and optional tool_calls."""
         return await self._send_request(
-            messages, temperature, max_tokens, stream=False,
-            tools=tools, tool_results=tool_results
+            messages, temperature, max_tokens, stream=False, tools=tools, tool_results=tool_results
         )
 
     async def non_stream_completion_text(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 4096,
     ) -> str:
@@ -501,11 +520,11 @@ class MultiProviderRouter:
 
     async def tool_use_completion(
         self,
-        messages: List[Dict[str, Any]],
-        tools: List[ToolDefinition],
+        messages: list[dict[str, Any]],
+        tools: list[ToolDefinition],
         temperature: float = 0.2,
         max_tokens: int = 4096,
-    ) -> List[ToolCall]:
+    ) -> list[ToolCall]:
         """Request tool calls from the LLM. Returns list of tool calls."""
         data = await self.non_stream_completion(messages, temperature, max_tokens, tools=tools)
         try:
@@ -528,20 +547,19 @@ class MultiProviderRouter:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            return loop.run_until_complete(
-                self.non_stream_completion_text(messages, temperature, max_tokens)
-            )
+            return loop.run_until_complete(self.non_stream_completion_text(messages, temperature, max_tokens))
         finally:
             loop.close()
 
 
 class LLMError(Exception):
     """Exception raised on LLM call failure."""
+
     pass
 
 
 # Singleton router instance
-_router: Optional[MultiProviderRouter] = None
+_router: MultiProviderRouter | None = None
 
 
 def get_router() -> MultiProviderRouter:
@@ -554,17 +572,17 @@ def get_router() -> MultiProviderRouter:
 
 # Backward-compatible wrappers that use the singleton router
 async def stream_completion(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
-) -> AsyncIterator[Dict[str, Any]]:
+) -> AsyncIterator[dict[str, Any]]:
     router = get_router()
     async for chunk in router.stream_completion(messages, temperature, max_tokens):
         yield chunk
 
 
 async def non_stream_completion(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
 ) -> str:
@@ -573,7 +591,7 @@ async def non_stream_completion(
 
 
 def non_stream_completion_sync(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
 ) -> str:

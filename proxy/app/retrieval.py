@@ -7,32 +7,41 @@
 - Опциональное графовое расширение (Neo4j)
 - Интеграцию с Qdrant (ближний сосед + фильтрация по версии)
 """
-import logging
+
 import hashlib
 import json
-from typing import List, Dict, Any, Optional, Tuple
-from functools import lru_cache
+import logging
 
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.http import models
+
     QDRANT_AVAILABLE = True
 except ImportError:
     QDRANT_AVAILABLE = False
 
 try:
     from sentence_transformers import SentenceTransformer
+
     ST_AVAILABLE = True
 except ImportError:
     ST_AVAILABLE = False
 
 # Импорт конфигурации (будет создан отдельно)
-from app.config import (
-    QDRANT_HOST, QDRANT_PORT, COLLECTION_NAME,
-    EMBEDDER_MODEL, EMBEDDER_DEVICE,
-    USE_REDIS, REDIS_URL, GRAPH_ENABLED, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
-)
 from app.cache import CacheManager
+from app.config import (
+    COLLECTION_NAME,
+    EMBEDDER_DEVICE,
+    EMBEDDER_MODEL,
+    GRAPH_ENABLED,
+    NEO4J_PASSWORD,
+    NEO4J_URI,
+    NEO4J_USER,
+    QDRANT_HOST,
+    QDRANT_PORT,
+    REDIS_URL,
+    USE_REDIS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,18 +68,18 @@ def initialize_retrieval():
         raise ImportError("qdrant-client is required")
     if not ST_AVAILABLE:
         raise ImportError("sentence-transformers is required")
-    
+
     qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
     embedder = SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)
     logger.info(f"Embedder {EMBEDDER_MODEL} loaded on {EMBEDDER_DEVICE}")
-    
+
     # Кэш (если используется Redis)
     if USE_REDIS and REDIS_URL:
         cache_manager = CacheManager(redis_url=REDIS_URL)
         # Асинхронная инициализация будет вызвана в main.py
     else:
         cache_manager = CacheManager(use_redis=False)
-    
+
     # Граф Neo4j
     if _GRAPH_ENABLED:
         try:
@@ -82,7 +91,7 @@ def initialize_retrieval():
             _GRAPH_ENABLED = False
 
 
-def _compute_dense_embedding(text: str) -> List[float]:
+def _compute_dense_embedding(text: str) -> list[float]:
     """Вычисляет dense вектор с кэшированием."""
     # Проверяем кэш
     if cache_manager:
@@ -95,7 +104,7 @@ def _compute_dense_embedding(text: str) -> List[float]:
     return vec
 
 
-def _compute_sparse_embedding(text: str) -> Optional[models.SparseVector]:
+def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
     """
     Вычисляет sparse вектор через bge-m3 (если поддерживается).
     Возвращает SparseVector или None.
@@ -103,14 +112,11 @@ def _compute_sparse_embedding(text: str) -> Optional[models.SparseVector]:
     if hasattr(embedder, "encode_sparse"):
         sparse = embedder.encode_sparse(text)
         if isinstance(sparse, dict) and "indices" in sparse and "values" in sparse:
-            return models.SparseVector(
-                indices=sparse["indices"],
-                values=sparse["values"]
-            )
+            return models.SparseVector(indices=sparse["indices"], values=sparse["values"])
     return None
 
 
-def reciprocal_rank_fusion(results_dense: List, results_sparse: List, k: int = 60) -> List:
+def reciprocal_rank_fusion(results_dense: list, results_sparse: list, k: int = 60) -> list:
     """
     RRF слияние двух списков результатов (каждый элемент должен иметь .id и .score).
     Возвращает объединённый список, отсортированный по RRF-скорy.
@@ -128,25 +134,19 @@ def reciprocal_rank_fusion(results_dense: List, results_sparse: List, k: int = 6
     return [all_results[hid] for hid in sorted_ids if hid in all_results]
 
 
-def hybrid_search(
-    query: str,
-    version: Optional[str] = None,
-    top_k: int = 50
-) -> List:
+def hybrid_search(query: str, version: str | None = None, top_k: int = 50) -> list:
     """
     Гибридный поиск в Qdrant: dense + sparse.
     Возвращает список объектов Qdrant ScoredPoint.
     """
     if not qdrant_client or not embedder:
         initialize_retrieval()
-    
+
     # Построение фильтра по версии (если указана)
     q_filter = None
     if version:
-        q_filter = models.Filter(
-            must=[models.FieldCondition(key="version", match=models.MatchValue(value=version))]
-        )
-    
+        q_filter = models.Filter(must=[models.FieldCondition(key="version", match=models.MatchValue(value=version))])
+
     # Dense поиск
     dense_vec = _compute_dense_embedding(query)
     dense_results = qdrant_client.search(
@@ -154,9 +154,9 @@ def hybrid_search(
         query_vector=("dense", dense_vec),
         limit=top_k,
         query_filter=q_filter,
-        with_payload=True
+        with_payload=True,
     )
-    
+
     # Sparse поиск (если поддерживается)
     sparse_vec = _compute_sparse_embedding(query)
     sparse_results = []
@@ -166,9 +166,9 @@ def hybrid_search(
             query_vector=("sparse", sparse_vec),
             limit=top_k,
             query_filter=q_filter,
-            with_payload=True
+            with_payload=True,
         )
-    
+
     # Слияние
     if sparse_results:
         fused = reciprocal_rank_fusion(dense_results, sparse_results)
@@ -184,13 +184,13 @@ def graph_expand_query(query: str, max_entities: int = 5) -> str:
     """
     if not _GRAPH_ENABLED or not neo4j_driver:
         return ""
-    
+
     # Извлекаем ключевые слова из запроса (простейшая эвристика)
     # В реальном применении лучше использовать NER или запрос к графу по full-text поиску
     keywords = [w for w in query.split() if len(w) > 3][:3]
     if not keywords:
         return ""
-    
+
     # Cypher запрос: ищем сущности, связанные с этими ключевыми словами
     cypher = """
     MATCH (e:Entity)

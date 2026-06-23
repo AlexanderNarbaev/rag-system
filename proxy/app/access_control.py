@@ -20,11 +20,9 @@ Role hierarchy (higher roles inherit lower roles' access):
     external   → public only
 """
 
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from typing import Any
 
 from app.auth import UserContext
-
 
 # ---------------------------------------------------------------------------
 # Access level and role definitions
@@ -37,7 +35,7 @@ ACCESS_LEVEL_RANK = {level: i for i, level in enumerate(ACCESS_LEVELS)}
 ROLES = ["admin", "expert", "developer", "viewer", "external"]
 
 # Each role is allowed to access documents at or below this rank
-ROLE_MAX_LEVEL: Dict[str, str] = {
+ROLE_MAX_LEVEL: dict[str, str] = {
     "admin": "restricted",
     "expert": "confidential",
     "developer": "confidential",
@@ -46,7 +44,7 @@ ROLE_MAX_LEVEL: Dict[str, str] = {
 }
 
 # Role hierarchy: which access levels each role can see
-ROLE_ACCESS: Dict[str, List[str]] = {
+ROLE_ACCESS: dict[str, list[str]] = {
     "admin": ["public", "internal", "confidential", "restricted"],
     "expert": ["public", "internal", "confidential"],
     "developer": ["public", "internal", "confidential"],
@@ -55,7 +53,7 @@ ROLE_ACCESS: Dict[str, List[str]] = {
 }
 
 
-def _role_allowed_levels(user_context: UserContext) -> List[str]:
+def _role_allowed_levels(user_context: UserContext) -> list[str]:
     """Return the list of access levels the user is allowed to see based on their roles."""
     allowed: set = set()
     for role in user_context.roles:
@@ -70,7 +68,7 @@ def _role_allowed_levels(user_context: UserContext) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-def build_access_filter(user_context: UserContext) -> Optional[List[Dict[str, Any]]]:
+def build_access_filter(user_context: UserContext) -> list[dict[str, Any]] | None:
     """Build a Qdrant-style payload filter for the given user context.
 
     Returns a list of Qdrant filter conditions that can be used with
@@ -90,32 +88,38 @@ def build_access_filter(user_context: UserContext) -> Optional[List[Dict[str, An
 
     allowed_levels = _role_allowed_levels(user_context)
 
-    conditions: List[Dict[str, Any]] = []
+    conditions: list[dict[str, Any]] = []
 
     # Level-based filter
-    conditions.append({
-        "key": "access_level",
-        "match": {"any": allowed_levels},
-    })
+    conditions.append(
+        {
+            "key": "access_level",
+            "match": {"any": allowed_levels},
+        }
+    )
 
     # For confidential documents, additionally check group membership
     if "confidential" in allowed_levels and user_context.groups:
-        conditions.append({
-            "key": "allowed_groups",
-            "match": {"any": user_context.groups},
-        })
+        conditions.append(
+            {
+                "key": "allowed_groups",
+                "match": {"any": user_context.groups},
+            }
+        )
 
     # For restricted documents, check user list
     if "restricted" in allowed_levels and user_context.username:
-        conditions.append({
-            "key": "allowed_users",
-            "match": {"value": user_context.username},
-        })
+        conditions.append(
+            {
+                "key": "allowed_users",
+                "match": {"value": user_context.username},
+            }
+        )
 
     return conditions
 
 
-def build_access_filter_should(user_context: UserContext) -> Optional[Dict[str, Any]]:
+def build_access_filter_should(user_context: UserContext) -> dict[str, Any] | None:
     """Build a Qdrant 'should' filter — any condition can match.
 
     Returns None for admin (no filter) and for anonymous auth-disabled users.
@@ -125,33 +129,39 @@ def build_access_filter_should(user_context: UserContext) -> Optional[Dict[str, 
 
     allowed_levels = _role_allowed_levels(user_context)
 
-    should_clauses: List[Dict[str, Any]] = []
+    should_clauses: list[dict[str, Any]] = []
 
     # Public + Internal: matched by access_level alone
     base_levels = [lvl for lvl in allowed_levels if lvl in ("public", "internal")]
     if base_levels:
-        should_clauses.append({
-            "key": "access_level",
-            "match": {"any": base_levels},
-        })
+        should_clauses.append(
+            {
+                "key": "access_level",
+                "match": {"any": base_levels},
+            }
+        )
 
     # Confidential: requires group match
     if "confidential" in allowed_levels and user_context.groups:
-        should_clauses.append({
-            "must": [
-                {"key": "access_level", "match": {"value": "confidential"}},
-                {"key": "allowed_groups", "match": {"any": user_context.groups}},
-            ]
-        })
+        should_clauses.append(
+            {
+                "must": [
+                    {"key": "access_level", "match": {"value": "confidential"}},
+                    {"key": "allowed_groups", "match": {"any": user_context.groups}},
+                ]
+            }
+        )
 
     # Restricted: requires allowed_users match
     if "restricted" in allowed_levels and user_context.username:
-        should_clauses.append({
-            "must": [
-                {"key": "access_level", "match": {"value": "restricted"}},
-                {"key": "allowed_users", "match": {"value": user_context.username}},
-            ]
-        })
+        should_clauses.append(
+            {
+                "must": [
+                    {"key": "access_level", "match": {"value": "restricted"}},
+                    {"key": "allowed_users", "match": {"value": user_context.username}},
+                ]
+            }
+        )
 
     if should_clauses:
         return {"should": should_clauses}
@@ -164,9 +174,9 @@ def build_access_filter_should(user_context: UserContext) -> Optional[Dict[str, 
 
 
 def filter_chunks(
-    chunks: List[Dict[str, Any]],
+    chunks: list[dict[str, Any]],
     user_context: UserContext,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Filter retrieved chunks based on user access level.
 
     Each chunk may have:
@@ -181,7 +191,7 @@ def filter_chunks(
 
     allowed_levels = _role_allowed_levels(user_context)
 
-    filtered: List[Dict[str, Any]] = []
+    filtered: list[dict[str, Any]] = []
     for chunk in chunks:
         chunk_level = chunk.get("access_level", chunk.get("payload", {}).get("access_level", "public"))
 
@@ -215,9 +225,9 @@ def filter_chunks(
 
 
 def filter_chunks_list(
-    chunks: List[Dict[str, Any]],
+    chunks: list[dict[str, Any]],
     user_context: UserContext,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Alias for filter_chunks — filter list of raw chunk dicts."""
     return filter_chunks(chunks, user_context)
 
@@ -252,8 +262,7 @@ def can_access_source(
 
     # Check role against access level
     user_max_level_rank = max(
-        (ACCESS_LEVEL_RANK.get(ROLE_MAX_LEVEL.get(role, "public"), 0)
-         for role in user_context.roles),
+        (ACCESS_LEVEL_RANK.get(ROLE_MAX_LEVEL.get(role, "public"), 0) for role in user_context.roles),
         default=0,
     )
 
@@ -263,8 +272,8 @@ def can_access_source(
 def can_access_document(
     user_context: UserContext,
     access_level: str,
-    allowed_groups: Optional[List[str]] = None,
-    allowed_users: Optional[List[str]] = None,
+    allowed_groups: list[str] | None = None,
+    allowed_users: list[str] | None = None,
 ) -> bool:
     """Check if a user can access a specific document given its access metadata."""
     if user_context.is_admin:

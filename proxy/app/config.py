@@ -3,8 +3,10 @@
 Конфигурация RAG-прокси.
 Все параметры загружаются из переменных окружения или имеют значения по умолчанию.
 """
+
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Загрузка .env файла (если существует)
@@ -100,11 +102,11 @@ PORT = int(os.getenv("PORT", "8080"))
 RELOAD = os.getenv("RELOAD", "false").lower() == "true"
 WORKERS = int(os.getenv("WORKERS", "1"))
 
+
 # ============ Вспомогательная функция для отладки ============
 def print_config():
     """Выводит текущую конфигурацию (скрывая секреты)."""
-    config_vars = {k: v for k, v in globals().items() 
-                   if not k.startswith("_") and isinstance(v, (str, int, bool))}
+    config_vars = {k: v for k, v in globals().items() if not k.startswith("_") and isinstance(v, (str, int, bool))}
     # Маскируем чувствительные переменные
     sensitive_keys = ["API_KEY", "PASSWORD", "SECRET"]
     for key in config_vars:

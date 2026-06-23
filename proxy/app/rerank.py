@@ -7,23 +7,19 @@
 - Кэширование результатов (Redis/in-memory)
 - Автоматическую обрезку текста до max_length модели
 """
-import logging
+
 import hashlib
-import json
-from typing import List, Tuple, Optional, Any
-from functools import lru_cache
+import logging
 
 try:
     from sentence_transformers import CrossEncoder
+
     CROSS_ENCODER_AVAILABLE = True
 except ImportError:
     CROSS_ENCODER_AVAILABLE = False
 
-from app.config import (
-    RERANKER_MODEL, RERANKER_MAX_LENGTH, RERANKER_BATCH_SIZE,
-    USE_REDIS, REDIS_URL
-)
 from app.cache import CacheManager
+from app.config import REDIS_URL, RERANKER_MAX_LENGTH, RERANKER_MODEL, USE_REDIS
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +33,10 @@ def initialize_reranker():
     global reranker, cache_manager
     if not CROSS_ENCODER_AVAILABLE:
         raise ImportError("sentence-transformers is required for cross-encoder")
-    
+
     reranker = CrossEncoder(RERANKER_MODEL, max_length=RERANKER_MAX_LENGTH)
     logger.info(f"Cross-encoder {RERANKER_MODEL} loaded (max_length={RERANKER_MAX_LENGTH})")
-    
+
     # Инициализация кэша (если используется Redis)
     if USE_REDIS and REDIS_URL:
         cache_manager = CacheManager(redis_url=REDIS_URL)
@@ -65,15 +61,10 @@ def _get_cache_key(query: str, chunk_text: str) -> str:
     return f"rerank:{hashlib.md5(content.encode()).hexdigest()}"
 
 
-def rerank_chunks(
-    query: str,
-    chunks: List[str],
-    top_k: int = 20,
-    use_cache: bool = True
-) -> List[int]:
+def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: bool = True) -> list[int]:
     """
     Выполняет реранкинг списка чанков по релевантности запросу.
-    
+
     :param query: поисковый запрос
     :param chunks: список текстов чанков
     :param top_k: количество лучших чанков после реранкинга
@@ -82,16 +73,16 @@ def rerank_chunks(
     """
     if not reranker:
         initialize_reranker()
-    
+
     if not chunks:
         return []
-    
+
     # Обрезаем тексты до максимальной длины модели
     truncated_chunks = [_truncate_text(chunk) for chunk in chunks]
-    
+
     # Подготовка пар (запрос, чанк)
     pairs = [(query, chunk) for chunk in truncated_chunks]
-    
+
     # Получение скоров с кэшированием
     scores = []
     if use_cache and cache_manager:
@@ -114,21 +105,18 @@ def rerank_chunks(
                 cache_manager.set_sync(cache_key, str(scores[i]), ttl=3600)
     else:
         scores = reranker.predict(pairs)
-    
+
     # Сортировка индексов по убыванию скора
     indexed_scores = list(enumerate(scores))
     indexed_scores.sort(key=lambda x: x[1], reverse=True)
-    
+
     # Возвращаем индексы top_k
     return [idx for idx, _ in indexed_scores[:top_k]]
 
 
 def rerank_chunks_with_scores(
-    query: str,
-    chunks: List[str],
-    top_k: int = 20,
-    use_cache: bool = True
-) -> List[Tuple[int, float]]:
+    query: str, chunks: list[str], top_k: int = 20, use_cache: bool = True
+) -> list[tuple[int, float]]:
     """
     Возвращает пары (индекс, score) для top_k чанков.
     """
@@ -151,16 +139,18 @@ if cache_manager is None:
 if __name__ == "__main__":
     # Тестовый запуск (требуется настроенная конфигурация)
     import sys
+
     sys.path.insert(0, ".")
     from app.config import set_test_config
+
     set_test_config()
-    
+
     initialize_reranker()
     query = "Как настроить CI/CD pipeline?"
     chunks = [
         "CI/CD pipeline настраивается через файл .gitlab-ci.yml",
         "Docker позволяет контейнеризировать приложения",
-        "Для автоматической сборки используйте GitLab Runners"
+        "Для автоматической сборки используйте GitLab Runners",
     ]
     indices = rerank_chunks(query, chunks, top_k=2)
     print(f"Top indices: {indices}")

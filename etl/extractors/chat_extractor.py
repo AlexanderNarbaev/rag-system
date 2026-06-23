@@ -3,9 +3,9 @@
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any
 
 from etl.extractors.base_extractor import BaseExtractor, ExtractedDocument, ExtractorConfig
 
@@ -24,7 +24,7 @@ class ChatExtractor(BaseExtractor):
     def __init__(self, config: ExtractorConfig):
         super().__init__(config)
         self._validated = False
-        self._source_files: List[Path] = []
+        self._source_files: list[Path] = []
 
     async def validate_connection(self) -> bool:
         """Validate that source chat export files exist."""
@@ -42,8 +42,7 @@ class ChatExtractor(BaseExtractor):
 
         if self.config.exclude_patterns:
             self._source_files = [
-                f for f in self._source_files
-                if not any(p in str(f) for p in self.config.exclude_patterns)
+                f for f in self._source_files if not any(p in str(f) for p in self.config.exclude_patterns)
             ]
 
         self._validated = len(self._source_files) > 0
@@ -70,9 +69,9 @@ class ChatExtractor(BaseExtractor):
             except Exception as e:
                 logger.error(f"Failed to extract chat file {file_path}: {e}", exc_info=True)
 
-    async def _parse_file(self, file_path: Path, format_type: str) -> List[Dict[str, Any]]:
+    async def _parse_file(self, file_path: Path, format_type: str) -> list[dict[str, Any]]:
         """Parse a chat export file based on detected format."""
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         try:
@@ -91,7 +90,7 @@ class ChatExtractor(BaseExtractor):
             return self._parse_jsonl(content)
         return self._parse_generic_text(content)
 
-    def _parse_deepseek(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_deepseek(self, content: str) -> list[dict[str, Any]]:
         """Parse DeepSeek chat JSON export."""
         data = json.loads(content)
         conversations = []
@@ -114,7 +113,7 @@ class ChatExtractor(BaseExtractor):
                     conversations.append(conv)
         return conversations
 
-    def _parse_chatgpt(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_chatgpt(self, content: str) -> list[dict[str, Any]]:
         """Parse ChatGPT export (typically JSON with conversations array)."""
         data = json.loads(content)
         conversations = []
@@ -129,7 +128,7 @@ class ChatExtractor(BaseExtractor):
                 conversations.append(conv)
         return conversations
 
-    def _parse_claude(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_claude(self, content: str) -> list[dict[str, Any]]:
         """Parse Claude conversation export."""
         data = json.loads(content)
         conversations = []
@@ -144,14 +143,14 @@ class ChatExtractor(BaseExtractor):
                 conversations.append(normalized)
         return conversations
 
-    def _parse_generic_json(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_generic_json(self, content: str) -> list[dict[str, Any]]:
         """Parse a generic JSON chat export (best effort)."""
         data = json.loads(content)
         if isinstance(data, list):
             return [self._normalize_conversation(item, self.FORMAT_GENERIC) for item in data if item]
         return [self._normalize_conversation(data, self.FORMAT_GENERIC)]
 
-    def _parse_jsonl(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_jsonl(self, content: str) -> list[dict[str, Any]]:
         """Parse JSONL format (one JSON object per line)."""
         conversations = []
         for line in content.splitlines():
@@ -167,7 +166,7 @@ class ChatExtractor(BaseExtractor):
                 continue
         return conversations
 
-    def _parse_generic_text(self, content: str) -> List[Dict[str, Any]]:
+    def _parse_generic_text(self, content: str) -> list[dict[str, Any]]:
         """Parse plain text chat logs (fallback)."""
         qa_pattern = re.compile(
             r"^(?:Q|Question|User|Human|Человек)[:]\s*(.+?)\s*"
@@ -206,7 +205,7 @@ class ChatExtractor(BaseExtractor):
 
         return [{"title": "Chat Log", "messages": segments, "id": "generic_text_1"}] if segments else []
 
-    def _normalize_conversation(self, conv: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:
+    def _normalize_conversation(self, conv: dict[str, Any], source: str) -> dict[str, Any] | None:
         """Normalize conversation to a unified structure."""
         if not isinstance(conv, dict):
             return None
@@ -241,12 +240,14 @@ class ChatExtractor(BaseExtractor):
                     else:
                         role = "assistant"
 
-                normalized_messages.append({
-                    "role": role,
-                    "content": str(content) if content else "",
-                    "model": str(model) if model else "",
-                    "timestamp": str(timestamp) if timestamp else "",
-                })
+                normalized_messages.append(
+                    {
+                        "role": role,
+                        "content": str(content) if content else "",
+                        "model": str(model) if model else "",
+                        "timestamp": str(timestamp) if timestamp else "",
+                    }
+                )
 
         return {
             "id": conv.get("id", conv.get("conversation_id", conv.get("uuid", ""))),
@@ -257,7 +258,7 @@ class ChatExtractor(BaseExtractor):
             "updated_at": conv.get("update_time", conv.get("updated_at", "")),
         }
 
-    def _extract_from_mapping(self, mapping: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _extract_from_mapping(self, mapping: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract messages from ChatGPT conversation mapping format."""
         messages = []
         for node_id, node in mapping.items():
@@ -268,8 +269,8 @@ class ChatExtractor(BaseExtractor):
         return sorted(messages, key=lambda m: m.get("create_time", 0) or 0)
 
     def _conversation_to_documents(
-        self, conv: Dict[str, Any], format_type: str, file_path: Path
-    ) -> List[ExtractedDocument]:
+        self, conv: dict[str, Any], format_type: str, file_path: Path
+    ) -> list[ExtractedDocument]:
         """Convert a conversation into Q&A pair documents."""
         documents = []
         messages = conv.get("messages", [])
@@ -323,7 +324,7 @@ class ChatExtractor(BaseExtractor):
         return documents
 
     @staticmethod
-    def _extract_qa_pairs(messages: List[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    def _extract_qa_pairs(messages: list[dict[str, Any]]) -> list[tuple[str, str]]:
         """Extract question-answer pairs from message list."""
         pairs = []
         current_question = None
@@ -341,7 +342,7 @@ class ChatExtractor(BaseExtractor):
         return pairs
 
     @staticmethod
-    def _extract_code_blocks(text: str) -> List[str]:
+    def _extract_code_blocks(text: str) -> list[str]:
         """Extract code blocks from markdown-style text."""
         blocks = []
         pattern = re.compile(r"```(?:\w*)\n(.*?)```", re.DOTALL)
@@ -361,7 +362,7 @@ class ChatExtractor(BaseExtractor):
     def _detect_format(file_path: Path) -> str:
         """Detect chat export format from file content and name."""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 head = f.read(4096)
 
             if "deepseek" in head.lower() or "deepseek" in str(file_path).lower():

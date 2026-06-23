@@ -338,6 +338,7 @@ class TestOrchestratorFlow:
         with patch("proxy.app.config.USE_LANGGRAPH", True), \
              patch("proxy.app.config.MAX_RETRIEVAL_LOOPS", 1), \
              patch("proxy.app.orchestrator.hybrid_search") as mock_search, \
+             patch("proxy.app.orchestrator.rerank_chunks", return_value=[0]), \
              patch("proxy.app.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm:
 
             mock_llm.return_value = "Ответ после ограничения циклов."

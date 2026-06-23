@@ -14,62 +14,66 @@ OpenAI-совместимый прокси-сервер для RAG.
 - LangGraph (опционально) для агентной оркестрации
 - Redis для кэширования эмбеддингов (опционально)
 """
-import os
+
 import json
 import logging
+import os
 import time
-from typing import List, Optional, Dict, Any, AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, Field
 import uvicorn
-
-# Импорт внутренних модулей
-from app.config import (
-    QDRANT_HOST, QDRANT_PORT, COLLECTION_NAME,
-    EMBEDDER_MODEL, RERANKER_MODEL, LLM_ENDPOINT, LLM_MODEL_NAME,
-    MAX_CHUNKS_RETRIEVAL, MAX_CHUNKS_AFTER_RERANK,
-    REDIS_URL, USE_REDIS, USE_LANGGRAPH, LOG_REQUESTS, LOG_DIR,
-    METRICS_ENABLED, RATE_LIMIT_ENABLED, RATE_LIMIT_PER_MINUTE, RATE_LIMIT_BURST,
-    LOG_FORMAT, CORS_ORIGINS,
+from app.access_control import (
+    build_access_filter,
+    filter_chunks,
 )
-from app.retrieval import hybrid_search
-from app.rerank import rerank_chunks
-from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
-from app.token_optimizer import TokenOptimizer
-from app.retrieval_evaluator import RetrievalEvaluator
-from app.provider_adapter import stream_completion, non_stream_completion, LLMError
-from app.cache import CacheManager
-from app.hitl import log_interaction
-from app.metrics import metrics_endpoint, init_metrics
-from app.middleware import setup_all_middleware, add_cors_middleware
-from app.rate_limiter import add_rate_limit_middleware
-from app.logging_config import setup_logging
+from app.audit import AuditLogger, RequestTracker
 from app.auth import (
     AUTH_ENABLED,
     UserContext,
     create_token,
-    verify_token,
     get_auth_context,
-    get_optional_auth_context,
-    get_user_from_token,
+    verify_token,
 )
-from app.audit import AuditLogger, RequestTracker
-from app.security import InputValidator, SecurityHeaders
-from app.access_control import (
-    filter_chunks,
-    build_access_filter,
-    can_access_document,
+from app.cache import CacheManager
+
+# Импорт внутренних модулей
+from app.config import (
+    CORS_ORIGINS,
+    LLM_ENDPOINT,
+    LLM_MODEL_NAME,
+    LOG_DIR,
+    LOG_REQUESTS,
+    MAX_CHUNKS_AFTER_RERANK,
+    MAX_CHUNKS_RETRIEVAL,
+    RATE_LIMIT_BURST,
+    RATE_LIMIT_ENABLED,
+    RATE_LIMIT_PER_MINUTE,
+    REDIS_URL,
+    USE_LANGGRAPH,
+    USE_REDIS,
 )
+from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
+from app.hitl import log_interaction
+from app.logging_config import setup_logging
+from app.metrics import init_metrics, metrics_endpoint
+from app.middleware import add_cors_middleware, setup_all_middleware
+from app.provider_adapter import non_stream_completion, stream_completion
+from app.rate_limiter import add_rate_limit_middleware
+from app.rerank import rerank_chunks
+from app.retrieval import hybrid_search
+from app.retrieval_evaluator import RetrievalEvaluator
+from app.security import InputValidator
+from app.token_optimizer import TokenOptimizer
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 # Опциональные модули
 if USE_LANGGRAPH:
     from app.orchestrator import get_orchestrator
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("rag-proxy")
 
 # Глобальные объекты (инициализируются при старте)
@@ -113,7 +117,7 @@ app = FastAPI(
     title="RAG Proxy for Gemma",
     description="OpenAI-compatible proxy with hybrid search, reranking, and Gemma LLM",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Middleware setup (order matters: CORS > correlation > request-id > logging > rate-limit)
@@ -137,20 +141,20 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     model: str
-    messages: List[ChatMessage]
-    temperature: Optional[float] = 0.2
-    top_p: Optional[float] = 0.95
-    max_tokens: Optional[int] = 4096
-    stream: Optional[bool] = False
+    messages: list[ChatMessage]
+    temperature: float | None = 0.2
+    top_p: float | None = 0.95
+    max_tokens: int | None = 4096
+    stream: bool | None = False
     # Нестандартные параметры для RAG
-    rag_version: Optional[str] = None  # конкретная версия документа
-    rag_force_refresh: Optional[bool] = False  # игнорировать кэш
+    rag_version: str | None = None  # конкретная версия документа
+    rag_force_refresh: bool | None = False  # игнорировать кэш
 
 
 class ChatCompletionResponseChoice(BaseModel):
     index: int
     message: ChatMessage
-    finish_reason: Optional[str] = "stop"
+    finish_reason: str | None = "stop"
 
 
 class ChatCompletionResponse(BaseModel):
@@ -158,8 +162,8 @@ class ChatCompletionResponse(BaseModel):
     object: str = "chat.completion"
     created: int
     model: str
-    choices: List[ChatCompletionResponseChoice]
-    usage: Dict[str, int] = Field(default={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+    choices: list[ChatCompletionResponseChoice]
+    usage: dict[str, int] = Field(default={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
 
 
 class ModelInfo(BaseModel):
@@ -171,17 +175,18 @@ class ModelInfo(BaseModel):
 
 class ModelsResponse(BaseModel):
     object: str = "list"
-    data: List[ModelInfo]
+    data: list[ModelInfo]
 
 
 # ===========================================================================
 # Auth models
 # ===========================================================================
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
-    expires_in_hours: Optional[int] = 24
+    expires_in_hours: int | None = 24
 
 
 class LoginResponse(BaseModel):
@@ -190,8 +195,8 @@ class LoginResponse(BaseModel):
     expires_in: int  # seconds
     user_id: str
     username: str
-    roles: List[str]
-    groups: List[str]
+    roles: list[str]
+    groups: list[str]
 
 
 class RefreshRequest(BaseModel):
@@ -207,8 +212,8 @@ class RefreshResponse(BaseModel):
 class UserInfoResponse(BaseModel):
     user_id: str
     username: str
-    roles: List[str]
-    groups: List[str]
+    roles: list[str]
+    groups: list[str]
     access_level: str
     is_admin: bool
     is_authenticated: bool
@@ -221,13 +226,13 @@ def generate_request_id() -> str:
 
 async def process_rag_query(
     user_query: str,
-    version: Optional[str] = None,
+    version: str | None = None,
     force_refresh: bool = False,
     temperature: float = 0.2,
     max_tokens: int = 4096,
     stream: bool = False,
-    other_messages: List[Dict] = None,
-    user_context: Optional[UserContext] = None,
+    other_messages: list[dict] = None,
+    user_context: UserContext | None = None,
 ):
     """
     Основной RAG-пайплайн:
@@ -253,11 +258,7 @@ async def process_rag_query(
             return cached, True
 
     # 2. Гибридный поиск
-    search_results = hybrid_search(
-        query=user_query,
-        version=version,
-        top_k=MAX_CHUNKS_RETRIEVAL
-    )
+    search_results = hybrid_search(query=user_query, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
     if not search_results:
         # Нет релевантных чанков -> ответ без контекста
         context = ""
@@ -307,8 +308,7 @@ async def process_rag_query(
                 c_copy["score"] = s
                 chunks_for_eval.append(c_copy)
             confidence, action, quality_processed = retrieval_evaluator.evaluate_and_act(
-                query=user_query,
-                retrieved_chunks=chunks_for_eval
+                query=user_query, retrieved_chunks=chunks_for_eval
             )
             logger.info(f"Retrieval quality: confidence={confidence:.3f}, action={action}")
 
@@ -321,22 +321,15 @@ async def process_rag_query(
                 # 6. Smart token budget allocation
                 available_tokens = 130000
                 budget = token_optimizer.smart_token_budget(
-                    available_tokens=available_tokens,
-                    num_chunks=len(unique_chunks)
+                    available_tokens=available_tokens, num_chunks=len(unique_chunks)
                 )
 
                 # 7. Context compression with budget
-                raw_context = build_context(
-                    unique_chunks,
-                    max_tokens=budget["context_total"],
-                    include_metadata=True
-                )
+                raw_context = build_context(unique_chunks, max_tokens=budget["context_total"], include_metadata=True)
 
                 if budget["context_total"] < len(raw_context) // 4:
                     context = token_optimizer.compress_context(
-                        [c for c, _ in unique_chunks],
-                        max_tokens=budget["context_total"],
-                        strategy="hierarchical"
+                        [c for c, _ in unique_chunks], max_tokens=budget["context_total"], strategy="hierarchical"
                     )
                 else:
                     context = raw_context
@@ -373,14 +366,11 @@ async def process_rag_query(
 @app.get("/v1/health")
 async def health():
     """Проверка работоспособности прокси и зависимостей."""
-    status = {
-        "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "components": {}
-    }
+    status = {"status": "ok", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
     # Проверка Qdrant (опционально)
     try:
         from app.retrieval import qdrant_client
+
         qdrant_client.get_collections()
         status["components"]["qdrant"] = "ok"
     except Exception as e:
@@ -389,6 +379,7 @@ async def health():
     # Проверка LLM эндпоинта
     try:
         import requests
+
         resp = requests.get(f"{LLM_ENDPOINT}/health", timeout=2)
         if resp.status_code == 200:
             status["components"]["llm"] = "ok"
@@ -405,7 +396,7 @@ async def list_models():
     """Возвращает список доступных моделей."""
     models = [
         ModelInfo(id=LLM_MODEL_NAME, created=int(time.time())),
-        ModelInfo(id="rag-proxy", created=int(time.time()))  # виртуальная модель для RAG
+        ModelInfo(id="rag-proxy", created=int(time.time())),  # виртуальная модель для RAG
     ]
     return ModelsResponse(data=models)
 
@@ -413,6 +404,7 @@ async def list_models():
 # ===========================================================================
 # Auth endpoints
 # ===========================================================================
+
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
 async def auth_login(request: LoginRequest):
@@ -504,6 +496,7 @@ async def auth_me(user: UserContext = Depends(get_auth_context)):
 # Chat completions
 # ===========================================================================
 
+
 @app.post("/v1/chat/completions")
 async def chat_completions(
     request: ChatCompletionRequest,
@@ -516,12 +509,12 @@ async def chat_completions(
 
     # Store user context in request state for downstream components
     raw_request.state.user_context = user
-    
+
     # Input validation
     validated_model = InputValidator.validate_non_empty(request.model, max_len=256)
     if not validated_model:
         raise HTTPException(status_code=400, detail="Invalid model name")
-    
+
     # Извлекаем последний пользовательский запрос
     user_query = None
     other_messages = []
@@ -533,13 +526,13 @@ async def chat_completions(
             sanitized_msg = msg.model_dump()
             sanitized_msg["content"] = sanitized_content
             other_messages.append(sanitized_msg)
-    
+
     if not user_query:
         raise HTTPException(status_code=400, detail="No user message found")
-    
+
     # Извлекаем версию из запроса
     version = request.rag_version or extract_version_from_query(user_query)
-    
+
     # Логирование входящего запроса (опционально)
     client_ip = raw_request.client.host if raw_request.client else "unknown"
     if LOG_REQUESTS:
@@ -548,20 +541,22 @@ async def chat_completions(
             f"Request {request_id}: user={client_ip}, roles={role_info}, "
             f"query={user_query[:100]}, version={version}, stream={request.stream}"
         )
-    
+
     # Track request lifecycle
     request_tracker.start(request_id, metadata={"model": request.model, "client_ip": client_ip})
-    
+
     # Используем оркестратор LangGraph, если включён
     if USE_LANGGRAPH and orchestrator:
         # Агентный пайплайн
-        final_response = await orchestrator.ainvoke({
-            "query": user_query,
-            "version": version,
-            "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
-            "stream": request.stream
-        })
+        final_response = await orchestrator.ainvoke(
+            {
+                "query": user_query,
+                "version": version,
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+                "stream": request.stream,
+            }
+        )
         if request.stream:
             # Для стриминга нужно возвращать StreamingResponse из оркестратора
             return StreamingResponse(final_response, media_type="text/event-stream")
@@ -572,11 +567,11 @@ async def chat_completions(
                 id=request_id,
                 created=int(time.time()),
                 model=request.model,
-                choices=[ChatCompletionResponseChoice(
-                    index=0,
-                    message=ChatMessage(role="assistant", content=response_text),
-                    finish_reason="stop"
-                )]
+                choices=[
+                    ChatCompletionResponseChoice(
+                        index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
+                    )
+                ],
             )
             duration_ms = (time.time() - start_time) * 1000
             request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -600,10 +595,10 @@ async def chat_completions(
                     user_query=user_query,
                     context="[agentic]",
                     response=response_text,
-                    metadata={"version": version, "model": request.model, "client_ip": client_ip}
+                    metadata={"version": version, "model": request.model, "client_ip": client_ip},
                 )
             return completion
-    
+
     # Стандартный RAG пайплайн
     if request.stream:
         # Потоковый режим
@@ -649,6 +644,7 @@ async def chat_completions(
                         endpoint="/v1/chat/completions",
                     )
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     else:
         # Non-streaming
@@ -666,11 +662,11 @@ async def chat_completions(
             id=request_id,
             created=int(time.time()),
             model=request.model,
-            choices=[ChatCompletionResponseChoice(
-                index=0,
-                message=ChatMessage(role="assistant", content=response_text),
-                finish_reason="stop"
-            )]
+            choices=[
+                ChatCompletionResponseChoice(
+                    index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
+                )
+            ],
         )
         duration_ms = (time.time() - start_time) * 1000
         request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -694,7 +690,7 @@ async def chat_completions(
                 user_query=user_query,
                 context="[rag_context_omitted_for_logging]",
                 response=response_text,
-                metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache}
+                metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
             )
         return completion
 
@@ -705,5 +701,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8080,
         reload=False,
-        workers=1  # Для стриминга и кэша лучше 1 воркер, или использовать Redis
+        workers=1,  # Для стриминга и кэша лучше 1 воркер, или использовать Redis
     )

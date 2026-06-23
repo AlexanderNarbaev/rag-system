@@ -10,24 +10,25 @@
 - Инкрементальный режим (updated > last_run)
 - WAL для возобновления
 """
-import os
+
 import json
-import hashlib
 import logging
+import os
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Iterator
-from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import urljoin
 
 import requests
 from requests.auth import HTTPBasicAuth
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class JiraExtractor:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         config: {
             "url": "https://jira.internal.company.com",
@@ -64,9 +65,9 @@ class JiraExtractor:
         self.wal_path.parent.mkdir(parents=True, exist_ok=True)
         self.wal_data = self._load_wal()
 
-    def _load_wal(self) -> Dict:
+    def _load_wal(self) -> dict:
         if self.wal_path.exists():
-            with open(self.wal_path, "r") as f:
+            with open(self.wal_path) as f:
                 return json.load(f)
         return {"last_run": None, "last_issue_id": None, "processed_issues": []}
 
@@ -74,13 +75,13 @@ class JiraExtractor:
         with open(self.wal_path, "w") as f:
             json.dump(self.wal_data, f, indent=2)
 
-    def _request(self, endpoint: str, params: Dict = None) -> Dict:
+    def _request(self, endpoint: str, params: dict = None) -> dict:
         url = urljoin(self.url, endpoint)
         resp = self.session.get(url, params=params)
         resp.raise_for_status()
         return resp.json()
 
-    def _paginated_issues(self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[Dict]:
+    def _paginated_issues(self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[dict]:
         """Генератор для пагинированного получения задач."""
         while True:
             params = {
@@ -88,7 +89,7 @@ class JiraExtractor:
                 "fields": self.fields,
                 "expand": self.expand,
                 "startAt": start_at,
-                "maxResults": max_results
+                "maxResults": max_results,
             }
             data = self._request("/rest/api/3/search", params)
             issues = data.get("issues", [])
@@ -97,13 +98,13 @@ class JiraExtractor:
                 break
             start_at += max_results
 
-    def _get_issue_transitions(self, issue_key: str) -> List[Dict]:
+    def _get_issue_transitions(self, issue_key: str) -> list[dict]:
         """Возвращает доступные переходы (не все хранятся в changelog, но полезно)."""
         endpoint = f"/rest/api/3/issue/{issue_key}/transitions"
         data = self._request(endpoint)
         return data.get("transitions", [])
 
-    def _get_sprints_for_issue(self, issue_key: str) -> List[Dict]:
+    def _get_sprints_for_issue(self, issue_key: str) -> list[dict]:
         """
         Получает спринты, связанные с задачей (через agile API).
         Требует установленного дополнения Jira Agile (Greenhopper).
@@ -116,7 +117,7 @@ class JiraExtractor:
             logger.debug(f"Sprint info not available for {issue_key}: {e}")
             return []
 
-    def _download_attachment(self, attachment: Dict, issue_key: str) -> Optional[str]:
+    def _download_attachment(self, attachment: dict, issue_key: str) -> str | None:
         """Скачивает вложение и возвращает локальный путь."""
         attachment_id = attachment["id"]
         filename = attachment["filename"]
@@ -139,20 +140,21 @@ class JiraExtractor:
             logger.error(f"Failed to download attachment {attachment_id} for {issue_key}: {e}")
             return None
 
-    def _extract_links_from_text(self, text: str) -> Dict[str, List[str]]:
+    def _extract_links_from_text(self, text: str) -> dict[str, list[str]]:
         """Извлекает ссылки из текста (описание, комментарий): URL и Jira issue ключи."""
         import re
+
         url_pattern = r'https?://[^\s<>"\']+'
-        issue_key_pattern = r'[A-Z][A-Z0-9]+-\d+'
+        issue_key_pattern = r"[A-Z][A-Z0-9]+-\d+"
         urls = re.findall(url_pattern, text) if text else []
         issue_keys = re.findall(issue_key_pattern, text) if text else []
         return {"external_urls": list(set(urls)), "mentioned_issues": list(set(issue_keys))}
 
-    def _process_issue(self, issue: Dict) -> Dict:
+    def _process_issue(self, issue: dict) -> dict:
         """Преобразует сырой JSON задачи в структурированный формат с нужными данными."""
         key = issue["key"]
         fields = issue.get("fields", {})
-        
+
         # Базовые поля
         summary = fields.get("summary", "")
         description = fields.get("description", "")
@@ -165,61 +167,70 @@ class JiraExtractor:
         assignee = fields.get("assignee", {}).get("displayName", "") if fields.get("assignee") else None
         reporter = fields.get("reporter", {}).get("displayName", "") if fields.get("reporter") else None
         labels = fields.get("labels", [])
-        
+
         # Спринты (если есть)
         sprints = self._get_sprints_for_issue(key)
-        
+
         # Комментарии (уже входят в expand=renderedBody)
         comments_data = fields.get("comment", {}).get("comments", [])
         comments = []
         for com in comments_data:
             comment_body = com.get("body", "")
-            comments.append({
-                "id": com["id"],
-                "author": com.get("author", {}).get("displayName", ""),
-                "created": com.get("created", ""),
-                "updated": com.get("updated", ""),
-                "body": comment_body,
-                "links": self._extract_links_from_text(comment_body)
-            })
-        
+            comments.append(
+                {
+                    "id": com["id"],
+                    "author": com.get("author", {}).get("displayName", ""),
+                    "created": com.get("created", ""),
+                    "updated": com.get("updated", ""),
+                    "body": comment_body,
+                    "links": self._extract_links_from_text(comment_body),
+                }
+            )
+
         # Changelog (история изменений)
         changelog = issue.get("changelog", {})
         histories = changelog.get("histories", [])
         changelog_entries = []
         for hist in histories:
             for item in hist.get("items", []):
-                changelog_entries.append({
-                    "author": hist.get("author", {}).get("displayName", ""),
-                    "created": hist.get("created", ""),
-                    "field": item.get("field", ""),
-                    "from": item.get("fromString", ""),
-                    "to": item.get("toString", "")
-                })
-        
+                changelog_entries.append(
+                    {
+                        "author": hist.get("author", {}).get("displayName", ""),
+                        "created": hist.get("created", ""),
+                        "field": item.get("field", ""),
+                        "from": item.get("fromString", ""),
+                        "to": item.get("toString", ""),
+                    }
+                )
+
         # Вложения
         attachments = []
         if self.download_attachments:
             for att in fields.get("attachment", []):
                 local_path = self._download_attachment(att, key)
-                attachments.append({
+                attachments.append(
+                    {
+                        "id": att["id"],
+                        "filename": att["filename"],
+                        "size": att.get("size", 0),
+                        "mime_type": att.get("mimeType", ""),
+                        "created": att.get("created", ""),
+                        "author": att.get("author", {}).get("displayName", ""),
+                        "local_path": local_path,
+                    }
+                )
+        else:
+            attachments = [
+                {
                     "id": att["id"],
                     "filename": att["filename"],
                     "size": att.get("size", 0),
                     "mime_type": att.get("mimeType", ""),
                     "created": att.get("created", ""),
-                    "author": att.get("author", {}).get("displayName", ""),
-                    "local_path": local_path
-                })
-        else:
-            attachments = [{
-                "id": att["id"],
-                "filename": att["filename"],
-                "size": att.get("size", 0),
-                "mime_type": att.get("mimeType", ""),
-                "created": att.get("created", "")
-            } for att in fields.get("attachment", [])]
-        
+                }
+                for att in fields.get("attachment", [])
+            ]
+
         # Связи (issuelinks, subtasks)
         links = []
         for link in fields.get("issuelinks", []):
@@ -234,13 +245,13 @@ class JiraExtractor:
                 link_info["target_key"] = link["inwardIssue"]["key"]
             if link_info:
                 links.append(link_info)
-        
+
         # Подзадачи (subtasks)
         subtasks = [{"key": st["key"], "summary": st["fields"].get("summary", "")} for st in fields.get("subtasks", [])]
-        
+
         # Извлечение ссылок из описания
         description_links = self._extract_links_from_text(description)
-        
+
         # Итоговый объект задачи
         result = {
             "key": key,
@@ -262,7 +273,7 @@ class JiraExtractor:
             "links": links,
             "subtasks": subtasks,
             "description_links": description_links,
-            "extracted_at": datetime.now(timezone.utc).isoformat()
+            "extracted_at": datetime.now(UTC).isoformat(),
         }
         return result
 
@@ -277,7 +288,8 @@ class JiraExtractor:
             if "updated" in jql:
                 # Простейшее: предполагаем, что updated встречается в виде updated > ... или updated >= ...
                 import re
-                if re.search(r'updated\s*[<>=]', jql):
+
+                if re.search(r"updated\s*[<>=]", jql):
                     logger.warning("Base JQL already has updated condition. Incremental may overlap.")
                     return f"({jql}) AND {updated_condition}"
             else:
@@ -297,7 +309,7 @@ class JiraExtractor:
             if key in self.wal_data["processed_issues"] and self.incremental:
                 logger.debug(f"Skipping already processed issue {key}")
                 continue
-            
+
             try:
                 processed = self._process_issue(issue)
                 # Сохраняем в JSON
@@ -305,23 +317,23 @@ class JiraExtractor:
                 issue_dir.mkdir(parents=True, exist_ok=True)
                 with open(issue_dir / "issue.json", "w", encoding="utf-8") as f:
                     json.dump(processed, f, ensure_ascii=False, indent=2)
-                
+
                 # Обновляем WAL
                 if key not in self.wal_data["processed_issues"]:
                     self.wal_data["processed_issues"].append(key)
-                self.wal_data["last_run"] = datetime.now(timezone.utc).isoformat()
+                self.wal_data["last_run"] = datetime.now(UTC).isoformat()
                 self._save_wal()
-                
+
                 total_processed += 1
                 if self.max_issues_per_run > 0 and total_processed >= self.max_issues_per_run:
                     logger.info(f"Reached max issues per run ({self.max_issues_per_run})")
                     break
-                
+
                 logger.info(f"Processed issue {key}")
             except Exception as e:
                 logger.error(f"Failed to process issue {key}: {e}", exc_info=True)
                 # продолжаем со следующей задачей
-        
+
         logger.info(f"Jira extraction finished. Processed {total_processed} issues.")
 
 
@@ -339,7 +351,7 @@ if __name__ == "__main__":
         "max_issues_per_run": 0,
         "since_date": "2025-01-01T00:00:00.000+0000",
         "fields": "*all",
-        "expand": "changelog,renderedBody"
+        "expand": "changelog,renderedBody",
     }
     extractor = JiraExtractor(config_example)
     extractor.run()
