@@ -27,8 +27,29 @@ from app.context_builder import build_context, deduplicate_chunks
 from app.provider_adapter import non_stream_completion
 from app.rerank import rerank_chunks
 from app.retrieval import graph_expand_query, hybrid_search
+from app.slm_router import IntentType, classify_intent
 
 logger = logging.getLogger(__name__)
+
+
+def _dynamic_top_k(query: str, *, max_default: int = 50) -> int:
+    """Determine the optimal number of chunks to retrieve based on query intent.
+
+    Greeting → 0 (skip retrieval), Factual → 15, Procedural → 25,
+    Comparison/Summarization → max_default. Falls back to max_default on error.
+    """
+    try:
+        intent, _ = classify_intent(query)
+        mapping = {
+            IntentType.GREETING: 0,
+            IntentType.FACTUAL: min(15, max_default),
+            IntentType.PROCEDURAL: min(25, max_default),
+            IntentType.COMPARISON: max_default,
+            IntentType.SUMMARIZATION: max_default,
+        }
+        return mapping.get(intent, max_default)
+    except Exception:
+        return max_default
 
 
 class RAGState(TypedDict):
