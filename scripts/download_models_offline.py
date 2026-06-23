@@ -61,8 +61,9 @@ def download_huggingface_model(model_id: str, save_dir: Path):
     """Downloads any HuggingFace model using transformers."""
     from transformers import AutoModel, AutoTokenizer
     logger.info(f"Downloading HF model: {model_id}")
-    model = AutoModel.from_pretrained(model_id, trust_remote_code=True)
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    # trust_remote_code=False: only execute code from trusted HF repos
+    model = AutoModel.from_pretrained(model_id, trust_remote_code=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=False)
     save_path = save_dir / model_id.replace("/", "_")
     model.save_pretrained(save_path)
     tokenizer.save_pretrained(save_path)

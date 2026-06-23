@@ -144,7 +144,7 @@ class EntityRelationExtractor:
                 mapped_type = type_map.get(ent_type, "CONCEPT")
                 entities.append(
                     Entity(
-                        id=hashlib.md5(f"{name}_{mapped_type}".encode()).hexdigest(),
+                        id=hashlib.sha256(f"{name}_{mapped_type}".encode()).hexdigest(),
                         name=name,
                         type=mapped_type,
                         source_id="",
