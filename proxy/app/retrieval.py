@@ -11,6 +11,8 @@
 import hashlib
 import json
 import logging
+from datetime import datetime, timezone
+from math import exp
 
 try:
     from qdrant_client import QdrantClient
@@ -220,6 +222,56 @@ def graph_expand_query(query: str, max_entities: int = 5) -> str:
 # Для совместимости с уже написанным кодом, добавим синхронные обёртки
 if cache_manager is None:
     cache_manager = CacheManager(use_redis=False)
+
+
+def _parse_timestamp(value) -> float | None:
+    """Parse a timestamp from a string or numeric value, returning Unix epoch seconds."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        dt = datetime.fromisoformat(value)
+        return dt.timestamp()
+    except (ValueError, TypeError):
+        return None
+
+
+def apply_time_decay(chunks: list[dict], decay_days: int = 180) -> list[dict]:
+    """Boost scores for newer chunks, decay older ones.
+
+    Uses exponential decay: boost = exp(-age_days / decay_days).
+    Looks for 'updated_at' or 'created_at' in chunk payload or top-level fields.
+    """
+    if not chunks:
+        return chunks
+
+    now = datetime.now(timezone.utc).timestamp()  # noqa: UP017
+    result = []
+    for chunk in chunks:
+        payload = chunk.get("payload", {})
+        ts_raw = (
+            payload.get("updated_at")
+            or payload.get("created_at")
+            or chunk.get("updated_at")
+            or chunk.get("created_at")
+        )
+        ts = _parse_timestamp(ts_raw)
+        if ts is None:
+            result.append(chunk)
+            continue
+
+        age_seconds = now - ts
+        age_days = max(0, age_seconds / 86400)
+        boost = exp(-age_days / decay_days)
+        boosted = dict(chunk)
+        boosted["score"] = chunk.get("score", 0.0) * (1.0 + boost)
+        boosted["time_boost"] = boost
+        result.append(boosted)
+
+    return result
 
 
 # Утилита для проверки доступности Qdrant

@@ -26,8 +26,9 @@ from app.config import MAX_CHUNKS_AFTER_RERANK, MAX_CHUNKS_RETRIEVAL, MAX_RETRIE
 from app.context_builder import build_context, deduplicate_chunks
 from app.provider_adapter import non_stream_completion
 from app.rerank import rerank_chunks
-from app.retrieval import graph_expand_query, hybrid_search
+from app.retrieval import apply_time_decay, graph_expand_query, hybrid_search
 from app.slm_router import IntentType, classify_intent
+from app.token_optimizer import TokenOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,7 @@ def retrieve(state: RAGState) -> dict[str, Any]:
     """
     Выполняет гибридный поиск в Qdrant.
     Использует переписанный запрос, если есть, иначе оригинальный.
+    Применяет time-decay бустинг для версионированных документов.
     """
     query_to_use = state.get("rewritten_query") or state["query"]
     version = state.get("version")
@@ -116,7 +118,10 @@ def retrieve(state: RAGState) -> dict[str, Any]:
     for hit in results:
         chunks.append({"id": hit.id, "text": hit.payload.get("text", ""), "score": hit.score, "payload": hit.payload})
 
-    logger.info(f"Retrieved {len(chunks)} chunks")
+    # Применяем time-decay бустинг для версионированных документов
+    chunks = apply_time_decay(chunks)
+
+    logger.info(f"Retrieved {len(chunks)} chunks (with time-decay)")
     return {"retrieved_chunks": chunks}
 
 
@@ -185,11 +190,25 @@ def rerank(state: RAGState) -> dict[str, Any]:
 def build_context_node(state: RAGState) -> dict[str, Any]:
     """
     Собирает финальный контекст из отреранжированных чанков и графового расширения.
+    Применяет extractive-компрессию если контекст превышает токен-бюджет.
     """
     chunks_with_scores = state.get("reranked_chunks", [])
     graph_ctx = state.get("graph_context", "")
+    query = state.get("rewritten_query") or state["query"]
+    max_tokens = state.get("max_tokens", 120000)
 
-    context = build_context(chunks_with_scores, max_tokens=120000)
+    context = build_context(chunks_with_scores, max_tokens=max_tokens)
+
+    # Оценка токенов и extractive-компрессия при превышении бюджета
+    optimizer = TokenOptimizer()
+    approx_tokens = optimizer.estimate_token_cost(context)
+    if approx_tokens > max_tokens * 0.9 and chunks_with_scores:
+        logger.info(f"Context ~{approx_tokens} tokens exceeds budget {max_tokens}, applying extractive compression")
+        chunk_texts = [chunk.get("text", "") for chunk, _ in chunks_with_scores]
+        compressed_text = optimizer.extractive_compress(chunk_texts, query, max_sentences=3)
+        compressed_chunks = [(dict(chunk, text=compressed_text), score) for chunk, score in chunks_with_scores[:1]]
+        context = build_context(compressed_chunks, max_tokens=max_tokens)
+
     if graph_ctx:
         context += graph_ctx
 

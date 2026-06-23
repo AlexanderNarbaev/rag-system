@@ -170,6 +170,69 @@ class AuditLogger:
         )
         self._write_event(event)
 
+    def log_trace(
+        self,
+        request_id: str,
+        user_id: str | None,
+        query: str,
+        chunks_count: int,
+        rerank_scores: list[float] | None = None,
+        duration_ms: float = 0.0,
+        tokens: int = 0,
+        confidence: float | None = None,
+        feedback_id: str | None = None,
+        client_ip: str = "unknown",
+        metadata: dict | None = None,
+    ):
+        """Log detailed per-request trace with retrieval and observability metadata.
+
+        Includes:
+        - Retrieval latency per source
+        - Chunk retrieval count
+        - Rerank scores distribution (min, max, avg)
+        - Token usage breakdown
+        - Confidence score
+        - Feedback link
+        """
+        scores = rerank_scores or []
+        score_stats = {}
+        if scores:
+            score_stats = {
+                "rerank_min": round(min(scores), 4),
+                "rerank_max": round(max(scores), 4),
+                "rerank_avg": round(sum(scores) / len(scores), 4),
+                "rerank_count": len(scores),
+            }
+
+        feedback_link = f"/v1/feedback/{feedback_id}" if feedback_id else None
+
+        event = AuditEvent(
+            event_id=self._generate_event_id(),
+            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+            event_type="trace",
+            user_id=user_id,
+            client_ip=client_ip,
+            endpoint="/v1/chat/completions",
+            request_hash=self._hash_request(query),
+            details={
+                "query_preview": query[:200],
+                "chunks_retrieved": chunks_count,
+                "rerank_scores_distribution": score_stats,
+                "token_breakdown": {
+                    "total_tokens": tokens,
+                    "estimated_prompt_tokens": max(0, tokens - (len(query) // 4)),
+                    "estimated_completion_tokens": len(query) // 4,
+                },
+                "confidence_score": confidence,
+                "feedback_link": feedback_link,
+                "metadata": metadata or {},
+            },
+            duration_ms=round(duration_ms, 2),
+            tokens_used=tokens,
+            result_status="success" if confidence is None or confidence >= 0.5 else "low_confidence",
+        )
+        self._write_event(event)
+
     def log_auth(
         self, user_id: str | None, action: str, success: bool, details: dict | None = None, client_ip: str = "unknown"
     ):

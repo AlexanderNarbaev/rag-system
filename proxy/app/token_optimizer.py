@@ -173,6 +173,44 @@ class TokenOptimizer:
 
         return "\n\n".join(parts)
 
+    def extractive_compress(self, chunks: list[str], query: str, max_sentences: int = 3) -> str:
+        """Extract most query-relevant sentences from chunks.
+
+        Heuristic: tokenize query into keywords, score each sentence by
+        keyword overlap, keep top N sentences per chunk.
+        """
+        if not chunks or not query:
+            return "\n\n".join(chunks) if chunks else ""
+
+        query_keywords = set(re.findall(r"\w+", query.lower()))
+        if not query_keywords:
+            return "\n\n".join(chunks)
+
+        result_parts = []
+        for chunk_text in chunks:
+            if not chunk_text.strip():
+                continue
+            sentences = re.split(r"(?<=[.!?])\s+", chunk_text)
+            if len(sentences) <= max_sentences:
+                result_parts.append(chunk_text.strip())
+                continue
+
+            scored = []
+            for s in sentences:
+                s_tokens = set(re.findall(r"\w+", s.lower()))
+                if not s_tokens:
+                    scored.append((s, 0.0))
+                    continue
+                overlap = len(query_keywords & s_tokens)
+                score = overlap / len(query_keywords)
+                scored.append((s, score))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+            top_sentences = [s for s, _ in scored[:max_sentences]]
+            result_parts.append(" ".join(top_sentences))
+
+        return "\n\n".join(result_parts)
+
     def smart_token_budget(self, available_tokens: int, num_chunks: int) -> dict[str, int]:
         """
         Allocate token budget across system_prompt, context_per_chunk, history, and response.

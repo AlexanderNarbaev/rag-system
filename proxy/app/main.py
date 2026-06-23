@@ -168,6 +168,7 @@ class ChatCompletionResponse(BaseModel):
     usage: dict[str, int] = Field(default={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
     rag_feedback_id: str | None = None
     rag_confidence: float | None = None
+    rag_sources: list[dict] | None = None  # source chunks with metadata
 
 
 class ModelInfo(BaseModel):
@@ -271,10 +272,11 @@ async def process_rag_query(
         cached = await cache_manager.get(cache_key)
         if cached:
             logger.info(f"Cache hit for query: {user_query[:50]}...")
-            return cached, "", True
+            return cached, "", True, []
 
     # 2. Гибридный поиск
     search_results = hybrid_search(query=user_query, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
+    sources: list[dict] = []
     if not search_results:
         # Нет релевантных чанков -> ответ без контекста
         context = ""
@@ -317,7 +319,20 @@ async def process_rag_query(
             # 4. Дедупликация и версионирование
             unique_chunks = deduplicate_chunks(reranked_chunks)
 
-            # 5. Retrieval quality evaluation (CRAG-style)
+            # 5. Build source citations from unique chunks
+            from app.context_builder import compute_chunk_hash
+
+            for chunk, score in unique_chunks:
+                sources.append({
+                    "chunk_id": compute_chunk_hash(chunk),
+                    "source": chunk.get("source_type", "unknown"),
+                    "title": chunk.get("title", "") or chunk.get("doc_title", ""),
+                    "version": chunk.get("version", "unknown"),
+                    "relevance": round(score, 4),
+                    "text_preview": chunk.get("text", "")[:200],
+                })
+
+            # 6. Retrieval quality evaluation (CRAG-style)
             chunks_for_eval = []
             for c, s in unique_chunks:
                 c_copy = dict(c)
@@ -334,13 +349,13 @@ async def process_rag_query(
             elif action == "EXPAND":
                 context = build_context(unique_chunks, max_tokens=100000)
             else:
-                # 6. Smart token budget allocation
+                # 7. Smart token budget allocation
                 available_tokens = 130000
                 budget = token_optimizer.smart_token_budget(
                     available_tokens=available_tokens, num_chunks=len(unique_chunks)
                 )
 
-                # 7. Context compression with budget
+                # 8. Context compression with budget
                 raw_context = build_context(unique_chunks, max_tokens=budget["context_total"], include_metadata=True)
 
                 if budget["context_total"] < len(raw_context) // 4:
@@ -355,7 +370,7 @@ async def process_rag_query(
                     f"context={budget['context_total']}, response={budget['response']}"
                 )
 
-    # 6. Формируем системный промпт
+    # 9. Формируем системный промпт
     system_prompt = (
         "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
         "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
@@ -368,15 +383,15 @@ async def process_rag_query(
             if msg.get("role") != "system":
                 messages_for_llm.append(msg)
 
-    # 7. Вызов LLM
+    # 10. Вызов LLM
     if stream:
-        return context, messages_for_llm, False  # streaming handled separately
+        return context, messages_for_llm, False, sources  # streaming handled separately
     else:
         response_text = await non_stream_completion(messages_for_llm, temperature=temperature, max_tokens=max_tokens)
         # Сохраняем в кэш
         if cache_manager and not force_refresh:
             await cache_manager.set(cache_key, response_text, ttl=3600)  # 1 час
-        return response_text, context, False
+        return response_text, context, False, sources
 
 
 @app.get("/v1/health")
@@ -616,6 +631,19 @@ async def chat_completions(
         else:
             response_text = final_response["answer"]
             context = final_response.get("context", "")
+            # Build sources from orchestrator state
+            orchestrator_sources: list[dict] = []
+            from app.context_builder import compute_chunk_hash
+
+            for chunk, score in final_response.get("reranked_chunks", []):
+                orchestrator_sources.append({
+                    "chunk_id": compute_chunk_hash(chunk),
+                    "source": chunk.get("source_type", "unknown"),
+                    "title": chunk.get("title", "") or chunk.get("doc_title", ""),
+                    "version": chunk.get("version", "unknown"),
+                    "relevance": round(score, 4),
+                    "text_preview": chunk.get("text", "")[:200],
+                })
             feedback_id = generate_feedback_id()
             confidence = compute_confidence(query=user_query, context=context, answer=response_text)
             # Формируем ответ в OpenAI формате
@@ -630,6 +658,7 @@ async def chat_completions(
                 ],
                 rag_feedback_id=feedback_id,
                 rag_confidence=confidence.score,
+                rag_sources=orchestrator_sources,
             )
             duration_ms = (time.time() - start_time) * 1000
             request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -639,12 +668,25 @@ async def chat_completions(
                     user_id=client_ip,
                     query=user_query,
                     response_preview=response_text[:200],
-                    chunks=0,
+                    chunks=len(orchestrator_sources),
                     duration_ms=duration_ms,
                     tokens=len(response_text) // 4,
                     client_ip=client_ip,
                     result_status="success",
                     metadata={"version": version, "model": request.model, "source": "langgraph"},
+                )
+                # Trace-level audit log
+                audit_logger.log_trace(
+                    request_id=request_id,
+                    user_id=client_ip,
+                    query=user_query,
+                    chunks_count=len(orchestrator_sources),
+                    rerank_scores=[s["relevance"] for s in orchestrator_sources],
+                    duration_ms=duration_ms,
+                    tokens=len(response_text) // 4,
+                    confidence=confidence.score,
+                    feedback_id=feedback_id,
+                    client_ip=client_ip,
                 )
             # Асинхронно логируем в HITL
             if LOG_REQUESTS:
@@ -663,7 +705,7 @@ async def chat_completions(
         async def event_generator():
             try:
                 # Выполняем поиск и подготовку контекста (синхронно, но в потоке)
-                context, messages_for_llm, _ = await process_rag_query(
+                context, messages_for_llm, _, _ = await process_rag_query(
                     user_query=user_query,
                     version=version,
                     force_refresh=request.rag_force_refresh,
@@ -706,7 +748,7 @@ async def chat_completions(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     else:
         # Non-streaming
-        response_text, rag_context, from_cache = await process_rag_query(
+        response_text, rag_context, from_cache, sources = await process_rag_query(
             user_query=user_query,
             version=version,
             force_refresh=request.rag_force_refresh,
@@ -729,6 +771,7 @@ async def chat_completions(
             ],
             rag_feedback_id=feedback_id,
             rag_confidence=confidence.score,
+            rag_sources=sources,
         )
         duration_ms = (time.time() - start_time) * 1000
         request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -738,12 +781,25 @@ async def chat_completions(
                 user_id=client_ip,
                 query=user_query,
                 response_preview=response_text[:200],
-                chunks=0,
+                chunks=len(sources),
                 duration_ms=duration_ms,
                 tokens=len(response_text) // 4,
                 client_ip=client_ip,
                 result_status="success",
                 metadata={"version": version, "model": request.model, "from_cache": from_cache},
+            )
+            # Trace-level audit log
+            audit_logger.log_trace(
+                request_id=request_id,
+                user_id=client_ip,
+                query=user_query,
+                chunks_count=len(sources),
+                rerank_scores=[s["relevance"] for s in sources],
+                duration_ms=duration_ms,
+                tokens=len(response_text) // 4,
+                confidence=confidence.score,
+                feedback_id=feedback_id,
+                client_ip=client_ip,
             )
         # Логирование взаимодействия
         if LOG_REQUESTS:
