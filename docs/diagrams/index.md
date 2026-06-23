@@ -12,7 +12,7 @@ Shows the RAG System in the context of its users and external systems (11 nodes)
 
 ![C4 Level 2 — Containers](c4-level2-containers.svg)
 
-Decomposes the system into deployable containers: ETL Pipeline, RAG Proxy, Qdrant, Neo4j, Redis, vLLM (10 nodes).
+Decomposes the system into deployable containers: ETL Pipeline, RAG Proxy, Qdrant, Neo4j, Redis, LLM backend (10 nodes).
 
 ## Level 3 — RAG Proxy Components
 

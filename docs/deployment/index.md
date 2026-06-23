@@ -2,7 +2,7 @@
 
 The RAG System is deployed as two separate components that communicate over the network:
 
-1. **RAG Proxy** — Docker Compose stack with the proxy, Qdrant, Neo4j, Redis, vLLM, and HITL dashboard
+1. **RAG Proxy** — Docker Compose stack with the proxy, Qdrant, Neo4j, Redis, LLM backend, and HITL dashboard
 2. **ETL Pipeline** — Python application that runs on a schedule to extract and index data
 
 ## Guides
@@ -27,7 +27,7 @@ The RAG System is deployed as two separate components that communicate over the 
 │    Neo4j via API       │         │  │ qdrant  :6333   │  │
 │                       │         │  │ redis   :6379   │  │
 │                       │         │  │ neo4j   :7687   │  │
-│                       │         │  │ vllm    :8000   │  │
+│                       │         │  │ llm     :8000   │  │
 │                       │         │  └─────────────────┘  │
 └──────────────────────┘         └──────────────────────┘
 ```

@@ -91,7 +91,7 @@ class TestAppCreation:
 
     def test_app_exists(self):
         assert app is not None
-        assert app.title == "RAG Proxy for Gemma"
+        assert "RAG Proxy" in app.title
 
     def test_app_has_routes(self):
         routes = [route.path for route in app.routes]
@@ -156,7 +156,7 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["hybrid_search"].return_value = []
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma-4-26b-it",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "Hello, how are you?"}],
             "stream": False
         })
@@ -172,7 +172,7 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["hybrid_search"].return_value = []
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "What changed in v2.0?"}],
             "rag_version": "2.0",
             "stream": False
@@ -181,7 +181,7 @@ class TestChatCompletionsNonStreaming:
 
     def test_missing_user_message(self, client, mock_rag_pipeline):
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma",
+            "model": "test-model",
             "messages": [{"role": "system", "content": "You are helpful."}],
             "stream": False
         })
@@ -200,7 +200,7 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["build_context"].return_value = "[wiki] D / T (v1)\nRelevant chunk"
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "What is Kubernetes?"}],
             "stream": False
         })
@@ -213,7 +213,7 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["hybrid_search"].return_value = []
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma-4-26b-it",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "test"}],
             "temperature": 0.5,
             "max_tokens": 2000,
@@ -221,7 +221,7 @@ class TestChatCompletionsNonStreaming:
         })
         data = response.json()
         assert data["object"] == "chat.completion"
-        assert data["model"] == "gemma-4-26b-it"
+        assert data["model"] == "test-model"
         assert data["choices"][0]["finish_reason"] == "stop"
         assert "id" in data
         assert "created" in data
@@ -239,7 +239,7 @@ class TestChatCompletionsStreaming:
         mock_rag_pipeline["hybrid_search"].return_value = []
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "Hi"}],
             "stream": True
         })
@@ -255,7 +255,7 @@ class TestChatCompletionsStreaming:
         mock_rag_pipeline["hybrid_search"].return_value = []
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "hello"}],
             "stream": True
         })
@@ -266,7 +266,7 @@ class TestChatCompletionsStreaming:
         mock_rag_pipeline["hybrid_search"].side_effect = Exception("Search failed")
 
         response = client.post("/v1/chat/completions", json={
-            "model": "gemma",
+            "model": "test-model",
             "messages": [{"role": "user", "content": "query"}],
             "stream": True
         })
@@ -343,7 +343,7 @@ class TestLangGraphOrchestratorIntegration:
         with patch("proxy.app.main.USE_LANGGRAPH", True), \
              patch("proxy.app.main.orchestrator", mock_orchestrator):
             response = client.post("/v1/chat/completions", json={
-                "model": "gemma",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Complex question"}],
                 "stream": False
             })
@@ -359,7 +359,7 @@ class TestLangGraphOrchestratorIntegration:
         with patch("proxy.app.main.USE_LANGGRAPH", True), \
              patch("proxy.app.main.orchestrator", mock_orchestrator):
             response = client.post("/v1/chat/completions", json={
-                "model": "gemma",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "stream this"}],
                 "stream": True
             })
