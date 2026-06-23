@@ -77,7 +77,7 @@ class JiraExtractor:
 
     def _request(self, endpoint: str, params: dict = None) -> dict:
         url = urljoin(self.url, endpoint)
-        resp = self.session.get(url, params=params)
+        resp = self.session.get(url, params=params, timeout=30)
         resp.raise_for_status()
         return resp.json()
 
@@ -124,7 +124,7 @@ class JiraExtractor:
         download_url = attachment["content"]
         # Используем сессию с аутентификацией
         try:
-            resp = self.session.get(download_url, stream=True)
+            resp = self.session.get(download_url, stream=True, timeout=60)
             resp.raise_for_status()
             issue_dir = self.output_dir / issue_key / "attachments"
             issue_dir.mkdir(parents=True, exist_ok=True)

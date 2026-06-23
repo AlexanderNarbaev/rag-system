@@ -76,7 +76,7 @@ class GitLabExtractor:
 
     def _request(self, endpoint: str, params: dict = None, method: str = "GET") -> dict:
         url = urljoin(self.url, endpoint)
-        resp = self.session.request(method, url, params=params)
+        resp = self.session.request(method, url, params=params, timeout=30)
         resp.raise_for_status()
         return resp.json()
 
@@ -135,7 +135,7 @@ class GitLabExtractor:
         encoded_path = file_path.replace("/", "%2F")
         endpoint = f"/api/v4/projects/{project_id}/repository/files/{encoded_path}/raw"
         try:
-            resp = self.session.get(urljoin(self.url, endpoint), params={"ref": ref})
+            resp = self.session.get(urljoin(self.url, endpoint), params={"ref": ref}, timeout=30)
             resp.raise_for_status()
             return resp.text
         except Exception as e:

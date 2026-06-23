@@ -74,7 +74,7 @@ def download_gguf_model(url: str, output_path: Path):
     """Downloads a GGUF model file."""
     import requests
     logger.info(f"Downloading GGUF model from {url}")
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, timeout=300)
     response.raise_for_status()
     with open(output_path, "wb") as f:
         for chunk in response.iter_content(chunk_size=8192):
