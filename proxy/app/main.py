@@ -41,7 +41,7 @@ from app.rerank import rerank_chunks
 from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
 from app.token_optimizer import TokenOptimizer
 from app.retrieval_evaluator import RetrievalEvaluator
-from app.llm_router import stream_completion, non_stream_completion
+from app.provider_adapter import stream_completion, non_stream_completion, LLMError
 from app.cache import CacheManager
 from app.hitl import log_interaction
 from app.metrics import metrics_endpoint, init_metrics

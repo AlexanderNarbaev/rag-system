@@ -28,7 +28,7 @@ from app.config import (
 from app.retrieval import hybrid_search, graph_expand_query
 from app.rerank import rerank_chunks
 from app.context_builder import deduplicate_chunks, build_context, extract_version_from_query
-from app.llm_router import non_stream_completion, stream_completion
+from app.provider_adapter import non_stream_completion, stream_completion
 
 logger = logging.getLogger(__name__)
 
