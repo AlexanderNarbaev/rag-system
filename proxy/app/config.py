@@ -17,26 +17,33 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "knowledge_base")
 
-# ============ Эмбеддер ============
-EMBEDDER_MODEL = os.getenv("EMBEDDER_MODEL", "BAAI/bge-m3")
-EMBEDDER_DEVICE = os.getenv("EMBEDDER_DEVICE", "cpu")  # или "cuda"
+# ============ Embedder / Embedding Model ============
+# Examples: BAAI/bge-m3, intfloat/multilingual-e5-large, sentence-transformers/all-MiniLM-L6-v2
+EMBEDDER_MODEL = os.getenv("EMBEDDER_MODEL", "")
+EMBEDDER_DEVICE = os.getenv("EMBEDDER_DEVICE", "cpu")
 
-# ============ Ренкер ============
-RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+# ============ Reranker / Cross-Encoder ============
+# Examples: cross-encoder/ms-marco-MiniLM-L-6-v2, BAAI/bge-reranker-v2-m3, mixedbread-ai/mxbai-rerank-large-v1
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "")
 RERANKER_MAX_LENGTH = int(os.getenv("RERANKER_MAX_LENGTH", "512"))
 RERANKER_BATCH_SIZE = int(os.getenv("RERANKER_BATCH_SIZE", "32"))
 
-# ============ LLM (Gemma) ============
+# ============ LLM / Primary Language Model ============
+# Supports any OpenAI-compatible endpoint (vLLM, llama.cpp, Ollama, LiteLLM, etc.)
+# Examples: gemma-4-26b-it, meta-llama/Llama-3.1-70B, mistralai/Mixtral-8x22B
 LLM_ENDPOINT = os.getenv("LLM_ENDPOINT", "http://localhost:8000/v1")
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "gemma-4-26b-it")
+LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", None)
+LLM_PROVIDER_TYPE = os.getenv("LLM_PROVIDER_TYPE", "openai")  # openai, anthropic, generic
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 RETRY_DELAY = float(os.getenv("RETRY_DELAY", "1.0"))
 
-# ============ SLM (для маршрутизации/декомпозиции) ============
-SLM_ENDPOINT = os.getenv("SLM_ENDPOINT", "")  # если пусто, SLM не используется
-SLM_MODEL_NAME = os.getenv("SLM_MODEL_NAME", "gemma-2b-it")
+# ============ SLM / Small Language Model (routing, decomposition) ============
+# Leave SLM_ENDPOINT empty to disable SLM features (heuristic fallback will be used)
+# Examples: gemma-2b-it, Qwen/Qwen2.5-1.5B-Instruct, microsoft/Phi-3-mini-4k-instruct
+SLM_ENDPOINT = os.getenv("SLM_ENDPOINT", "")
+SLM_MODEL_NAME = os.getenv("SLM_MODEL_NAME", "")
 SLM_API_KEY = os.getenv("SLM_API_KEY", None)
 SLM_MAX_TOKENS = int(os.getenv("SLM_MAX_TOKENS", "256"))
 

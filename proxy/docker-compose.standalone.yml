@@ -112,7 +112,7 @@ services:
       VLLM_API_KEY: "${API_KEY:-}"
       HUGGINGFACE_HUB_CACHE: /models/cache
     command: >
-      --model /models/${MODEL_NAME_LLM:-gemma-4-26b-it}
+      --model /models/${MODEL_NAME_LLM:-default-model}
       --port 8000
       --host 0.0.0.0
       --max-model-len 65536
@@ -151,7 +151,7 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     command: >
-      --model /models/${MODEL_NAME_LLM:-gemma-4-26b-it-GGUF}.gguf
+      --model /models/${MODEL_NAME_LLM:-default-model}.gguf
       --host 0.0.0.0
       --port 8000
       --ctx-size 65536

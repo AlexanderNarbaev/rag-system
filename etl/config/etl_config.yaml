@@ -70,7 +70,7 @@ indexing:
   qdrant_host: "localhost"
   qdrant_port: 6333
   collection_name: "knowledge_base"
-  embedder_model: "BAAI/bge-m3"
+  embedder_model: ""                      # REQUIRED — e.g. BAAI/bge-m3
   embedder_device: "cpu"                 # или "cuda"
   batch_size: 100
   hot_dir: "./hot_chunks"                # горячее хранилище чанков (текущие версии)
@@ -83,7 +83,7 @@ indexing:
 graph:
   enabled: false                         # включить построение графа
   use_spacy: true                        # использовать spaCy для NER
-  spacy_model: "ru_core_news_sm"         # или "en_core_web_sm"
+  spacy_model: ""                         # REQUIRED — e.g. ru_core_news_sm, en_core_web_sm
   use_slm: false                         # использовать SLM для извлечения отношений
   slm_endpoint: "http://localhost:8080/v1/completions"
   cache_dir: "./entity_cache"            # кэш сущностей

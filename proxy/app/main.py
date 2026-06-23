@@ -1,6 +1,6 @@
 # proxy/app/main.py
 """
-OpenAI-совместимый прокси-сервер для RAG с Gemma.
+OpenAI-совместимый прокси-сервер для RAG.
 Поддерживает:
 - /v1/chat/completions (stream + non-stream)
 - /v1/models

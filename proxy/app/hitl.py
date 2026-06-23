@@ -7,6 +7,7 @@ Human-in-the-Loop модуль для сбора обратной связи.
 - Формирование датасета для fine-tuning
 - Интеграция с дашбордом (через API или запись в БД)
 """
+import os
 import json
 import logging
 from pathlib import Path
@@ -200,7 +201,7 @@ if __name__ == "__main__":
         user_query="Как настроить CI/CD?",
         context="Контекст из документации...",
         response="Для настройки CI/CD создайте файл .gitlab-ci.yml",
-        metadata={"model": "gemma", "version": "latest"}
+        metadata={"model": os.getenv("LLM_MODEL_NAME", "default"), "version": "latest"}
     )
     logger.log_feedback("test123", FeedbackType.POSITIVE, comment="Отличный ответ!")
     export_training_dataset(Path("./training_dataset.jsonl"))
