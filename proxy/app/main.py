@@ -18,6 +18,7 @@ OpenAI-совместимый прокси-сервер для RAG.
 import json
 import logging
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -405,15 +406,49 @@ async def list_models():
 # Auth endpoints
 # ===========================================================================
 
+# Brute-force protection: in-memory rate limiter for login attempts
+# In production, use Redis-backed rate limiter instead
+_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+_LOGIN_COOLDOWN_SECONDS = 900  # 15 minutes after max attempts
+
+
+def _check_login_rate_limit(identifier: str) -> None:
+    """Check and update login rate limit for an identifier (username or IP).
+    Raises HTTPException if rate limit exceeded."""
+    now = time.time()
+    if identifier in _LOGIN_ATTEMPTS:
+        count, first_attempt = _LOGIN_ATTEMPTS[identifier]
+        if now - first_attempt > _LOGIN_WINDOW_SECONDS:
+            _LOGIN_ATTEMPTS[identifier] = (1, now)
+            return
+        if count >= _LOGIN_MAX_ATTEMPTS:
+            if now - first_attempt < _LOGIN_COOLDOWN_SECONDS:
+                wait = int(_LOGIN_COOLDOWN_SECONDS - (now - first_attempt))
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Too many login attempts. Try again in {wait} seconds.",
+                )
+            else:
+                _LOGIN_ATTEMPTS[identifier] = (1, now)
+                return
+        _LOGIN_ATTEMPTS[identifier] = (count + 1, first_attempt)
+    else:
+        _LOGIN_ATTEMPTS[identifier] = (1, now)
+
 
 @app.post("/v1/auth/login", response_model=LoginResponse)
-async def auth_login(request: LoginRequest):
+async def auth_login(request: LoginRequest, raw_request: Request):
     """Generate a JWT token for the given credentials.
 
     In production, this would validate against Keycloak/LDAP.
     For air-gapped deployments, it uses a hardcoded credential store
     configurable via environment variables.
     """
+    client_ip = raw_request.client.host if raw_request.client else "unknown"
+    rate_limit_key = f"{client_ip}:{request.username}"
+
     valid_users_json = os.getenv("AUTH_VALID_USERS", "{}")
     try:
         valid_users = json.loads(valid_users_json) if valid_users_json else {}
@@ -422,10 +457,12 @@ async def auth_login(request: LoginRequest):
         valid_users = {}
 
     if request.username not in valid_users:
+        _check_login_rate_limit(rate_limit_key)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user_data = valid_users[request.username]
-    if user_data.get("password", "") != request.password:
+    if not secrets.compare_digest(user_data.get("password", ""), request.password):
+        _check_login_rate_limit(rate_limit_key)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_token(
@@ -537,9 +574,10 @@ async def chat_completions(
     client_ip = raw_request.client.host if raw_request.client else "unknown"
     if LOG_REQUESTS:
         role_info = ",".join(user.roles) if user.is_authenticated else "anonymous"
+        safe_query = InputValidator.sanitize_for_log(user_query[:100])
         logger.info(
             f"Request {request_id}: user={client_ip}, roles={role_info}, "
-            f"query={user_query[:100]}, version={version}, stream={request.stream}"
+            f"query={safe_query}, version={version}, stream={request.stream}"
         )
 
     # Track request lifecycle
