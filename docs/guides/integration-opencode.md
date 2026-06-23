@@ -13,8 +13,8 @@ The RAG system exposes an OpenAI-compatible API at `http://localhost:8080/v1`. O
                           ┌────────────────────┼────────────────────┐
                           ▼                    ▼                    ▼
                      ┌────────┐          ┌────────┐          ┌────────┐
-                     │ Qdrant │          │  Neo4j │          │  vLLM  │
-                     │ (vecs) │          │ (graph)│          │ (LLM)  │
+                      │ Qdrant │          │  Neo4j │          │  LLM   │
+                     │ (vecs) │          │ (graph)│          │ Backend│
                      └────────┘          └────────┘          └────────┘
 ```
 
@@ -31,10 +31,10 @@ Configure OpenCode to use the RAG system as its model provider via `opencode.jso
       "name": "RAG System",
       "base_url": "http://localhost:8080/v1",
       "api_key": "${RAG_API_KEY}",
-      "models": ["gemma-4-26b-it"]
+      "models": ["your-model-name"]
     }
   },
-  "model": "rag-system/gemma-4-26b-it"
+  "model": "rag-system/your-model-name"
 }
 ```
 
@@ -47,12 +47,12 @@ If the RAG system is deployed on a separate machine within the air-gapped networ
       "name": "RAG System (Internal)",
       "base_url": "http://rag-proxy.internal.company.com:8080/v1",
       "api_key": "${RAG_API_KEY}",
-      "models": ["gemma-4-26b-it"],
+      "models": ["your-model-name"],
       "timeout": 120
     }
   },
-  "model": "rag-system/gemma-4-26b-it",
-  "small_model": "rag-system/gemma-4-26b-it"
+  "model": "rag-system/your-model-name",
+  "small_model": "rag-system/your-model-name"
 }
 ```
 
@@ -61,7 +61,7 @@ If the RAG system is deployed on a separate machine within the air-gapped networ
 ```bash
 # Set before launching OpenCode:
 export RAG_API_KEY="your-secure-api-key"
-# Must match the --api-key set in vLLM docker-compose command
+# Must match the --api-key set in your LLM backend configuration
 ```
 
 ## Usage Examples
@@ -92,7 +92,7 @@ and was tracked in [Jira: DEV-1423].
 
 ```json
 {
-  "model": "rag-system/gemma-4-26b-it",
+  "model": "rag-system/your-model-name",
   "messages": [
     {"role": "user", "content": "What was the original database schema?"}
   ],
@@ -104,7 +104,7 @@ and was tracked in [Jira: DEV-1423].
 
 ```json
 {
-  "model": "rag-system/gemma-4-26b-it",
+  "model": "rag-system/your-model-name",
   "messages": [
     {"role": "user", "content": "What open Jira issues block the release?"}
   ],
@@ -145,13 +145,13 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml
 ### API Key Management
 
 ```bash
-# vLLM — set API key (docker-compose.yml):
-vllm:
+# LLM backend — set API key (docker-compose.yml example for vLLM):
+llm-backend:
   command: >
-    --model /models/gemma-4-26b-it-GGUF
+    --model /models/your-model.gguf
     --api-key ${LLM_API_KEY:-change-me-in-production}
 
-# The proxy authenticates to vLLM:
+# The proxy authenticates to LLM backend:
 LLM_API_KEY=change-me-in-production  # in proxy/.env
 
 # OpenCode authenticates to proxy:
@@ -218,7 +218,7 @@ docker exec rag-redis redis-cli INFO stats | grep -E 'keyspace_hits|keyspace_mis
 ### Concurrency
 
 ```bash
-# vLLM handles up to 16 concurrent sequences:
+# LLM backend handles concurrent sequences (example for vLLM):
 --max-num-seqs 16
 
 # Proxy uvicorn workers (docker-compose):
@@ -233,7 +233,7 @@ docker-compose up -d --scale rag-proxy=3
 - Each query: ~5 KB request + ~50 KB context + ~2 KB response
 - ETL ingestion: ~10 MB per 1000 documents (text only)
 - Model serving: embeddings ~5 MB per batch, LLM ~50 MB per request (streaming)
-- Internal network should have >1 Gbps between proxy, Qdrant, and vLLM
+- Internal network should have >1 Gbps between proxy, Qdrant, and LLM backend
 
 ## Troubleshooting OpenCode Integration
 
@@ -246,7 +246,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${RAG_API_KEY}" \
   -d '{
-    "model": "gemma-4-26b-it",
+    "model": "your-model-name",
     "messages": [{"role": "user", "content": "What is the project structure?"}]
   }'
 

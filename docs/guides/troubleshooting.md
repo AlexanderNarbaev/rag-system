@@ -36,13 +36,13 @@ docker run --rm -v $(pwd)/.env:/app/.env:ro rag-proxy python -c "from app.config
 
 ### Cannot Connect to Upstream Services
 ```bash
-# Symptom: "Connection refused" to qdrant/neo4j/redis/vllm in proxy logs
+# Symptom: "Connection refused" to qdrant/neo4j/redis/llm-backend in proxy logs
 # Verify all services are running:
 docker-compose ps
 
 # Check network connectivity:
 docker exec rag-proxy curl -s http://qdrant:6333/health
-docker exec rag-proxy curl -s http://vllm:8000/health
+docker exec rag-proxy curl -s http://llm-backend:8000/health
 
 # Fix: ensure depends_on order is correct, increase start_period
 ```
@@ -93,7 +93,7 @@ environment:
 
 ### Increase Request Timeout
 ```bash
-# Symptom: "Read timed out" or 504 from vLLM
+# Symptom: "Read timed out" or 504 from LLM backend
 # Check current setting:
 grep REQUEST_TIMEOUT proxy/.env
 
@@ -106,26 +106,26 @@ RETRY_DELAY=2.0
 docker-compose restart rag-proxy
 ```
 
-### Check vLLM Status
+### Check LLM Backend Status
 ```bash
 # Symptom: LLM returning empty responses or 500
-# Check vLLM is healthy:
+# Check LLM backend is healthy:
 curl http://localhost:8000/health
 
-# Check vLLM logs for OOM or model loading errors:
-docker logs rag-vllm --tail 50
+# Check backend logs for OOM or model loading errors:
+docker logs rag-llm-backend --tail 50
 
-# Common vLLM issues:
+# Common LLM backend issues:
 # - Model file not found: verify /models volume mount
 # - GPU out of memory: reduce --max-model-len or use smaller quant
 ```
 
-### Fallback to Direct LLM
+### Fallback to Alternative Backend
 ```bash
-# If vLLM is down, point proxy directly to llama.cpp:
+# If one backend is down, point proxy to an alternative:
 LLM_ENDPOINT=http://localhost:8081/v1
-# Start llama-cpp separately:
-llama-server -m /models/gemma-4-26b-it-Q4_K_M.gguf --port 8081
+# Start alternative server (e.g., llama.cpp):
+llama-server -m /models/your-model.gguf --port 8081
 ```
 
 ## Poor Search Results
@@ -181,7 +181,7 @@ redis:
 EMBEDDER_DEVICE=cpu
 RERANKER_BATCH_SIZE=8
 
-# For vLLM, reduce memory usage:
+# For LLM backend, reduce memory usage:
 --max-model-len 32768          # shorter context window
 --gpu-memory-utilization 0.80  # leave 20% headroom for other processes
 ```

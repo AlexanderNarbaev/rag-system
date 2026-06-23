@@ -7,25 +7,25 @@
 
 The RAG system serves two distinct categories of inference workloads: lightweight preprocessing tasks (intent classification, query decomposition, entity extraction) and heavy generation tasks (contextual answer synthesis from retrieved chunks). Running all tasks on a single large model wastes compute and adds latency for preprocessing operations. The system must operate in an air-gapped environment with limited GPU capacity (single machine with one or two GPUs).
 
-Alternatives considered: **single large model** (Gemma-4-26B for everything — high latency for preprocessing, blocking GPU for all requests), **API-only routing** (rejected due to air-gap), **rule-based preprocessing** (insufficient accuracy for multi-hop query decomposition).
+Alternatives considered: **single large model** (running everything on one model — high latency for preprocessing, blocking GPU for all requests), **API-only routing** (rejected due to air-gap), **rule-based preprocessing** (insufficient accuracy for multi-hop query decomposition).
 
 ## Decision
 
-**Use a dual-LLM architecture: Gemma-2B-it (SLM) for lightweight routing tasks and Gemma-4-26B-it (LLM) for generation.**
+**Use a dual-LLM architecture: a small language model (SLM) for lightweight routing tasks and a primary large language model (LLM) for generation (for example, Gemma-2B-it and Gemma-4-26B-it).**
 
-The SLM (`SLM_MODEL_NAME=gemma-2b-it` in `proxy/app/config.py:39`) handles:
+The SLM (`SLM_MODEL_NAME` in `proxy/app/config.py:39`) handles:
 - Intent classification (`proxy/app/slm_router.py:67-87`): classifies queries into factual, procedural, comparison, summarization, or greeting.
 - Query decomposition (`slm_router.py:90-113`): splits complex queries into up to 3 sub-queries.
 - Entity extraction (`slm_router.py:143-164`): extracts technologies, project names, ticket numbers.
 - Lightweight query rewriting (`slm_router.py:125-140`).
 
-The LLM (`LLM_MODEL_NAME=gemma-4-26b-it` in `config.py:31`) handles generation via `proxy/app/llm_router.py` through an OpenAI-compatible API (`llama.cpp` or `vLLM` server). Both models are served from the same inference server (`LLM_ENDPOINT`), distinguished by model name.
+The LLM (`LLM_MODEL_NAME` in `config.py:31`) handles generation via `proxy/app/llm_router.py` through an OpenAI-compatible API (e.g., `llama.cpp` or `vLLM` server). Both models are served from the same inference server (`LLM_ENDPOINT`), distinguished by model name.
 
 Fallback: if `SLM_ENDPOINT` is empty (`config.py:38`), the system uses heuristics — keyword matching for intent, regex for entity extraction (`slm_router.py:41` returns empty string with a warning).
 
 ## Consequences
 
-**Positive:** SLM (~2 GB VRAM) runs alongside LLM (~52 GB for 4-bit quantized Gemma-4-26B) on a single GPU with batching. Preprocessing latency is ~100ms (SLM) vs ~800ms (LLM). Decoupled scaling — SLM stays on CPU if GPU is fully utilized by LLM generation.
+**Positive:** SLM (~2 GB VRAM) runs alongside LLM (whose VRAM depends on model size and quantization) on a single GPU with batching. Preprocessing latency is ~100ms (SLM) vs ~800ms (LLM). Decoupled scaling — SLM stays on CPU if GPU is fully utilized by LLM generation.
 
 **Negative:** Two models to maintain and update. Prompts must be versioned for both models separately. SLM quality degrades for edge-case queries; the heuristic fallback is crude.
 

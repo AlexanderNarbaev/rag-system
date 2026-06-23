@@ -40,14 +40,14 @@ cd rag-system
 python scripts/download_models_offline.py \
   --output-dir ./offline_models \
   --models embedder reranker spacy_ru spacy_en slm \
-  --gguf-url https://huggingface.co/bartowski/gemma-4-26b-it-GGUF/resolve/main/gemma-4-26b-it-Q4_K_M.gguf
+  --gguf-url https://huggingface.co/your-org/your-model-GGUF/resolve/main/your-model-Q4_K_M.gguf
 
 # This downloads:
 # - BAAI/bge-m3 (embedder + sparse)
 # - cross-encoder/ms-marco-MiniLM-L-6-v2 (reranker)
 # - ru_core_news_sm, en_core_web_sm (spaCy)
-# - gemma-2b-it (SLM)
-# - gemma-4-26b-it GGUF (LLM)
+# - your-slm-model (SLM)
+# - your-llm-model GGUF (LLM)
 
 # Transfer to air-gapped machine:
 tar -czf offline_models.tar.gz offline_models/
@@ -61,11 +61,15 @@ scp offline_models.tar.gz user@airgap-machine:/opt/rag-system/
 docker pull qdrant/qdrant:latest
 docker pull neo4j:5-enterprise
 docker pull redis:7-alpine
-docker pull vllm/vllm-openai:latest
 docker pull python:3.11-slim
 
 docker save qdrant/qdrant:latest neo4j:5-enterprise redis:7-alpine \
-  vllm/vllm-openai:latest python:3.11-slim -o rag-images.tar
+  python:3.11-slim -o rag-images.tar
+
+# For LLM backend (choose one):
+# - vLLM: docker pull vllm/vllm-openai:latest
+# - llama.cpp: docker pull ghcr.io/ggerganov/llama.cpp:server
+# - Any OpenAI-compatible server
 
 scp rag-images.tar user@airgap-machine:/opt/rag-system/
 
@@ -98,8 +102,8 @@ Key variables to configure:
 ```ini
 QDRANT_HOST=qdrant
 QDRANT_PORT=6333
-LLM_ENDPOINT=http://vllm:8000/v1
-LLM_MODEL_NAME=gemma-4-26b-it
+LLM_ENDPOINT=http://llm-backend:8000/v1
+LLM_MODEL_NAME=your-model-name
 REQUEST_TIMEOUT=120
 USE_REDIS=true
 REDIS_URL=redis://redis:6379
@@ -111,7 +115,7 @@ NEO4J_PASSWORD=your_secure_password
 
 ### Step 2: Update Model Paths
 
-In `proxy/docker-compose.yml`, update the vllm volume:
+In `proxy/docker-compose.yml`, update the LLM backend volume:
 ```yaml
 volumes:
   - /opt/rag-system/offline_models:/models:ro
@@ -140,7 +144,7 @@ docker-compose up -d
 
 # Check all containers are healthy:
 docker-compose ps
-# Expected: qdrant, neo4j, redis, vllm, rag-proxy, hitl-dashboard — all "Up"
+# Expected: qdrant, neo4j, redis, llm-backend, rag-proxy, hitl-dashboard — all "Up"
 ```
 
 ### Step 5: Verify Health
@@ -152,7 +156,7 @@ curl http://localhost:8080/v1/health
 
 # List models:
 curl http://localhost:8080/v1/models
-# Response: {"data": [{"id": "gemma-4-26b-it", ...}]}
+# Response: {"data": [{"id": "your-model-name", ...}]}
 ```
 
 ### Step 6: Run First ETL Pipeline
@@ -174,7 +178,7 @@ docker run --rm --network=host \
 
 ### Security
 - [ ] Change ALL default passwords (Neo4j, Qdrant API key if set)
-- [ ] Set `LLM_API_KEY` and restrict vLLM with `--api-key`
+- [ ] Set `LLM_API_KEY` and restrict LLM backend with `--api-key`
 - [ ] Use reverse proxy (nginx/Caddy) with TLS in front of port 8080
 - [ ] Enable firewall: only expose 8080 and 8501 externally
 - [ ] Set `LOG_REQUESTS=true` but mask `SENSITIVE_SECRETS` in config
@@ -194,8 +198,8 @@ docker run --rm --network=host \
 
 ### OOM (Out of Memory)
 ```bash
-# vLLM OOM: reduce context, use quantized model
-# Edit docker-compose.yml vllm command:
+# LLM backend OOM: reduce context, use quantized model
+# For vLLM, edit docker-compose.yml backend command:
 --max-model-len 65536  # instead of 130000
 --tensor-parallel-size 1
 
@@ -223,14 +227,14 @@ find etl/cold_chunks/ -name "*.parquet" -mtime +30 -delete
 find proxy/logs/ -name "*.log" -mtime +7 -delete
 ```
 
-### vLLM Won't Start
+### LLM Backend Won't Start
 ```bash
 # Check GPU access:
-docker run --rm --gpus all vllm/vllm-openai:latest nvidia-smi
+docker run --rm --gpus all your-llm-backend-image nvidia-smi
 
 # Verify model file exists:
-ls -la /opt/rag-system/offline_models/gemma-4-26b-it-Q4_K_M.gguf
+ls -la /opt/rag-system/offline_models/your-model.gguf
 
-# Check vLLM logs:
-docker logs rag-vllm
+# Check backend logs:
+docker logs rag-llm-backend
 ```

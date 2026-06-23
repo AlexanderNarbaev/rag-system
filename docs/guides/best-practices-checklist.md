@@ -99,7 +99,7 @@ This checklist tracks production readiness across 8 dimensions. Checked items (�
 
 ## 7. Operations
 
-- [x] Docker Compose deployment — `docker-compose.yml` with Qdrant, Redis, Neo4j, vLLM, proxy
+- [x] Docker Compose deployment — `docker-compose.yml` with Qdrant, Redis, Neo4j, LLM backend, proxy
 - [x] Environment-based configuration — all settings via env vars or `.env` file; no hardcoded paths
 - [x] Health check integration — Docker health check compatible endpoint
 - [ ] Infrastructure as Code — no Terraform/Ansible; Docker Compose is the only deployment spec
