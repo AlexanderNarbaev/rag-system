@@ -65,7 +65,7 @@ MAX_RETRIEVAL_LOOPS = int(os.getenv("MAX_RETRIEVAL_LOOPS", "3"))
 GRAPH_ENABLED = os.getenv("GRAPH_ENABLED", "false").lower() == "true"
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 USE_GRAPH_EXPANSION = os.getenv("USE_GRAPH_EXPANSION", "false").lower() == "true"
 
 # ============ Логирование и HITL ============
