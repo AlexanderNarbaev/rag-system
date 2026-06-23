@@ -7,25 +7,26 @@
 - Ответов LLM (опционально)
 - Поисковых запросов (опционально)
 """
-import json
+
 import asyncio
+import json
 import logging
-from typing import Any, Optional, Dict, Union
-from datetime import datetime, timedelta, timezone
-from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class InMemoryCache:
     """Простой in-memory кэш с TTL."""
+
     def __init__(self):
-        self._store: Dict[str, tuple[Any, float]] = {}  # key -> (value, expire_timestamp)
-    
+        self._store: dict[str, tuple[Any, float]] = {}  # key -> (value, expire_timestamp)
+
     def _is_expired(self, expire_ts: float) -> bool:
-        return expire_ts < datetime.now(timezone.utc).timestamp()
-    
-    async def get(self, key: str) -> Optional[Any]:
+        return expire_ts < datetime.now(UTC).timestamp()
+
+    async def get(self, key: str) -> Any | None:
         if key not in self._store:
             return None
         value, expire_ts = self._store[key]
@@ -33,38 +34,40 @@ class InMemoryCache:
             del self._store[key]
             return None
         return value
-    
+
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        expire_ts = datetime.now(timezone.utc).timestamp() + ttl
+        expire_ts = datetime.now(UTC).timestamp() + ttl
         self._store[key] = (value, expire_ts)
         return True
-    
+
     async def delete(self, key: str) -> bool:
         if key in self._store:
             del self._store[key]
             return True
         return False
-    
+
     async def clear(self):
         self._store.clear()
-    
+
     # Синхронные методы для совместимости
-    def get_sync(self, key: str) -> Optional[Any]:
+    def get_sync(self, key: str) -> Any | None:
         try:
             loop = asyncio.get_running_loop()
             # Если уже в асинхронном контексте, создаём задачу
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(asyncio.run, self.get(key))
                 return future.result()
         except RuntimeError:
             # Нет запущенного цикла – запускаем свой
             return asyncio.run(self.get(key))
-    
+
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
         try:
             loop = asyncio.get_running_loop()
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(asyncio.run, self.set(key, value, ttl))
                 return future.result()
@@ -74,14 +77,16 @@ class InMemoryCache:
 
 class RedisCache:
     """Redis-кэш (асинхронный)."""
+
     def __init__(self, redis_url: str):
         self.redis_url = redis_url
         self._client = None
-    
+
     async def _get_client(self):
         if self._client is None:
             try:
                 import redis.asyncio as redis
+
                 self._client = redis.from_url(self.redis_url, decode_responses=True)
                 # Проверяем соединение
                 await self._client.ping()
@@ -93,8 +98,8 @@ class RedisCache:
                 logger.error(f"Failed to connect to Redis: {e}")
                 raise
         return self._client
-    
-    async def get(self, key: str) -> Optional[Any]:
+
+    async def get(self, key: str) -> Any | None:
         client = await self._get_client()
         value = await client.get(key)
         if value is None:
@@ -103,44 +108,46 @@ class RedisCache:
             return json.loads(value)
         except json.JSONDecodeError:
             return value  # строка
-    
+
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
         client = await self._get_client()
         if not isinstance(value, str):
             value = json.dumps(value, ensure_ascii=False)
         await client.setex(key, ttl, value)
         return True
-    
+
     async def delete(self, key: str) -> bool:
         client = await self._get_client()
         deleted = await client.delete(key)
         return deleted > 0
-    
+
     async def clear(self):
         client = await self._get_client()
         await client.flushdb()
-    
+
     # Синхронные обёртки (используют run_until_complete)
-    def get_sync(self, key: str) -> Optional[Any]:
+    def get_sync(self, key: str) -> Any | None:
         try:
             loop = asyncio.get_running_loop()
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(asyncio.run, self.get(key))
                 return future.result()
         except RuntimeError:
             return asyncio.run(self.get(key))
-    
+
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
         try:
             loop = asyncio.get_running_loop()
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future = executor.submit(asyncio.run, self.set(key, value, ttl))
                 return future.result()
         except RuntimeError:
             return asyncio.run(self.set(key, value, ttl))
-    
+
     async def close(self):
         if self._client:
             await self._client.close()
@@ -151,55 +158,57 @@ class CacheManager:
     """
     Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory.
     """
-    def __init__(self, redis_url: Optional[str] = None, use_redis: bool = True):
+
+    def __init__(self, redis_url: str | None = None, use_redis: bool = True):
         self.use_redis = use_redis and redis_url is not None
         if self.use_redis:
             self._cache = RedisCache(redis_url)
         else:
             self._cache = InMemoryCache()
         logger.info(f"CacheManager initialized with {type(self._cache).__name__}")
-    
+
     async def initialize(self):
         """Для Redis: проверка подключения при старте."""
         if self.use_redis:
             await self._cache._get_client()
-    
-    async def get(self, key: str) -> Optional[Any]:
+
+    async def get(self, key: str) -> Any | None:
         return await self._cache.get(key)
-    
+
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
         return await self._cache.set(key, value, ttl)
-    
+
     async def delete(self, key: str) -> bool:
         return await self._cache.delete(key)
-    
+
     async def clear(self):
         await self._cache.clear()
-    
+
     async def close(self):
-        if hasattr(self._cache, 'close'):
+        if hasattr(self._cache, "close"):
             await self._cache.close()
-    
+
     # Синхронные методы для обратной совместимости (используются в retrieval и rerank)
-    def get_sync(self, key: str) -> Optional[Any]:
+    def get_sync(self, key: str) -> Any | None:
         return self._cache.get_sync(key)
-    
+
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
         return self._cache.set_sync(key, value, ttl)
-    
+
     def delete_sync(self, key: str) -> bool:
-        return self._cache.delete_sync(key) if hasattr(self._cache, 'delete_sync') else asyncio.run(self.delete(key))
+        return self._cache.delete_sync(key) if hasattr(self._cache, "delete_sync") else asyncio.run(self.delete(key))
 
 
 # Пример использования
 if __name__ == "__main__":
+
     async def test():
         # In-memory
         cache = CacheManager(use_redis=False)
         await cache.set("test_key", "hello", ttl=10)
         val = await cache.get("test_key")
         print(f"In-memory get: {val}")
-        
+
         # Redis (если доступен)
         cache2 = CacheManager(redis_url="redis://localhost:6379", use_redis=True)
         await cache2.initialize()
@@ -207,5 +216,5 @@ if __name__ == "__main__":
         val2 = await cache2.get("test_redis")
         print(f"Redis get: {val2}")
         await cache2.close()
-    
+
     asyncio.run(test())

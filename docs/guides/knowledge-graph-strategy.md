@@ -40,7 +40,7 @@ Nine relation types defined in `schema.yaml:161-251`:
 Implemented in `etl/graph_builder/entity_extractor.py:51-277`:
 
 1. **spaCy NER** (`extract_entities_spacy`, line 117) — extracts PERSON, ORG, GPE, PRODUCT, EVENT from text chunks. Maps spaCy labels to internal types. Uses `ru_core_news_sm` by default.
-2. **SLM augmentation** (`extract_relations_slm`, line 149) — sends text + entity list to a local LLM (Gemma-2B) to infer relations. Prompt structured for JSON-only output. Results cached by SHA-256 of text.
+2. **SLM augmentation** (`extract_relations_slm`, line 149) — sends text + entity list to a local SLM to infer relations. Prompt structured for JSON-only output. Results cached by SHA-256 of text.
 3. **Deduplication** (`extract_batch`, line 248) — merges duplicate entities by ID and duplicate relations by (source, target, type)` tuple.
 
 ### 1.4 Graph Loading & Constraints
@@ -258,7 +258,7 @@ Entity: PROJ-123 (TICKET) — status: In Progress
 
 ### 7.2 Token Budget Allocation
 
-With Gemma's 130K context window:
+With the configured LLM's context window:
 
 | Component | Tokens | Percentage |
 |---|---|---|

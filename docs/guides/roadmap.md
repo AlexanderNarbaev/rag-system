@@ -16,7 +16,7 @@
 - Hybrid retrieval (dense + sparse) with RRF fusion via Qdrant
 - Cross-encoder reranking with MiniLM-L-6-v2
 - Content-addressable chunk versioning (SHA-256) with hot/cold storage
-- Dual-LLM architecture: SLM (Gemma-2B) for routing + LLM (Gemma-4-26B) for generation
+- Dual-LLM architecture: SLM (lightweight) for routing + LLM (full-scale) for generation
 - LangGraph agentic orchestrator (7-node state graph, optional)
 - OpenAI-compatible proxy API (`/v1/chat/completions`, `/v1/models`, `/v1/health`)
 - Redis-backed multi-tier cache (embeddings, rerank, responses)
@@ -123,7 +123,7 @@
 | 1 | **Image embedding & retrieval** | CLIP/BLIP integration for diagram and screenshot indexing | "Find architecture diagram for service X" returns correct image |
 | 2 | **Code-aware chunking** | AST-aware splitting for Python/JS/Java; function/class-level chunks | Code search matches function signatures, not just comments |
 | 3 | **Table extraction** | Parse Confluence/Jira tables into structured representations | "Show me the performance benchmarks table" returns tabular data |
-| 4 | **Multi-modal context assembly** | Mix text + image + code in LLM context | Gemma handles interleaved content without confusion |
+| 4 | **Multi-modal context assembly** | Mix text + image + code in LLM context | LLM handles interleaved content without confusion |
 | 5 | **HITL feedback loop closure** | Use expert corrections to fine-tune reranker on domain data | MRR improvement of ≥5% after 500 corrections |
 | 6 | **ColBERT late interaction** | Enable bge-m3 ColBERT multi-vectors for maximum relevance | Recall@20 improvement of ≥3% over dense+sparse alone |
 | 7 | **Automated cold storage cleanup** | TTL-based Parquet version pruning; keep last 5 versions per document | Cold storage stays under 2× hot storage size |
@@ -214,7 +214,7 @@
 | H1 2028 | **Self-Correcting RAG (Level 5)** | CRAG evaluator, HyDE, self-reflection loops, answer verification, hallucination rate < 5% |
 | H1 2028 | **Agentic Tools** | Tool-calling API (Confluence/Jira/GitLab live queries, not just indexed data), function calling |
 | H2 2028 | **Multi-Language Expansion** | Beyond RU+EN: DE, FR, ZH; cross-lingual retrieval benchmarks |
-| H2 2028 | **Model Evolution** | Migrate to Gemma-3 or newer; evaluate Llama/Mistral as alternatives; on-prem fine-tuning pipeline |
+| H2 2028 | **Model Evolution** | Migrate to newer model generations; evaluate alternative architectures (Llama, Mistral, etc.); on-prem fine-tuning pipeline |
 | 2029+ | **Federated RAG** | Multi-instance search across departments; federated query routing; cross-silo retrieval |
 
 ---

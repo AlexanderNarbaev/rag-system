@@ -1,11 +1,9 @@
 """Documentation extractor for Markdown, RST, and AsciiDoc formats."""
 
-import hashlib
 import logging
 import re
-from datetime import datetime, timezone
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from etl.extractors.base_extractor import BaseExtractor, ExtractedDocument, ExtractorConfig
 
@@ -25,7 +23,7 @@ class DocExtractor(BaseExtractor):
     def __init__(self, config: ExtractorConfig):
         super().__init__(config)
         self._validated = False
-        self._source_files: List[Path] = []
+        self._source_files: list[Path] = []
 
     async def validate_connection(self) -> bool:
         """Validate that source documentation files exist."""
@@ -43,8 +41,7 @@ class DocExtractor(BaseExtractor):
 
         if self.config.exclude_patterns:
             self._source_files = [
-                f for f in self._source_files
-                if not any(p in str(f) for p in self.config.exclude_patterns)
+                f for f in self._source_files if not any(p in str(f) for p in self.config.exclude_patterns)
             ]
 
         self._validated = len(self._source_files) > 0
@@ -76,7 +73,7 @@ class DocExtractor(BaseExtractor):
             except Exception as e:
                 logger.error(f"Failed to extract doc file {file_path}: {e}", exc_info=True)
 
-    def _extract_markdown(self, file_path: Path) -> List[ExtractedDocument]:
+    def _extract_markdown(self, file_path: Path) -> list[ExtractedDocument]:
         """Extract structured content from Markdown with heading hierarchy."""
         content = file_path.read_text(encoding="utf-8")
         title = file_path.stem
@@ -125,7 +122,7 @@ class DocExtractor(BaseExtractor):
 
         return documents
 
-    def _extract_rst(self, file_path: Path) -> List[ExtractedDocument]:
+    def _extract_rst(self, file_path: Path) -> list[ExtractedDocument]:
         """Extract structured content from RST files."""
         content = file_path.read_text(encoding="utf-8")
         title = file_path.stem
@@ -167,7 +164,7 @@ class DocExtractor(BaseExtractor):
 
         return documents
 
-    def _extract_asciidoc(self, file_path: Path) -> List[ExtractedDocument]:
+    def _extract_asciidoc(self, file_path: Path) -> list[ExtractedDocument]:
         """Extract structured content from AsciiDoc files."""
         content = file_path.read_text(encoding="utf-8")
         title = file_path.stem
@@ -209,7 +206,7 @@ class DocExtractor(BaseExtractor):
 
         return documents
 
-    def _extract_generic_text(self, file_path: Path) -> List[ExtractedDocument]:
+    def _extract_generic_text(self, file_path: Path) -> list[ExtractedDocument]:
         """Fallback extraction for plain text files."""
         content = file_path.read_text(encoding="utf-8")
         return [self._make_document(file_path, file_path.stem, content, "text", 0, 1, [], [], [])]
@@ -222,9 +219,9 @@ class DocExtractor(BaseExtractor):
         format_type: str,
         section_idx: int,
         total_sections: int,
-        code_blocks: List[str],
-        tables: List[str],
-        links: List[str],
+        code_blocks: list[str],
+        tables: list[str],
+        links: list[str],
     ) -> ExtractedDocument:
         return ExtractedDocument(
             source_id=f"doc_{format_type}_{file_path.stem}_s{section_idx}",
@@ -247,7 +244,7 @@ class DocExtractor(BaseExtractor):
         )
 
     @staticmethod
-    def _parse_markdown_headings(text: str) -> List[Tuple[str, int, str]]:
+    def _parse_markdown_headings(text: str) -> list[tuple[str, int, str]]:
         """Parse markdown headings with their section text."""
         pattern = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
         matches = list(pattern.finditer(text))
@@ -259,7 +256,7 @@ class DocExtractor(BaseExtractor):
         return results
 
     @staticmethod
-    def _parse_rst_headings(text: str) -> List[Tuple[str, int, str]]:
+    def _parse_rst_headings(text: str) -> list[tuple[str, int, str]]:
         """Parse RST headings."""
         results = []
         lines = text.splitlines()
@@ -287,14 +284,14 @@ class DocExtractor(BaseExtractor):
         return results
 
     @staticmethod
-    def _parse_asciidoc_headings(text: str) -> List[Tuple[str, int, str]]:
+    def _parse_asciidoc_headings(text: str) -> list[tuple[str, int, str]]:
         """Parse AsciiDoc headings."""
         pattern = re.compile(r"^(=+)\s+(.+)$", re.MULTILINE)
         matches = list(pattern.finditer(text))
         return [(m.group(2).strip(), len(m.group(1)), "") for m in matches]
 
     @staticmethod
-    def _get_section_text(text: str, headings: List[Tuple[str, int, str]], idx: int) -> str:
+    def _get_section_text(text: str, headings: list[tuple[str, int, str]], idx: int) -> str:
         """Get the text section for a heading."""
         heading_pattern = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
         all_matches = list(heading_pattern.finditer(text))
@@ -307,7 +304,7 @@ class DocExtractor(BaseExtractor):
         return text[start:end].strip()
 
     @staticmethod
-    def _get_rst_section_text(text: str, headings: List[Tuple[str, int, str]], idx: int) -> str:
+    def _get_rst_section_text(text: str, headings: list[tuple[str, int, str]], idx: int) -> str:
         """Get text section for RST heading."""
         heading_title = headings[idx][0]
         escaped = re.escape(heading_title)
@@ -319,7 +316,7 @@ class DocExtractor(BaseExtractor):
         return text[start:end].strip()
 
     @staticmethod
-    def _get_section_text_from_headings(text: str, headings: List[Tuple[str, int, str]], idx: int) -> str:
+    def _get_section_text_from_headings(text: str, headings: list[tuple[str, int, str]], idx: int) -> str:
         """Get text section using heading data."""
         heading_title = headings[idx][0]
         escaped = re.escape(heading_title)
@@ -333,7 +330,7 @@ class DocExtractor(BaseExtractor):
         return text[start:end].strip()
 
     @staticmethod
-    def _extract_markdown_code_blocks(text: str) -> List[str]:
+    def _extract_markdown_code_blocks(text: str) -> list[str]:
         """Extract code blocks from markdown."""
         blocks = []
         pattern = re.compile(r"```(?:\w*)\n(.*?)```", re.DOTALL)
@@ -344,7 +341,7 @@ class DocExtractor(BaseExtractor):
         return blocks
 
     @staticmethod
-    def _extract_markdown_tables(text: str) -> List[str]:
+    def _extract_markdown_tables(text: str) -> list[str]:
         """Extract markdown table rows."""
         tables = []
         in_table = False
@@ -367,13 +364,13 @@ class DocExtractor(BaseExtractor):
         return tables
 
     @staticmethod
-    def _extract_markdown_links(text: str) -> List[str]:
+    def _extract_markdown_links(text: str) -> list[str]:
         """Extract markdown links."""
         pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
         return [m.group(2) for m in pattern.finditer(text)]
 
     @staticmethod
-    def _extract_rst_code_blocks(text: str) -> List[str]:
+    def _extract_rst_code_blocks(text: str) -> list[str]:
         """Extract RST code blocks."""
         blocks = []
         pattern = re.compile(r"\.\.\s+code-block::.*?\n\n(.*?)(?=\n\S|\Z)", re.DOTALL)
@@ -383,7 +380,7 @@ class DocExtractor(BaseExtractor):
         return blocks
 
     @staticmethod
-    def _extract_asciidoc_code_blocks(text: str) -> List[str]:
+    def _extract_asciidoc_code_blocks(text: str) -> list[str]:
         """Extract AsciiDoc code blocks."""
         blocks = []
         pattern = re.compile(r"----\n(.*?)----", re.DOTALL)

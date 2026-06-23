@@ -1,23 +1,23 @@
 # AGENTS.md — RAG System
 
 ## Identity
-Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline for Confluence, Jira, GitLab data ingestion into Qdrant + Neo4j, served via Gemma LLM.
+Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline for Confluence, Jira, GitLab data ingestion into Qdrant + Neo4j, served via configurable LLM backend.
 
 ## Language
 English for code and comments. Russian for discussions.
 
 ## Current State
-- **Version:** v0.1.0 (June 2026)
+- **Version:** v0.3 (June 2026)
 - **Tests:** 505 total, 483 passing (96% pass rate), 21 failing, 1 collection error
 - **Maturity:** RAG Level 4 (Agentic) operational, Level 5 (Self-Correcting) partially designed
 - **Production readiness:** 45% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
-- **Next milestone:** v0.2 — Token optimization + retrieval quality evaluation (see `docs/guides/roadmap.md`)
+- **Next milestone:** v0.4 — Token optimization + retrieval quality evaluation (see `docs/guides/roadmap.md`)
 
 ## Architecture
-Three-layer system plus supporting services:
+Three-layer system plus supporting services, with multi-provider LLM backend support:
 
 1. **ETL Layer** — data extraction, chunking, embedding, indexing (runs on a separate machine)
-2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, LLM routing
+2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing (vLLM, llama.cpp, or any OpenAI-compatible endpoint)
 3. **HITL Layer** — Streamlit expert dashboard for feedback and quality control
 4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude Desktop)
 
@@ -27,9 +27,10 @@ Three-layer system plus supporting services:
 2. **Graceful degradation** — every component can fail independently: Neo4j unavailable → skip graph expansion. Reranker OOM → use raw hybrid scores. Redis down → fall back to in-memory cache. The proxy never crashes on component failure.
 3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents are reindexed.
 4. **OpenAI compatibility** — the proxy is a drop-in replacement for any OpenAI client. Extensions (`rag_version`, `rag_force_refresh`) are silently ignored by standard clients.
-5. **Dual-model routing** — SLM (Gemma-2B) for fast preprocessing; LLM (Gemma-4-26B) for heavy generation. Keeps latency low for routing tasks.
-6. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The system runs in simple RAG mode by default.
-7. **Token economy** — every token counts. Token optimizer provides BPE-aware counting, 4 compression strategies, and smart budget allocation.
+5. **Dual-model routing** — lightweight SLM for fast preprocessing (intent classification, query decomposition, entity extraction); full-scale LLM for heavy generation. Keeps latency low for routing tasks.
+6. **Multi-provider support** — pluggable backend adapters via `provider_adapter.py` allow swapping between vLLM, llama.cpp, and any OpenAI-compatible API without changing orchestration logic.
+7. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The system runs in simple RAG mode by default.
+8. **Token economy** — every token counts. Token optimizer provides BPE-aware counting, 4 compression strategies, and smart budget allocation.
 
 ## Project Structure
 
@@ -48,10 +49,11 @@ rag-system/
 │   ├── app/
 │   │   ├── main.py                   # FastAPI entry point (3 endpoints + health + metrics)
 │   │   ├── orchestrator.py           # LangGraph agentic query pipeline (7-node state graph)
+│   │   ├── provider_adapter.py       # Multi-provider LLM backend adapter (vLLM, llama.cpp, OpenAI-compatible)
 │   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
 │   │   ├── rerank.py                 # Cross-encoder reranker (MiniLM-L-6-v2)
 │   │   ├── context_builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
-│   │   ├── llm_router.py             # Async vLLM/llama-cpp adapter (streaming + non-streaming)
+│   │   ├── llm_router.py             # Async LLM adapter (streaming + non-streaming) via provider_adapter
 │   │   ├── slm_router.py             # SLM: intent classification, query decomposition, entity extraction
 │   │   ├── token_optimizer.py        # BPE-aware token counting, compression, budget allocation
 │   │   ├── cache.py                  # Redis + in-memory multi-tier cache
@@ -65,7 +67,7 @@ rag-system/
 │   ├── .env                          # Configuration (edit before first run)
 │   ├── Dockerfile
 │   ├── requirements_proxy.txt
-│   └── docker-compose.yml            # Qdrant + Redis + Neo4j + vLLM + Proxy
+│   └── docker-compose.yml            # Qdrant + Redis + Neo4j + LLM backend + Proxy
 ├── mcp_server/                       # MCP server for OpenCode/Claude Desktop integration
 │   ├── server.py                     # STDIO + Streamable HTTP transports, tools/resources/prompts
 │   └── __init__.py
@@ -96,8 +98,8 @@ rag-system/
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **LLM** | Gemma-4-26B (GGUF via llama.cpp / vLLM) | Response generation (130K context) |
-| **SLM** | Gemma-2B | Query routing, entity extraction (fast path) |
+| **LLM** | Any OpenAI-compatible model (e.g., Llama, Mistral, Gemma, Qwen) via vLLM/llama.cpp | Response generation (configurable context length) |
+| **SLM** | Lightweight model (e.g., Llama-3B, Gemma-2B, Qwen-2.5-3B) | Query routing, entity extraction (fast path) |
 | **Embeddings** | BAAI/bge-m3 | Dense (1024-dim) + sparse (lexical) + ColBERT |
 | **Vector DB** | Qdrant | Hybrid search (dense + sparse), RRF fusion |
 | **Graph DB** | Neo4j | Entity relationships, multi-hop traversal |
@@ -106,12 +108,12 @@ rag-system/
 | **ETL** | Python, requests, BeautifulSoup, spaCy, sentence-transformers | Data extraction, chunking, indexing |
 | **Dashboard** | Streamlit | HITL expert review |
 | **MCP** | FastMCP | Model Context Protocol server for IDE integration |
-| **Auth** | Keycloak (planned v0.3) | Corporate SSO, RBAC |
+| **Auth** | Keycloak (planned v0.4) | Corporate SSO, RBAC |
 | **Infra** | Docker Compose | Containerized deployment |
 
 ## Key Constraints
 - **Air-gapped environment** — all components must work without internet access
-- **Gemma context limits**: 130K tokens (LLM), 8K tokens (embedder/reranker)
+- **LLM context limits**: configurable (depends on deployed model); 8K tokens (embedder/reranker)
 - **Technical documents**: versioned, overlapping, duplicate-prone
 - **Incremental updates**: WAL-based checkpointing for resume capability
 - **Single worker proxy**: `WORKERS=1` to protect shared embedder/cache state
@@ -177,8 +179,9 @@ All configuration via environment variables or `.env` file in `proxy/.env`. Key 
 ```bash
 # Required
 QDRANT_HOST=localhost          # Qdrant server
-LLM_ENDPOINT=http://localhost:8000/v1  # vLLM/llama-cpp endpoint
-LLM_MODEL_NAME=gemma-4-26b-it
+LLM_ENDPOINT=http://localhost:8000/v1  # LLM backend endpoint (vLLM/llama.cpp/OpenAI-compatible)
+LLM_MODEL_NAME=your-model-name
+LLM_PROVIDER=vllm              # Backend provider: vllm, llama_cpp, openai_compatible
 
 # Optional features (disabled by default)
 USE_LANGGRAPH=true             # Enable agentic orchestration

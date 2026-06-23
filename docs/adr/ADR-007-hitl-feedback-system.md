@@ -5,7 +5,7 @@
 
 ## Context
 
-The RAG system's answer quality depends on retrieval relevance, context assembly, and LLM generation accuracy. Without feedback collection, quality issues go undetected and there is no mechanism for continuous improvement. Expert users (domain specialists) need a way to correct inaccurate responses and mark good answers. Additionally, corrected answers form a valuable training dataset for future fine-tuning of the Gemma model.
+The RAG system's answer quality depends on retrieval relevance, context assembly, and LLM generation accuracy. Without feedback collection, quality issues go undetected and there is no mechanism for continuous improvement. Expert users (domain specialists) need a way to correct inaccurate responses and mark good answers. Additionally, corrected answers form a valuable training dataset for future fine-tuning of the language model.
 
 Alternatives considered: **no feedback** (quality degrades over time), **automated evaluation** (metrics like ROUGE/BERTScore don't capture factual correctness for technical content), **external annotation platform** (overkill, adds integration complexity).
 

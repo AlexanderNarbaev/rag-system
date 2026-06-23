@@ -3,8 +3,9 @@
 Prometheus metrics module for RAG proxy observability.
 Exposes counters, histograms, and gauges for monitoring.
 """
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
 from fastapi import Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 _initialized = False
 

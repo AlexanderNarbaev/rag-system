@@ -8,18 +8,17 @@
 - Создание индексов и уникальных ограничений
 - Очистку устаревших связей
 """
+
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from pathlib import Path
-from datetime import datetime
 
 try:
-    from neo4j import GraphDatabase, Driver, Session
+    from neo4j import Driver, GraphDatabase, Session
+
     NEO4J_AVAILABLE = True
 except ImportError:
     NEO4J_AVAILABLE = False
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -27,14 +26,9 @@ class Neo4jLoader:
     """
     Загрузчик графа знаний в Neo4j.
     """
+
     def __init__(
-        self,
-        uri: str,
-        user: str,
-        password: str,
-        database: str = "neo4j",
-        batch_size: int = 500,
-        max_retries: int = 3
+        self, uri: str, user: str, password: str, database: str = "neo4j", batch_size: int = 500, max_retries: int = 3
     ):
         """
         :param uri: Neo4j URI (bolt://localhost:7687)
@@ -46,14 +40,14 @@ class Neo4jLoader:
         """
         if not NEO4J_AVAILABLE:
             raise ImportError("neo4j driver is required. Install: pip install neo4j")
-        
+
         self.uri = uri
         self.user = user
         self.password = password
         self.database = database
         self.batch_size = batch_size
         self.max_retries = max_retries
-        self.driver: Optional[Driver] = None
+        self.driver: Driver | None = None
 
     def connect(self):
         """Устанавливает соединение с Neo4j."""
@@ -75,11 +69,11 @@ class Neo4jLoader:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def _execute_with_retry(self, query: str, parameters: Dict = None) -> bool:
+    def _execute_with_retry(self, query: str, parameters: dict = None) -> bool:
         """Выполняет запрос с повторными попытками при временных ошибках."""
         if not self.driver:
             raise RuntimeError("Not connected to Neo4j")
-        
+
         for attempt in range(self.max_retries):
             try:
                 with self.driver.session(database=self.database) as session:
@@ -87,7 +81,7 @@ class Neo4jLoader:
                     summary = result.consume()
                     return summary.counters.contains_updates
             except Exception as e:
-                logger.warning(f"Attempt {attempt+1}/{self.max_retries} failed: {e}")
+                logger.warning(f"Attempt {attempt + 1}/{self.max_retries} failed: {e}")
                 if attempt == self.max_retries - 1:
                     raise
         return False
@@ -103,13 +97,13 @@ class Neo4jLoader:
             "CREATE CONSTRAINT IF NOT EXISTS FOR (o:Organization) REQUIRE o.id IS UNIQUE",
             "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Technology) REQUIRE t.id IS UNIQUE",
             "CREATE CONSTRAINT IF NOT EXISTS FOR (prod:Product) REQUIRE prod.id IS UNIQUE",
-            "CREATE CONSTRAINT IF NOT EXISTS FOR (loc:Location) REQUIRE loc.id IS UNIQUE"
+            "CREATE CONSTRAINT IF NOT EXISTS FOR (loc:Location) REQUIRE loc.id IS UNIQUE",
         ]
         indexes = [
             "CREATE INDEX IF NOT EXISTS FOR (e:Entity) ON (e.name)",
             "CREATE INDEX IF NOT EXISTS FOR (e:Entity) ON (e.source_id)",
             "CREATE INDEX IF NOT EXISTS FOR (e:Entity) ON (e.type)",
-            "CREATE INDEX IF NOT EXISTS FOR ()-[r:RELATES_TO]-() ON (r.type)"
+            "CREATE INDEX IF NOT EXISTS FOR ()-[r:RELATES_TO]-() ON (r.type)",
         ]
         for query in constraints + indexes:
             try:
@@ -118,7 +112,7 @@ class Neo4jLoader:
             except Exception as e:
                 logger.warning(f"Failed to create constraint/index: {e}")
 
-    def load_entities(self, entities: List[Dict]) -> int:
+    def load_entities(self, entities: list[dict]) -> int:
         """
         Загружает пакет сущностей в Neo4j.
         Каждая сущность должна иметь поля: id, name, type, source_id, properties (dict)
@@ -126,11 +120,11 @@ class Neo4jLoader:
         """
         if not entities:
             return 0
-        
+
         # Разбиваем на батчи
         total = 0
         for i in range(0, len(entities), self.batch_size):
-            batch = entities[i:i + self.batch_size]
+            batch = entities[i : i + self.batch_size]
             query = """
             UNWIND $batch AS entity
             MERGE (n:Entity {id: entity.id})
@@ -167,7 +161,7 @@ class Neo4jLoader:
                 raise
         return total
 
-    def load_relations(self, relations: List[Dict]) -> int:
+    def load_relations(self, relations: list[dict]) -> int:
         """
         Загружает пакет отношений.
         Каждое отношение должно содержать: source, target, type, properties (dict)
@@ -175,10 +169,10 @@ class Neo4jLoader:
         """
         if not relations:
             return 0
-        
+
         total = 0
         for i in range(0, len(relations), self.batch_size):
-            batch = relations[i:i + self.batch_size]
+            batch = relations[i : i + self.batch_size]
             query = """
             UNWIND $batch AS rel
             MATCH (a {id: rel.source})
@@ -211,7 +205,7 @@ class Neo4jLoader:
             logger.debug(f"Loaded {len(batch)} relations")
         return total
 
-    def delete_outdated_entities(self, valid_source_ids: List[str]):
+    def delete_outdated_entities(self, valid_source_ids: list[str]):
         """
         Удаляет сущности, которые больше не встречаются в актуальных источниках.
         source_id - идентификаторы документов/частичных источников, которые были обработаны.
@@ -220,7 +214,7 @@ class Neo4jLoader:
         if not valid_source_ids:
             logger.warning("No valid source ids provided, skipping deletion")
             return 0
-        
+
         query = """
         MATCH (n:Entity)
         WHERE n.source_id IS NOT NULL AND NOT n.source_id IN $valid_ids
@@ -253,7 +247,7 @@ class Neo4jLoader:
         logger.info(f"Deleted {deleted_count} outdated relations")
         return deleted_count
 
-    def get_graph_statistics(self) -> Dict[str, int]:
+    def get_graph_statistics(self) -> dict[str, int]:
         """Возвращает статистику графа: количество узлов, рёбер, типов сущностей."""
         query = """
         MATCH (n:Entity)
@@ -264,21 +258,21 @@ class Neo4jLoader:
         with self.driver.session(database=self.database) as session:
             result = session.run(query).single()
             total_nodes = result["total_nodes"] if result else 0
-        
+
         query_rels = "MATCH ()-[r]->() RETURN count(r) as total_rels"
         with self.driver.session(database=self.database) as session:
             result = session.run(query_rels).single()
             total_rels = result["total_rels"] if result else 0
-        
+
         return {"nodes": total_nodes, "relations": total_rels}
 
 
 def batch_load_from_extractor(
     loader: Neo4jLoader,
-    entities: List[Dict],
-    relations: List[Dict],
+    entities: list[dict],
+    relations: list[dict],
     clear_old: bool = False,
-    valid_source_ids: List[str] = None
+    valid_source_ids: list[str] = None,
 ):
     """
     Удобная функция для загрузки сущностей и отношений из extractor'а.
@@ -290,19 +284,19 @@ def batch_load_from_extractor(
     """
     # Создаём индексы и ограничения (один раз)
     loader.create_constraints_and_indexes()
-    
+
     # Загружаем сущности
     entities_loaded = loader.load_entities(entities)
     logger.info(f"Loaded {entities_loaded} entities")
-    
+
     # Загружаем отношения
     relations_loaded = loader.load_relations(relations)
     logger.info(f"Loaded {relations_loaded} relations")
-    
+
     # Опциональная очистка
     if clear_old and valid_source_ids:
         loader.delete_outdated_entities(valid_source_ids)
-    
+
     # Выводим статистику
     stats = loader.get_graph_statistics()
     logger.info(f"Graph stats: {stats['nodes']} nodes, {stats['relations']} relations")
@@ -310,12 +304,7 @@ def batch_load_from_extractor(
 
 if __name__ == "__main__":
     # Пример использования
-    config = {
-        "uri": "bolt://localhost:7687",
-        "user": "neo4j",
-        "password": "password",
-        "database": "neo4j"
-    }
+    config = {"uri": "bolt://localhost:7687", "user": "neo4j", "password": "password", "database": "neo4j"}
     # Пример сущностей и отношений (из entity_extractor)
     sample_entities = [
         {
@@ -323,31 +312,21 @@ if __name__ == "__main__":
             "name": "Иван Иванов",
             "type": "PERSON",
             "source_id": "confluence_123",
-            "properties": {"role": "developer"}
+            "properties": {"role": "developer"},
         },
         {
             "id": "def456",
             "name": "PROJ-123",
             "type": "PRODUCT",
             "source_id": "jira_456",
-            "properties": {"status": "active"}
-        }
+            "properties": {"status": "active"},
+        },
     ]
     sample_relations = [
-        {
-            "source": "abc123",
-            "target": "def456",
-            "type": "WORKS_ON",
-            "properties": {"since": "2025-01-01"}
-        }
+        {"source": "abc123", "target": "def456", "type": "WORKS_ON", "properties": {"since": "2025-01-01"}}
     ]
-    
+
     with Neo4jLoader(**config) as loader:
-        batch_load_from_extractor(
-            loader,
-            sample_entities,
-            sample_relations,
-            clear_old=False
-        )
+        batch_load_from_extractor(loader, sample_entities, sample_relations, clear_old=False)
         stats = loader.get_graph_statistics()
         print("Final stats:", stats)

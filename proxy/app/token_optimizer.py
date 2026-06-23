@@ -9,11 +9,12 @@ Implements:
 - Surrounding chunk expansion
 - Chunk header enrichment with document context
 """
-import re
+
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+import re
 
 logger = logging.getLogger(__name__)
+
 
 # Approximate BPE token boundaries — common multi-character units
 def _tokenize_words(text: str) -> list:
@@ -45,14 +46,9 @@ class TokenOptimizer:
         char_estimate = max(1, len(text) // 4)
         word_tokens = len(_tokenize_words(text))
         word_estimate = max(1, int(word_tokens * 1.3))
-        return max(1, int((char_estimate * 0.4 + word_estimate * 0.6)))
+        return max(1, int(char_estimate * 0.4 + word_estimate * 0.6))
 
-    def compress_context(
-        self,
-        chunks: List[Dict],
-        max_tokens: int,
-        strategy: str = "relevance"
-    ) -> str:
+    def compress_context(self, chunks: list[dict], max_tokens: int, strategy: str = "relevance") -> str:
         """
         Compress context using the specified strategy.
 
@@ -77,7 +73,7 @@ class TokenOptimizer:
             logger.warning(f"Unknown compression strategy '{strategy}', falling back to relevance")
             return self._compress_relevance(chunks, max_tokens)
 
-    def _compress_relevance(self, chunks: List[Dict], max_tokens: int) -> str:
+    def _compress_relevance(self, chunks: list[dict], max_tokens: int) -> str:
         """Keep top chunks, truncate each to fit token budget."""
         token_budget = max_tokens
         parts = []
@@ -91,21 +87,21 @@ class TokenOptimizer:
             if used + per_chunk > token_budget:
                 remaining = token_budget - used
                 if remaining > 50:
-                    parts.append(text[:remaining * 4])
+                    parts.append(text[: remaining * 4])
                 break
-            parts.append(text[:per_chunk * 4])
+            parts.append(text[: per_chunk * 4])
             used += per_chunk
 
         return "\n\n".join(parts)
 
-    def _compress_proposition(self, chunks: List[Dict], max_tokens: int) -> str:
+    def _compress_proposition(self, chunks: list[dict], max_tokens: int) -> str:
         """Convert each chunk to atomic fact-like sentences, then assemble."""
         propositions = []
         for chunk in chunks:
             text = chunk.get("text", "").strip()
             if not text:
                 continue
-            sentences = re.split(r'(?<=[.!?])\s+', text)
+            sentences = re.split(r"(?<=[.!?])\s+", text)
             for s in sentences:
                 s = s.strip()
                 if len(s) > 20:
@@ -118,7 +114,7 @@ class TokenOptimizer:
             result = candidate
         return result.strip()
 
-    def _compress_summary(self, chunks: List[Dict], max_tokens: int) -> str:
+    def _compress_summary(self, chunks: list[dict], max_tokens: int) -> str:
         """Keep first N sentences of each chunk, stop at budget."""
         parts = []
         used = 0
@@ -128,20 +124,20 @@ class TokenOptimizer:
             text = chunk.get("text", "").strip()
             if not text:
                 continue
-            sentences = re.split(r'(?<=[.!?])\s+', text)
+            sentences = re.split(r"(?<=[.!?])\s+", text)
             summary = " ".join(sentences[:2])
             cost = self.estimate_token_cost(summary)
             if used + cost > budget:
                 remaining = budget - used
                 if remaining > 20:
-                    parts.append(summary[:remaining * 4])
+                    parts.append(summary[: remaining * 4])
                 break
             parts.append(summary)
             used += cost
 
         return "\n\n".join(parts)
 
-    def _compress_hierarchical(self, chunks: List[Dict], max_tokens: int) -> str:
+    def _compress_hierarchical(self, chunks: list[dict], max_tokens: int) -> str:
         """
         Tiered detail:
         - Top-3 chunks: full text
@@ -160,28 +156,24 @@ class TokenOptimizer:
             if i < 3:
                 segment = text
             elif i < 8:
-                sentences = re.split(r'(?<=[.!?])\s+', text)
+                sentences = re.split(r"(?<=[.!?])\s+", text)
                 segment = " ".join(sentences[:3])
             else:
-                sentences = re.split(r'(?<=[.!?])\s+', text)
+                sentences = re.split(r"(?<=[.!?])\s+", text)
                 segment = sentences[0] if sentences else text[:200]
 
             cost = self.estimate_token_cost(segment)
             if used + cost > budget:
                 remaining = budget - used
                 if remaining > 50:
-                    parts.append(segment[:remaining * 4])
+                    parts.append(segment[: remaining * 4])
                 break
             parts.append(segment)
             used += cost
 
         return "\n\n".join(parts)
 
-    def smart_token_budget(
-        self,
-        available_tokens: int,
-        num_chunks: int
-    ) -> Dict[str, int]:
+    def smart_token_budget(self, available_tokens: int, num_chunks: int) -> dict[str, int]:
         """
         Allocate token budget across system_prompt, context_per_chunk, history, and response.
 
@@ -218,11 +210,7 @@ class TokenOptimizer:
             "response": response,
         }
 
-    def surround_chunks(
-        self,
-        chunks: List[Dict],
-        nearby_count: int = 2
-    ) -> List[Dict]:
+    def surround_chunks(self, chunks: list[dict], nearby_count: int = 2) -> list[dict]:
         """
         Expand chunks with surrounding context from the same document.
         For chunks sharing the same source_id, returns nearby neighbors.
@@ -232,7 +220,7 @@ class TokenOptimizer:
         if not chunks or nearby_count <= 0:
             return list(chunks) if chunks else []
 
-        source_groups: Dict[str, List[Dict]] = {}
+        source_groups: dict[str, list[dict]] = {}
         for chunk in chunks:
             source_id = chunk.get("source_id", "unknown")
             source_groups.setdefault(source_id, []).append(chunk)
@@ -266,11 +254,7 @@ class TokenOptimizer:
 
         return expanded
 
-    def enrich_chunk_headers(
-        self,
-        chunk: Dict,
-        doc_context: Dict
-    ) -> Dict:
+    def enrich_chunk_headers(self, chunk: dict, doc_context: dict) -> dict:
         """
         Add document-level context as chunk header.
         Modifies chunk in place (text gets a header prefix) and returns it.

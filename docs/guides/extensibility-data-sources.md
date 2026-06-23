@@ -153,7 +153,7 @@ function/class boundaries. Embed commit messages as cross-references to affected
 
 1. **TF-IDF** — extracts top-N keywords from chunk text.
 2. **spaCy NER** — identifies PERSON, ORG, GPE, PRODUCT entities.
-3. **SLM (Gemma-2B)** — generates hypothetical questions and summaries (optional).
+3. **SLM (your lightweight model)** — generates hypothetical questions and summaries (optional).
 
 To add source-type-specific enrichment, extend the `enrich()` method:
 

@@ -10,23 +10,24 @@
 - Инкрементальный режим (хеши коммитов, timestamp последнего MR)
 - WAL для возобновления
 """
-import os
+
 import json
-import hashlib
 import logging
+import os
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Iterator
-from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import urljoin
 
 import requests
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class GitLabExtractor:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         config: {
             "url": "https://gitlab.internal.company.com",
@@ -63,9 +64,9 @@ class GitLabExtractor:
         self.wal_path.parent.mkdir(parents=True, exist_ok=True)
         self.wal_data = self._load_wal()
 
-    def _load_wal(self) -> Dict:
+    def _load_wal(self) -> dict:
         if self.wal_path.exists():
-            with open(self.wal_path, "r") as f:
+            with open(self.wal_path) as f:
                 return json.load(f)
         return {"last_run": None, "projects": {}}
 
@@ -73,13 +74,13 @@ class GitLabExtractor:
         with open(self.wal_path, "w") as f:
             json.dump(self.wal_data, f, indent=2)
 
-    def _request(self, endpoint: str, params: Dict = None, method: str = "GET") -> Dict:
+    def _request(self, endpoint: str, params: dict = None, method: str = "GET") -> dict:
         url = urljoin(self.url, endpoint)
         resp = self.session.request(method, url, params=params)
         resp.raise_for_status()
         return resp.json()
 
-    def _paginated_get(self, endpoint: str, params: Dict = None, per_page: int = 100) -> Iterator[Dict]:
+    def _paginated_get(self, endpoint: str, params: dict = None, per_page: int = 100) -> Iterator[dict]:
         """Пагинированный сбор всех элементов (постранично)."""
         page = 1
         while True:
@@ -92,7 +93,7 @@ class GitLabExtractor:
             yield from data
             page += 1
 
-    def get_projects(self) -> List[Dict]:
+    def get_projects(self) -> list[dict]:
         """Список проектов (репозиториев)."""
         if self.project_ids:
             projects = []
@@ -103,7 +104,7 @@ class GitLabExtractor:
         else:
             return list(self._paginated_get("/api/v4/projects", {"simple": True}))
 
-    def get_commits(self, project_id: int, since: str = None) -> List[Dict]:
+    def get_commits(self, project_id: int, since: str = None) -> list[dict]:
         """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
         params = {"with_stats": True}
         if since:
@@ -125,11 +126,11 @@ class GitLabExtractor:
                 commit["diff"] = []
         return commits
 
-    def get_branches(self, project_id: int) -> List[Dict]:
+    def get_branches(self, project_id: int) -> list[dict]:
         """Список веток репозитория."""
         return list(self._paginated_get(f"/api/v4/projects/{project_id}/repository/branches"))
 
-    def get_file_content(self, project_id: int, file_path: str, ref: str = "main") -> Optional[str]:
+    def get_file_content(self, project_id: int, file_path: str, ref: str = "main") -> str | None:
         """Получает содержимое файла (текст). Возвращает None если не удалось."""
         encoded_path = file_path.replace("/", "%2F")
         endpoint = f"/api/v4/projects/{project_id}/repository/files/{encoded_path}/raw"
@@ -141,7 +142,7 @@ class GitLabExtractor:
             logger.warning(f"Failed to fetch file {file_path} in project {project_id}: {e}")
             return None
 
-    def get_merge_requests(self, project_id: int, state: str = "all") -> List[Dict]:
+    def get_merge_requests(self, project_id: int, state: str = "all") -> list[dict]:
         """MR с пагинацией. Добавляет обсуждения и комментарии."""
         params = {"state": state}
         if self.since_date:
@@ -158,7 +159,7 @@ class GitLabExtractor:
             mrs.append(mr)
         return mrs
 
-    def get_mr_discussions(self, project_id: int, mr_iid: int) -> List[Dict]:
+    def get_mr_discussions(self, project_id: int, mr_iid: int) -> list[dict]:
         """Возвращает все дискуссии (нити комментариев) в MR."""
         discussions = list(self._paginated_get(f"/api/v4/projects/{project_id}/merge_requests/{mr_iid}/discussions"))
         # Преобразуем в удобный формат: каждая дискуссия содержит массив заметок (notes)
@@ -166,13 +167,15 @@ class GitLabExtractor:
         for disc in discussions:
             notes = []
             for note in disc.get("notes", []):
-                notes.append({
-                    "id": note["id"],
-                    "author": note["author"]["username"],
-                    "created_at": note["created_at"],
-                    "body": note["body"],
-                    "type": note.get("type", "regular")  # DiffNote, etc.
-                })
+                notes.append(
+                    {
+                        "id": note["id"],
+                        "author": note["author"]["username"],
+                        "created_at": note["created_at"],
+                        "body": note["body"],
+                        "type": note.get("type", "regular"),  # DiffNote, etc.
+                    }
+                )
             result.append({"id": disc["id"], "notes": notes})
         return result
 
@@ -196,11 +199,17 @@ class GitLabExtractor:
             self.wal_data["projects"][str(project_id)] = {}
         self.wal_data["projects"][str(project_id)]["last_commit_sha"] = last_commit_sha
         self.wal_data["projects"][str(project_id)]["last_commit_date"] = last_commit_date
-        self.wal_data["last_run"] = datetime.now(timezone.utc).isoformat()
+        self.wal_data["last_run"] = datetime.now(UTC).isoformat()
         self._save_wal()
 
-    def _save_project_data(self, project: Dict, commits: List[Dict], branches: List[Dict],
-                           merge_requests: List[Dict], files_data: List[Dict]):
+    def _save_project_data(
+        self,
+        project: dict,
+        commits: list[dict],
+        branches: list[dict],
+        merge_requests: list[dict],
+        files_data: list[dict],
+    ):
         """Сохраняет все данные проекта в JSON структуру."""
         project_id = str(project["id"])
         proj_dir = self.output_dir / project_id
@@ -279,11 +288,7 @@ class GitLabExtractor:
                             if self._matches_filter(path):
                                 content = self.get_file_content(project_id, path, ref="main")
                                 if content:
-                                    files_data.append({
-                                        "path": path,
-                                        "content": content,
-                                        "sha": item["id"]
-                                    })
+                                    files_data.append({"path": path, "content": content, "sha": item["id"]})
                     logger.info(f"  Retrieved {len(files_data)} files from repository")
                 except Exception as e:
                     logger.error(f"  Failed to fetch repository tree for project {project_id}: {e}")
@@ -319,7 +324,7 @@ if __name__ == "__main__":
         "fetch_merge_requests": True,
         "max_commits_per_project": 500,
         "since_date": "2025-01-01T00:00:00Z",
-        "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml", "*.yml"]
+        "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml", "*.yml"],
     }
     extractor = GitLabExtractor(config_example)
     extractor.run()

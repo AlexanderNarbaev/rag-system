@@ -173,7 +173,7 @@ chunking:
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `max_tokens` | int | `8000` | Maximum tokens per chunk (BGE-m3 limit is 8192) |
+| `max_tokens` | int | `8000` | Maximum tokens per chunk (embedder context window limit) |
 | `overlap_tokens` | int | `200` | Token overlap between consecutive chunks |
 | `min_chunk_tokens` | int | `100` | Minimum chunk size; smaller chunks merged |
 | `use_slm` | bool | `false` | Use SLM for chunk metadata enrichment |
@@ -192,7 +192,7 @@ indexing:
   qdrant_host: "localhost"
   qdrant_port: 6333
   collection_name: "knowledge_base"
-  embedder_model: "BAAI/bge-m3"
+  embedder_model: "your-embedding-model"   # e.g. "BAAI/bge-m3"
   embedder_device: "cpu"               # "cpu" or "cuda"
   batch_size: 100
   hot_dir: "./hot_chunks"              # Hot storage (current versions)
@@ -207,7 +207,7 @@ indexing:
 | `qdrant_host` | string | `"localhost"` | Qdrant server hostname |
 | `qdrant_port` | int | `6333` | Qdrant gRPC port |
 | `collection_name` | string | `"knowledge_base"` | Qdrant collection name |
-| `embedder_model` | string | `"BAAI/bge-m3"` | Sentence-transformers model for embeddings |
+| `embedder_model` | string | `"your-embedding-model"` | Sentence-transformers model for embeddings |
 | `embedder_device` | string | `"cpu"` | Device for embedding: `cpu`, `cuda`, `cuda:0` |
 | `batch_size` | int | `100` | Chunks per embedding batch |
 | `hot_dir` | string | `"./hot_chunks"` | Hot storage for current active chunks |
@@ -226,7 +226,7 @@ indexing:
 graph:
   enabled: false                       # Enable graph construction
   use_spacy: true                      # Use spaCy for NER
-  spacy_model: "ru_core_news_sm"       # or "en_core_web_sm"
+  spacy_model: "ru_core_news_sm"       # e.g. "ru_core_news_sm" for Russian, "en_core_web_sm" for English
   use_slm: false                       # Use SLM for relation extraction
   slm_endpoint: "http://localhost:8080/v1/completions"
   cache_dir: "./entity_cache"          # Entity extraction cache
@@ -242,7 +242,7 @@ graph:
 |---------|------|---------|-------------|
 | `enabled` | bool | `false` | Enable graph construction |
 | `use_spacy` | bool | `true` | Use spaCy for named entity recognition |
-| `spacy_model` | string | `"ru_core_news_sm"` | spaCy model for NER |
+| `spacy_model` | string | `"ru_core_news_sm"` | spaCy model for NER (language-specific) |
 | `use_slm` | bool | `false` | Use SLM for relation extraction (higher quality, slower) |
 | `cache_dir` | string | `"./entity_cache"` | Cache extracted entities |
 | `neo4j.enabled` | bool | `false` | Load entities and relations into Neo4j |
@@ -456,9 +456,9 @@ ln -s /mnt/cold_storage/rag_lake etl/cold_lake
 On an internet-connected machine:
 
 ```bash
-# Download spaCy models
-python -m spacy download ru_core_news_sm
-python -m spacy download en_core_web_sm
+# Download spaCy models (replace with your language models)
+python -m spacy download ru_core_news_sm    # Russian
+python -m spacy download en_core_web_sm     # English
 
 # Package for transfer
 tar -czf spacy_models.tar.gz $(python -c "import spacy; print(spacy.util.get_package_path('ru_core_news_sm'))") \

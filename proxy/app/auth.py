@@ -19,15 +19,15 @@ The system can operate in two modes:
 - AUTH_ENABLED=true: requires valid JWT on all RAG endpoints
 """
 
+import logging
 import os
 import time
-import logging
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
+from typing import Any
 
 import jwt
-from fastapi import Request, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,8 @@ class UserContext:
 
     user_id: str
     username: str
-    roles: List[str] = field(default_factory=list)
-    groups: List[str] = field(default_factory=list)
+    roles: list[str] = field(default_factory=list)
+    groups: list[str] = field(default_factory=list)
     access_level: str = "internal"
 
     @property
@@ -89,11 +89,11 @@ class UserContext:
 def create_token(
     user_id: str,
     username: str,
-    roles: Optional[List[str]] = None,
-    groups: Optional[List[str]] = None,
+    roles: list[str] | None = None,
+    groups: list[str] | None = None,
     access_level: str = "internal",
     expires_in_hours: int = TOKEN_EXPIRE_HOURS,
-    secret: Optional[str] = None,
+    secret: str | None = None,
 ) -> str:
     """Create a JWT token for the given user.
 
@@ -101,7 +101,7 @@ def create_token(
     service accounts, local dev, or the built-in /v1/auth/login endpoint.
     """
     now = int(time.time())
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "sub": user_id,
         "preferred_username": username,
         "roles": roles or [],
@@ -116,7 +116,7 @@ def create_token(
     return jwt.encode(payload, key, algorithm=JWT_ALGORITHM)
 
 
-def _get_verify_key() -> Optional[str]:
+def _get_verify_key() -> str | None:
     """Return the key to use for token verification.
 
     For RS256: uses JWT_PUBLIC_KEY (PEM).
@@ -153,7 +153,7 @@ def verify_token(token: str) -> UserContext:
     )
 
 
-def get_user_from_token(token: str) -> Optional[UserContext]:
+def get_user_from_token(token: str) -> UserContext | None:
     """Extract user context from a token without raising HTTP errors.
 
     Returns None for any invalid or expired tokens.
@@ -187,7 +187,7 @@ def get_user_from_token(token: str) -> Optional[UserContext]:
 
 async def get_auth_context(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> UserContext:
     """FastAPI dependency that extracts the UserContext from the request.
 
@@ -199,7 +199,7 @@ async def get_auth_context(
         return UserContext.anonymous()
 
     # Also check for X-Auth-Token header (alternative to Bearer)
-    token: Optional[str] = None
+    token: str | None = None
     if credentials:
         token = credentials.credentials
     elif "x-auth-token" in request.headers:
@@ -213,13 +213,13 @@ async def get_auth_context(
 
 async def get_optional_auth_context(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> UserContext:
     """FastAPI dependency that extracts UserContext when available but never fails.
 
     Useful for endpoints that work both with and without authentication.
     """
-    token: Optional[str] = None
+    token: str | None = None
     if credentials:
         token = credentials.credentials
     elif "x-auth-token" in request.headers:

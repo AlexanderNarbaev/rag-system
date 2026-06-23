@@ -8,16 +8,17 @@
 - Извлечение версии из пользовательского запроса (regex)
 - Группировка по семантическому ключу (опционально)
 """
-import re
+
 import hashlib
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+import re
 from collections import defaultdict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def extract_version_from_query(query: str) -> Optional[str]:
+def extract_version_from_query(query: str) -> str | None:
     """
     Извлекает версию документа из текстового запроса.
     Поддерживаемые паттерны:
@@ -28,27 +29,27 @@ def extract_version_from_query(query: str) -> Optional[str]:
     """
     if not query:
         return None
-    
+
     # Поиск семантических версий
     patterns = [
-        r'(?:v|version)[\s]*(\d+(?:\.\d+)+(?:\.\d+)?)',           # v1.2.3, version 1.2.3
-        r'version[\s]*[=:][\s]*(\d+(?:\.\d+)+)',                  # version=1.2
-        r'версия[\s]*(\d+(?:\.\d+)+)',                            # русский вариант
+        r"(?:v|version)[\s]*(\d+(?:\.\d+)+(?:\.\d+)?)",  # v1.2.3, version 1.2.3
+        r"version[\s]*[=:][\s]*(\d+(?:\.\d+)+)",  # version=1.2
+        r"версия[\s]*(\d+(?:\.\d+)+)",  # русский вариант
     ]
     for pattern in patterns:
         match = re.search(pattern, query, re.IGNORECASE)
         if match:
             return match.group(1)
-    
+
     # Поиск даты как версии (YYYY-MM-DD)
-    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', query)
+    date_match = re.search(r"(\d{4}-\d{2}-\d{2})", query)
     if date_match:
         return date_match.group(1)
-    
+
     return None
 
 
-def compute_chunk_hash(chunk: Dict[str, Any]) -> str:
+def compute_chunk_hash(chunk: dict[str, Any]) -> str:
     """
     Вычисляет хеш чанка на основе текста и ключевых метаданных (игнорирует score, position и т.д.).
     Используется для дедупликации.
@@ -63,9 +64,8 @@ def compute_chunk_hash(chunk: Dict[str, Any]) -> str:
 
 
 def deduplicate_chunks(
-    chunks_with_scores: List[Tuple[Dict[str, Any], float]],
-    method: str = "hash"
-) -> List[Tuple[Dict[str, Any], float]]:
+    chunks_with_scores: list[tuple[dict[str, Any], float]], method: str = "hash"
+) -> list[tuple[dict[str, Any], float]]:
     """
     Дедупликация списка чанков.
     :param chunks_with_scores: список пар (chunk_dict, score)
@@ -84,9 +84,8 @@ def deduplicate_chunks(
 
 
 def resolve_versions(
-    chunks_with_scores: List[Tuple[Dict[str, Any], float]],
-    requested_version: Optional[str] = None
-) -> List[Tuple[Dict[str, Any], float]]:
+    chunks_with_scores: list[tuple[dict[str, Any], float]], requested_version: str | None = None
+) -> list[tuple[dict[str, Any], float]]:
     """
     Разрешение версий: для каждого документа (source_id) оставляет чанки только одной версии.
     Если запрошена конкретная версия (requested_version) – оставляет только её.
@@ -95,13 +94,13 @@ def resolve_versions(
     """
     if not chunks_with_scores:
         return []
-    
+
     # Группировка по source_id
     groups = defaultdict(list)
     for chunk, score in chunks_with_scores:
         source_id = chunk.get("source_id", "unknown")
         groups[source_id].append((chunk, score))
-    
+
     resolved = []
     for source_id, group in groups.items():
         # Если запрошена конкретная версия
@@ -112,27 +111,27 @@ def resolve_versions(
                 continue
             # Если нет чанков с запрошенной версией, пробуем найти ближайшую (по семантике версий)
             logger.warning(f"Requested version {requested_version} not found for {source_id}, using latest")
-        
+
         # Найти максимальную версию (простейшее строковое сравнение, для дат и семантических версий)
         def version_key(chunk):
             v = chunk.get("version", "0")
             # Пытаемся преобразовать в кортеж чисел
-            parts = re.split(r'[.-]', v)
+            parts = re.split(r"[.-]", v)
             try:
                 return tuple(int(p) for p in parts if p.isdigit())
             except:
                 return (0,)
-        
+
         best_chunk = max(group, key=lambda x: version_key(x[0]))
         resolved.append(best_chunk)
-    
-    logger.debug(f"Version resolution: {len(chunks_with_scores)} -> {len(resolved)} chunks (requested: {requested_version})")
+
+    logger.debug(
+        f"Version resolution: {len(chunks_with_scores)} -> {len(resolved)} chunks (requested: {requested_version})"
+    )
     return resolved
 
 
-def group_by_semantic_key(
-    chunks_with_scores: List[Tuple[Dict[str, Any], float]]
-) -> List[Tuple[Dict[str, Any], float]]:
+def group_by_semantic_key(chunks_with_scores: list[tuple[dict[str, Any], float]]) -> list[tuple[dict[str, Any], float]]:
     """
     Группирует чанки с одинаковым semantic_key (поле в чанке) и объединяет их текст.
     Это позволяет вернуть связанные фрагменты как один блок.
@@ -141,7 +140,7 @@ def group_by_semantic_key(
     for chunk, score in chunks_with_scores:
         key = chunk.get("semantic_key", chunk.get("hash", ""))
         groups[key].append((chunk, score))
-    
+
     merged = []
     for key, group in groups.items():
         if len(group) == 1:
@@ -166,10 +165,10 @@ def estimate_tokens(text: str) -> int:
 
 
 def build_context(
-    chunks_with_scores: List[Tuple[Dict[str, Any], float]],
+    chunks_with_scores: list[tuple[dict[str, Any], float]],
     max_tokens: int = 120000,
     include_metadata: bool = True,
-    sort_by_score: bool = True
+    sort_by_score: bool = True,
 ) -> str:
     """
     Собирает контекст из отреранжированных и продедуплицированных чанков.
@@ -181,19 +180,19 @@ def build_context(
     """
     if not chunks_with_scores:
         return ""
-    
+
     # Сортировка по скору (убывание)
     if sort_by_score:
         chunks_with_scores.sort(key=lambda x: x[1], reverse=True)
-    
+
     context_parts = []
     total_tokens = 0
-    
+
     for chunk, score in chunks_with_scores:
         text = chunk.get("text", "").strip()
         if not text:
             continue
-        
+
         # Добавляем метаданные, если нужно
         if include_metadata:
             source_type = chunk.get("source_type", "unknown")
@@ -204,23 +203,23 @@ def build_context(
             header = f"[{source_type}] {doc_title} / {title} (v{version}) [rel={score:.3f}]\n"
         else:
             header = ""
-        
+
         part = header + text + "\n\n"
         part_tokens = estimate_tokens(part)
-        
+
         if total_tokens + part_tokens > max_tokens:
             # Если превышаем лимит, пытаемся сократить последний чанк или остановиться
             remaining = max_tokens - total_tokens
             if remaining > 50:
                 # Обрезаем текст последнего чанка
-                truncated_text = text[:remaining * 4]
+                truncated_text = text[: remaining * 4]
                 part = header + truncated_text + "...\n\n"
                 context_parts.append(part)
             break
-        
+
         context_parts.append(part)
         total_tokens += part_tokens
-    
+
     final_context = "".join(context_parts)
     logger.info(f"Context built: {len(final_context)} chars, ~{total_tokens} tokens")
     return final_context
@@ -235,17 +234,17 @@ def extract_relevant_segments(text: str, query: str) -> str:
     if not text or not query:
         return text
 
-    query_tokens = set(re.findall(r'\w+', query.lower()))
+    query_tokens = set(re.findall(r"\w+", query.lower()))
     if not query_tokens:
         return text
 
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    sentences = re.split(r"(?<=[.!?])\s+", text)
     if len(sentences) <= 3:
         return text
 
     scored = []
     for s in sentences:
-        s_tokens = set(re.findall(r'\w+', s.lower()))
+        s_tokens = set(re.findall(r"\w+", s.lower()))
         if not s_tokens:
             scored.append((s, 0.0))
             continue
@@ -261,10 +260,7 @@ def extract_relevant_segments(text: str, query: str) -> str:
     return " ".join(s for s, _ in scored[:3])
 
 
-def build_proposition_context(
-    chunks: List[Tuple[Dict[str, Any], float]],
-    max_tokens: int
-) -> str:
+def build_proposition_context(chunks: list[tuple[dict[str, Any], float]], max_tokens: int) -> str:
     """
     Convert chunks to atomic proposition-like sentences.
     Each sentence becomes a standalone fact unit, then assembled up to max_tokens.
@@ -277,12 +273,11 @@ def build_proposition_context(
         text = chunk.get("text", "").strip()
         if not text:
             continue
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
         for s in sentences:
             s = s.strip()
             if len(s) > 20:
-                propositions.append((s, chunk.get("source_type", "unknown"),
-                                     chunk.get("doc_title", "")))
+                propositions.append((s, chunk.get("source_type", "unknown"), chunk.get("doc_title", "")))
 
     result_parts = []
     total_tokens = 0
@@ -301,10 +296,7 @@ def build_proposition_context(
     return "".join(result_parts).strip()
 
 
-def build_hierarchical_context(
-    chunks: List[Tuple[Dict[str, Any], float]],
-    max_tokens: int
-) -> str:
+def build_hierarchical_context(chunks: list[tuple[dict[str, Any], float]], max_tokens: int) -> str:
     """
     Tiered detail levels:
     - Top-3 chunks by score: full text
@@ -330,11 +322,11 @@ def build_hierarchical_context(
         if i < 3:
             segment = header + text
         elif i < 8:
-            sentences = re.split(r'(?<=[.!?])\s+', text)
+            sentences = re.split(r"(?<=[.!?])\s+", text)
             summary = " ".join(sentences[:3])
             segment = header + summary + " [...]"
         else:
-            sentences = re.split(r'(?<=[.!?])\s+', text)
+            sentences = re.split(r"(?<=[.!?])\s+", text)
             first = sentences[0] if sentences else text[:200]
             segment = header + first + " [...]"
 
@@ -342,7 +334,7 @@ def build_hierarchical_context(
         if total_tokens + seg_tokens > max_tokens:
             remaining = max_tokens - total_tokens
             if remaining > 50:
-                parts.append(segment[:remaining * 4])
+                parts.append(segment[: remaining * 4])
             break
         parts.append(segment)
         total_tokens += seg_tokens
@@ -352,30 +344,30 @@ def build_hierarchical_context(
 
 # Комбинированная функция для полной пост-обработки
 def prepare_context(
-    chunks_with_scores: List[Tuple[Dict[str, Any], float]],
-    requested_version: Optional[str] = None,
+    chunks_with_scores: list[tuple[dict[str, Any], float]],
+    requested_version: str | None = None,
     max_tokens: int = 120000,
     deduplicate: bool = True,
     resolve_versions_flag: bool = True,
-    group_semantic: bool = False
+    group_semantic: bool = False,
 ) -> str:
     """
     Высокоуровневая функция: дедупликация, разрешение версий, группировка, сборка контекста.
     """
     if not chunks_with_scores:
         return ""
-    
+
     result = chunks_with_scores
-    
+
     if deduplicate:
         result = deduplicate_chunks(result)
-    
+
     if resolve_versions_flag:
         result = resolve_versions(result, requested_version=requested_version)
-    
+
     if group_semantic:
         result = group_by_semantic_key(result)
-    
+
     context = build_context(result, max_tokens=max_tokens)
     return context
 

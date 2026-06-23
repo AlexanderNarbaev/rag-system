@@ -10,28 +10,27 @@
 - Инкрементальный режим (только изменённые страницы)
 - WAL (чекпоинты для возобновления)
 """
-import os
-import sys
-import time
-import json
+
 import hashlib
+import json
 import logging
+import os
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timezone
-from urllib.parse import urljoin, urlparse
+from typing import Any
+from urllib.parse import urljoin
 
 import requests
-from requests.auth import HTTPBasicAuth
 from bs4 import BeautifulSoup
+from requests.auth import HTTPBasicAuth
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class ConfluenceExtractor:
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         config: {
             "url": "https://confluence.internal/",
@@ -65,10 +64,10 @@ class ConfluenceExtractor:
 
         self.wal_data = self._load_wal()
 
-    def _load_wal(self) -> Dict:
+    def _load_wal(self) -> dict:
         """Загружает WAL (последние успешные метки времени и хеши страниц)."""
         if self.wal_path.exists():
-            with open(self.wal_path, "r") as f:
+            with open(self.wal_path) as f:
                 return json.load(f)
         return {"last_run": None, "pages_hash": {}}
 
@@ -76,14 +75,14 @@ class ConfluenceExtractor:
         with open(self.wal_path, "w") as f:
             json.dump(self.wal_data, f, indent=2)
 
-    def _request(self, endpoint: str, params: Dict = None) -> Dict:
+    def _request(self, endpoint: str, params: dict = None) -> dict:
         """Выполняет GET запрос к Confluence API."""
         url = urljoin(self.url, endpoint)
         resp = self.session.get(url, params=params)
         resp.raise_for_status()
         return resp.json()
 
-    def _get_all_pages(self, space_key: str = None, start: int = 0, limit: int = 50) -> List[Dict]:
+    def _get_all_pages(self, space_key: str = None, start: int = 0, limit: int = 50) -> list[dict]:
         """
         Рекурсивно получает все страницы с пагинацией.
         Возвращает список страниц (с минимальными полями).
@@ -117,28 +116,28 @@ class ConfluenceExtractor:
                 break
         return pages
 
-    def _get_page_versions(self, page_id: str) -> List[Dict]:
+    def _get_page_versions(self, page_id: str) -> list[dict]:
         """Возвращает историю версий страницы."""
         endpoint = f"/rest/api/content/{page_id}/version"
         data = self._request(endpoint)
         versions = data.get("results", [])
         if self.max_versions > 0 and len(versions) > self.max_versions:
-            versions = versions[-self.max_versions:]
+            versions = versions[-self.max_versions :]
         return versions
 
-    def _get_comments(self, page_id: str) -> List[Dict]:
+    def _get_comments(self, page_id: str) -> list[dict]:
         """Возвращает комментарии к странице."""
         endpoint = f"/rest/api/content/{page_id}/child/comment"
         data = self._request(endpoint, params={"expand": "body.storage,version"})
         return data.get("results", [])
 
-    def _get_attachments_metadata(self, page_id: str) -> List[Dict]:
+    def _get_attachments_metadata(self, page_id: str) -> list[dict]:
         """Возвращает метаданные вложений (без содержимого)."""
         endpoint = f"/rest/api/content/{page_id}/child/attachment"
         data = self._request(endpoint, params={"expand": "version"})
         return data.get("results", [])
 
-    def _download_attachment(self, page_id: str, attachment_id: str, filename: str, output_dir: Path) -> Optional[str]:
+    def _download_attachment(self, page_id: str, attachment_id: str, filename: str, output_dir: Path) -> str | None:
         """Скачивает файл вложения и возвращает путь к сохранённому файлу."""
         download_url = f"/rest/api/content/{page_id}/child/attachment/{attachment_id}/download"
         try:
@@ -156,7 +155,7 @@ class ConfluenceExtractor:
             logger.error(f"Failed to download attachment {attachment_id}: {e}")
             return None
 
-    def _extract_links_from_html(self, html: str) -> Dict[str, List[str]]:
+    def _extract_links_from_html(self, html: str) -> dict[str, list[str]]:
         """Извлекает внутренние (Confluence) и внешние ссылки из HTML."""
         soup = BeautifulSoup(html, "html.parser")
         internal = []
@@ -169,7 +168,7 @@ class ConfluenceExtractor:
                 external.append(href)
         return {"internal_links": list(set(internal)), "external_links": list(set(external))}
 
-    def _calculate_page_hash(self, page: Dict) -> str:
+    def _calculate_page_hash(self, page: dict) -> str:
         """Вычисляет хеш содержимого страницы для проверки изменений."""
         # Берём body.storage.value + версию + дату изменения
         body = page.get("body", {}).get("storage", {}).get("value", "")
@@ -185,7 +184,7 @@ class ConfluenceExtractor:
         old_hash = self.wal_data["pages_hash"].get(page_id)
         return old_hash != new_hash
 
-    def _save_page_data(self, page_data: Dict, page_id: str):
+    def _save_page_data(self, page_data: dict, page_id: str):
         """Сохраняет структурированные данные страницы в JSON."""
         page_dir = self.output_dir / page_id
         page_dir.mkdir(parents=True, exist_ok=True)
@@ -198,7 +197,7 @@ class ConfluenceExtractor:
                 f.write(page_data["body_storage_raw"])
         logger.info(f"Saved page {page_id} to {page_dir}")
 
-    def extract_page(self, page: Dict) -> Dict:
+    def extract_page(self, page: dict) -> dict:
         """
         Извлекает полные данные одной страницы:
         - Метаданные (id, title, space, версии, даты)
@@ -228,24 +227,28 @@ class ConfluenceExtractor:
         versions = self._get_page_versions(page_id)
         version_list = []
         for v in versions:
-            version_list.append({
-                "number": v.get("number"),
-                "when": v.get("when"),
-                "message": v.get("message", ""),
-                "author": v.get("by", {}).get("displayName", ""),
-            })
+            version_list.append(
+                {
+                    "number": v.get("number"),
+                    "when": v.get("when"),
+                    "message": v.get("message", ""),
+                    "author": v.get("by", {}).get("displayName", ""),
+                }
+            )
 
         # Комментарии
         comments = self._get_comments(page_id)
         comment_data = []
         for com in comments:
             com_body = com.get("body", {}).get("storage", {}).get("value", "")
-            comment_data.append({
-                "id": com["id"],
-                "author": com.get("version", {}).get("by", {}).get("displayName", ""),
-                "created": com.get("version", {}).get("when", ""),
-                "body_storage": com_body,
-            })
+            comment_data.append(
+                {
+                    "id": com["id"],
+                    "author": com.get("version", {}).get("by", {}).get("displayName", ""),
+                    "created": com.get("version", {}).get("when", ""),
+                    "body_storage": com_body,
+                }
+            )
 
         # Вложения
         attachments_meta = self._get_attachments_metadata(page_id)
@@ -282,11 +285,7 @@ class ConfluenceExtractor:
                     value = param.get_text(strip=True)
                     if key:
                         macro_params[key] = value
-                macros.append({
-                    "name": macro_name,
-                    "parameters": macro_params,
-                    "raw_html": str(macro)
-                })
+                macros.append({"name": macro_name, "parameters": macro_params, "raw_html": str(macro)})
 
         # Итоговый объект
         page_data = {
@@ -303,7 +302,7 @@ class ConfluenceExtractor:
             "comments": comment_data,
             "attachments": attachment_data,
             "macros": macros,
-            "extracted_at": datetime.now(timezone.utc).isoformat()
+            "extracted_at": datetime.now(UTC).isoformat(),
         }
         return page_data
 
@@ -325,7 +324,7 @@ class ConfluenceExtractor:
                     self._save_page_data(full_data, page_id)
                     # Обновляем WAL
                     self.wal_data["pages_hash"][page_id] = new_hash
-                    self.wal_data["last_run"] = datetime.now(timezone.utc).isoformat()
+                    self.wal_data["last_run"] = datetime.now(UTC).isoformat()
                     self._save_wal()
                 except Exception as e:
                     logger.error(f"Failed to process page {page_id}: {e}", exc_info=True)
@@ -339,13 +338,13 @@ if __name__ == "__main__":
         "url": os.getenv("CONFLUENCE_URL", "https://confluence.example.com"),
         "username": os.getenv("CONFLUENCE_USER", "bot"),
         "token": os.getenv("CONFLUENCE_TOKEN", "your_token"),
-        "space_keys": ["DEV", "OPS"],   # или None для всех
+        "space_keys": ["DEV", "OPS"],  # или None для всех
         "output_dir": "./raw_data/confluence",
         "wal_file": "./wal/confluence_wal.json",
         "incremental": True,
         "download_attachments": True,
         "max_versions": 0,
-        "api_version": "2"
+        "api_version": "2",
     }
     extractor = ConfluenceExtractor(config_example)
     extractor.run()

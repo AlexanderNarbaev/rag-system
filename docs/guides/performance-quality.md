@@ -79,31 +79,31 @@ Current reranker: `cross-encoder/ms-marco-MiniLM-L-6-v2` (80M params, `proxy/app
 
 **Recommendation**: Stay with MiniLM-L-6-v2 for <50 chunks. Switch to bge-reranker-v2-m3 only if MRR drops below 0.75 in monitoring. Batch reranker inputs at `batch_size=32`.
 
-### 2.3 LLM Inference (vLLM)
+### 2.3 LLM Inference
 
-Gemma-4-26B via vLLM with these optimizations:
+Your configured LLM via the backend adapter with these optimizations:
 
 | Setting | Value | Rationale |
 |---|---|---|
-| `--max-model-len` | 131072 | Match Gemma's 130K context |
+| `--max-model-len` | 131072 | Match model's max context |
 | `--gpu-memory-utilization` | 0.92 | Leave 8% for KV-cache spikes |
 | `--enable-prefix-caching` | true | Reuse system prompt KV state |
 | `--max-num-seqs` | 4 | Concurrent requests for RAG proxy |
-| `--dtype` | awq (4-bit) | AWQ quantization reduces VRAM from 52GB to 14GB |
+| `--dtype` | awq (4-bit) | AWQ quantization reduces VRAM significantly |
 
 AWQ quantization: 4-bit with group size 128, keeps perplexity within 1% of FP16. For GPU with <16GB VRAM, mandatory.
 
 ### 2.4 SLM vs LLM Routing
 
 The dual-model architecture routes queries:
-- **SLM (Gemma-2B)**: Query rewriting, entity extraction (fast path, <50ms)
-- **LLM (Gemma-26B)**: Final answer generation (slow path, 2–8s)
+- **SLM (your lightweight model)**: Query rewriting, entity extraction (fast path, <50ms)
+- **LLM (your full-scale model)**: Final answer generation (slow path, 2–8s)
 
 Routing heuristic: if `llm_router` detects a query requiring only fact retrieval (no reasoning), answer directly from retrieved context without LLM call — saves 2–3s latency.
 
 ### 2.5 Streaming Chunk Size
 
-For `stream=True` responses, output chunks of **16–32 tokens** (default vLLM is 16). This provides smooth UX without excessive HTTP frame overhead.
+For `stream=True` responses, output chunks of **16–32 tokens** (default for most backends is 16). This provides smooth UX without excessive HTTP frame overhead.
 
 ---
 
@@ -115,11 +115,11 @@ For `stream=True` responses, output chunks of **16–32 tokens** (default vLLM i
 |---|---|---|---|
 | bge-m3 (embedder) | 2.2GB | 0 | Keep on GPU permanently |
 | MiniLM-L-6-v2 (reranker) | 0.5GB | 0 | Keep on GPU |
-| Gemma-4-26B (LLM) | 14GB (AWQ) | 0 | GPU only, vLLM managed |
-| Gemma-2B (SLM) | 1.8GB | 0 | GPU if VRAM available, else CPU |
+| Your LLM (quantized) | varies | 0 | GPU only, backend managed |
+| Your SLM (lightweight) | ~1.8GB | 0 | GPU if VRAM available, else CPU |
 | spaCy ru_core_news_sm | 0 | 50MB | CPU only |
 
-Total GPU VRAM budget: **18.5GB** with all models on GPU (fits 24GB card). If using 16GB card, move SLM to CPU and reduce `gpu-memory-utilization` to 0.88.
+Total GPU VRAM budget: varies by model choice. If using 16GB card, move SLM to CPU and reduce `gpu-memory-utilization` to 0.88.
 
 ### 3.2 Embedding Cache Sizing
 
@@ -307,7 +307,7 @@ Exponential backoff with jitter:
 
 | Service | Max Retries | Base Delay | Max Delay | Jitter |
 |---|---|---|---|---|
-| LLM (vLLM) | 3 | 1s | 30s | ±20% |
+| LLM backend | 3 | 1s | 30s | ±20% |
 | Qdrant | 5 | 100ms | 5s | ±50% |
 | Neo4j | 3 | 500ms | 10s | ±25% |
 | Embedder (local) | 0 | — | — | No network, no retry |

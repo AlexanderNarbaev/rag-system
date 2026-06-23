@@ -84,7 +84,7 @@ class TestInputValidator:
         assert "[REDACTED]" in result
 
     def test_validate_model_name_valid(self):
-        assert InputValidator.validate_model_name("gemma-4-26b-it") is True
+        assert InputValidator.validate_model_name("test-model-v1") is True
 
     def test_validate_model_name_invalid(self):
         assert InputValidator.validate_model_name("bad; rm -rf /") is False

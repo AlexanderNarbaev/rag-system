@@ -22,7 +22,7 @@ def app_client():
     with patch("proxy.app.main.cache_manager", None), \
          patch("proxy.app.main.USE_LANGGRAPH", False), \
          patch("proxy.app.main.LOG_REQUESTS", False), \
-         patch("proxy.app.main.LLM_MODEL_NAME", "gemma-4-26b-it"):
+         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"):
         from proxy.app.main import app
         from fastapi.testclient import TestClient
         client = TestClient(app)
@@ -90,7 +90,7 @@ class TestChatCompletionsNonStreaming:
              patch("proxy.app.main.non_stream_completion", self.mock_llm):
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -99,7 +99,7 @@ class TestChatCompletionsNonStreaming:
             assert data["object"] == "chat.completion"
             assert "id" in data
             assert data["id"].startswith("rag_")
-            assert data["model"] == "gemma-4-26b-it"
+            assert data["model"] == "test-model"
             assert len(data["choices"]) == 1
             choice = data["choices"][0]
             assert choice["index"] == 0
@@ -117,7 +117,7 @@ class TestChatCompletionsNonStreaming:
             mock_search.return_value = self.search_results
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Расскажи про CI/CD pipeline"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -135,7 +135,7 @@ class TestChatCompletionsNonStreaming:
             mock_search.return_value = self.search_results
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Расскажи про RAG"}],
                 "rag_version": "2.0",
             }
@@ -150,7 +150,7 @@ class TestChatCompletionsNonStreaming:
              patch("proxy.app.main.non_stream_completion", self.mock_llm):
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Запрос без результатов"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -165,7 +165,7 @@ class TestChatCompletionsNonStreaming:
              patch("proxy.app.main.non_stream_completion", self.mock_llm):
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
             }
             # First request — no cache
@@ -191,7 +191,7 @@ class TestChatCompletionsNonStreaming:
              patch("proxy.app.main.non_stream_completion", side_effect=tracking_llm):
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Cache test query"}],
             }
             response1 = app_client.post("/v1/chat/completions", json=payload)
@@ -204,7 +204,7 @@ class TestChatCompletionsNonStreaming:
     def test_chat_completion_missing_user_message_returns_400(self, app_client):
         """Request without a user message returns 400 Bad Request."""
         payload = {
-            "model": "gemma-4-26b-it",
+            "model": "test-model",
             "messages": [{"role": "system", "content": "You are a helpful assistant."}],
         }
         response = app_client.post("/v1/chat/completions", json=payload)
@@ -219,7 +219,7 @@ class TestChatCompletionsNonStreaming:
             mock_search.return_value = self.search_results
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Покажи документацию v2.0 про RAG"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -256,7 +256,7 @@ class TestChatCompletionsStreaming:
             ]
 
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
                 "stream": True,
             }
@@ -281,7 +281,7 @@ class TestErrorHandling:
         with patch("proxy.app.main.hybrid_search", return_value=[mock_hit]), \
              patch("proxy.app.main.rerank_chunks", side_effect=RuntimeError("Rerank failed")):
             payload = {
-                "model": "gemma-4-26b-it",
+                "model": "test-model",
                 "messages": [{"role": "user", "content": "Test"}],
             }
             with pytest.raises(RuntimeError, match="Rerank failed"):
