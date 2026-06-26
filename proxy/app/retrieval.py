@@ -141,14 +141,28 @@ def hybrid_search(
     version: str | None = None,
     top_k: int = 50,
     namespace: str | None = None,
+    lang: str | None = None,
 ) -> list:
     """
     Гибридный поиск в Qdrant: dense + sparse.
     Фильтрация по версии и namespace (для мультитенантности).
+    Поддержка кросс-языкового поиска через bge-m3.
     Возвращает список объектов Qdrant ScoredPoint.
+
+    Args:
+        query: Search query text.
+        version: Optional version filter.
+        top_k: Maximum number of results.
+        namespace: Optional tenant namespace filter.
+        lang: Optional detected language code (for logging/metrics).
+              bge-m3 supports cross-lingual retrieval natively —
+              a query in German can find chunks in English.
     """
     if not qdrant_client or not embedder:
         initialize_retrieval()
+
+    if lang:
+        logger.debug(f"Cross-lingual search: query language = {lang}")
 
     # Build filter conditions
     filter_conditions = []
