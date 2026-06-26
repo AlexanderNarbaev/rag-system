@@ -8,10 +8,10 @@ English for code and comments. The system supports full i18n — documentation i
 
 ## Current State
 - **Version:** v0.4 (June 2026)
-- **Tests:** 505 total, 483 passing (96% pass rate), 21 failing, 1 collection error
-- **Maturity:** RAG Level 4 (Agentic) operational, Level 5 (Self-Correcting) partially designed
+- **Tests:** 919 collected, 919 passing (100% pass rate)
+- **Maturity:** RAG Level 4 (Agentic) operational with confidence scoring, active feedback, and self-enrichment
 - **Production readiness:** 45% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
-- **Next milestone:** v0.4 — Token optimization + retrieval quality evaluation (see `docs/guides/roadmap.md`)
+- **Next milestone:** v0.5 — Token optimization + retrieval quality evaluation (see `docs/guides/roadmap.md`)
 
 ## Architecture
 Three-layer system plus supporting services, with multi-provider LLM backend support:
@@ -47,13 +47,15 @@ rag-system/
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized)
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (3 endpoints + health + metrics)
+│   │   ├── main.py                   # FastAPI entry point (8 endpoints + health + metrics)
 │   │   ├── orchestrator.py           # LangGraph agentic query pipeline (7-node state graph)
 │   │   ├── provider_adapter.py       # Multi-provider LLM backend adapter (vLLM, llama.cpp, OpenAI-compatible)
 │   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
 │   │   ├── rerank.py                 # Cross-encoder reranker (MiniLM-L-6-v2)
 │   │   ├── context_builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
 │   │   ├── llm_router.py             # Async LLM adapter (streaming + non-streaming) via provider_adapter
+│   │   ├── confidence.py             # Confidence scoring: heuristics + optional SLM verification
+│   │   ├── enricher.py               # Self-enrichment: feedback Q&A → chunk → Qdrant
 │   │   ├── slm_router.py             # SLM: intent classification, query decomposition, entity extraction
 │   │   ├── token_optimizer.py        # BPE-aware token counting, compression, budget allocation
 │   │   ├── cache.py                  # Redis + in-memory multi-tier cache
@@ -166,11 +168,16 @@ ptw tests/ -- -v
 | `/v1/chat/completions` | POST | Chat completion (streaming + non-streaming) |
 | `/v1/models` | GET | List available models |
 | `/v1/health` | GET | Health check (Qdrant + LLM status) |
+| `/v1/feedback` | POST | Submit expert feedback (positive/negative + corrections) |
+| `/v1/auth/login` | POST | JWT token generation |
+| `/v1/auth/refresh` | POST | Token refresh |
+| `/v1/auth/me` | GET | Current user context |
 | `/metrics` | GET | Prometheus metrics (counters, histograms, gauges) |
 
 RAG-specific parameters on `/v1/chat/completions`:
 - `rag_version` — request a specific document version
 - `rag_force_refresh` — bypass response cache
+- Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`
 
 ## Configuration
 

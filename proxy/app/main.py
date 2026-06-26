@@ -703,9 +703,10 @@ async def chat_completions(
     if request.stream:
         # Потоковый режим
         async def event_generator():
+            accumulated_answer = []
             try:
                 # Выполняем поиск и подготовку контекста (синхронно, но в потоке)
-                context, messages_for_llm, _, _ = await process_rag_query(
+                rag_context, messages_for_llm, _, _ = await process_rag_query(
                     user_query=user_query,
                     version=version,
                     force_refresh=request.rag_force_refresh,
@@ -717,7 +718,15 @@ async def chat_completions(
                 )
                 # Передаём сообщения в LLM с потоковой генерацией
                 async for chunk in stream_completion(messages_for_llm, request.temperature, request.max_tokens):
+                    delta_content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if delta_content:
+                        accumulated_answer.append(delta_content)
                     yield f"data: {json.dumps(chunk)}\n\n"
+                # Yield final metadata chunk with confidence + feedback_id
+                full_answer = "".join(accumulated_answer)
+                feedback_id = generate_feedback_id()
+                confidence = compute_confidence(query=user_query, context=rag_context, answer=full_answer)
+                yield f"data: {json.dumps({'rag_feedback_id': feedback_id, 'rag_confidence': confidence.score})}\n\n"
                 yield "data: [DONE]\n\n"
                 duration_ms = (time.time() - start_time) * 1000
                 request_tracker.complete(request_id, status="success")

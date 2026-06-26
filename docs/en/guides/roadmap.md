@@ -1,7 +1,7 @@
 # Development Roadmap
 
-**Last Updated:** 2026-06-22
-**Current Version:** v0.1.0
+**Last Updated:** 2026-06-26
+**Current Version:** v0.4
 
 ---
 
@@ -27,21 +27,36 @@
 - Rate limiting (token bucket per IP)
 - Graceful degradation design for all components
 - Air-gapped deployment support (models pre-downloaded)
-- **546 designed / 505 collected / 483 passing tests** (96% pass rate)
+- 919 tests passing (100% pass rate)
 - 7 Architecture Decision Records, 4 C4 diagrams, 8 design guides
 
 **Known issues:**
-- 21 test failures (mostly assertion drift after code changes)
-- 1 test collection error (`test_extractors.py` — missing `requests` dependency)
 - No retrieval quality evaluation dataset or metrics
 - No end-to-end tests with real services
 - 40+ mypy type errors in proxy modules
-- MCP server has 46 tests but is not referenced in README
 - `USE_LANGGRAPH=false` by default; agentic path is opt-in
 
 ---
 
-### v0.2 — Token Optimization & Quality Foundations
+### v0.2 — Self-Improving RAG (Current)
+
+**Released:** June 2026
+**Status:** ✅ Complete
+
+**Theme:** Add confidence scoring, active feedback, VERIFY_CASCADE routing, and knowledge base self-enrichment.
+
+**Features delivered:**
+- **Confidence scoring** — heuristic scoring (context sufficiency, context-to-answer ratio, uncertainty phrase detection) with configurable threshold
+- **Active feedback** — `/v1/feedback` endpoint, `rag_feedback_id` in all responses, expert rating collection
+- **VERIFY_CASCADE routing** — `check_confidence` node in LangGraph orchestrator; low-confidence answers trigger query rewrite loop (up to `MAX_VERIFY_LOOPS`)
+- **Self-enrichment** — positive feedback with corrections indexed back into Qdrant as Q&A pairs (`ENRICHMENT_ENABLED`)
+- **Admin alerts** — low-confidence answers beyond loop limit trigger admin alerts (`ADMIN_ALERT_ENABLED`)
+- **Response metadata** — `rag_confidence` score and `rag_feedback_id` injected into both streaming and non-streaming responses
+- **919 tests passing** (100% pass rate)
+
+---
+
+### v0.3 — Token Optimization & Quality Foundations
 
 **Target:** Q3 2026
 **Status:** 🔵 Planning
@@ -75,7 +90,7 @@
 
 ---
 
-### v0.3 — Security & Multi-Tenancy
+### v0.4 — Security & Multi-Tenancy
 
 **Target:** Q4 2026
 **Status:** ⚪ Planned
@@ -99,7 +114,7 @@
 
 #### Dependencies
 - Keycloak instance deployed in corporate environment
-- Completion of evaluation dataset from v0.2 (needed for A/B testing)
+- Completion of evaluation dataset from v0.3 (needed for A/B testing)
 - Network/security team approval for JWT flow
 
 #### Effort Estimate
@@ -109,7 +124,7 @@
 
 ---
 
-### v0.4 — Multi-Modal RAG
+### v0.5 — Multi-Modal RAG
 
 **Target:** Q1 2027
 **Status:** ⚪ Planned
@@ -140,7 +155,7 @@
 
 ---
 
-### v0.5 — Real-Time Indexing & Streaming
+### v0.6 — Real-Time Indexing & Streaming
 
 **Target:** Q2 2027
 **Status:** ⚪ Planned
@@ -197,7 +212,7 @@
 #### Dependencies
 - Infrastructure budget for HA (additional Qdrant/Neo4j nodes)
 - Monitoring stack (Prometheus + Grafana) deployed
-- Completion of v0.2-v0.5 feature set
+- Completion of v0.3-v0.6 feature set
 
 #### Effort Estimate
 - **Engineering:** 30-40 person-days
@@ -223,10 +238,11 @@
 
 ```
 2026 Q2  ████████████ v0.1 — Core Infrastructure (COMPLETE)
-2026 Q3  ░░░░░░░░░░░░ v0.2 — Token Optimization + Quality Foundations
-2026 Q4  ░░░░░░░░░░░░ v0.3 — Security + RBAC + Multi-Tenancy
-2027 Q1  ░░░░░░░░░░░░ v0.4 — Multi-Modal RAG (Images, Code, Tables)
-2027 Q2  ░░░░░░░░░░░░ v0.5 — Real-Time Indexing + Streaming
+2026 Q2  ████████████ v0.2 — Self-Improving RAG (COMPLETE)
+2026 Q3  ░░░░░░░░░░░░ v0.3 — Token Optimization + Quality Foundations
+2026 Q4  ░░░░░░░░░░░░ v0.4 — Security + RBAC + Multi-Tenancy
+2027 Q1  ░░░░░░░░░░░░ v0.5 — Multi-Modal RAG (Images, Code, Tables)
+2027 Q2  ░░░░░░░░░░░░ v0.6 — Real-Time Indexing + Streaming
 2027 Q3  ░░░░░░░░░░░░ v1.0 — Production Hardening + GA
 2028+   ░░░░░░░░░░░░ v2.0 — Self-Correcting, Agentic Tools, Federated
 ```

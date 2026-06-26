@@ -1,6 +1,6 @@
 # Self-Improving RAG v0.4 — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add confidence scoring, active feedback, VERIFY_CASCADE routing, and self-enrichment to the RAG proxy.
 
@@ -43,7 +43,7 @@
 **Interfaces:**
 - Produces: `CONFIDENCE_THRESHOLD`, `ENRICHMENT_ENABLED`, `ADMIN_ALERT_ENABLED`, `ADMIN_ALERT_ENDPOINT`, `MAX_VERIFY_LOOPS`
 
-- [ ] **Step 1: Add new config vars**
+- [x] **Step 1: Add new config vars**
 
 ```python
 # ============ Confidence Scoring ============
@@ -58,12 +58,12 @@ ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true
 ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")  # webhook URL or email
 ```
 
-- [ ] **Step 2: Run existing tests to verify no regression**
+- [x] **Step 2: Run existing tests to verify no regression**
 
 Run: `pytest tests/proxy/test_config.py -v`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add proxy/app/config.py
@@ -81,7 +81,7 @@ git commit -m "feat: add confidence, enrichment, admin alert config vars"
 **Interfaces:**
 - Produces: `ConfidenceReport` dataclass, `compute_confidence(query, context, answer, slm_available) -> ConfidenceReport`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/proxy/test_confidence.py
@@ -115,12 +115,12 @@ def test_confidence_report_fields():
     assert report.needs_review is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/proxy/test_confidence.py -v`
 Expected: FAIL — module not found
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # proxy/app/confidence.py
@@ -203,12 +203,12 @@ def compute_confidence(
     )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/proxy/test_confidence.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add proxy/app/confidence.py tests/proxy/test_confidence.py
@@ -227,7 +227,7 @@ git commit -m "feat: confidence scorer with heuristics for RAG answer quality"
 - Consumes: `ConfidenceReport` from Task 2
 - Produces: `POST /v1/feedback` endpoint, `rag_feedback_id` in chat completion responses
 
-- [ ] **Step 1: Add `generate_feedback_id()` to hitl.py**
+- [x] **Step 1: Add `generate_feedback_id()` to hitl.py**
 
 In `proxy/app/hitl.py`, add function after the imports:
 
@@ -239,7 +239,7 @@ def generate_feedback_id() -> str:
     return f"fb_{uuid.uuid4().hex[:12]}"
 ```
 
-- [ ] **Step 2: Modify main.py — inject feedback_id into response**
+- [x] **Step 2: Modify main.py — inject feedback_id into response**
 
 In `proxy/app/main.py`, in `process_rag_query()` function, after answer is generated but before returning, add feedback_id to the response message. Find the section where `rag_version` is added and add `rag_feedback_id`:
 
@@ -254,7 +254,7 @@ if not request.stream:
     response_data["choices"][0]["message"]["rag_feedback_id"] = feedback_id
 ```
 
-- [ ] **Step 3: Add `POST /v1/feedback` endpoint to main.py**
+- [x] **Step 3: Add `POST /v1/feedback` endpoint to main.py**
 
 ```python
 from pydantic import BaseModel, Field
@@ -304,7 +304,7 @@ async def submit_feedback(request: FeedbackRequest, raw_request: Request):
         raise HTTPException(status_code=500, detail=f"Failed to record feedback: {e}")
 ```
 
-- [ ] **Step 4: Add test for feedback endpoint**
+- [x] **Step 4: Add test for feedback endpoint**
 
 ```python
 # tests/proxy/test_main.py — add test
@@ -319,12 +319,12 @@ def test_feedback_endpoint(client):
     assert data["status"] == "ok"
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `pytest tests/proxy/test_main.py::test_feedback_endpoint -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add proxy/app/main.py proxy/app/hitl.py tests/proxy/test_main.py
@@ -343,7 +343,7 @@ git commit -m "feat: active feedback — feedback_id in response + POST /v1/feed
 - Consumes: `ConfidenceReport`, `compute_confidence` from Task 2
 - Produces: Extended orchestrator state with `confidence`, `needs_escalation`, `escalation_reason`
 
-- [ ] **Step 1: Add `check_confidence` node to orchestrator**
+- [x] **Step 1: Add `check_confidence` node to orchestrator**
 
 In `proxy/app/orchestrator.py`, add a new node function:
 
@@ -377,7 +377,7 @@ def check_confidence(state: dict) -> dict:
     }
 ```
 
-- [ ] **Step 2: Wire `check_confidence` into the graph builder**
+- [x] **Step 2: Wire `check_confidence` into the graph builder**
 
 In `build_rag_graph()`, add the node and conditional edge after `generate`:
 
@@ -394,7 +394,7 @@ builder.add_conditional_edges(
 )
 ```
 
-- [ ] **Step 3: Write tests for VERIFY_CASCADE**
+- [x] **Step 3: Write tests for VERIFY_CASCADE**
 
 ```python
 # tests/proxy/test_orchestrator.py
@@ -427,12 +427,12 @@ def test_check_confidence_low_score_triggers_escalation_within_loop_limit():
     assert result["needs_escalation"] is True
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pytest tests/proxy/test_orchestrator.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add proxy/app/orchestrator.py tests/proxy/test_orchestrator.py
@@ -451,7 +451,7 @@ git commit -m "feat: VERIFY_CASCADE routing — check confidence → escalate or
 - Consumes: `FeedbackRequest` from Task 3
 - Produces: `enrich_from_feedback(feedback_request) -> None`
 
-- [ ] **Step 1: Write tests**
+- [x] **Step 1: Write tests**
 
 ```python
 # tests/proxy/test_enricher.py
@@ -505,12 +505,12 @@ def test_chunk_qa_pair():
     assert chunk["metadata"]["source"] == "user_feedback"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/proxy/test_enricher.py -v`
 Expected: FAIL
 
-- [ ] **Step 3: Implement enricher**
+- [x] **Step 3: Implement enricher**
 
 ```python
 # proxy/app/enricher.py
@@ -647,12 +647,12 @@ def _find_interaction(feedback_id: str) -> Optional[dict]:
     return None
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pytest tests/proxy/test_enricher.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add proxy/app/enricher.py tests/proxy/test_enricher.py
@@ -667,7 +667,7 @@ git commit -m "feat: self-enrichment pipeline — feedback → Q&A chunk → Qdr
 - Modify: `proxy/app/main.py` (wire confidence into process_rag_query, feedback_id into response)
 - Modify: `proxy/app/config.py` (add new vars to print_config)
 
-- [ ] **Step 1: Inject rag_feedback_id into non-streaming and streaming responses**
+- [x] **Step 1: Inject rag_feedback_id into non-streaming and streaming responses**
 
 In `process_rag_query()`, generate feedback_id and add to response:
 
@@ -699,7 +699,7 @@ if LOG_REQUESTS:
     )
 ```
 
-- [ ] **Step 2: Add confidence and feedback_id to response format**
+- [x] **Step 2: Add confidence and feedback_id to response format**
 
 For non-streaming responses, add to the message object:
 ```python
@@ -716,19 +716,19 @@ yield {
 }
 ```
 
-- [ ] **Step 3: Update print_config()**
+- [x] **Step 3: Update print_config()**
 
 Add new config vars to the output:
 ```python
 # In print_config(), the automatic globals listing will catch them
 ```
 
-- [ ] **Step 4: Run full test suite**
+- [x] **Step 4: Run full test suite**
 
 Run: `pytest tests/ -x --tb=short -q`
 Expected: All 880+ tests pass + new tests
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add proxy/app/main.py proxy/app/config.py
@@ -744,13 +744,13 @@ git commit -m "feat: integrate confidence scoring + feedback_id into response pi
 - Modify: `AGENTS.md` (update Current State to v0.4)
 - Modify: `README.md` (add self-improving RAG features)
 
-- [ ] **Step 1: Add /v1/feedback to api_reference.md**
+- [x] **Step 1: Add /v1/feedback to api_reference.md**
 
-- [ ] **Step 2: Update AGENTS.md version**
+- [x] **Step 2: Update AGENTS.md version**
 
-- [ ] **Step 3: Update README.md features**
+- [x] **Step 3: Update README.md features**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/api_reference.md AGENTS.md README.md

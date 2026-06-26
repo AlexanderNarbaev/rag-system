@@ -8,11 +8,9 @@
 
 ## Status · Статус
 
-**EN:** **v0.1.0** — Complete codebase, 8 critical bugs fixed, 483+ tests passing.
-See [ADR documents](docs/adr/) for architecture decisions and [C4 diagrams](docs/diagrams/) for visual architecture.
+**EN:** **v0.4** — Self-improving RAG with confidence scoring, active feedback, VERIFY_CASCADE routing, and knowledge base self-enrichment. 919 tests passing. See [ADR documents](docs/adr/) for architecture decisions and [C4 diagrams](docs/diagrams/) for visual architecture.
 
-**RU:** **v0.1.0** — Полная кодовая база, исправлено 8 критических ошибок, 483+ тестов проходят.
-См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
+**RU:** **v0.4** — Самоулучшающийся RAG с оценкой уверенности, активной обратной связью, маршрутизацией VERIFY_CASCADE и самообогащением базы знаний. 919 тестов проходят. См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
 
 ---
 
@@ -96,6 +94,7 @@ See [ADR documents](docs/adr/) for architecture decisions and [C4 diagrams](docs
 6. **Dual-model routing** — a small language model (SLM) handles fast preprocessing (intent classification, query decomposition); a large language model (LLM) handles heavy generation. Keeps latency low for routing tasks.
 7. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The system runs in simple RAG mode by default.
 8. **Token economy** — BPE-aware token counting, 4 compression strategies, smart budget allocation.
+9. **Self-improving RAG** — confidence scoring on every answer, VERIFY_CASCADE routing triggers query rewrites for low-confidence responses, active feedback via `/v1/feedback` endpoint, knowledge base self-enrichment from expert corrections.
 
 **RU:**
 
@@ -107,6 +106,7 @@ See [ADR documents](docs/adr/) for architecture decisions and [C4 diagrams](docs
 6. **Двухмодельная маршрутизация** — малая языковая модель (SLM) для быстрой предобработки; большая языковая модель (LLM) для генерации. Минимизирует задержки.
 7. **Опциональная сложность** — LangGraph-оркестратор, Neo4j-расширение графом и Redis-кэширование опциональны. По умолчанию система работает в простом RAG-режиме.
 8. **Экономия токенов** — BPE-осознанный подсчёт токенов, 4 стратегии сжатия, умное распределение бюджета.
+9. **Самоулучшающийся RAG** — оценка уверенности для каждого ответа, VERIFY_CASCADE-маршрутизация запускает перезапрос при низкой уверенности, активная обратная связь через `/v1/feedback`, самообогащение базы знаний из экспертных исправлений.
 
 ---
 
@@ -125,7 +125,7 @@ rag-system/
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized) · в Docker
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (4 endpoints + health + metrics)
+│   │   ├── main.py                   # FastAPI entry point (8 endpoints + health + metrics)
 │   │   ├── orchestrator.py           # LangGraph agentic query pipeline (7-node state graph)
 │   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
 │   │   ├── rerank.py                 # Cross-encoder reranker
