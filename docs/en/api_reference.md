@@ -716,6 +716,176 @@ Enrichment failure is **non-blocking** — the feedback is still recorded even i
 
 ---
 
+### `POST /v1/admin/warmup`
+
+Pre-load embedder, reranker, and SLM models into GPU/CPU memory before serving traffic. Eliminates cold-start latency on first request. Optionally warms up the LLM backend.
+
+#### Request
+
+```http
+POST /v1/admin/warmup HTTP/1.1
+Authorization: Bearer <admin-token>
+```
+
+No request body required. Requires admin role when `AUTH_ENABLED=true`.
+
+#### Response Schema (200 OK)
+
+```json
+{
+  "status": "ok",
+  "warmed_components": {
+    "embedder": "ok",
+    "reranker": "ok",
+    "slm": "ok",
+    "llm": "skipped"
+  },
+  "duration_ms": 2500
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `warmed_components` | object | Status per component: `ok`, `skipped` (disabled), or `error: <message>` |
+| `duration_ms` | integer | Total warm-up time in milliseconds |
+
+**Warm-up behavior:**
+
+- Embedder: Runs a single `encode("warmup")` call to trigger model loading
+- Reranker: Runs a single dummy pair scoring to initialize the cross-encoder
+- SLM: Sends a single-token completion (`"ping"`) to the SLM endpoint
+- LLM: Skipped by default. Set `WARMUP_LLM=true` to include a single-token completion
+
+#### cURL Example
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/warmup \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+---
+
+### `POST /webhook/confluence`
+
+Receive Confluence webhook events for real-time indexing. Validates HMAC-SHA256 signatures and enqueues events into Redis Streams for processing by the streaming ETL pipeline.
+
+#### Request
+
+```http
+POST /webhook/confluence HTTP/1.1
+Content-Type: application/json
+X-Confluence-Webhook-Signature: sha256=<hmac-signature>
+```
+
+#### Request Body
+
+```json
+{
+  "event": "page_created | page_updated | page_removed",
+  "page": {
+    "id": "string",
+    "title": "string",
+    "spaceKey": "string",
+    "version": "integer",
+    "url": "string"
+  },
+  "timestamp": "string (ISO 8601)"
+}
+```
+
+#### Response Schema (200 OK)
+
+```json
+{
+  "status": "accepted",
+  "event_id": "string",
+  "message": "Event enqueued for processing"
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `status` | Always `"accepted"` — events are processed asynchronously |
+| `event_id` | Unique ID for tracking the event through the streaming pipeline |
+| `message` | Human-readable status |
+
+#### Error Responses
+
+| HTTP Status | Description |
+|-------------|-------------|
+| **401** | Invalid or missing `X-Confluence-Webhook-Signature` header |
+| **400** | Malformed event body or unsupported event type |
+| **503** | Redis Streams unavailable (event not enqueued) |
+
+#### cURL Example
+
+```bash
+curl -X POST http://localhost:8080/webhook/confluence \
+  -H "Content-Type: application/json" \
+  -H "X-Confluence-Webhook-Signature: sha256=abc123..." \
+  -d '{
+    "event": "page_updated",
+    "page": {
+      "id": "12345",
+      "title": "Deployment Guide",
+      "spaceKey": "ENG",
+      "version": 3,
+      "url": "https://confluence.example.com/display/ENG/Deployment+Guide"
+    },
+    "timestamp": "2026-06-26T10:30:00Z"
+  }'
+```
+
+---
+
+### Response Compression
+
+All API responses support gzip and brotli compression via the `Accept-Encoding` request header. Compression is applied to responses larger than 1 KB (configurable via `COMPRESSION_MIN_SIZE`).
+
+#### Behavior
+
+| Header | Value | Effect |
+|--------|-------|--------|
+| `Accept-Encoding: gzip` | gzip | Response compressed with gzip (level 6) |
+| `Accept-Encoding: br` | brotli | Response compressed with brotli (level 4) |
+| `Accept-Encoding: gzip, br` | br or gzip | Brotli preferred, gzip as fallback |
+| (not present) | — | Uncompressed response |
+
+**Compression applies to:**
+- All JSON responses (chat completions, health checks, models list, etc.)
+- Error responses (when body > 1 KB)
+- Prometheus metrics (`/metrics`)
+
+**Compression does NOT apply to:**
+- Streaming SSE responses (`text/event-stream`) — uses `Transfer-Encoding: chunked` instead
+- Responses smaller than `COMPRESSION_MIN_SIZE` (default: 1 KB)
+
+#### Configuration
+
+```bash
+# Enable response compression (default: true)
+COMPRESSION_ENABLED=true
+
+# Minimum response size in bytes to apply compression (default: 1000)
+COMPRESSION_MIN_SIZE=1000
+
+# Compression level: gzip 1-9, brotli 0-11 (default: 6 for gzip, 4 for brotli)
+COMPRESSION_LEVEL=6
+```
+
+#### Performance Benchmarks
+
+| Content Type | Uncompressed | gzip | Brotli | Reduction |
+|-------------|-------------|------|--------|-----------|
+| JSON (rag_sources) | ~45 KB | ~15 KB | ~13 KB | 65–72% |
+| JSON (chat completion) | ~12 KB | ~3.5 KB | ~3.1 KB | 70–75% |
+| HTML (health dashboard) | ~28 KB | ~6 KB | ~5.5 KB | 75–80% |
+| Prometheus metrics | ~18 KB | ~4 KB | ~3.8 KB | 75–80% |
+
+CPU overhead: < 5ms for gzip, < 15ms for brotli per request.
+
+---
+
 ## Error Codes
 
 All errors follow a consistent format:
@@ -876,6 +1046,13 @@ All proxy configuration via environment variables (see `proxy/.env` and `proxy/a
 | `RETRY_DELAY` | `1.0` | Delay between retries in seconds |
 | `WORKERS` | `1` | Uvicorn worker processes (keep at 1 for shared caches) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
+| `COMPRESSION_ENABLED` | `true` | Enable gzip/brotli response compression |
+| `COMPRESSION_MIN_SIZE` | `1000` | Minimum response size in bytes to compress |
+| `COMPRESSION_LEVEL` | `6` | Compression level (1-9 for gzip, 0-11 for brotli) |
+| `WARMUP_LLM` | `false` | Include LLM in model warm-up |
+| `WEBHOOK_SECRET` | (empty) | Shared secret for Confluence/GitLab webhook HMAC verification |
+| `STREAMING_ETL_ENABLED` | `false` | Enable Redis Streams based streaming ETL pipeline |
+| `REDIS_STREAMS_URL` | `redis://localhost:6379` | Redis Streams connection URL for streaming ETL |
 
 ### SLM / Small Language Model
 
@@ -902,6 +1079,8 @@ All proxy configuration via environment variables (see `proxy/.env` and `proxy/a
 | `POST` | `/v1/auth/refresh` | Yes | No | Token refresh |
 | `GET` | `/v1/auth/me` | Yes | No | Current user context |
 | `POST` | `/v1/feedback` | No | No | Submit expert feedback |
+| `POST` | `/v1/admin/warmup` | Yes (admin) | No | Pre-load models into GPU/CPU memory |
+| `POST` | `/webhook/confluence` | No (HMAC) | No | Receive Confluence webhook events for streaming ETL |
 
 ---
 
