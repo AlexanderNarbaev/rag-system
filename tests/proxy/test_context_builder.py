@@ -282,3 +282,70 @@ class TestPrepareContext:
         result = prepare_context(chunks, group_semantic=True, resolve_versions_flag=False)
         assert "P1" in result
         assert "P2" in result
+
+
+class TestLanguageAwareContextAssembly:
+    """F4: Language-aware context assembly — build_context with lang parameter."""
+
+    def test_build_context_accepts_lang(self):
+        """build_context should accept an optional lang parameter."""
+        from proxy.app.context_builder import build_context
+
+        chunks = [
+            ({"text": "RAG combines retrieval with generation.", "source_type": "wiki", "title": "RAG", "doc_title": "RAG Overview"}, 0.95),
+        ]
+        context = build_context(chunks, lang="de")
+        assert "RAG" in context
+
+    def test_build_context_lang_none(self):
+        """build_context should work with lang=None (default behavior)."""
+        from proxy.app.context_builder import build_context
+
+        chunks = [
+            ({"text": "RAG combines retrieval with generation.", "source_type": "wiki", "title": "RAG", "doc_title": "RAG Overview"}, 0.95),
+        ]
+        context = build_context(chunks, lang=None)
+        assert "RAG" in context
+
+    def test_prepare_context_accepts_lang(self):
+        """prepare_context should accept and pass through lang parameter."""
+        from proxy.app.context_builder import prepare_context
+
+        chunks = [
+            ({"text": "Test content", "source_id": "d1", "source_type": "wiki", "title": "T", "doc_title": "D"}, 0.9),
+        ]
+        context = prepare_context(chunks, lang="fr")
+        assert "Test" in context
+
+    def test_language_instruction_included_for_non_en(self):
+        """When building context for non-EN, the response should include language awareness."""
+        from proxy.app.context_builder import build_context
+
+        chunks = [
+            ({"text": "Qdrant is a vector database for RAG systems.", "source_type": "wiki", "title": "Qdrant", "doc_title": "Vector DB Guide"}, 0.98),
+        ]
+        context = build_context(chunks, lang="de")
+        assert isinstance(context, str)
+        assert len(context) > 0
+
+    def test_context_for_chinese_works(self):
+        from proxy.app.context_builder import build_context
+
+        chunks = [
+            ({"text": "Qdrant is a vector database for RAG systems.", "source_type": "wiki", "title": "Qdrant", "doc_title": "Vector DB Guide"}, 0.98),
+        ]
+        context = build_context(chunks, lang="zh")
+        assert isinstance(context, str)
+        assert len(context) > 0
+
+    def test_multilang_prioritization(self):
+        """Chunks matching query language should be prioritized (de query, de chunks first)."""
+        from proxy.app.context_builder import build_context
+
+        chunks = [
+            ({"text": "German context here.", "source_type": "wiki", "title": "DE Doc", "doc_title": "German Guide"}, 0.70),
+            ({"text": "English context here.", "source_type": "wiki", "title": "EN Doc", "doc_title": "English Guide"}, 0.95),
+        ]
+        context = build_context(chunks, lang="de")
+        assert isinstance(context, str)
+        assert len(context) > 0

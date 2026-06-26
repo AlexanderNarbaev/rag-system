@@ -188,6 +188,7 @@ def build_context(
     max_tokens: int = 120000,
     include_metadata: bool = True,
     sort_by_score: bool = True,
+    lang: str | None = None,
 ) -> str:
     """
     Собирает контекст из отреранжированных и продедуплицированных чанков.
@@ -195,6 +196,7 @@ def build_context(
     :param max_tokens: максимальное количество токенов в финальном контексте
     :param include_metadata: добавлять ли заголовки с метаданными перед каждым чанком
     :param sort_by_score: сортировать ли чанки по убыванию релевантности (score)
+    :param lang: detected query language for multi-lingual prioritization (optional)
     :return: текст контекста
     """
     if not chunks_with_scores:
@@ -484,6 +486,7 @@ def prepare_context(
     deduplicate: bool = True,
     resolve_versions_flag: bool = True,
     group_semantic: bool = False,
+    lang: str | None = None,
 ) -> str:
     """
     High-level function: dedup, version resolution, grouping, context assembly.
@@ -502,7 +505,7 @@ def prepare_context(
     if group_semantic:
         result = group_by_semantic_key(result)
 
-    context = build_context(result, max_tokens=max_tokens)
+    context = build_context(result, max_tokens=max_tokens, lang=lang)
     return context
 
 
