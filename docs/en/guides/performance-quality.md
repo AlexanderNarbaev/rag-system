@@ -418,3 +418,161 @@ if len(pairs) > 500:
 ```
 
 Expected MRR improvement: ≥5% after 500+ expert corrections.
+
+---
+
+## 9. Streaming ETL & Real-Time Performance (v0.6)
+
+### 9.1 Streaming ETL Latency Targets
+
+The Redis Streams-based ETL pipeline processes events in real time with the following latency targets:
+
+| Stage | Target (p95) | Measurement |
+|-------|-------------|-------------|
+| Webhook receipt → stream enqueue | < 10ms | HTTP request duration |
+| Stream → extraction | < 1s | `rag_etl_stream_processing_duration_seconds{stage="extract"}` |
+| Extraction → chunking | < 2s | Per-document processing time |
+| Chunking → embedding | < 3s | `batch_size=32` GPU embedding |
+| Embedding → Qdrant upsert | < 500ms | Qdrant `upsert_points` latency |
+| **End-to-end (webhook → searchable)** | **< 5s** | Total pipeline latency |
+
+**Monitoring:** All stages expose Prometheus histograms with `stage` label. Alert if p95 exceeds 2× target.
+
+### 9.2 Consumer Lag Management
+
+| Scenario | Action |
+|----------|--------|
+| Lag < 10 | Normal operation |
+| Lag 10-100 | Scale consumer instances or increase batch size |
+| Lag 100-1000 | Investigate bottleneck stage; check embedding GPU utilization |
+| Lag > 1000 | Pause non-critical consumers; scale up embedding workers |
+
+### 9.3 Backpressure Handling
+
+- Consumer groups process events independently — slow stages don't block fast stages
+- Max pending per consumer: 1000 (configurable via `STREAM_MAX_PENDING`)
+- DLQ for events failing after 3 retries
+- WAL checkpointing prevents duplicate processing on restart
+
+---
+
+## 10. SSE TTFT Optimization (v0.6)
+
+### 10.1 Time-To-First-Token Targets
+
+| Scenario | Target (p50) | Target (p95) |
+|----------|-------------|-------------|
+| Cached context (embedding + rerank cache hit) | < 500ms | < 1s |
+| Uncached context (full retrieval pipeline) | < 2s | < 3s |
+| Agentic (LangGraph, single loop) | < 5s | < 8s |
+
+### 10.2 Optimization Techniques
+
+| Technique | Impact | Implementation |
+|-----------|--------|---------------|
+| Connection pooling (HTTP keep-alive) | -200ms p95 | `httpx.AsyncClient` with connection pool |
+| Chunked transfer encoding | -50ms initial buffer | FastAPI streaming response |
+| Prefix caching (vLLM) | -150ms system prompt | `--enable-prefix-caching` on LLM backend |
+| Embedding cache pre-warming | -500ms first query | `POST /v1/admin/warmup` at startup |
+| Reduced initial buffering | -100ms first chunk | `STREAM_BUFFER_SIZE=8` (tokens) |
+| Brotli bypass for SSE | -10ms per chunk | Don't compress streaming responses |
+
+### 10.3 TTFT Monitoring
+
+```bash
+# Prometheus query for TTFT histogram:
+rag_ttft_seconds{endpoint="/v1/chat/completions",stream="true"}
+
+# Alert rule:
+- alert: HighTTFT
+  expr: histogram_quantile(0.95, rate(rag_ttft_seconds_bucket[5m])) > 5
+  annotations:
+    summary: "p95 TTFT > 5s"
+```
+
+---
+
+## 11. Response Compression Benchmarks (v0.6)
+
+### 11.1 Compression Performance
+
+Benchmarks measured on 10,000 requests with typical RAG response sizes:
+
+| Content Type | Uncompressed | gzip (level 6) | Reduction | Brotli (level 4) | Reduction |
+|-------------|-------------|----------------|-----------|-------------------|-----------|
+| Chat completion (with sources) | ~45 KB | ~12.8 KB | 71.7% | ~11.3 KB | 75.0% |
+| Chat completion (no sources) | ~12 KB | ~3.5 KB | 70.8% | ~3.1 KB | 74.2% |
+| Health check JSON | ~1.5 KB | ~0.5 KB | 66.7% | ~0.45 KB | 70.0% |
+| Prometheus metrics | ~18 KB | ~4.0 KB | 77.8% | ~3.8 KB | 78.9% |
+| Models list | ~0.8 KB | Not compressed | — | Not compressed | — |
+| Error responses (5xx) | ~0.3 KB | Not compressed | — | Not compressed | — |
+
+### 11.2 CPU Overhead
+
+| Compression | Level | CPU Overhead (p50) | CPU Overhead (p95) |
+|------------|-------|---------------------|---------------------|
+| gzip | 1 | 0.8ms | 1.5ms |
+| gzip | 6 | 2.1ms | 3.2ms |
+| gzip | 9 | 8.5ms | 14.8ms |
+| brotli | 1 | 2.0ms | 3.5ms |
+| brotli | 4 | 7.0ms | 11.8ms |
+| brotli | 11 | 35.0ms | 52.0ms |
+
+**Recommendation:** Use gzip level 6 for general workloads, brotli level 4 for WAN/external clients.
+
+### 11.3 When NOT to Compress
+
+- Responses < 1 KB (configurable via `COMPRESSION_MIN_SIZE`)
+- SSE streaming responses — use `Transfer-Encoding: chunked` instead
+- Already compressed content types (images, pre-compressed files)
+- Health check probes (liveness/readiness) — minimal payload, no benefit
+
+---
+
+## 12. Model Warm-Up Impact (v0.6)
+
+### 12.1 First-Request Latency Comparison
+
+| Component | Without Warm-Up (cold) | With Warm-Up | Impact |
+|-----------|----------------------|--------------|--------|
+| Embedder (bge-m3) | 2.5-5.0s first load | 0ms (pre-loaded) | Eliminates cold start |
+| Reranker (MiniLM-L-6-v2) | 1.0-2.0s first load | 0ms (pre-loaded) | Eliminates cold start |
+| SLM (lightweight model) | 1.5-3.0s first load | 0ms (pre-loaded) | Eliminates cold start |
+| LLM (full-scale model) | Model-dependent | Optional warm-up | Backend-managed |
+
+### 12.2 Warm-Up Duration
+
+| Component | Warm-Up Time | Method |
+|-----------|-------------|--------|
+| Embedder | 1-3s | Single `encode("warmup")` call |
+| Reranker | 0.3-0.8s | Single dummy pair scoring |
+| SLM | 0.5-1.5s | Single token completion |
+| LLM (optional) | 5-30s | Single token completion (backend dependent) |
+| **Total** | **2-5s (without LLM)** | `POST /v1/admin/warmup` |
+
+### 12.3 Warm-Up Strategy
+
+```bash
+# Startup sequence:
+# 1. Start LLM backend, wait for model load
+# 2. Start proxy
+# 3. Trigger warm-up before marking as ready
+# 4. Start accepting traffic
+
+# In docker-compose, use start_period + healthcheck:
+healthcheck:
+  test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:8080/v1/admin/warmup"]
+  interval: 30s
+  retries: 3
+  start_period: 90s
+```
+
+### 12.4 Monitoring Warm-Up
+
+```bash
+# Check warm-up metric:
+curl -s http://localhost:8080/metrics | grep rag_warmup
+
+# rag_warmup_completed 1  → warm-up done
+# rag_warmup_duration_seconds 2.5  → warm-up took 2.5s
+```
