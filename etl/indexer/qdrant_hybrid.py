@@ -340,6 +340,46 @@ class QdrantHybridIndexer:
             logger.error("ColBERT index failed: %s", e)
             return False
 
+    def live_upsert(self, chunk: dict) -> bool:
+        """Atomic upsert of a single chunk into Qdrant.
+
+        Uses the chunk's SHA-256 hash as the point ID for idempotency.
+        No full reindexing required — updates/deletes individual points.
+
+        :param chunk: dict with fields hash, text, title, source_type, etc.
+        :return: True if upsert succeeded
+        """
+        point = self._chunk_to_point(chunk)
+        if point is None:
+            return False
+        try:
+            self.client.upsert(collection_name=self.collection_name, points=[point])
+            logger.debug("Live upsert for chunk %s", point.id)
+            return True
+        except Exception as e:
+            logger.error("Live upsert failed for chunk %s: %s", point.id, e)
+            return False
+
+    def live_delete(self, chunk_id: str) -> bool:
+        """Atomic delete of a single chunk from Qdrant by point ID.
+
+        :param chunk_id: the point ID (chunk hash) to delete
+        :return: True if delete succeeded
+        """
+        if not chunk_id:
+            logger.warning("Empty chunk_id for live_delete")
+            return False
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.PointIdsList(points=[chunk_id]),
+            )
+            logger.debug("Live delete for chunk %s", chunk_id)
+            return True
+        except Exception as e:
+            logger.error("Live delete failed for chunk %s: %s", chunk_id, e)
+            return False
+
     def search_colbert(self, query: str, limit: int = 10) -> list[dict]:
         """Search using ColBERT late interaction scoring.
 

@@ -78,6 +78,19 @@ indexing:
   lake_dir: "./cold_lake"                # LiveVectorLake cold storage
   use_delta: false                       # использовать Delta Lake (требуется deltalake)
   version_wal: "./wal/version_wal.json"  # WAL для версионирования чанков
+  live_upsert_enabled: true               # Enable atomic chunk-level upserts (no full reindex)
+
+# Streaming ETL (Redis Streams) — real-time webhook-driven ingestion
+streaming:
+  streaming_enabled: false                  # Enable real-time streaming mode
+  webhook_enabled: true                     # Enable webhook server
+  webhook_host: "0.0.0.0"
+  webhook_port: 9000
+  webhook_secret: ""                        # REQUIRED — shared secret for HMAC validation
+  redis_host: "localhost"
+  redis_port: 6379
+  redis_stream_key: "etl:events"
+  redis_consumer_group: "etl-workers"
 
 # Граф знаний (Neo4j) – опционально
 graph:

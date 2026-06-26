@@ -316,6 +316,9 @@ def main():
     parser.add_argument("--skip-index", action="store_true", help="Skip indexing phase")
     parser.add_argument("--force-reindex", action="store_true", help="Force reindex all documents (ignore WAL)")
     parser.add_argument("--reset-wal", action="store_true", help="Reset all WAL checkpoints before run")
+    parser.add_argument("--streaming", action="store_true", help="Start streaming ETL (webhook + consumer) alongside batch")
+    parser.add_argument("--webhook-only", action="store_true", help="Start only webhook server")
+    parser.add_argument("--consumer-only", action="store_true", help="Start only stream consumer")
     args = parser.parse_args()
     
     # Загрузка конфигурации
@@ -423,6 +426,76 @@ def main():
         )
         run_indexing(all_chunks, live_lake, wal)
     
+    # 6. Streaming mode (optional)
+    streaming_cfg = config.get("streaming", {})
+    streaming_enabled = (
+        args.streaming
+        or args.webhook_only
+        or args.consumer_only
+        or streaming_cfg.get("streaming_enabled", False)
+    )
+    live_upsert_enabled = index_config.get("live_upsert_enabled", False)
+    if live_upsert_enabled:
+        logger.info("Live upsert enabled: atomic chunk-level updates in Qdrant")
+
+    if streaming_enabled:
+        logger.info("=== Starting streaming ETL ===")
+        try:
+            import redis
+        except ImportError:
+            logger.error("redis package not installed, streaming disabled")
+            streaming_enabled = False
+
+        if streaming_enabled:
+            redis_host = os.environ.get("REDIS_HOST", streaming_cfg.get("redis_host", "localhost"))
+            redis_port = int(os.environ.get("REDIS_PORT", streaming_cfg.get("redis_port", 6379)))
+            stream_key = os.environ.get("REDIS_STREAM_KEY", streaming_cfg.get("redis_stream_key", "etl:events"))
+            consumer_group = os.environ.get("REDIS_CONSUMER_GROUP", streaming_cfg.get("redis_consumer_group", "etl-workers"))
+
+            try:
+                rclient = redis.Redis(host=redis_host, port=redis_port, socket_connect_timeout=2)
+                rclient.ping()
+                logger.info("Redis connected at %s:%d", redis_host, redis_port)
+            except Exception as e:
+                logger.warning("Redis unavailable: %s. Falling back to batch mode.", e)
+                rclient = None
+
+            if args.webhook_only or (args.streaming and not args.consumer_only):
+                from etl.scheduler.webhook_server import create_app as create_webhook_app
+                from etl.scheduler.stream_producer import StreamProducer
+
+                webhook_secret = os.environ.get("WEBHOOK_SECRET", streaming_cfg.get("webhook_secret", ""))
+                webhook_host = os.environ.get("WEBHOOK_HOST", streaming_cfg.get("webhook_host", "0.0.0.0"))
+                webhook_port = int(os.environ.get("WEBHOOK_PORT", streaming_cfg.get("webhook_port", 9000)))
+
+                webhook_app = create_webhook_app(
+                    redis_client=rclient,
+                    webhook_secret=webhook_secret,
+                    stream_key=stream_key,
+                    webhook_enabled=streaming_cfg.get("webhook_enabled", True),
+                )
+                logger.info("Webhook server configured on %s:%d", webhook_host, webhook_port)
+
+                if args.webhook_only:
+                    from etl.scheduler.stream_producer import StreamProducer
+                    import uvicorn
+                    logger.info("Starting webhook-only mode")
+                    uvicorn.run(webhook_app, host=webhook_host, port=webhook_port)
+                    return
+
+            if args.consumer_only or (args.streaming and not args.webhook_only):
+                from etl.scheduler.stream_consumer import StreamConsumer
+
+                consumer = StreamConsumer(
+                    redis_client=rclient,
+                    stream_key=stream_key,
+                    consumer_group=consumer_group,
+                )
+                logger.info("Starting stream consumer on stream %s", stream_key)
+                if args.consumer_only:
+                    consumer.run_forever()
+                    return
+
     logger.info("ETL pipeline completed successfully")
 
 
