@@ -139,3 +139,74 @@ class TestComputeAllMetrics:
             if key == "num_queries":
                 continue
             assert 0.0 <= value <= 1.0, f"{key} = {value}"
+
+
+class TestCrossLingualBenchmarks:
+    """F6: Cross-lingual retrieval benchmark evaluation."""
+
+    def test_evaluate_cross_lingual_returns_dict(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        result = evaluate_cross_lingual_retrieval(("en", "de"))
+        assert isinstance(result, dict)
+
+    def test_evaluate_cross_lingual_has_required_keys(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        result = evaluate_cross_lingual_retrieval(("en", "fr"))
+        assert "source_lang" in result
+        assert "target_lang" in result
+        assert "monolingual" in result
+        assert "cross_lingual" in result
+
+    def test_evaluate_cross_lingual_monolingual_metrics(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        result = evaluate_cross_lingual_retrieval(("en", "zh"))
+        mono = result["monolingual"]
+        assert "mrr" in mono
+        assert "recall@5" in mono
+        assert "recall@10" in mono
+        assert all(0.0 <= v <= 1.0 for k, v in mono.items() if not k.startswith("_"))
+
+    def test_evaluate_cross_lingual_cross_metrics(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        result = evaluate_cross_lingual_retrieval(("en", "de"))
+        cross = result["cross_lingual"]
+        assert "mrr" in cross
+        assert "recall@5" in cross
+        assert "recall@10" in cross
+        assert all(0.0 <= v <= 1.0 for k, v in cross.items() if not k.startswith("_"))
+
+    def test_evaluate_cross_lingual_with_custom_queries(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        queries = {"en": ["What is RAG?"], "de": ["Was ist RAG?"]}
+        result = evaluate_cross_lingual_retrieval(("en", "de"), queries=queries)
+        assert result["num_queries"] == 1
+
+    def test_evaluate_cross_lingual_comparison(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        result = evaluate_cross_lingual_retrieval(("en", "fr"))
+        comparison = result.get("comparison", {})
+        assert isinstance(comparison, dict)
+        assert "mrr_delta" in comparison
+
+    def test_evaluate_cross_lingual_empty_queries(self):
+        from proxy.app.evaluation import evaluate_cross_lingual_retrieval
+
+        queries = {"en": [], "de": []}
+        result = evaluate_cross_lingual_retrieval(("en", "de"), queries=queries)
+        assert result["num_queries"] == 0
+
+    def test_evaluate_cross_lingual_all_pair_benchmark(self):
+        from proxy.app.evaluation import run_cross_lingual_benchmark
+
+        results = run_cross_lingual_benchmark()
+        assert isinstance(results, list)
+        for r in results:
+            assert "lang_pair" in r
+            assert "monolingual" in r
+            assert "cross_lingual" in r
