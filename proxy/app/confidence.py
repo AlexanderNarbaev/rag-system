@@ -244,3 +244,162 @@ def compute_confidence(
         uncertainties=uncertainties,
         recommendation=recommendation,
     )
+
+
+# ── F2: CRAG Retrieval Quality Evaluator ──
+
+
+@dataclass
+class RetrievalQualityReport:
+    classification: str  # "Correct", "Incorrect", "Ambiguous"
+    correct_count: int
+    incorrect_count: int
+    ambiguous_count: int
+    total_count: int
+    correct_rate: float
+    recommendations: list[str] = field(default_factory=list)
+
+
+def _score_chunk_relevance(query: str, chunk_text: str) -> float:
+    """Score a single chunk's relevance to the query using keyword overlap."""
+    if not query or not chunk_text:
+        return 0.0
+
+    query_tokens = _tokenize(query)
+    chunk_tokens = _tokenize(chunk_text)
+    if not query_tokens:
+        return 0.0
+
+    intersection = query_tokens & chunk_tokens
+    overlap_ratio = len(intersection) / len(query_tokens)
+
+    cosine = _compute_cosine_proxy(query, chunk_text)
+    combined = 0.4 * overlap_ratio + 0.6 * cosine
+    return min(1.0, combined)
+
+
+def evaluate_retrieval_quality(query: str, chunks: list[dict]) -> RetrievalQualityReport:
+    """Evaluate retrieval quality: score each chunk, classify, return report.
+
+    CRAG-style classification:
+    - Correct: score > 0.7 → highly relevant
+    - Ambiguous: 0.3 <= score <= 0.7 → somewhat relevant
+    - Incorrect: score < 0.3 → not relevant
+
+    Args:
+        query: The user query.
+        chunks: List of chunk dicts with 'text' and optionally 'score' keys.
+
+    Returns:
+        RetrievalQualityReport with classification and statistics.
+    """
+    if not chunks:
+        return RetrievalQualityReport(
+            classification="Incorrect",
+            correct_count=0,
+            incorrect_count=0,
+            ambiguous_count=0,
+            total_count=0,
+            correct_rate=0.0,
+            recommendations=["No chunks retrieved. Consider expanding retrieval scope or checking index."],
+        )
+
+    correct = 0
+    incorrect = 0
+    ambiguous = 0
+    recommendations: list[str] = []
+
+    for chunk in chunks:
+        text = chunk.get("text", "")
+        score = _score_chunk_relevance(query, text)
+
+        if score > 0.7:
+            correct += 1
+        elif score < 0.3:
+            incorrect += 1
+        else:
+            ambiguous += 1
+
+    total = len(chunks)
+    correct_rate = correct / total if total > 0 else 0.0
+
+    if correct_rate >= 0.5:
+        classification = "Correct"
+    elif correct_rate == 0.0 and incorrect == total:
+        classification = "Incorrect"
+    else:
+        classification = "Ambiguous"
+
+    if incorrect > 0:
+        recommendations.append(f"{incorrect}/{total} chunks are irrelevant to the query.")
+    if ambiguous > 0:
+        recommendations.append(f"{ambiguous}/{total} chunks are partially relevant — consider query refinement.")
+    if correct == 0 and total > 0:
+        recommendations.append("No highly relevant chunks found. Consider re-running retrieval with HyDE enabled.")
+    if correct_rate >= 0.5:
+        recommendations.append("Retrieval quality is acceptable.")
+
+    return RetrievalQualityReport(
+        classification=classification,
+        correct_count=correct,
+        incorrect_count=incorrect,
+        ambiguous_count=ambiguous,
+        total_count=total,
+        correct_rate=round(correct_rate, 3),
+        recommendations=recommendations,
+    )
+
+
+# ── F4: Answer Claim Verification ──
+
+
+@dataclass
+class VerificationReport:
+    verification_rate: float
+    supported_claims: list[str] = field(default_factory=list)
+    unsupported_claims: list[str] = field(default_factory=list)
+    total_claims: int = 0
+
+
+def verify_answer_claims(answer: str, context: str) -> VerificationReport:
+    """Decompose answer into atomic claims and verify each against context.
+
+    Uses the same entailment-style check as NLI grounding: cosine similarity
+    + keyword overlap for air-gapped compatibility.
+
+    Args:
+        answer: The generated answer text.
+        context: The retrieved context to verify against.
+
+    Returns:
+        VerificationReport with supported/unsupported claims and verification rate.
+    """
+    if not answer or not answer.strip():
+        return VerificationReport(verification_rate=0.0)
+
+    claims = decompose_into_claims(answer)
+    if not claims:
+        return VerificationReport(verification_rate=0.0)
+
+    if not context or not context.strip():
+        return VerificationReport(
+            verification_rate=0.0,
+            unsupported_claims=list(claims),
+            total_claims=len(claims),
+        )
+
+    supported = []
+    unsupported = []
+    for claim in claims:
+        if _check_claim_supported(claim, context):
+            supported.append(claim)
+        else:
+            unsupported.append(claim)
+
+    rate = len(supported) / len(claims) if claims else 0.0
+    return VerificationReport(
+        verification_rate=round(rate, 3),
+        supported_claims=supported,
+        unsupported_claims=unsupported,
+        total_claims=len(claims),
+    )

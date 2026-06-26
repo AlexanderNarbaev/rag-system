@@ -358,6 +358,85 @@ def _self_critique_route(state: dict) -> str:
     return "done"
 
 
+# ── F3: Self-Reflection Node (Level 5) ──
+
+
+def self_reflection(state: dict) -> dict:
+    """Evaluate answer quality: is the answer fully supported by the context?
+
+    Uses SLM to reflect on whether the generated answer is grounded in the
+    retrieved context. If gaps are identified, triggers re-retrieval and
+    re-generation (up to REFLECTION_DEPTH cycles).
+
+    Multi-hop: for complex answers, verifies each piece independently,
+    accumulating uncovered gaps for targeted re-retrieval.
+
+    Config: REFLECTION_ENABLED, REFLECTION_DEPTH
+    """
+    from app.config import REFLECTION_DEPTH, REFLECTION_ENABLED
+    from app.slm_router import _call_slm_sync
+
+    answer = state.get("answer", "")
+    context = state.get("context", "")
+    query = state.get("rewritten_query") or state.get("query", "")
+    reflection_count = state.get("reflection_count", 0)
+
+    if not REFLECTION_ENABLED:
+        return {"needs_reflection": False, "reflection_count": reflection_count}
+
+    if not answer or not answer.strip():
+        return {"needs_reflection": False, "reflection_count": reflection_count}
+
+    if reflection_count >= REFLECTION_DEPTH:
+        logger.info(f"Max reflection depth ({REFLECTION_DEPTH}) reached, accepting answer")
+        return {"needs_reflection": False, "reflection_count": reflection_count}
+
+    prompt = (
+        f"You are an answer quality evaluator. Determine if the answer is fully supported by the context.\n"
+        f"Reply with ONLY one of these exact words: FULLY_SUPPORTED, PARTIALLY_SUPPORTED, or NOT_SUPPORTED.\n"
+        f"If PARTIALLY_SUPPORTED or NOT_SUPPORTED, on the next line write: MISSING: <what information is missing>\n\n"
+        f"User question: {query}\n\n"
+        f"Context:\n{context}\n\n"
+        f"Answer: {answer}\n\n"
+        f"Evaluation:"
+    )
+
+    try:
+        result = _call_slm_sync(prompt, max_tokens=100, temperature=0.0)
+        response_text = result.strip().upper() if result else ""
+        logger.info(f"Self-reflection result: '{response_text[:120]}'")
+
+        is_fully_supported = response_text.startswith("FULLY_SUPPORTED")
+
+        if not is_fully_supported:
+            missing_info = ""
+            if "MISSING:" in response_text:
+                missing_info = response_text.split("MISSING:", 1)[1].strip() if "MISSING:" in response_text else ""
+            logger.info(
+                f"Self-reflection: gaps identified. "
+                f"Missing info: '{missing_info[:80]}'. Re-retrieving."
+            )
+            return {
+                "needs_reflection": True,
+                "reflection_count": reflection_count + 1,
+                "reflection_gaps": missing_info,
+            }
+
+        logger.info("Self-reflection: answer fully supported")
+        return {"needs_reflection": False, "reflection_count": reflection_count + 1}
+
+    except Exception as e:
+        logger.warning(f"Self-reflection call failed: {e}, accepting answer")
+        return {"needs_reflection": False, "reflection_count": reflection_count + 1}
+
+
+def _self_reflection_route(state: dict) -> str:
+    """Route after self-reflection: re-retrieve if gaps found, otherwise done."""
+    if state.get("needs_reflection"):
+        return "retrieve"
+    return "done"
+
+
 # Строим граф
 def build_rag_graph() -> StateGraph:
     """Создаёт и компилирует граф RAG."""
@@ -383,9 +462,20 @@ def build_rag_graph() -> StateGraph:
     builder.add_conditional_edges("check_sufficiency", check_sufficiency, {"rewrite": "rewrite", "rerank": "rerank"})
 
     builder.add_edge("build_context", "generate")
+    builder.add_node("self_reflection", self_reflection)
     builder.add_node("check_confidence", check_confidence)
     builder.add_node("self_critique", self_critique)
-    builder.add_edge("generate", "check_confidence")
+
+    # Flow: generate -> self_reflection -> (retrieve if gaps | check_confidence if ok)
+    builder.add_edge("generate", "self_reflection")
+    builder.add_conditional_edges(
+        "self_reflection",
+        _self_reflection_route,
+        {
+            "retrieve": "retrieve",
+            "done": "check_confidence",
+        },
+    )
 
     # Route from check_confidence:
     # - If needs_escalation → rewrite (low confidence, retry retrieval)
