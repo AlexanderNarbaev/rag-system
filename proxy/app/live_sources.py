@@ -118,9 +118,9 @@ class ConfluenceLiveClient(_CacheMixin):
         self.base_url = CONFLUENCE_API_URL.rstrip("/") if CONFLUENCE_API_URL else ""
         self.headers: dict[str, str] = {}
         if CONFLUENCE_API_USER and CONFLUENCE_API_TOKEN:
-            self.headers["Authorization"] = aiohttp.BasicAuth(
+            self.headers["Authorization"] = aiohttp.encode_basic_auth(
                 CONFLUENCE_API_USER, CONFLUENCE_API_TOKEN
-            ).encode()
+            )
 
     @property
     def _enabled(self) -> bool:
@@ -218,7 +218,7 @@ class JiraLiveClient(_CacheMixin):
         self.base_url = JIRA_API_URL.rstrip("/") if JIRA_API_URL else ""
         self.headers: dict[str, str] = {}
         if JIRA_API_USER and JIRA_API_TOKEN:
-            auth_str = aiohttp.BasicAuth(JIRA_API_USER, JIRA_API_TOKEN).encode()
+            auth_str = aiohttp.encode_basic_auth(JIRA_API_USER, JIRA_API_TOKEN)
             self.headers["Authorization"] = auth_str
 
     @property
