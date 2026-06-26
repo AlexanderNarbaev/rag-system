@@ -24,6 +24,14 @@ wal/
 .DS_Store
 Thumbs.db
 
+# Logs
+logs/
+
+# Backup artifacts
+*.bak
+*~
+*.orig
+
 # Models
 models/
 *.gguf

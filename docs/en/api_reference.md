@@ -1,6 +1,6 @@
 # API Reference
 
-The RAG Proxy exposes an **OpenAI-compatible API** on port `8080`. Any OpenAI client can use it as a drop-in replacement — just point `base_url` to `http://<host>:8080/v1`. The proxy also adds RAG-specific extensions for feedback, confidence scoring, and source traceability.
+The RAG Proxy exposes an **OpenAI-compatible API** on port `8080`. Any OpenAI client can use it as a drop-in replacement — just point `base_url` to `http://<host>:8080/v1`. The proxy adds RAG-specific extensions for feedback, confidence scoring, source traceability, tool calling (including live Confluence/Jira/GitLab queries), and multi-language support.
 
 ---
 
@@ -169,6 +169,10 @@ These parameters extend the standard OpenAI schema. They are silently ignored by
 |-------|------|----------|---------|-------------|
 | `rag_version` | string | No | `null` | Request context from a specific document version. Accepts ISO date (`"2026-01-15"`), SHA-256 prefix (`"a1b2c3d4"`), or version tag (`"v2.1"`). Filters retrieved chunks to match the specified version. |
 | `rag_force_refresh` | boolean | No | `false` | Bypass Redis response cache. Forces fresh retrieval, reranking, context assembly, and LLM generation. Useful when documents have been updated and cached responses are stale. |
+| `lang` | string | No | `"en"` | Response language for multi-language support. Supported: `ru`, `en`, `de`, `fr`, `zh`. Affects both document retrieval (cross-lingual matching) and response generation language. |
+| `enable_live_sources` | boolean | No | `false` | Enable live queries to Confluence/Jira/GitLab APIs alongside indexed data. When enabled, the proxy can make real-time API calls to source systems for fresh data. Requires `LIVE_SOURCES_ENABLED=true` in configuration. |
+| `enable_hyde` | boolean | No | `true` | Enable HyDE (Hypothetical Document Embeddings) query expansion. Generates a hypothetical document from the user query and uses it for second-pass retrieval. Improves recall for technical queries with uncommon terminology. |
+| `enable_self_reflection` | boolean | No | `true` | Enable self-reflection critique step. After generation, the LLM re-reads its answer against retrieved context and flags inconsistencies. Low-scoring answers may trigger corrective re-generation. |
 
 #### Response Schema (Non-Streaming, 200 OK)
 
@@ -305,24 +309,106 @@ data: [DONE]
 When a chat completion request arrives at the proxy:
 
 1. **Query Analysis** — SLM classifies intent (5 classes: factual, procedural, comparison, troubleshooting, meta), optionally decomposes into sub-queries, extracts entities
-2. **Hybrid Retrieval** — Dense (BGE-M3 1024-dim) + sparse (lexical BM25-style) vectors searched in Qdrant with RRF fusion (k=60). Returns up to `MAX_CHUNKS_RETRIEVAL` (default 50) chunks
-3. **Retrieval Quality Evaluation** — `RetrievalEvaluator` scores results (confidence 0.0–1.0) based on score distribution, coverage ratio, and result count. Determines action: `USE`, `REWRITE`, `EXPAND`, or `FALLBACK`
-4. **Query Rewriting** (if needed) — SLM or LLM rewrites ambiguous/failed queries; up to `MAX_RETRIEVAL_LOOPS=3` iterations
-5. **Cross-Encoder Reranking** — MiniLM-L-6-v2 scores top-N candidates, selects top `MAX_CHUNKS_AFTER_RERANK` (default 20)
-6. **Graph Expansion** (optional, `USE_GRAPH_EXPANSION=true`) — Neo4j multi-hop traversal enriches context with related entities
-7. **De-duplication & Version Filtering** — Chunks deduplicated by SHA-256 hash; filtered by `rag_version` if specified
-8. **Context Assembly** — `TokenOptimizer` allocates token budget across system prompt, context, history, and response. Applies up to 4 compression strategies
-9. **LLM Generation** — Assembled prompt sent to configured LLM provider (vLLM, llama.cpp, Anthropic, Ollama, or generic OpenAI-compatible)
-10. **Confidence Scoring** — `compute_confidence()` heuristic: context sufficiency (0.4 weight), context-to-answer ratio (0.3), uncertainty phrase detection (0.2), answer length check (0.1)
-11. **Response Caching** — Response cached in Redis (1h TTL) unless `rag_force_refresh=true`
+2. **HyDE Query Expansion** (optional, `enable_hyde=true`) — Generates a hypothetical document from the query, embeds it, and uses it for a second-pass retrieval alongside the original query
+3. **Hybrid Retrieval** — Dense (BGE-M3 1024-dim) + sparse (lexical BM25-style) vectors searched in Qdrant with RRF fusion (k=60). Returns up to `MAX_CHUNKS_RETRIEVAL` (default 50) chunks
+4. **Live Source Query** (optional, `enable_live_sources=true`) — Direct API calls to Confluence/Jira/GitLab for real-time data alongside indexed results. Configured via tool/function calling
+5. **Retrieval Quality Evaluation (CRAG)** — `RetrievalEvaluator` scores results (confidence 0.0–1.0) based on score distribution (0.4), coverage ratio (0.3), result count factor (0.2), and recency decay (0.1). Maps confidence to action: `USE`, `REWRITE`, `EXPAND`, or `FALLBACK`
+6. **Query Rewriting** (if needed) — SLM or LLM rewrites ambiguous/failed queries; up to `MAX_RETRIEVAL_LOOPS=3` iterations
+7. **Cross-Encoder Reranking** — MiniLM-L-6-v2 scores top-N candidates, selects top `MAX_CHUNKS_AFTER_RERANK` (default 20)
+8. **LongContextReorder** — Re-ranks documents with significant content at edges (beginning/end) to combat "lost in the middle" effect
+9. **Graph Expansion** (optional, `USE_GRAPH_EXPANSION=true`) — Neo4j multi-hop traversal enriches context with related entities and self-reflection validation edges
+10. **De-duplication & Version Filtering** — Chunks deduplicated by SHA-256 hash; filtered by `rag_version` if specified
+11. **LLMLingua Context Compression** — Token-level prompt compression for long documents (2-5x ratio with < 5% information loss)
+12. **Context Assembly** — `TokenOptimizer` allocates token budget across system prompt, context, history, response, and self-reflection overhead
+13. **LLM Generation** — Assembled prompt sent to configured LLM provider (vLLM, llama.cpp, Anthropic, Ollama, or generic OpenAI-compatible)
+14. **Confidence Scoring** — `compute_confidence()` heuristic: context sufficiency (0.4 weight), context-to-answer ratio (0.3), uncertainty phrase detection (0.2), answer length check (0.1)
+15. **Self-Reflection** (optional, `enable_self_reflection=true`) — Post-generation critique step: LLM re-reads answer against context, scores faithfulness, flags inconsistencies
+16. **Hallucination Grounding** — NLI-based verification: cosine similarity embedding check + entailment classification. Answers with grounding score < 0.70 flagged for review
+17. **Corrective Re-Generation** — Low-confidence or ungrounded answers trigger re-generation with expanded context, factuality-focused system prompt, or adjusted temperature
+18. **Response Caching** — Response cached in Redis (1h TTL) unless `rag_force_refresh=true`
 
 With LangGraph enabled (`USE_LANGGRAPH=true`), steps 1–9 are orchestrated by a 7-node state graph with conditional looping and self-correction:
 
 ```
-rewrite → retrieve → check_sufficiency → rerank → graph_expand → build_context → generate → check_confidence
-    ↑          ↑               ↓                                                        ↓
-    └──────────┴─── (if insufficient, loop ≤3 times)                                   (low confidence → alert)
+rewrite → hyde_expand → retrieve → check_sufficiency → rerank → reorder → graph_expand → build_context → generate → self_reflect → check_confidence → (corrective_regen if needed)
+    ↑          ↑               ↓                                                                                ↓
+    └──────────┴─── (if insufficient, loop ≤3 times)                                                 (low confidence/grounding → corrective re-generation)
 ```
+
+---
+
+## Agentic Tool Calling (Live Sources)
+
+v2.0 adds agentic tool calling that allows the LLM to make live queries to Confluence, Jira, and GitLab APIs alongside indexed data. Tools are defined as standard OpenAI-compatible function definitions and are routed through the provider adapter for transparent multi-provider support.
+
+### Built-in Tools
+
+| Tool Name | Source | Description |
+|-----------|--------|-------------|
+| `search_confluence` | Confluence REST API | Search Confluence pages by title, space, or content |
+| `get_jira_issue` | Jira REST API | Retrieve Jira issue details by key or JQL query |
+| `search_gitlab_merge_requests` | GitLab API | Search GitLab merge requests, commits, and discussions |
+| `search_knowledge_base` | Qdrant + Neo4j | Search the indexed knowledge base (hybrid retrieval) |
+
+### Tool Calling Example
+
+```json
+{
+  "model": "rag-proxy",
+  "messages": [
+    {"role": "user", "content": "What's the latest status of the authentication migration project?"}
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_jira_issue",
+        "description": "Get Jira issue details by project key",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "project_key": {"type": "string", "description": "Jira project key (e.g., AUTH)"},
+            "status": {"type": "string", "description": "Filter by status"}
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "search_confluence",
+        "description": "Search Confluence for relevant documentation",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "Search query"},
+            "space_key": {"type": "string", "description": "Confluence space key"}
+          }
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "enable_live_sources": true
+}
+```
+
+### Configuration
+
+```bash
+# Enable live source queries
+LIVE_SOURCES_ENABLED=true
+
+# Source API endpoints
+CONFLUENCE_API_URL=https://confluence.example.com/rest/api
+CONFLUENCE_API_TOKEN=your-token
+JIRA_API_URL=https://jira.example.com/rest/api/2
+JIRA_API_TOKEN=your-token
+GITLAB_API_URL=https://gitlab.example.com/api/v4
+GITLAB_API_TOKEN=your-token
+```
+
+Tool calling works across all supported LLM providers (OpenAI, Anthropic, Ollama, Generic REST) with automatic format translation by `provider_adapter.py`.
 
 ---
 
