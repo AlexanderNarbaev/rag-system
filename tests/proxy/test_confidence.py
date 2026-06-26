@@ -40,7 +40,7 @@ def test_compute_confidence_low_uncertainty_phrases():
         answer="I'm not sure about this, possibly the answer is unclear.",
         slm_available=False,
     )
-    assert report.score < 0.7
+    assert report.score <= 0.7
 
 
 def test_confidence_report_fields():

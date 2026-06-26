@@ -1,5 +1,7 @@
-"""Confidence scoring for RAG answers. Uses heuristics + optional SLM verification."""
+"""Confidence scoring for RAG answers. Uses heuristics + NLI grounding + calibration."""
 import logging
+import math
+import re
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -14,6 +16,171 @@ class ConfidenceReport:
     recommendation: str = ""
 
 
+@dataclass
+class GroundingReport:
+    score: float
+    supported_claims: int
+    total_claims: int
+    unsupported: list[str] = field(default_factory=list)
+
+
+# ── F1: NLI-based Grounding Checker ──
+
+
+def decompose_into_claims(answer: str) -> list[str]:
+    """Decompose answer text into atomic claims using sentence splitting."""
+    if not answer or not answer.strip():
+        return []
+
+    parts = re.split(r"(?<=[.!?])\s+|\n|(?<=;)\s+", answer.strip())
+    claims = []
+    for part in parts:
+        stripped = part.strip().rstrip(";.")
+        stripped = re.sub(r"^[-*•]\s*", "", stripped).strip()
+        if len(stripped) >= 10:
+            claims.append(stripped)
+    return claims
+
+
+def _tokenize(text: str) -> set[str]:
+    """Tokenize text into lowercase word set for overlap computation."""
+    return set(re.findall(r"\w+", text.lower()))
+
+
+def _compute_cosine_proxy(text_a: str, text_b: str) -> float:
+    """Lightweight cosine similarity proxy using word overlap."""
+    tokens_a = _tokenize(text_a)
+    tokens_b = _tokenize(text_b)
+    if not tokens_a or not tokens_b:
+        return 0.0
+    intersection = tokens_a & tokens_b
+    return len(intersection) / math.sqrt(len(tokens_a) * len(tokens_b))
+
+
+def _check_claim_supported(claim: str, context: str) -> bool:
+    """Check if a claim is supported by context using cosine + keyword overlap."""
+    if not context or not context.strip():
+        return False
+
+    claim_tokens = _tokenize(claim)
+    if not claim_tokens:
+        return False
+
+    cosine_score = _compute_cosine_proxy(claim, context)
+
+    context_tokens = _tokenize(context)
+    keyword_overlap = len(claim_tokens & context_tokens) / len(claim_tokens)
+
+    combined = 0.5 * cosine_score + 0.5 * keyword_overlap
+    return combined >= 0.25
+
+
+def compute_nli_grounding(answer: str, context: str) -> GroundingReport:
+    """Compute NLI-grounded confidence by checking each claim against context.
+
+    Uses lightweight cosine similarity + keyword overlap as NLI proxy
+    (no external NLI model needed — air-gapped compatible).
+
+    Returns a GroundingReport with score 0.0–1.0 and unsupported claims list.
+    """
+    if not answer or not answer.strip():
+        return GroundingReport(score=0.0, supported_claims=0, total_claims=0, unsupported=[])
+
+    claims = decompose_into_claims(answer)
+    if not claims:
+        return GroundingReport(score=0.0, supported_claims=0, total_claims=0, unsupported=[])
+
+    if not context or not context.strip():
+        return GroundingReport(
+            score=0.0, supported_claims=0, total_claims=len(claims), unsupported=list(claims)
+        )
+
+    supported = 0
+    unsupported = []
+    for claim in claims:
+        if _check_claim_supported(claim, context):
+            supported += 1
+        else:
+            unsupported.append(claim)
+
+    score = supported / len(claims) if claims else 0.0
+    return GroundingReport(
+        score=round(score, 3),
+        supported_claims=supported,
+        total_claims=len(claims),
+        unsupported=unsupported,
+    )
+
+
+# ── F6: Confidence Threshold Calibration ──
+
+
+def calibrate_threshold(test_cases: list[tuple[float, bool]]) -> float:
+    """Given labeled test cases (score, is_correct), find optimal threshold maximizing F1.
+
+    If no cases, returns the current CONFIDENCE_THRESHOLD as fallback.
+    """
+    if not test_cases:
+        from proxy.app.config import CONFIDENCE_THRESHOLD
+        return CONFIDENCE_THRESHOLD
+
+    candidates = [c[0] for c in test_cases]
+    best_f1 = 0.0
+    best_threshold = 0.5
+
+    for candidate in candidates:
+        tp = fn = fp = tn = 0
+        for score, is_correct in test_cases:
+            predicted_ok = score >= candidate
+            if predicted_ok and is_correct:
+                tp += 1
+            elif predicted_ok and not is_correct:
+                fp += 1
+            elif not predicted_ok and is_correct:
+                fn += 1
+            else:
+                tn += 1
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        if f1 > best_f1:
+            best_f1 = f1
+            best_threshold = candidate
+        elif f1 == best_f1 and candidate < best_threshold:
+            best_threshold = candidate
+
+    # Also try midpoints between sorted candidates
+    sorted_candidates = sorted(set(candidates))
+    for i in range(len(sorted_candidates) - 1):
+        mid = (sorted_candidates[i] + sorted_candidates[i + 1]) / 2
+        tp = fn = fp = tn = 0
+        for score, is_correct in test_cases:
+            predicted_ok = score >= mid
+            if predicted_ok and is_correct:
+                tp += 1
+            elif predicted_ok and not is_correct:
+                fp += 1
+            elif not predicted_ok and is_correct:
+                fn += 1
+            else:
+                tn += 1
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        if f1 > best_f1:
+            best_f1 = f1
+            best_threshold = mid
+
+    return round(best_threshold, 3)
+
+
+# ── Main confidence function ──
+
+
 def compute_confidence(
     query: str,
     context: str,
@@ -22,6 +189,7 @@ def compute_confidence(
 ) -> ConfidenceReport:
     uncertainties: list[str] = []
     score = 0.7
+    nli_score = None
 
     if not context or len(context.strip()) < 20:
         uncertainties.append("Retrieved context is empty or very short")
@@ -46,6 +214,23 @@ def compute_confidence(
     if len(answer.strip()) < 20:
         uncertainties.append("Answer is very short — insufficient information")
         score -= 0.15
+
+    # F1: NLI grounding integration
+    try:
+        from proxy.app.config import NLI_GROUNDING_ENABLED
+    except ImportError:
+        NLI_GROUNDING_ENABLED = True
+
+    if NLI_GROUNDING_ENABLED and answer.strip() and context.strip():
+        nli_report = compute_nli_grounding(answer, context)
+        nli_score = nli_report.score
+        if nli_report.unsupported:
+            unsupported_preview = nli_report.unsupported[:3]
+            uncertainties.append(
+                f"NLI: {nli_report.supported_claims}/{nli_report.total_claims} claims grounded. "
+                f"Unsupported: {unsupported_preview}"
+            )
+        score = 0.6 * score + 0.4 * nli_score
 
     score = max(0.0, min(1.0, score))
     needs_review = score < 0.5

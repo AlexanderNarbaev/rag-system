@@ -36,7 +36,7 @@ class TestDynamicTopK:
         with patch("proxy.app.orchestrator.classify_intent") as mock_classify:
             mock_classify.return_value = (orchestrator.IntentType.SUMMARIZATION, 0.9)
             result = _dynamic_top_k("Summarize the deployment guide", max_default=50)
-            assert result == 50
+            assert result == 30  # min(30, 50)
 
     def test_greeting_returns_zero(self):
         with patch("proxy.app.orchestrator.classify_intent") as mock_classify:

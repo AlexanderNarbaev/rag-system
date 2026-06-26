@@ -322,3 +322,171 @@ class TokenOptimizer:
             result["text"] = f"{header}\n{text}"
 
         return result
+
+    # ── F5: LLMLingua-style Perplexity Compression ──
+
+    def compress_with_perplexity(
+        self, text: str, budget: int, strategy: str = "keyword"
+    ) -> str:
+        """Compress text to fit within token budget using SLM perplexity or keyword scoring.
+
+        strategy: "perplexity" — use SLM log-probability token importance (falls back to keyword)
+                  "keyword"   — use sentence-level keyword density scoring
+                  "none"      — return text unchanged
+
+        High-surprise (high-perplexity) tokens are kept; predictable tokens are dropped.
+        If SLM is unavailable, falls back gracefully to keyword density method.
+        """
+        if not text or not text.strip():
+            return ""
+
+        if strategy == "none":
+            return text
+
+        current_tokens = self.estimate_token_cost(text)
+        if current_tokens <= budget:
+            return text
+
+        if strategy == "perplexity":
+            try:
+                return self._compress_by_perplexity(text, budget)
+            except Exception as e:
+                logger.warning(f"Perplexity compression failed ({e}), falling back to keyword")
+                return self._compress_by_keyword(text, budget)
+        else:
+            return self._compress_by_keyword(text, budget)
+
+    def _compress_by_perplexity(self, text: str, budget: int) -> str:
+        """Perplexity-based compression using token-level surprise scores.
+
+        Computes approximate token importance via word rarity in the text corpus.
+        Keeps high-surprise tokens, drops predictable/common ones.
+        Falls back to keyword density if SLM log-prob unavailable.
+        """
+        # Build word frequency from the text itself as proxy for "predictability"
+        words = re.findall(r"\w+", text.lower())
+        if not words:
+            return text
+
+        word_freq = {}
+        for w in words:
+            word_freq[w] = word_freq.get(w, 0) + 1
+        total = len(words)
+
+        # Higher frequency → lower surprise (more predictable)
+        vocab = {w: 1.0 - (cnt / total) for w, cnt in word_freq.items()}
+
+        surprises = _compute_token_surprise(text, vocab)
+
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        scored = []
+        for s in sentences:
+            s_stripped = s.strip()
+            if not s_stripped:
+                continue
+            s_words = re.findall(r"\w+", s_stripped.lower())
+            if not s_words:
+                scored.append((s_stripped, 0.0))
+                continue
+            avg_surprise = sum(surprises.get(w, 0.5) for w in s_words) / len(s_words)
+            scored.append((s_stripped, avg_surprise))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        result = ""
+        for sentence, _ in scored:
+            candidate = result + sentence + " "
+            if self.estimate_token_cost(candidate) > budget:
+                # Try to fit partial
+                remaining_chars = budget * 4 - len(result)
+                if remaining_chars > 20:
+                    truncated = sentence[:remaining_chars]
+                    result += truncated
+                break
+            result += sentence + " "
+
+        return result.strip()
+
+    def _compress_by_keyword(self, text: str, budget: int) -> str:
+        """Sentence-level compression by keyword density relative to the full text.
+
+        Sentences with more unique/relevant words (high keyword density vs corpus)
+        are kept first. Falls back to keeping first N sentences if all equal.
+        """
+        words = re.findall(r"\w+", text.lower())
+        if not words:
+            return text
+
+        word_freq = {}
+        for w in words:
+            word_freq[w] = word_freq.get(w, 0) + 1
+        total = len(words)
+
+        # IDF-like: rare words are more important
+        word_importance = {w: 1.0 - (cnt / total) for w, cnt in word_freq.items()}
+
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        scored = []
+        for s in sentences:
+            s_stripped = s.strip()
+            if not s_stripped:
+                continue
+            s_words = re.findall(r"\w+", s_stripped.lower())
+            if not s_words:
+                scored.append((s_stripped, 0.0))
+                continue
+            avg_importance = sum(word_importance.get(w, 0.5) for w in s_words) / len(s_words)
+            scored.append((s_stripped, avg_importance))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        result = ""
+        for sentence, _ in scored:
+            candidate = result + sentence + " "
+            if self.estimate_token_cost(candidate) > budget:
+                remaining_chars = budget * 4 - len(result)
+                if remaining_chars > 20:
+                    truncated = sentence[:remaining_chars]
+                    result += truncated
+                break
+            result += sentence + " "
+
+        return result.strip()
+
+
+# ── Standalone functions for external use ──
+
+
+def _compute_token_surprise(text: str, vocab: dict[str, float]) -> dict[str, float]:
+    """Compute token-level surprise scores.
+
+    Surprise = -log(P(token)) approx 1.0 - P(token) in vocab.
+    Rare words have high surprise; common words have low surprise.
+    """
+    if not text or not vocab:
+        return {}
+
+    words = re.findall(r"\w+", text.lower())
+    surprises = {}
+    for w in words:
+        surprisal = vocab.get(w, 0.5)  # 0.5 = medium surprise for unknown
+        surprises[w] = surprisal
+    return surprises
+
+
+def _score_sentence_by_keyword_density(sentence: str, query: str) -> float:
+    """Score a sentence by keyword overlap with a query."""
+    if not sentence or not query:
+        return 0.0
+    query_tokens = set(re.findall(r"\w+", query.lower()))
+    if not query_tokens:
+        return 0.0
+    sent_tokens = set(re.findall(r"\w+", sentence.lower()))
+    overlap = len(query_tokens & sent_tokens)
+    return overlap / len(query_tokens)
+
+
+def compress_with_perplexity(text: str, budget: int, strategy: str = "keyword") -> str:
+    """Standalone function for perplexity-based compression."""
+    optimizer = TokenOptimizer()
+    return optimizer.compress_with_perplexity(text, budget, strategy=strategy)

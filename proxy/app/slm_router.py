@@ -22,12 +22,27 @@ logger = logging.getLogger(__name__)
 class IntentType(Enum):
     """Типы интентов пользователя."""
 
+    GREETING = "greeting"  # Приветствие/общие фразы
+    SIMPLE_FACT = "simple_fact"  # Простой факт (да/нет, определение)
     FACTUAL = "factual"  # Простой факт (требует контекст)
     PROCEDURAL = "procedural"  # "как сделать" (требует инструкций)
     COMPARISON = "comparison"  # Сравнение нескольких сущностей
     SUMMARIZATION = "summarize"  # Суммаризация документа
-    GREETING = "greeting"  # Приветствие/общие фразы
+    COMPLEX = "complex"  # Многочастный запрос, требующий декомпозиции
     UNKNOWN = "unknown"
+
+
+# Complexity scores for each intent type (1-10)
+INTENT_COMPLEXITY_MAP: dict[IntentType, int] = {
+    IntentType.GREETING: 1,
+    IntentType.SIMPLE_FACT: 3,
+    IntentType.FACTUAL: 5,
+    IntentType.PROCEDURAL: 7,
+    IntentType.COMPARISON: 8,
+    IntentType.SUMMARIZATION: 6,
+    IntentType.COMPLEX: 10,
+    IntentType.UNKNOWN: 5,
+}
 
 
 # Вспомогательная функция для вызова SLM (синхронная, так как используется в основном коде)
@@ -70,15 +85,17 @@ def classify_intent(query: str) -> tuple[IntentType, float]:
     Классифицирует интент пользователя. Возвращает (тип, уверенность).
     """
     prompt = f"""Классифицируй следующий вопрос пользователя по типу:
-- factual: вопрос о фактах, определении, дате, свойстве
+- greeting: приветствие, благодарность, общая фраза без запроса информации
+- simple_fact: простой вопрос да/нет или об одном известном понятии
+- factual: вопрос о фактах, определении, дате, свойстве (требует поиска)
 - procedural: вопрос о том, как что-то сделать, инструкция, руководство
 - comparison: сравнение двух или более сущностей
 - summarize: запрос на суммаризацию документа, краткое изложение
-- greeting: приветствие, благодарность, общая фраза без запроса информации
+- complex: многочастный запрос, требующий разбора на подвопросы
 
 Вопрос: {query}
 
-Ответь только одним словом из списка: factual, procedural, comparison, summarize, greeting.
+Ответь только одним словом из списка: greeting, simple_fact, factual, procedural, comparison, summarize, complex.
 """
     result = _call_slm_sync(prompt, max_tokens=10, temperature=0).lower()
     confidence = 0.8  # простая эвристика
@@ -86,6 +103,18 @@ def classify_intent(query: str) -> tuple[IntentType, float]:
         if intent.value == result:
             return intent, confidence
     return IntentType.UNKNOWN, 0.5
+
+
+def get_complexity_score(intent: IntentType) -> int:
+    """Return complexity score (1-10) for a given intent type."""
+    return INTENT_COMPLEXITY_MAP.get(intent, 5)
+
+
+def get_query_complexity(query: str) -> int:
+    """Classify query intent and return its complexity score (1-10).
+    Falls back to 5 if SLM is unavailable."""
+    intent, _ = classify_intent(query)
+    return get_complexity_score(intent)
 
 
 def decompose_query(query: str, max_subqueries: int = 3) -> list[str]:
@@ -119,7 +148,7 @@ def needs_retrieval(intent: IntentType) -> bool:
     """
     Определяет, нужен ли поиск в базе знаний для данного интента.
     """
-    if intent in (IntentType.GREETING, IntentType.UNKNOWN):
+    if intent in (IntentType.GREETING, IntentType.SIMPLE_FACT, IntentType.UNKNOWN):
         return False
     return True
 
@@ -165,6 +194,77 @@ def extract_entities_slm(query: str) -> list[str]:
         words = re.findall(r"\b[A-ZА-Я][A-Za-zА-Яа-я0-9_-]+\b", query)
         return words
     return []
+
+
+def score_query_complexity(query: str) -> int:
+    """
+    Score query complexity on a 1-10 scale based on heuristics and SLM classification.
+
+    Complexity factors:
+    - Word count (more words = more complex)
+    - Number of key comparison/relational words
+    - Intent type (comparison/summarization > procedural > factual)
+    - Question marks (multi-part questions)
+
+    Returns:
+        Complexity score from 1 (simple) to 10 (highly complex).
+    """
+    score = 1
+    word_count = len(query.split())
+
+    # Heuristic: word count contributes to complexity
+    if word_count <= 3:
+        score = 1
+    elif word_count <= 6:
+        score = 3
+    elif word_count <= 12:
+        score = 5
+    elif word_count <= 20:
+        score = 7
+    else:
+        score = 9
+
+    # Comparison/relational words increase complexity
+    comparison_words = [
+        "сравн", "compar", "difference", "versus", "vs", "лучше", "better",
+        "отличие", "difference", "плюсы", "минусы", "pros", "cons",
+        "альтернатив", "alternative",
+    ]
+    query_lower = query.lower()
+    comp_count = sum(1 for w in comparison_words if w in query_lower)
+    score += min(comp_count, 3)
+
+    # Multi-question indicator
+    if query_lower.count("?") > 1 or query_lower.count("?") == 1 and word_count > 10:
+        score += 1
+
+    # SLM-based refinement (if available)
+    try:
+        intent, _ = classify_intent(query)
+        if intent == IntentType.COMPARISON:
+            score = max(score, 7)
+        elif intent == IntentType.SUMMARIZATION:
+            score = max(score, 6)
+        elif intent == IntentType.PROCEDURAL:
+            score = max(score, 5)
+        elif intent == IntentType.FACTUAL:
+            score = max(score, 3)
+    except Exception:
+        pass
+
+    return max(1, min(10, score))
+
+
+def dynamic_top_k_from_complexity(complexity: int, max_default: int = 50) -> int:
+    """
+    Map query complexity score (1-10) to a retrieval top_k value.
+
+    Mapping:
+      1 → 5, 2 → 5, 3 → 10, 4 → 10, 5 → 15,
+      6 → 20, 7 → 25, 8 → 35, 9 → 40, 10 → 50
+    """
+    mapping = {1: 5, 2: 5, 3: 10, 4: 10, 5: 15, 6: 20, 7: 25, 8: 35, 9: 40, 10: 50}
+    return mapping.get(complexity, max_default)
 
 
 def should_use_graph(intent: IntentType, query: str) -> bool:

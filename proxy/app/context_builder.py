@@ -1,19 +1,38 @@
 # proxy/app/context_builder.py
 """
-Пост-обработка чанков для RAG-прокси.
-Функции:
-- Дедупликация чанков по хешу содержимого и/или текстовому сходству
-- Разрешение версий: для одного документа оставляем только последнюю версию (если не запрошена конкретная)
-- Сборка контекста с метаданными и ограничением по токенам
-- Извлечение версии из пользовательского запроса (regex)
-- Группировка по семантическому ключу (опционально)
+Post-processing of chunks for RAG proxy.
+Features:
+- Deduplication by content hash and/or text similarity
+- Version resolution: keep only latest version per document
+- Context assembly with metadata and token budget
+- Version extraction from user query (regex)
+- Grouping by semantic key (optional)
+- CRAG knowledge strip decomposition
+- LongContextReorder (counters "Lost in the Middle")
+- Multi-modal context assembly (text + code + table + image)
 """
 
 import hashlib
 import logging
 import re
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+MULTI_MODAL_ENABLED = True
+
+
+@dataclass
+class KnowledgeStrip:
+    """A single knowledge strip from CRAG decomposition."""
+    text: str
+    score: float
+    source_type: str = "unknown"
+    doc_title: str = ""
+    chunk_index: int = 0
+    sentence_index: int = 0
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +200,14 @@ def build_context(
     if not chunks_with_scores:
         return ""
 
+    # F4: LongContextReorder — place best at start/end, medium in middle
+    try:
+        from proxy.app.config import REORDER_ENABLED
+    except ImportError:
+        REORDER_ENABLED = True
+    if REORDER_ENABLED:
+        chunks_with_scores = reorder_chunks(chunks_with_scores)
+
     # Сортировка по скору (убывание)
     if sort_by_score:
         chunks_with_scores.sort(key=lambda x: x[1], reverse=True)
@@ -222,6 +249,27 @@ def build_context(
 
     final_context = "".join(context_parts)
     logger.info(f"Context built: {len(final_context)} chars, ~{total_tokens} tokens")
+
+    # Token optimizer integration: apply compression if token budget exceeded
+    try:
+        from app.config import TOKEN_OPTIMIZER_ENABLED
+    except ImportError:
+        TOKEN_OPTIMIZER_ENABLED = False
+
+    if TOKEN_OPTIMIZER_ENABLED and total_tokens > max_tokens and chunks_with_scores:
+        try:
+            from app.token_optimizer import TokenOptimizer
+
+            optimizer = TokenOptimizer()
+            compressed = optimizer.compress_context(
+                [c for c, _ in chunks_with_scores], max_tokens=max_tokens, strategy="hierarchical"
+            )
+            if compressed:
+                final_context = compressed
+                logger.info(f"Context compressed via TokenOptimizer: {len(final_context)} chars")
+        except Exception:
+            logger.warning("Token optimizer compression failed, using truncated context", exc_info=True)
+
     return final_context
 
 
@@ -342,6 +390,92 @@ def build_hierarchical_context(chunks: list[tuple[dict[str, Any], float]], max_t
     return "\n\n".join(parts)
 
 
+# ── F2: CRAG Knowledge Strip Decomposition ──
+
+
+def decompose_to_strips(
+    chunks_with_scores: list[tuple[dict[str, Any], float]],
+    relevance_threshold: float = 0.0,
+) -> list[KnowledgeStrip]:
+    """Split each chunk into sentence-level knowledge strips.
+
+    Each strip inherits the parent chunk's score, source_type, and doc_title.
+    Strips below relevance_threshold are filtered out.
+    """
+    if not chunks_with_scores:
+        return []
+
+    strips = []
+    for chunk_idx, (chunk, score) in enumerate(chunks_with_scores):
+        text = chunk.get("text", "").strip()
+        if not text:
+            continue
+
+        source_type = chunk.get("source_type", "unknown")
+        doc_title = chunk.get("doc_title", "")
+
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        for sent_idx, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if len(sentence) < 10:
+                continue
+
+            strip = KnowledgeStrip(
+                text=sentence,
+                score=score,
+                source_type=source_type,
+                doc_title=doc_title,
+                chunk_index=chunk_idx,
+                sentence_index=sent_idx,
+            )
+            strips.append(strip)
+
+    if relevance_threshold > 0:
+        strips = [s for s in strips if s.score >= relevance_threshold]
+
+    logger.debug(f"CRAG decomposition: {len(chunks_with_scores)} chunks -> {len(strips)} strips")
+    return strips
+
+
+# ── F4: LongContextReorder ──
+
+
+def reorder_chunks(
+    chunks_with_scores: list[tuple[dict[str, Any], float]],
+) -> list[tuple[dict[str, Any], float]]:
+    """Reorder chunks to counter the 'Lost in the Middle' U-shaped recall curve.
+
+    Places highest-relevance chunks at START and END of the prompt;
+    medium-relevance chunks go in the middle.
+
+    Algorithm:
+    1. Sort by score descending
+    2. Interleave: pick best → put at start, pick next → put at end, repeat
+    3. Remaining (medium) chunks stay in score order in the middle
+    """
+    if len(chunks_with_scores) <= 2:
+        return list(chunks_with_scores)
+
+    sorted_chunks = sorted(chunks_with_scores, key=lambda x: x[1], reverse=True)
+    positions_high = []
+    positions_low = []
+    remaining = []
+
+    for i, item in enumerate(sorted_chunks):
+        if i % 2 == 0:
+            positions_high.append(item)
+        else:
+            positions_low.append(item)
+
+    # Reverse the "low" group so the second-best goes last, fourth-best second-to-last, etc.
+    positions_low.reverse()
+
+    result = positions_high + positions_low
+
+    logger.debug(f"Reordered {len(chunks_with_scores)} chunks: best at front/back")
+    return result
+
+
 # Комбинированная функция для полной пост-обработки
 def prepare_context(
     chunks_with_scores: list[tuple[dict[str, Any], float]],
@@ -352,7 +486,7 @@ def prepare_context(
     group_semantic: bool = False,
 ) -> str:
     """
-    Высокоуровневая функция: дедупликация, разрешение версий, группировка, сборка контекста.
+    High-level function: dedup, version resolution, grouping, context assembly.
     """
     if not chunks_with_scores:
         return ""
@@ -370,6 +504,79 @@ def prepare_context(
 
     context = build_context(result, max_tokens=max_tokens)
     return context
+
+
+def assemble_multimodal_context(
+    chunks: list[str],
+    images: list[str] | None = None,
+    tables: list[str] | None = None,
+    code_blocks: list[str] | None = None,
+    max_tokens: int = 120000,
+) -> str:
+    """Assemble multi-modal context: interleave text, tables, code, image captions.
+
+    Token-aware: allocates budget proportionally across modalities.
+    Graceful degradation: all modal inputs are optional.
+
+    :param chunks: list of text chunk strings
+    :param images: list of image caption strings
+    :param tables: list of Markdown table strings
+    :param code_blocks: list of code block strings
+    :param max_tokens: maximum total tokens
+    :return: assembled multi-modal context string
+    """
+    if not MULTI_MODAL_ENABLED:
+        return "\n\n".join(chunks)
+
+    images = images or []
+    tables = tables or []
+    code_blocks = code_blocks or []
+
+    total_items = len(chunks) + len(images) + len(tables) + len(code_blocks)
+    if total_items == 0:
+        return ""
+
+    sections = []
+
+    text_budget = int(max_tokens * 0.5)
+    table_budget = int(max_tokens * 0.2)
+    code_budget = int(max_tokens * 0.2)
+    image_budget = int(max_tokens * 0.1)
+
+    current_tokens = 0
+
+    for chunk in chunks:
+        tokens = estimate_tokens(chunk)
+        if current_tokens + tokens > text_budget:
+            if text_budget - current_tokens > 50:
+                sections.append(chunk[: (text_budget - current_tokens) * 4] + "...")
+            break
+        sections.append(chunk)
+        current_tokens += tokens
+
+    table_start = current_tokens = 0
+    for table in tables:
+        tokens = estimate_tokens(table)
+        if table_start + tokens > table_budget:
+            break
+        sections.append(table)
+        table_start += tokens
+
+    code_start = 0
+    for code in code_blocks:
+        tokens = estimate_tokens(code)
+        if code_start + tokens > code_budget:
+            break
+        framed = f"```\n{code}\n```"
+        sections.append(framed)
+        code_start += tokens
+
+    for img in images:
+        tokens = estimate_tokens(img)
+        if tokens < 20:
+            sections.append(img)
+
+    return "\n\n".join(sections)
 
 
 # Пример использования (для самопроверки)
