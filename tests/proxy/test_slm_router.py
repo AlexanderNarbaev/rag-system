@@ -286,3 +286,61 @@ class TestDynamicTopKFromComplexity:
         assert dynamic_top_k_from_complexity(0) == 50
         assert dynamic_top_k_from_complexity(11) == 50
         assert dynamic_top_k_from_complexity(100, max_default=30) == 30
+
+
+class TestMultilingualIntentClassification:
+    """F2: Language-aware intent classification for non-EN/RU queries."""
+
+    def test_multilingual_intent_detects_german(self):
+        """When query is in German, intent should be classified with simple heuristics."""
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, confidence = classify_intent_multilingual("Wie richte ich eine CI/CD Pipeline ein?")
+        assert intent in (IntentType.FACTUAL, IntentType.PROCEDURAL)
+        assert confidence >= 0.4
+
+    def test_multilingual_intent_detects_french(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, confidence = classify_intent_multilingual("Comment configurer un pipeline CI/CD?")
+        assert intent in (IntentType.FACTUAL, IntentType.PROCEDURAL)
+        assert confidence >= 0.4
+
+    def test_multilingual_intent_detects_chinese(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, confidence = classify_intent_multilingual("如何在GitLab中设置CI/CD管道？")
+        assert intent in (IntentType.FACTUAL, IntentType.PROCEDURAL)
+        assert confidence >= 0.4
+
+    def test_multilingual_intent_delegates_english_to_main_classifier(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, confidence = classify_intent_multilingual("How to set up CI/CD pipeline?")
+        assert isinstance(intent, IntentType)
+        assert confidence >= 0.3
+
+    def test_multilingual_intent_delegates_russian_to_main_classifier(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, confidence = classify_intent_multilingual("Как настроить CI/CD пайплайн?")
+        assert isinstance(intent, IntentType)
+        assert confidence >= 0.3
+
+    def test_multilingual_intent_heuristic_german_greeting(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, _ = classify_intent_multilingual("Hallo, wie geht es Ihnen?")
+        assert intent == IntentType.GREETING
+
+    def test_multilingual_intent_heuristic_french_greeting(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, _ = classify_intent_multilingual("Bonjour, comment allez-vous?")
+        assert intent == IntentType.GREETING
+
+    def test_multilingual_intent_heuristic_chinese_greeting(self):
+        from proxy.app.slm_router import classify_intent_multilingual
+
+        intent, _ = classify_intent_multilingual("你好")
+        assert intent == IntentType.GREETING

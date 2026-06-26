@@ -277,6 +277,71 @@ def should_use_graph(intent: IntentType, query: str) -> bool:
     return intent == IntentType.COMPARISON or has_relation
 
 
+# ── F2: Multilingual Intent Classification ──
+
+_NON_EN_GREETING_PATTERNS = {
+    "de": ["hallo", "guten tag", "guten morgen", "guten abend", "hi", "hey", "moin", "servus", "grüß"],
+    "fr": ["bonjour", "bonsoir", "salut", "coucou", "hello", "hi"],
+    "zh": ["你好", "您好", "嗨", "哈喽"],
+}
+
+_NON_EN_HOWTO_PATTERNS = {
+    "de": ["wie", "anleitung", "konfigurieren", "einrichten", "erstellen", "installieren"],
+    "fr": ["comment", "configurer", "installer", "créer", "mettre en place", "guide"],
+    "zh": ["如何", "怎么", "怎样", "如何做", "攻略", "教程"],
+}
+
+_NON_EN_COMPARE_PATTERNS = {
+    "de": ["vergleich", "unterschied", "besser", "schlechter", "vs", "oder"],
+    "fr": ["comparaison", "différence", "mieux", "moins bien", "vs", "ou"],
+    "zh": ["对比", "区别", "哪个更好", "比较", "差异"],
+}
+
+
+def classify_intent_multilingual(query: str) -> tuple[IntentType, float]:
+    """Classify intent for any language, using linguistic heuristics for non-EN/RU.
+
+    For EN and RU queries, delegates to the SLM-based classify_intent().
+    For DE, FR, ZH queries, uses keyword-based heuristics with simplified
+    intent mapping (GREETING, PROCEDURAL, COMPARISON, FACTUAL).
+
+    Args:
+        query: User query in any supported language.
+
+    Returns:
+        Tuple of (IntentType, confidence 0.0-1.0).
+    """
+    if not query:
+        return IntentType.UNKNOWN, 0.0
+
+    try:
+        from app.i18n import detect_language
+        lang = detect_language(query)
+    except Exception:
+        logger.warning("Language detection failed, falling back to classify_intent")
+        return classify_intent(query)
+
+    if lang in ("en", "ru"):
+        return classify_intent(query)
+
+    query_lower = query.lower()
+
+    greetings = _NON_EN_GREETING_PATTERNS.get(lang, [])
+    howto = _NON_EN_HOWTO_PATTERNS.get(lang, [])
+    compare = _NON_EN_COMPARE_PATTERNS.get(lang, [])
+
+    if any(g in query_lower for g in greetings):
+        return IntentType.GREETING, 0.85
+
+    if any(c in query_lower for c in compare):
+        return IntentType.COMPARISON, 0.70
+
+    if any(h in query_lower for h in howto):
+        return IntentType.PROCEDURAL, 0.70
+
+    return IntentType.FACTUAL, 0.50
+
+
 # Пример использования
 if __name__ == "__main__":
     # Требуется настроенный SLM_ENDPOINT
