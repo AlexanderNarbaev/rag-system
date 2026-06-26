@@ -313,3 +313,139 @@ graph:
 graph:
   enabled: false
 ```
+
+---
+
+## Проблемы потокового ETL (Redis Streams)
+
+### Сбои подключения к Redis Stream
+
+```bash
+# Симптом: "Failed to connect to Redis Streams" или вебхук возвращает 503
+# Проверьте, что Redis запущен и потоки настроены:
+docker exec rag-redis redis-cli PING
+docker exec rag-redis redis-cli XINFO STREAM etl:events
+
+# Если поток не существует, создайте его:
+docker exec rag-redis redis-cli XADD etl:events * event test
+
+# Проверьте существование групп потребителей:
+docker exec rag-redis redis-cli XINFO GROUPS etl:events
+
+# Пересоздайте группы потребителей при отсутствии:
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-extract $ MKSTREAM
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-chunk $
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-embed $
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-index $
+```
+
+### Рост Consumer Lag
+
+```bash
+# Симптом: События поставлены в очередь, но не обрабатываются, lag растёт
+# Проверьте ожидающие сообщения по потребителям:
+docker exec rag-redis redis-cli XPENDING etl:events etl-extract
+docker exec rag-redis redis-cli XPENDING etl:events etl-chunk
+
+# Проверьте время простоя потребителя:
+docker exec rag-redis redis-cli XINFO CONSUMERS etl:events etl-extract
+
+# Исправление: перезапустите зависшего потребителя:
+docker-compose restart rag-etl-extract
+
+# Если события зависли навсегда (3+ неудачных попытки), переместите в DLQ:
+docker exec rag-redis redis-cli XCLAIM etl:events etl-extract new-consumer 3600000 <message-id>
+```
+
+---
+
+## Проблемы с Redis
+
+### Redis недоступен для потокового ETL
+
+```bash
+# Симптом: "Redis connection refused" в логах ETL
+# Проверьте статус Redis:
+docker exec rag-redis redis-cli PING
+
+# Проверьте переменные окружения:
+grep REDIS_STREAMS_URL proxy/.env
+# Должно совпадать: redis://redis:6379
+```
+
+---
+
+## Сбои проверки вебхуков
+
+### Неверная подпись (Confluence)
+
+```bash
+# Симптом: Вебхук Confluence возвращает 401 "Invalid signature"
+# Проверьте совпадение WEBHOOK_SECRET на обеих сторонах:
+echo $WEBHOOK_SECRET
+
+# Тест генерации подписи:
+echo -n '{"event":"test"}' | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET"
+
+# Тест эндпоинта с вычисленной подписью:
+SIG=$(echo -n '{"event":"test"}' | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | cut -d' ' -f2)
+curl -X POST http://localhost:8080/webhook/confluence \
+  -H "Content-Type: application/json" \
+  -H "X-Confluence-Webhook-Signature: sha256=$SIG" \
+  -d '{"event":"test"}'
+# Ожидается: 200 с {"status":"accepted"}
+```
+
+---
+
+## Проблемы прогрева моделей
+
+### Таймаут прогрева
+
+```bash
+# Симптом: POST /v1/admin/warmup зависает или возвращает таймаут
+# Проверьте статус компонентов:
+curl -s http://localhost:8080/v1/health | jq '.components'
+
+# Типичные причины:
+# - Модель эмбеддера всё ещё загружается
+# - SLM-эндпоинт недоступен
+# - Память GPU исчерпана
+
+# Исправление: пропустите проблемный компонент и повторите:
+# Если SLM недоступен: временно отключите SLM (SLM_ENDPOINT="")
+# Увеличьте таймаут в .env:
+WARMUP_TIMEOUT=120  # секунд (по умолчанию: 60)
+
+# Проверьте логи прогрева:
+docker logs rag-proxy --tail 50 | grep warmup
+```
+
+---
+
+## Проблемы, связанные со сжатием
+
+### Клиент не может распаковать ответ
+
+```bash
+# Симптом: Клиент получает искажённый/бинарный ответ
+# Проверьте, отправил ли клиент заголовок Accept-Encoding:
+curl -v http://localhost:8080/v1/health 2>&1 | grep -i "Accept-Encoding"
+
+# Если клиент не поддерживает сжатие, отключите его на сервере:
+COMPRESSION_ENABLED=false
+
+# Или явно откажитесь от сжатия на клиенте:
+curl -H "Accept-Encoding: identity" http://localhost:8080/v1/health
+```
+
+### Регрессия производительности сжатия
+
+```bash
+# Симптом: Высокая загрузка CPU после включения сжатия
+# Проверьте уровень сжатия:
+grep COMPRESSION_LEVEL proxy/.env
+
+# Снизьте уровень для меньшей нагрузки CPU:
+COMPRESSION_LEVEL=1  # Быстрее, ~58% снижение
+```
