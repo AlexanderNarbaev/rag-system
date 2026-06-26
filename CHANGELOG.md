@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-06-26
+
+### Added
+- **Self-Correcting RAG (Level 5):** HyDE query expansion for sparse retrieval improvement
+- **CRAG evaluator:** Multi-factor retrieval quality assessment with confidence scoring
+- **Self-reflection loops:** Post-generation critique step that re-reads answers against context
+- **Hallucination detection & grounding:** NLI-based answer verification with entailment check
+- **Corrective re-generation:** When confidence is low, re-generate with expanded context and factuality-focused prompts
+- **Agentic tool calling:** Live queries to Confluence/Jira/GitLab APIs (not just indexed data)
+- **Multi-language support:** Full i18n for RU, EN, DE, FR, ZH with configurable response language
+- **Cross-lingual retrieval benchmarks:** Evaluation dataset with multi-language query-document pairs
+- **Live source connectors:** Direct API integration with Confluence, Jira, and GitLab for real-time data
+- **Self-reflection graph patterns:** Neo4j knowledge graph patterns for self-reflection and entity linking
+- 12 new tests (1333 total, 100% pass rate)
+
+### Changed
+- RAG maturity: upgraded from Level 4+ (Agentic+) to Level 5 (Self-Correcting)
+- Production readiness: improved from 84% (67/80) to 94% (75/80)
+- Composite maturity score: improved from 4.2/5.0 to 4.5+/5.0
+- Token budget management: now includes self-reflection overhead allocation
+
 ## [1.0.0] — 2026-06-26
 
 ### Added
@@ -114,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 7 Architecture Decision Records, 4 C4 diagrams, 8 design guides
 - 1248 tests passing (100% pass rate)
 
+[2.0.0]: https://github.com/AlexanderNarbaev/rag-system/releases/tag/v2.0.0
 [1.0.0]: https://github.com/AlexanderNarbaev/rag-system/releases/tag/v1.0.0
 [0.6.0]: https://github.com/AlexanderNarbaev/rag-system/releases/tag/v0.6.0
 [0.5.0]: https://github.com/AlexanderNarbaev/rag-system/releases/tag/v0.5.0
