@@ -533,6 +533,176 @@ Prometheus-метрики в формате OpenMetrics.
 
 ---
 
+### `POST /v1/admin/warmup`
+
+Предварительная загрузка моделей эмбеддера, реранкера и SLM в память GPU/CPU перед началом обслуживания. Устраняет задержку холодного старта на первом запросе. Опционально прогревает LLM-бэкенд.
+
+#### Запрос
+
+```http
+POST /v1/admin/warmup HTTP/1.1
+Authorization: Bearer <admin-токен>
+```
+
+Тело запроса не требуется. Требуется роль admin при `AUTH_ENABLED=true`.
+
+#### Ответ (200 OK)
+
+```json
+{
+  "status": "ok",
+  "warmed_components": {
+    "embedder": "ok",
+    "reranker": "ok",
+    "slm": "ok",
+    "llm": "skipped"
+  },
+  "duration_ms": 2500
+}
+```
+
+| Поле | Тип | Описание |
+|-------|------|-------------|
+| `warmed_components` | object | Статус по компонентам: `ok`, `skipped` (отключён), или `error: <сообщение>` |
+| `duration_ms` | integer | Общее время прогрева в миллисекундах |
+
+**Поведение прогрева:**
+
+- Эмбеддер: выполняет вызов `encode("warmup")` для загрузки модели
+- Реранкер: выполняет scoring фиктивной пары для инициализации cross-encoder
+- SLM: отправляет однотокеновое завершение (`"ping"`) на SLM-эндпоинт
+- LLM: пропускается по умолчанию. Установите `WARMUP_LLM=true` для включения
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/warmup \
+  -H "Authorization: Bearer <admin-токен>"
+```
+
+---
+
+### `POST /webhook/confluence`
+
+Приём вебхук-событий Confluence для индексации в реальном времени. Проверяет HMAC-SHA256 подписи и помещает события в Redis Streams для обработки потоковым ETL-конвейером.
+
+#### Запрос
+
+```http
+POST /webhook/confluence HTTP/1.1
+Content-Type: application/json
+X-Confluence-Webhook-Signature: sha256=<hmac-подпись>
+```
+
+#### Тело запроса
+
+```json
+{
+  "event": "page_created | page_updated | page_removed",
+  "page": {
+    "id": "string",
+    "title": "string",
+    "spaceKey": "string",
+    "version": "integer",
+    "url": "string"
+  },
+  "timestamp": "string (ISO 8601)"
+}
+```
+
+#### Ответ (200 OK)
+
+```json
+{
+  "status": "accepted",
+  "event_id": "string",
+  "message": "Событие поставлено в очередь на обработку"
+}
+```
+
+| Поле | Описание |
+|-------|-------------|
+| `status` | Всегда `"accepted"` — события обрабатываются асинхронно |
+| `event_id` | Уникальный ID для отслеживания события через потоковый конвейер |
+| `message` | Человекочитаемый статус |
+
+#### Ошибки
+
+| HTTP Status | Описание |
+|-------------|-------------|
+| **401** | Неверный или отсутствующий заголовок `X-Confluence-Webhook-Signature` |
+| **400** | Некорректное тело события или неподдерживаемый тип события |
+| **503** | Redis Streams недоступен (событие не поставлено в очередь) |
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/webhook/confluence \
+  -H "Content-Type: application/json" \
+  -H "X-Confluence-Webhook-Signature: sha256=abc123..." \
+  -d '{
+    "event": "page_updated",
+    "page": {
+      "id": "12345",
+      "title": "Руководство по развёртыванию",
+      "spaceKey": "ENG",
+      "version": 3,
+      "url": "https://confluence.example.com/display/ENG/Deployment+Guide"
+    },
+    "timestamp": "2026-06-26T10:30:00Z"
+  }'
+```
+
+---
+
+### Сжатие ответов
+
+Все ответы API поддерживают сжатие gzip и brotli через заголовок запроса `Accept-Encoding`. Сжатие применяется к ответам больше 1 KB (настраивается через `COMPRESSION_MIN_SIZE`).
+
+#### Поведение
+
+| Заголовок | Значение | Эффект |
+|--------|-------|--------|
+| `Accept-Encoding: gzip` | gzip | Ответ сжат gzip (уровень 6) |
+| `Accept-Encoding: br` | brotli | Ответ сжат brotli (уровень 4) |
+| `Accept-Encoding: gzip, br` | br или gzip | Brotli предпочтительнее, gzip как запасной |
+| (отсутствует) | — | Ответ без сжатия |
+
+**Сжатие применяется к:**
+- Всем JSON-ответам (чат-завершения, проверки здоровья, список моделей и т.д.)
+- Ответам с ошибками (если тело > 1 KB)
+- Метрикам Prometheus (`/metrics`)
+
+**Сжатие НЕ применяется к:**
+- Потоковым SSE-ответам (`text/event-stream`) — используется `Transfer-Encoding: chunked`
+- Ответам меньше `COMPRESSION_MIN_SIZE` (по умолчанию: 1 KB)
+
+#### Настройка
+
+```bash
+# Включить сжатие ответов (по умолчанию: true)
+COMPRESSION_ENABLED=true
+
+# Минимальный размер ответа в байтах для сжатия (по умолчанию: 1000)
+COMPRESSION_MIN_SIZE=1000
+
+# Уровень сжатия: gzip 1-9, brotli 0-11 (по умолчанию: 6 для gzip, 4 для brotli)
+COMPRESSION_LEVEL=6
+```
+
+#### Бенчмарки производительности
+
+| Тип контента | Без сжатия | gzip | Brotli | Снижение |
+|-------------|-----------|------|--------|----------|
+| JSON (rag_sources) | ~45 KB | ~15 KB | ~13 KB | 65–72% |
+| JSON (чат-завершение) | ~12 KB | ~3.5 KB | ~3.1 KB | 70–75% |
+| HTML (health dashboard) | ~28 KB | ~6 KB | ~5.5 KB | 75–80% |
+| Метрики Prometheus | ~18 KB | ~4 KB | ~3.8 KB | 75–80% |
+
+Накладные расходы CPU: < 5ms для gzip, < 15ms для brotli на запрос.
+
+---
+
 ## Коды ошибок
 
 | HTTP Status | Тип ошибки | Значение | Действие |
@@ -640,6 +810,13 @@ HTTP-заголовки в каждом ответе (при активном о
 | `RETRY_DELAY` | `1.0` | Задержка между повторами в секундах |
 | `WORKERS` | `1` | Процессов-воркеров (держите 1 для общих кэшей) |
 | `CORS_ORIGINS` | `*` | Разрешённые источники CORS |
+| `COMPRESSION_ENABLED` | `true` | Включить сжатие ответов gzip/brotli |
+| `COMPRESSION_MIN_SIZE` | `1000` | Минимальный размер ответа в байтах для сжатия |
+| `COMPRESSION_LEVEL` | `6` | Уровень сжатия (1-9 для gzip, 0-11 для brotli) |
+| `WARMUP_LLM` | `false` | Включить LLM в прогрев моделей |
+| `WEBHOOK_SECRET` | (пусто) | Общий секрет для HMAC-верификации вебхуков Confluence/GitLab |
+| `STREAMING_ETL_ENABLED` | `false` | Включить потоковый ETL на основе Redis Streams |
+| `REDIS_STREAMS_URL` | `redis://localhost:6379` | URL подключения к Redis Streams для потокового ETL |
 
 ### SLM / Малая языковая модель
 
@@ -666,6 +843,8 @@ HTTP-заголовки в каждом ответе (при активном о
 | `POST` | `/v1/auth/refresh` | Да | Нет | Обновление токена |
 | `GET` | `/v1/auth/me` | Да | Нет | Контекст пользователя |
 | `POST` | `/v1/feedback` | Нет | Нет | Отправка обратной связи |
+| `POST` | `/v1/admin/warmup` | Да (admin) | Нет | Прогрев моделей в память GPU/CPU |
+| `POST` | `/webhook/confluence` | Нет (HMAC) | Нет | Приём вебхуков Confluence для потокового ETL |
 
 ---
 
