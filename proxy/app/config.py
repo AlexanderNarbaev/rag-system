@@ -136,6 +136,12 @@ REORDER_ENABLED = os.getenv("REORDER_ENABLED", "true").lower() == "true"
 CRAG_DECOMPOSITION_ENABLED = os.getenv("CRAG_DECOMPOSITION_ENABLED", "true").lower() == "true"
 NLI_MODEL_ENABLED = os.getenv("NLI_MODEL_ENABLED", "false").lower() == "true"
 
+# ============ Level 5: Self-Correcting RAG ============
+HYDE_ENABLED = os.getenv("HYDE_ENABLED", "false").lower() == "true"
+REFLECTION_ENABLED = os.getenv("REFLECTION_ENABLED", "false").lower() == "true"
+REFLECTION_DEPTH = int(os.getenv("REFLECTION_DEPTH", "2"))
+HALLUCINATION_CHECK_ENABLED = os.getenv("HALLUCINATION_CHECK_ENABLED", "false").lower() == "true"
+
 # ============ Self-Enrichment ============
 ENRICHMENT_ENABLED = os.getenv("ENRICHMENT_ENABLED", "false").lower() == "true"
 
@@ -170,6 +176,27 @@ DEPENDENCY_SCAN_ENABLED = os.getenv("DEPENDENCY_SCAN_ENABLED", "false").lower() 
 # ============ Admin Alerts ============
 ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
 ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")
+
+# ============ Tool Calling / Function Calling ============
+TOOLS_ENABLED = os.getenv("TOOLS_ENABLED", "false").lower() == "true"
+LIVE_SOURCES_ENABLED = os.getenv("LIVE_SOURCES_ENABLED", "false").lower() == "true"
+
+# ============ Live Source APIs ============
+CONFLUENCE_API_URL = os.getenv("CONFLUENCE_API_URL", "")
+CONFLUENCE_API_TOKEN = os.getenv("CONFLUENCE_API_TOKEN", "")
+CONFLUENCE_API_USER = os.getenv("CONFLUENCE_API_USER", "")
+JIRA_API_URL = os.getenv("JIRA_API_URL", "")
+JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
+JIRA_API_USER = os.getenv("JIRA_API_USER", "")
+GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")
+GITLAB_API_TOKEN = os.getenv("GITLAB_API_TOKEN", "")
+
+# ============ I18N / Multi-Language Support ============
+I18N_ENABLED = os.getenv("I18N_ENABLED", "true").lower() == "true"
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
+SUPPORTED_LANGUAGES = os.getenv("SUPPORTED_LANGUAGES", "en,ru,de,fr,zh").split(",")
+MULTILINGUAL_INTENT_ENABLED = os.getenv("MULTILINGUAL_INTENT_ENABLED", "true").lower() == "true"
+CROSS_LINGUAL_ENABLED = os.getenv("CROSS_LINGUAL_ENABLED", "true").lower() == "true"
 
 # ============ Response Compression ============
 COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() == "true"
