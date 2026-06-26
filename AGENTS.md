@@ -113,6 +113,20 @@ rag-system/
 | **Auth** | Keycloak (planned v0.4) | Corporate SSO, RBAC |
 | **Infra** | Docker Compose | Containerized deployment |
 
+## MCP Servers (configured in opencode.json)
+
+| Server | Purpose |
+|--------|---------|
+| **`filesystem`** | File operations within the project |
+| **`context7`** | Live documentation for libraries and frameworks |
+| **`sequential-thinking`** | Step-by-step reasoning for complex problems |
+| **`codegraph`** | Code graph navigation and call tracing |
+| **`agentic-tools`** | Hierarchical task management and memory |
+| **`memorylayer`** | Semantic memory and session context |
+| **`fetch`** | HTTP requests and web content retrieval |
+| **`sqlite`** | SQLite database interactions |
+| **`github`** | GitHub API (repositories, PRs, issues) |
+
 ## Key Constraints
 - **Air-gapped environment** — all components must work without internet access
 - **LLM context limits**: configurable (depends on deployed model); 8K tokens (embedder/reranker)
