@@ -305,7 +305,62 @@ RERANKER_BATCH_SIZE=16  # 8-32 range; lower reduces memory spikes
 --max-num-seqs 16           # concurrent requests
 ```
 
-## Log Management
+## Cold Storage Cleanup
+
+### Automatic Version Pruning
+
+The cold storage directory (`COLD_DIR` in ETL config) accumulates Parquet files for each document version. To prevent unbounded growth, enable TTL-based cleanup:
+
+```bash
+# In proxy/.env or ETL config
+COLD_STORAGE_ENABLED=true
+COLD_STORAGE_MAX_VERSIONS=5   # Keep latest 5 versions per document
+```
+
+The cleanup process:
+1. Scans cold storage for `*.parquet` files matching pattern `<doc_name>_v<N>.parquet`
+2. Groups files by document name
+3. Sorts by version number (descending)
+4. Deletes all files beyond `COLD_STORAGE_MAX_VERSIONS`
+
+**Manual trigger:**
+```bash
+python etl/scheduler/cold_storage_cleanup.py --cold-dir /data/cold_chunks --max-versions 3
+```
+
+**Cron integration:**
+```cron
+0 3 * * 0 cd /opt/rag-system && python etl/scheduler/cold_storage_cleanup.py
+```
+
+---
+
+## Model Warm-Up
+
+### Startup Latency Optimization
+
+On first request after deployment, models are loaded into memory (GPU/CPU), causing high latency. Pre-warm models at startup:
+
+```bash
+# Pre-warm all models
+curl -X POST http://localhost:8080/v1/health/ready
+
+# Pre-warm with a dummy query
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"warmup","messages":[{"role":"user","content":"ping"}]}'
+```
+
+**Docker Compose healthcheck with warm-up:**
+```yaml
+services:
+  proxy:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health/live"]
+      interval: 30s
+      retries: 3
+      start_period: 120s  # Allow time for model loading
+```
 
 ### Log Rotation
 

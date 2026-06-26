@@ -182,6 +182,63 @@ docker run --rm --network=host \
 - [ ] Use reverse proxy (nginx/Caddy) with TLS in front of port 8080
 - [ ] Enable firewall: only expose 8080 and 8501 externally
 - [ ] Set `LOG_REQUESTS=true` but mask `SENSITIVE_SECRETS` in config
+- [ ] Configure log rotation for feedback logs and proxy logs
+
+### Nginx with TLS Termination
+
+```nginx
+# /etc/nginx/sites-available/rag-proxy
+server {
+    listen 443 ssl http2;
+    server_name rag-proxy.internal.company.com;
+
+    ssl_certificate     /etc/ssl/certs/rag-proxy.crt;
+    ssl_certificate_key /etc/ssl/private/rag-proxy.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    location /v1/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+        proxy_buffering off;  # Required for SSE streaming
+    }
+
+    location /metrics {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+### Log Rotation
+
+```bash
+# /etc/logrotate.d/rag-system
+./logs/feedback/*.jsonl {
+    daily
+    rotate 7
+    maxsize 100M
+    compress
+    missingok
+    notifempty
+}
+
+./logs/proxy/*.log {
+    daily
+    rotate 14
+    maxsize 50M
+    compress
+    missingok
+    notifempty
+    postrotate
+        docker exec rag-proxy kill -HUP 1 2>/dev/null || true
+    endscript
+}
+```
 
 ### Monitoring
 - [ ] Configure Prometheus to scrape `/metrics` on all services

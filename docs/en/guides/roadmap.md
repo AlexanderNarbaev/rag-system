@@ -1,7 +1,7 @@
 # Development Roadmap
 
 **Last Updated:** 2026-06-26
-**Current Version:** v0.4
+**Current Version:** v0.5
 
 ---
 
@@ -27,7 +27,8 @@
 - Rate limiting (token bucket per IP)
 - Graceful degradation design for all components
 - Air-gapped deployment support (models pre-downloaded)
-- 919 tests passing (100% pass rate)
+- Cross-encoder reranker fine-tuning from HITL feedback
+- 1248 tests passing (100% pass rate)
 - 7 Architecture Decision Records, 4 C4 diagrams, 8 design guides
 
 **Known issues:**
@@ -59,7 +60,7 @@
 ### v0.3 — Token Optimization & Quality Foundations
 
 **Target:** Q3 2026
-**Status:** 🔵 Planning
+**Status:** ✅ Complete
 
 **Theme:** Reduce token costs by 40% and establish measurable quality baselines.
 
@@ -93,7 +94,7 @@
 ### v0.4 — Security & Multi-Tenancy
 
 **Target:** Q4 2026
-**Status:** ⚪ Planned
+**Status:** ✅ Complete
 
 **Theme:** Make the system safe for multi-user corporate deployment.
 
@@ -126,8 +127,8 @@
 
 ### v0.5 — Multi-Modal RAG
 
-**Target:** Q1 2027
-**Status:** ⚪ Planned
+**Target:** Q1 2027 (delivered early Q2 2026)
+**Status:** ✅ Complete
 
 **Theme:** Expand beyond text to images, diagrams, and code.
 
@@ -239,11 +240,11 @@
 ```
 2026 Q2  ████████████ v0.1 — Core Infrastructure (COMPLETE)
 2026 Q2  ████████████ v0.2 — Self-Improving RAG (COMPLETE)
-2026 Q3  ░░░░░░░░░░░░ v0.3 — Token Optimization + Quality Foundations
-2026 Q4  ░░░░░░░░░░░░ v0.4 — Security + RBAC + Multi-Tenancy
-2027 Q1  ░░░░░░░░░░░░ v0.5 — Multi-Modal RAG (Images, Code, Tables)
-2027 Q2  ░░░░░░░░░░░░ v0.6 — Real-Time Indexing + Streaming
-2027 Q3  ░░░░░░░░░░░░ v1.0 — Production Hardening + GA
+2026 Q2  ████████████ v0.3 — Token Optimization + Quality Foundations (COMPLETE)
+2026 Q2  ████████████ v0.4 — Security + RBAC + Multi-Tenancy (COMPLETE)
+2026 Q2  ████████████ v0.5 — Multi-Modal RAG (Images, Code, Tables) (COMPLETE)
+2026 Q3  ░░░░░░░░░░░░ v0.6 — Real-Time Indexing + Streaming
+2027 Q1  ░░░░░░░░░░░░ v1.0 — Production Hardening + GA
 2028+   ░░░░░░░░░░░░ v2.0 — Self-Correcting, Agentic Tools, Federated
 ```
 

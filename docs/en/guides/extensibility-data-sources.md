@@ -220,3 +220,89 @@ graph:
 
 Cross-source relationships (e.g., linking a Confluence page about "Auth Service" to GitLab
 code that implements it) use `RELATES_TO` edges with `source_type` metadata on the edge.
+
+---
+
+## 5. Multi-Modal Data Extractors (v0.5)
+
+### Image Extractor
+
+Extracts images from HTML documents for multi-modal retrieval. Located at
+`etl/extractors/image_extractor.py`.
+
+```python
+from etl.extractors.image_extractor import extract_images_from_html, caption_image, ImageInfo
+
+html = '<img src="architecture.png" alt="System architecture diagram">'
+images = extract_images_from_html(html)
+for img in images:
+    caption = caption_image(img.src, img.alt)
+    # caption = "[Image: System architecture diagram]"
+```
+
+**Configuration:**
+```bash
+IMAGE_EXTRACTION_ENABLED=true
+IMAGE_MODEL=clip-ViT-B-32  # placeholder for future CLIP integration
+```
+
+### Table Extractor
+
+Parses `<table>` elements from Confluence/Jira HTML into structured data.
+Located at `etl/chunker/table_extractor.py`.
+
+```python
+from etl.chunker.table_extractor import extract_tables_from_html, table_to_markdown
+
+html = "<table><tr><th>Name</th><th>Value</th></tr><tr><td>timeout</td><td>30</td></tr></table>"
+tables = extract_tables_from_html(html)
+for t in tables:
+    markdown_table = table_to_markdown(t)
+```
+
+**Configuration:**
+```bash
+TABLE_EXTRACTION_ENABLED=true
+```
+
+### Code Chunker
+
+AST-aware and regex-based code chunking for Python, JavaScript, and Java.
+Located at `etl/chunker/code_chunker.py`.
+
+```python
+from etl.chunker.code_chunker import chunk_code, chunk_python, CodeChunk
+
+source = "def hello(): return 'world'"
+chunks = chunk_code(source, "python")
+for c in chunks:
+    print(c.name, c.docstring, len(c.code))
+```
+
+**Configuration:**
+```bash
+CODE_CHUNKING_ENABLED=true
+AST_LANGUAGES=python,javascript,java
+```
+
+### Multi-Modal Context Assembly
+
+Combines text chunks, tables, code blocks, and image captions into a unified
+context with token-aware budget allocation. Located at `proxy/app/context_builder.py`.
+
+```python
+from proxy.app.context_builder import assemble_multimodal_context
+
+context = assemble_multimodal_context(
+    chunks=["RAG combines retrieval and generation..."],
+    tables=["| Param | Value |\n| timeout | 30 |"],
+    code_blocks=["def hello():\n    return 'world'"],
+    images=["[Image: architecture diagram]"],
+    max_tokens=120000,
+)
+```
+
+**Configuration:**
+```bash
+MULTI_MODAL_ENABLED=true
+```

@@ -353,3 +353,68 @@ wal_format = {
     "timestamp": "2026-06-22T10:30:00Z"
 }
 ```
+
+---
+
+## 8. Multi-Modal & ColBERT Performance (v0.5)
+
+### 8.1 ColBERT Late Interaction
+
+bge-m3 ColBERT multi-vector retrieval provides higher precision than dense-only search by computing token-level MaxSim interactions:
+
+```python
+from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+indexer = QdrantHybridIndexer(collection_name="knowledge_base")
+indexer.index_with_colbert("def hello(): return 'world'")
+results = indexer.search_colbert("python hello function", limit=10)
+```
+
+**Performance characteristics:**
+- Storage: ~100× more vectors per document (one per token vs one per doc)
+- Latency: 30-80ms additional vs dense search (with ColBERT enabled)
+- Recall@20: +3-5% improvement over dense+sparse hybrid alone
+- Requires: Qdrant 1.10+ with multi-vector support
+
+### 8.2 Evaluation Metrics
+
+Run automated retrieval quality evaluation:
+
+```bash
+python proxy/app/evaluation.py --eval-dataset data/eval_queries.json --top-k 20
+```
+
+Output metrics:
+- **MRR** (Mean Reciprocal Rank): Expected ≥0.75 for production
+- **Recall@20**: Expected ≥0.85 for production
+- **nDCG@10**: Expected ≥0.70 for production
+- **Precision@5**: Expected ≥0.80 for production
+
+### 8.3 Grounding Score
+
+NLI-based factual grounding check prevents hallucinations:
+
+```python
+from proxy.app.grounding import compute_nli_grounding
+
+report = compute_nli_grounding(answer_text, context_text)
+# report.supported_claims, report.unsupported_claims, report.overall_score
+```
+
+- Score ≥0.7: Well-grounded, safe to return
+- Score 0.4-0.7: Flag for HITL review, return with `rag_confidence` warning
+- Score <0.4: Return "I don't have enough information to answer this accurately"
+
+### 8.4 Reranker Fine-Tuning from HITL
+
+Fine-tune the cross-encoder on domain-specific relevance judgments:
+
+```python
+from proxy.app.rerank import collect_training_pairs, fine_tune_reranker
+
+pairs = collect_training_pairs()          # From /v1/feedback logs
+if len(pairs) > 500:
+    fine_tune_reranker(pairs, epochs=3)   # Saves to FT_MODEL_DIR
+```
+
+Expected MRR improvement: ≥5% after 500+ expert corrections.

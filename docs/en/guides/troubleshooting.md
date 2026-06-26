@@ -313,3 +313,64 @@ graph:
 graph:
   enabled: false
 ```
+
+---
+
+## Authentication & RBAC Issues
+
+### JWT Token Rejected (401 Unauthorized)
+
+**Symptom:** All authenticated requests return 401.
+
+```bash
+# Verify auth is enabled
+curl -s http://localhost:8080/v1/health | jq '.components.auth'
+
+# Check JWT secret is set
+echo $JWT_SECRET  # Must be non-empty when AUTH_ENABLED=true
+
+# Verify token is not expired
+curl -s http://localhost:8080/v1/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Token Expiration
+
+```bash
+# Refresh before expiry
+curl -X POST http://localhost:8080/v1/auth/refresh \
+  -H "Authorization: Bearer $TOKEN"
+
+# Increase expiry time:
+TOKEN_EXPIRE_HOURS=48
+```
+
+### RBAC Access Denied (403 Forbidden)
+
+**Symptom:** Authenticated but cannot access certain documents.
+
+1. Verify the user's role in JWT claims:
+   ```bash
+   python3 -c "import jwt; print(jwt.decode('$TOKEN', options={'verify_signature': False}))"
+   ```
+2. Check document access levels match user role:
+   - `admin` — can access all documents
+   - `expert` — can access `internal` + `public`
+   - `user` — can access `public` only
+   - `read_only` — read-only, cannot submit feedback
+3. Verify `AUTH_VALID_USERS` JSON has correct user entries.
+
+### Keycloak Integration Issues
+
+```bash
+# Verify Keycloak connectivity
+curl -s http://keycloak:8080/auth/realms/your-realm/.well-known/openid-configuration
+
+# Check JWT public key matches
+python3 -c "
+import jwt
+with open('path/to/public.pem', 'r') as f:
+    key = f.read()
+token = 'your-jwt'
+jwt.decode(token, key, algorithms=['RS256'])
+"

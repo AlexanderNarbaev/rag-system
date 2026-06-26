@@ -282,3 +282,45 @@ For queries with many graph hits, compress to summary table:
 ```
 
 This compresses ~2,000 tokens of graph text into ~200 tokens while preserving relationship semantics.
+
+---
+
+## 8. CRAG Decomposition (v0.5)
+
+### 8.1 Corrective RAG Overview
+
+CRAG (Corrective Retrieval-Augmented Generation) decomposition splits complex queries into sub-queries, retrieves answers for each, then synthesizes a final response. This is enabled via `CRAG_DECOMPOSITION_ENABLED=true`.
+
+**Pipeline:**
+1. **Decompose** — SLM splits query into atomic sub-questions
+2. **Retrieve** — Each sub-question retrieves independently from Qdrant + Neo4j
+3. **Evaluate** — Confidence scorer checks each sub-answer for grounding
+4. **Correct** — Low-confidence sub-answers trigger re-retrieval with modified queries
+5. **Synthesize** — LLM combines verified sub-answers into coherent response
+
+### 8.2 Query Decomposition Strategies
+
+| Strategy | Trigger | Example |
+|----------|---------|---------|
+| **Comparison** | Queries with "vs", "compare", "difference" | "How does X differ from Y?" → [X details, Y details, diff] |
+| **Temporal** | "before/after", "from X to Y" | "How did X evolve?" → [v1.0 X, v2.0 X, changes] |
+| **Composite** | Multiple entities or joins | "What is X and how does it relate to Y?" → [explain X, explain Y, relationship] |
+| **Multi-hop** | Requires reasoning chain | "Who wrote the doc that describes X?" → [find doc, find author] |
+
+### 8.3 Verification & Self-Correction
+
+Each sub-answer goes through:
+- **NLI Grounding**: Check if answer claims are supported by retrieved context
+- **Confidence threshold**: Sub-answers below `CONFIDENCE_THRESHOLD` are re-retrieved
+- **Loop limit**: `MAX_VERIFY_LOOPS=2` prevents infinite correction cycles
+
+### 8.4 Configuration
+
+```bash
+# In proxy/.env
+CRAG_DECOMPOSITION_ENABLED=true
+NLI_MODEL_ENABLED=false          # Set true for NLI-based verification
+CONFIDENCE_THRESHOLD=0.5
+MAX_VERIFY_LOOPS=2
+SELF_CRITIQUE_ENABLED=true
+```

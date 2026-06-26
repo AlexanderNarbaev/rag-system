@@ -362,6 +362,62 @@ data: [DONE]
 
 ---
 
+### `GET /v1/health/live`
+
+Kubernetes-совместимая проверка живости. Возвращает 200, пока процесс жив.
+
+#### Запрос
+
+```http
+GET /v1/health/live HTTP/1.1
+```
+
+#### Ответ (200 OK)
+
+```json
+{
+  "status": "alive",
+  "timestamp": "string (ISO 8601)"
+}
+```
+
+---
+
+### `GET /v1/health/ready`
+
+Kubernetes-совместимая проверка готовности. Возвращает 200, когда прокси готов обслуживать запросы (все необходимые зависимости доступны). Возвращает 503, если критически важные зависимости недоступны.
+
+#### Запрос
+
+```http
+GET /v1/health/ready HTTP/1.1
+```
+
+#### Ответ (200 OK — Готов)
+
+```json
+{
+  "status": "ready",
+  "timestamp": "string (ISO 8601)",
+  "components": {
+    "qdrant": "ok",
+    "llm": "ok"
+  }
+}
+```
+
+#### Ответ (503 — Не готов)
+
+```json
+{
+  "status": "not_ready",
+  "timestamp": "string (ISO 8601)",
+  "reason": "Qdrant недоступен"
+}
+```
+
+---
+
 ### `GET /metrics`
 
 Prometheus-метрики в формате OpenMetrics.
@@ -603,6 +659,8 @@ HTTP-заголовки в каждом ответе (при активном о
 | `POST` | `/v1/chat/completions` | Опционально | Да | Чат-завершение с RAG (потоковое и без) |
 | `GET` | `/v1/models` | Нет | Нет | Список моделей |
 | `GET` | `/v1/health` | Нет | Нет | Проверка здоровья |
+| `GET` | `/v1/health/live` | Нет | Нет | Проверка живости (liveness probe) |
+| `GET` | `/v1/health/ready` | Нет | Нет | Проверка готовности (readiness probe) |
 | `GET` | `/metrics` | Нет | Нет | Prometheus-метрики |
 | `POST` | `/v1/auth/login` | Нет | Да | Генерация JWT-токена |
 | `POST` | `/v1/auth/refresh` | Да | Нет | Обновление токена |

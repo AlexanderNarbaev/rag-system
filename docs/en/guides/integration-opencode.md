@@ -254,4 +254,44 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 # "Connection refused" → proxy not running
 # "401 Unauthorized" → API key mismatch
 # "504 Gateway Timeout" → increase REQUEST_TIMEOUT in .env
+
+---
+
+## MCP Server Tools (v0.5)
+
+The RAG system includes an MCP (Model Context Protocol) server at `mcp_server/server.py` that exposes RAG tools to MCP-compatible clients.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_knowledge_base` | Hybrid search (dense+sparse) across all indexed documents |
+| `get_document` | Retrieve a specific document by source ID |
+| `list_sources` | List available data sources with document counts |
+| `get_graph_context` | Retrieve Neo4j graph context for an entity |
+| `submit_feedback` | Submit expert feedback for HITL quality improvement |
+| `get_confidence` | Get confidence score for a query-answer pair |
+
+### Configuring in opencode.json
+
+```json
+{
+  "mcp_servers": {
+    "rag-system": {
+      "type": "streamableHttp",
+      "url": "http://localhost:8081/mcp",
+      "description": "RAG System — corporate knowledge base search"
+    }
+  }
+}
+```
+
+### Usage in OpenCode
+
+Once configured, OpenCode can use RAG tools directly:
+- "Search the knowledge base for the authentication architecture"
+- "Get the document with source ID CONFL-12345"
+- "List all available data sources"
+- "What's the graph context around the 'AuthService' entity?"
+
 ```

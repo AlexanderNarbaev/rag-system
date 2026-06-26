@@ -3,6 +3,8 @@
 This document defines the access control model for the RAG proxy — from data classification
 through Qdrant-level filtering to role-based context trimming.
 
+**Implementation Status:** ✅ Implemented in v0.4. JWT authentication, RBAC (admin/expert/user/read_only), data isolation, and audit logging are all available when `AUTH_ENABLED=true`.
+
 ---
 
 ## 1. Data Classification Levels

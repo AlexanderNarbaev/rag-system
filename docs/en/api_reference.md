@@ -436,6 +436,62 @@ GET /v1/health HTTP/1.1
 
 ---
 
+### `GET /v1/health/live`
+
+Kubernetes-compatible liveness probe. Returns 200 as long as the process is alive.
+
+#### Request
+
+```http
+GET /v1/health/live HTTP/1.1
+```
+
+#### Response (200 OK)
+
+```json
+{
+  "status": "alive",
+  "timestamp": "string (ISO 8601)"
+}
+```
+
+---
+
+### `GET /v1/health/ready`
+
+Kubernetes-compatible readiness probe. Returns 200 when the proxy is ready to serve requests (all required dependencies available). Returns 503 if critical dependencies are down.
+
+#### Request
+
+```http
+GET /v1/health/ready HTTP/1.1
+```
+
+#### Response (200 OK — Ready)
+
+```json
+{
+  "status": "ready",
+  "timestamp": "string (ISO 8601)",
+  "components": {
+    "qdrant": "ok",
+    "llm": "ok"
+  }
+}
+```
+
+#### Response (503 — Not Ready)
+
+```json
+{
+  "status": "not_ready",
+  "timestamp": "string (ISO 8601)",
+  "reason": "Qdrant unreachable"
+}
+```
+
+---
+
 ### `GET /metrics`
 
 Prometheus metrics in OpenMetrics text format.
@@ -839,6 +895,8 @@ All proxy configuration via environment variables (see `proxy/.env` and `proxy/a
 | `POST` | `/v1/chat/completions` | Optional | Yes | Chat completion with RAG augmentation (streaming + non-streaming) |
 | `GET` | `/v1/models` | No | No | List available models |
 | `GET` | `/v1/health` | No | No | Health check with component status |
+| `GET` | `/v1/health/live` | No | No | Liveness probe (process alive) |
+| `GET` | `/v1/health/ready` | No | No | Readiness probe (dependencies ready) |
 | `GET` | `/metrics` | No | No | Prometheus metrics in OpenMetrics format |
 | `POST` | `/v1/auth/login` | No | Yes | JWT token generation |
 | `POST` | `/v1/auth/refresh` | Yes | No | Token refresh |

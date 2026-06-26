@@ -8,9 +8,9 @@
 
 ## Status · Статус
 
-**EN:** **v0.4** — Self-improving RAG with confidence scoring, active feedback, VERIFY_CASCADE routing, and knowledge base self-enrichment. 919 tests passing. See [ADR documents](docs/adr/) for architecture decisions and [C4 diagrams](docs/diagrams/) for visual architecture.
+**EN:** **v0.5** — Multi-modal RAG with image embedding, code-aware chunking, table extraction, ColBERT late interaction, cold storage cleanup, and reranker fine-tuning from HITL feedback. 1248 tests passing. See [ADR documents](docs/adr/) for architecture decisions and [C4 diagrams](docs/diagrams/) for visual architecture.
 
-**RU:** **v0.4** — Самоулучшающийся RAG с оценкой уверенности, активной обратной связью, маршрутизацией VERIFY_CASCADE и самообогащением базы знаний. 919 тестов проходят. См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
+**RU:** **v0.5** — Мультимодальный RAG с эмбеддингом изображений, кодо-ориентированным чанкингом, извлечением таблиц, ColBERT late interaction, очисткой холодного хранилища и дообучением реранкера на HITL-фидбеке. 1248 тестов проходят. См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
 
 ---
 

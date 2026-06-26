@@ -7,11 +7,11 @@ Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline 
 English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language switcher. See `docs/en/` and `docs/ru/`.
 
 ## Current State
-- **Version:** v0.4 (June 2026)
-- **Tests:** 919 collected, 919 passing (100% pass rate)
-- **Maturity:** RAG Level 4 (Agentic) operational with confidence scoring, active feedback, and self-enrichment
-- **Production readiness:** 45% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
-- **Next milestone:** v0.5 — Token optimization + retrieval quality evaluation (see `docs/guides/roadmap.md`)
+- **Version:** v0.5 (June 2026)
+- **Tests:** 1248 collected, 1248 passing (100% pass rate)
+- **Maturity:** RAG Level 4 (Agentic) operational with confidence scoring, active feedback, self-enrichment, and multi-modal RAG
+- **Production readiness:** 55% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
+- **Next milestone:** v0.6 — Full RBAC, advanced auth, production hardening (see `docs/guides/roadmap.md`)
 
 ## Architecture
 Three-layer system plus supporting services, with multi-provider LLM backend support:
