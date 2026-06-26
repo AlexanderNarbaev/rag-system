@@ -136,18 +136,32 @@ def reciprocal_rank_fusion(results_dense: list, results_sparse: list, k: int = 6
     return [all_results[hid] for hid in sorted_ids if hid in all_results]
 
 
-def hybrid_search(query: str, version: str | None = None, top_k: int = 50) -> list:
+def hybrid_search(
+    query: str,
+    version: str | None = None,
+    top_k: int = 50,
+    namespace: str | None = None,
+) -> list:
     """
     Гибридный поиск в Qdrant: dense + sparse.
+    Фильтрация по версии и namespace (для мультитенантности).
     Возвращает список объектов Qdrant ScoredPoint.
     """
     if not qdrant_client or not embedder:
         initialize_retrieval()
 
-    # Построение фильтра по версии (если указана)
-    q_filter = None
+    # Build filter conditions
+    filter_conditions = []
     if version:
-        q_filter = models.Filter(must=[models.FieldCondition(key="version", match=models.MatchValue(value=version))])
+        filter_conditions.append(
+            models.FieldCondition(key="version", match=models.MatchValue(value=version))
+        )
+    if namespace:
+        filter_conditions.append(
+            models.FieldCondition(key="namespace", match=models.MatchValue(value=namespace))
+        )
+
+    q_filter = models.Filter(must=filter_conditions) if filter_conditions else None
 
     # Dense поиск
     dense_vec = _compute_dense_embedding(query)
@@ -281,3 +295,27 @@ def check_qdrant_health() -> bool:
         return True
     except Exception:
         return False
+
+
+def compute_dynamic_top_k(query: str, default: int = 50) -> int:
+    """
+    Compute the optimal number of chunks to retrieve based on query complexity.
+
+    Uses SLM-based complexity scoring when available, falling back to
+    word-count heuristics.
+
+    Args:
+        query: The user query string.
+        default: Fallback top_k when complexity scoring is unavailable.
+
+    Returns:
+        Optimal top_k value (between 5 and 50).
+    """
+    from app.slm_router import dynamic_top_k_from_complexity, score_query_complexity
+
+    try:
+        complexity = score_query_complexity(query)
+        return dynamic_top_k_from_complexity(complexity, max_default=default)
+    except Exception:
+        logger.warning("Dynamic top-k computation failed, using default", exc_info=True)
+        return default
