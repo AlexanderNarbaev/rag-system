@@ -1,7 +1,7 @@
 # Production Readiness Checklist
 
-**Last Updated:** 2026-06-24
-**Version:** v0.4.0
+**Last Updated:** 2026-06-26
+**Version:** v0.6.0
 
 This checklist tracks production readiness across 8 dimensions. Each item has pass/fail criteria, an automated verification command (where applicable), and remediation steps for failures. Checked items (✅) are implemented; unchecked (☐) are gaps. Partially implemented items are marked 🟡.
 
@@ -113,11 +113,11 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 6.5 | Load testing results | ☐ Fail | Benchmark script measures: simple query (< 2s p95), procedural query (< 5s p95), agentic query (< 15s p95); results reproducible | `python scripts/benchmark.py --scenario simple --requests 100 --concurrency 10` → p95 < 2s | Run load tests with increasing concurrency (1 → 5 → 10 → 50); identify bottlenecks; optimize slowest path |
 | 6.6 | p95 latency targets | ☐ Fail | p95 latency measured and tracked: simple < 2s, procedural < 5s, agentic < 15s; alerts at 200% of target | `curl -s http://localhost:8080/metrics | grep "rag_request_duration_seconds{endpoint=\"/v1/chat/completions\",quantile=\"0.95\"}"` | Measure baseline p95 under load; add Prometheus histogram quantiles; set p95 alerts |
 | 6.7 | Token budget management | ✅ Pass | `token_optimizer.py` with BPE-aware counting; 4 compression strategies; context fits within allocated budget ±10% | Log token counts: prompt_tokens + completion_tokens ≤ model context limit | Use `TokenOptimizer.estimate_token_cost()` in all context assembly paths; eliminate char-length heuristics |
-| 6.8 | Model warm-up | ☐ Fail | Embedder and reranker models loaded into GPU/CPU memory at startup (not on first request); first request latency same as subsequent | Compare first request latency vs 10th request latency → difference < 100ms | Add `warmup()` call in `lifespan`: run a dummy query through embedder and reranker to trigger model loading |
+| 6.8 | Model warm-up | ✅ Pass | Embedder, reranker, and SLM loaded at startup via `POST /v1/admin/warmup`; first request latency equals subsequent requests (±100ms); Prometheus `rag_warmup_completed` gauge monitors status | Compare first request latency vs 10th request latency → difference < 100ms; warm-up completes within 30s | Automate post-deploy warm-up via systemd or K8s post-start hook |
 | 6.9 | Connection keep-alive tuning | ☐ Fail | HTTP keep-alive enabled for all services; Qdrant gRPC keepalive configured; Redis connection timeout tuned | `curl -v http://localhost:8080/v1/health 2>&1 | grep -i keep-alive` → `Connection: keep-alive` | Configure HTTP client sessions with `keepalive_timeout=30`; enable TCP keepalive on Qdrant/Redis connections |
-| 6.10 | Response compression | ☐ Fail | Gzip middleware compresses responses > 1KB; reduces response size by 60-80% for text; adds < 5ms latency | `curl -H "Accept-Encoding: gzip" -v http://localhost:8080/v1/chat/completions ...` → `Content-Encoding: gzip` | Add `GZipMiddleware` from Starlette; set `minimum_size=1000`; avoid compressing streaming responses |
+| 6.10 | Response compression | ✅ Pass | Gzip/brotli middleware compresses responses > 1KB; 60%+ reduction for JSON/text; <5ms CPU overhead; `Content-Encoding: gzip` or `br` header present; configurable via `COMPRESSION_*` env vars | `curl -H "Accept-Encoding: gzip" -v http://localhost:8080/v1/health` → `Content-Encoding: gzip` | Configure `COMPRESSION_ENABLED`, `COMPRESSION_MIN_SIZE`, `COMPRESSION_LEVEL`; benchmark with load testing |
 
-**Performance: 5.5/10 (55%)**
+**Performance: 6.5/10 (65%)**
 
 ---
 
@@ -134,9 +134,9 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 7.7 | Zero-downtime deployment | ☐ Fail | Rolling update: start new instance, wait for healthy, drain old instance; no failed requests during deploy; `WORKERS=1` constraint documented | Deploy new version → `ab -n 1000 -c 10 http://proxy/v1/health` → 0 failures during deploy | Use Docker Swarm or K8s rolling update; add pre-stop hook for graceful shutdown; test with continuous traffic |
 | 7.8 | Canary/blue-green deployment | ☐ Fail | Canary: send 5% traffic to new version for 10 min → promote to 100% if no errors; rollback if error rate increases | Deploy canary → check error rate dashboard → promote or rollback | Add traffic splitting at load balancer level; implement automated canary analysis with Prometheus metrics |
 | 7.9 | Makefile for common tasks | ✅ Pass | `make test`, `make lint`, `make format`, `make typecheck`, `make docker-build`, `make docker-up`, `make docker-down`, `make clean`, `make all` | `make help` shows all targets; `make all` succeeds | Add `make backup`, `make restore`, `make migrate`, `make benchmark`, `make deploy` targets |
-| 7.10 | Runbook for common incidents | ☐ Fail | Documented procedures: "LLM is down", "Qdrant is full", "Redis OOM", "High latency", "Token budget exceeded"; each with symptoms, diagnosis, fix, prevention | Simulate "LLM down" scenario → follow runbook → system recovers | Write `docs/guides/incident-runbook.md`; include 5-7 common incidents; test each procedure in staging |
+| 7.10 | Runbook for common incidents | 🟡 Partial | Documented procedures in troubleshooting guide: streaming ETL Redis issues, webhook verification failures, warm-up timeouts, compression issues, Redis connection problems; each with symptoms, diagnosis, fix | Simulate "LLM down" or "Redis stream consumer lag" scenario → follow troubleshooting guide → system recovers | Expand to cover all component failure scenarios; add automated health check alerting with runbook links |
 
-**Operations: 3.5/10 (35%)**
+**Operations: 4.5/10 (45%)**
 
 ---
 
@@ -170,10 +170,10 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 3. Security | 5.0 | 10 | 50% | Improving |
 | 4. Observability | 4.0 | 10 | 40% | Stable |
 | 5. Reliability | 5.0 | 10 | 50% | Stable |
-| 6. Performance | 5.5 | 10 | 55% | Stable |
-| 7. Operations | 3.5 | 10 | 35% | Stable |
+| 6. Performance | 6.5 | 10 | 65% | Improving |
+| 7. Operations | 4.5 | 10 | 45% | Improving |
 | 8. Documentation | 9.0 | 10 | 90% | Strong |
-| **Overall** | **42.5** | **80** | **53%** | — |
+| **Overall** | **44.5** | **80** | **56%** | — |
 
 ### Radar View
 
@@ -184,7 +184,7 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
             / | \
            /  |  \
       Ops /   |   \ Performance
-    (35%)/    |    \(55%)
+    (45%)/    |    \(65%)
          \    |    /
   Reliability\  |  /Code Quality
       (50%)   \ | /  (60%)
@@ -198,16 +198,24 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 
 ### Priority Actions by Version
 
-#### v0.4 (Current — Token Optimization + Confidence)
+#### v0.4 (Completed — Token Optimization + Confidence)
 
 | # | Action | Dimension | Impact | Effort |
 |---|--------|-----------|--------|--------|
 | 1 | Wire grounding score into `check_confidence` node (5.5) | Security/Perf | Critical | 1 day |
 | 2 | Add env var validation at startup (1.9) | Code Quality | High | 0.5 day |
 | 3 | Add `pip-audit` to CI pipeline (3.6) | Security | High | 0.5 day |
-| 4 | Implement model warm-up in lifespan (6.8) | Performance | Medium | 0.5 day |
-| 5 | Add response compression middleware (6.10) | Performance | Medium | 0.5 day |
 | 6 | Create `CHANGELOG.md` with v0.1–v0.4 entries (8.10) | Documentation | Low | 1 day |
+
+#### v0.6 (Current — Streaming ETL + Performance)
+
+| # | Action | Dimension | Impact | Effort |
+|---|--------|-----------|--------|--------|
+| 4 | Streaming ETL pipeline (Redis Streams, webhook ingestion) (7.10) | Operations | High | Done |
+| 5 | Model warm-up endpoint + startup automation (6.8) | Performance | High | Done |
+| 6 | Response compression middleware gzip/brotli (6.10) | Performance | Medium | Done |
+| 7 | Streaming ETL monitoring and consumer lag alerts (4.1) | Observability | High | 2 days |
+| 8 | Webhook verification testing and integration (3.5) | Security | Medium | 1 day |
 
 #### v0.5 (Self-Correction)
 
@@ -292,6 +300,6 @@ echo "=== Results: $PASS passed, $FAIL failed, $WARN warnings ==="
 2. **Per-version review:** Before tagging a release, manually verify all criteria marked with ✅ or 🟡.
 3. **Gap prioritization:** Focus on Critical impact items first, then High, then Medium.
 4. **Remediation tracking:** Create a GitHub issue for each failing criterion. Link to this checklist.
-5. **Score trending:** Track the overall score (`42.5/80`) over time. Target +5 points per minor version.
+5. **Score trending:** Track the overall score (`44.5/80`) over time. Target +5 points per minor version.
 
 **Target for v1.0:** ≥ 70/80 (87.5%) across all dimensions.
