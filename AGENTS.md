@@ -7,11 +7,11 @@ Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline 
 English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language switcher. See `docs/en/` and `docs/ru/`.
 
 ## Current State
-- **Version:** v0.6 (June 2026)
-- **Tests:** 1248 collected, 1248 passing (100% pass rate)
-- **Maturity:** RAG Level 4+ (Agentic+) — NLI grounding, CRAG decomposition, self-critique, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k, streaming ETL (Redis Streams), webhook-driven ingestion, model warm-up, SSE TTFT optimization, response compression (gzip/brotli)
-- **Production readiness:** 75% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
-- **Next milestone:** v1.0 — Production Hardening & GA (see `docs/guides/roadmap.md`)
+- **Version:** v1.0 (June 2026) — General Availability
+- **Tests:** 1321 collected, 1321 passing (100% pass rate)
+- **Maturity:** RAG Level 4+ (Agentic+) — NLI grounding, CRAG decomposition, self-critique, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k, streaming ETL (Redis Streams), webhook-driven ingestion, model warm-up, SSE TTFT optimization, response compression (gzip/brotli), E2E test suite, chaos/resilience testing, K8s Helm chart, Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment, backup automation, DR runbook
+- **Production readiness:** 90%+ across 8 dimensions — see `docs/guides/best-practices-checklist.md`
+- **Next milestone:** Beyond v1.0 — Self-Correcting RAG (Level 5), Agentic Tools, Federated RAG (see `docs/guides/roadmap.md`)
 
 ## Architecture
 Three-layer system plus supporting services, with multi-provider LLM backend support:
@@ -117,8 +117,9 @@ rag-system/
 | **ETL** | Python, requests, BeautifulSoup, spaCy, sentence-transformers | Data extraction, chunking, indexing |
 | **Dashboard** | Streamlit | HITL expert review |
 | **MCP** | FastMCP | Model Context Protocol server for IDE integration |
-| **Auth** | Keycloak (planned v0.4) | Corporate SSO, RBAC |
-| **Infra** | Docker Compose | Containerized deployment |
+| **Auth** | Keycloak OIDC | Corporate SSO, RBAC |
+| **Infra** | Kubernetes + Helm | Production-grade deployment with HPA, probes |
+| **Backup** | S3/MinIO | Automated snapshots, dumps, RDB backups |
 
 ## MCP Servers (configured in opencode.json)
 
@@ -237,6 +238,8 @@ See `proxy/app/config.py` for all available settings and defaults.
 | `docs/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
 | `docs/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
 | `docs/guides/roadmap.md` | Version history and development roadmap (v0.1 → v1.0) |
+| `docs/guides/disaster-recovery-runbook.md` | DR procedures for all failure scenarios |
+| `docs/guides/sli-slo.md` | SLI/SLO definitions with error budgets |
 | `docs/guides/performance-quality.md` | HNSW tuning, quantization, monitoring, resilience |
 | `docs/guides/extensibility-data-sources.md` | Adding new ETL data sources |
 | `docs/guides/access-control-rbac.md` | RBAC and access control design |
