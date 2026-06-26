@@ -20,3 +20,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "e2e: End-to-end tests requiring running services",
+    "benchmark: Performance and load tests",
+    "chaos: Resilience and chaos engineering tests",
+]

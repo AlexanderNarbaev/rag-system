@@ -184,6 +184,10 @@ STREAM_BUFFER_SIZE = int(os.getenv("STREAM_BUFFER_SIZE", "1"))
 WARMUP_ENABLED = os.getenv("WARMUP_ENABLED", "true").lower() == "true"
 WARMUP_ON_STARTUP = os.getenv("WARMUP_ON_STARTUP", "true").lower() == "true"
 
+# ============ Graceful Shutdown ============
+GRACEFUL_SHUTDOWN_ENABLED = os.getenv("GRACEFUL_SHUTDOWN_ENABLED", "true").lower() == "true"
+SHUTDOWN_TIMEOUT = int(os.getenv("SHUTDOWN_TIMEOUT", "30"))
+
 # ============ Вспомогательная функция для отладки ============
 def print_config():
     """Выводит текущую конфигурацию (скрывая секреты)."""

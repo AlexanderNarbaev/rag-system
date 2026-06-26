@@ -15,10 +15,12 @@ OpenAI-совместимый прокси-сервер для RAG.
 - Redis для кэширования эмбеддингов (опционально)
 """
 
+import asyncio
 import json
 import logging
 import os
 import secrets
+import signal
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -45,6 +47,7 @@ from app.config import (
     COMPRESSION_LEVEL,
     COMPRESSION_MIN_SIZE,
     CORS_ORIGINS,
+    GRACEFUL_SHUTDOWN_ENABLED,
     LLM_ENDPOINT,
     LLM_MODEL_NAME,
     LOG_DIR,
@@ -55,6 +58,7 @@ from app.config import (
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_PER_MINUTE,
     REDIS_URL,
+    SHUTDOWN_TIMEOUT,
     SSE_CHUNK_SIZE,
     STREAM_BUFFER_SIZE,
     USE_LANGGRAPH,
@@ -95,6 +99,10 @@ token_optimizer = TokenOptimizer()
 retrieval_evaluator = RetrievalEvaluator()
 
 
+shutting_down = False
+_active_requests: set[asyncio.Task] = set()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения: инициализация и очистка ресурсов."""
@@ -123,12 +131,43 @@ async def lifespan(app: FastAPI):
             logger.info(f"Model warm-up completed: {warmup_result}")
         except Exception as e:
             logger.warning(f"Model warm-up failed (non-blocking): {e}")
+
+    if GRACEFUL_SHUTDOWN_ENABLED:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_initiate_shutdown(s)))
+            except (NotImplementedError, RuntimeError, ValueError):
+                logger.info(f"Signal handler for {sig.name} skipped (not supported in this environment)")
+        logger.info("Graceful shutdown handlers registered")
+
     logger.info("RAG Proxy ready")
     yield
     # Очистка
+    global shutting_down
+    shutting_down = True
+    logger.info("Draining in-flight requests...")
+    if _active_requests:
+        done, pending = await asyncio.wait(_active_requests, timeout=SHUTDOWN_TIMEOUT)
+        for task in pending:
+            task.cancel()
+        logger.info(f"Drained {len(done)} requests, cancelled {len(pending)}")
     if cache_manager:
         await cache_manager.close()
     logger.info("RAG Proxy shutdown")
+
+
+async def _initiate_shutdown(sig: signal.Signals):
+    """Initiate graceful shutdown on SIGTERM/SIGINT."""
+    global shutting_down
+    if shutting_down:
+        return
+    shutting_down = True
+    logger.info(f"Received signal {sig.name}, starting graceful shutdown...")
+    await asyncio.sleep(0.5)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
 
 
 app = FastAPI(
@@ -320,7 +359,11 @@ async def process_rag_query(
             return cached, "", True, []
 
     # 2. Гибридный поиск
-    search_results = hybrid_search(query=user_query, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
+    try:
+        search_results = hybrid_search(query=user_query, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
+    except Exception as e:
+        logger.warning(f"Hybrid search failed (degraded mode): {e}")
+        search_results = None
     sources: list[dict] = []
     if not search_results:
         # Нет релевантных чанков -> ответ без контекста

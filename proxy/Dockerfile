@@ -35,5 +35,11 @@ ENV PYTHONUNBUFFERED=1
 # Порт, который слушает сервер (по умолчанию 8080)
 EXPOSE 8080
 
+# Graceful shutdown signal
+STOPSIGNAL SIGTERM
+
+# Health check for orchestration
+HEALTHCHECK --interval=5s --timeout=3s --retries=3 CMD curl -f http://localhost:8080/v1/health/live || exit 1
+
 # Команда запуска через uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
