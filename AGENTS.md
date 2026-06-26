@@ -127,6 +127,7 @@ rag-system/
 |--------|---------|
 | **`filesystem`** | File operations within the project |
 | **`context7`** | Live documentation for libraries and frameworks |
+| **`context7-official`** | Official Context7 library documentation (upstash) |
 | **`sequential-thinking`** | Step-by-step reasoning for complex problems |
 | **`codegraph`** | Code graph navigation and call tracing |
 | **`agentic-tools`** | Hierarchical task management and memory |
@@ -134,6 +135,7 @@ rag-system/
 | **`fetch`** | HTTP requests and web content retrieval |
 | **`sqlite`** | SQLite database interactions |
 | **`github`** | GitHub API (repositories, PRs, issues) |
+| **`excalidraw`** | Architecture diagrams (C4, system design) |
 
 ## Key Constraints
 - **Air-gapped environment** — all components must work without internet access
