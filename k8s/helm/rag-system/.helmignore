@@ -1,0 +1,21 @@
+# Patterns to ignore when packaging
+.git
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# Project files
+.project
+.idea/
+*.tmproj
+.vscode/
+# OS files
+.DS_Store
+Thumbs.db

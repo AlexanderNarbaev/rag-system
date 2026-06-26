@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rag-system.fullname" . }}-proxy-config
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.proxyLabels" . | nindent 4 }}
+data:
+  QDRANT_HOST: {{ .Values.proxy.env.qdrantHost | default (printf "%s-qdrant" (include "rag-system.fullname" .)) | quote }}
+  QDRANT_PORT: {{ .Values.proxy.env.qdrantPort | quote }}
+  COLLECTION_NAME: {{ .Values.proxy.env.collectionName | quote }}
+  EMBEDDER_MODEL: {{ .Values.proxy.env.embedderModel | quote }}
+  EMBEDDER_DEVICE: {{ .Values.proxy.env.embedderDevice | quote }}
+  RERANKER_MODEL: {{ .Values.proxy.env.rerankerModel | quote }}
+  RERANKER_MAX_LENGTH: {{ .Values.proxy.env.rerankerMaxLength | quote }}
+  RERANKER_BATCH_SIZE: {{ .Values.proxy.env.rerankerBatchSize | quote }}
+  LLM_ENDPOINT: {{ .Values.proxy.env.llmEndpoint | quote }}
+  LLM_MODEL_NAME: {{ .Values.proxy.env.llmModelName | quote }}
+  LLM_PROVIDER_TYPE: {{ .Values.proxy.env.llmProviderType | quote }}
+  REQUEST_TIMEOUT: {{ .Values.proxy.env.requestTimeout | quote }}
+  MAX_RETRIES: {{ .Values.proxy.env.maxRetries | quote }}
+  RETRY_DELAY: {{ .Values.proxy.env.retryDelay | quote }}
+  SLM_ENDPOINT: {{ .Values.proxy.env.slmEndpoint | quote }}
+  SLM_MODEL_NAME: {{ .Values.proxy.env.slmModelName | quote }}
+  SLM_MAX_TOKENS: {{ .Values.proxy.env.slmMaxTokens | quote }}
+  MAX_CHUNKS_RETRIEVAL: {{ .Values.proxy.env.maxChunksRetrieval | quote }}
+  MAX_CHUNKS_AFTER_RERANK: {{ .Values.proxy.env.maxChunksAfterRerank | quote }}
+  USE_REDIS: {{ .Values.proxy.env.useRedis | quote }}
+  REDIS_URL: {{ .Values.proxy.env.redisUrl | default (printf "redis://%s-redis:6379" (include "rag-system.fullname" .)) | quote }}
+  USE_LANGGRAPH: {{ .Values.proxy.env.useLangGraph | quote }}
+  MAX_RETRIEVAL_LOOPS: {{ .Values.proxy.env.maxRetrievalLoops | quote }}
+  GRAPH_ENABLED: {{ .Values.proxy.env.graphEnabled | quote }}
+  NEO4J_URI: {{ .Values.proxy.env.neo4jUri | default (printf "bolt://%s-neo4j:7687" (include "rag-system.fullname" .)) | quote }}
+  NEO4J_USER: "neo4j"
+  USE_GRAPH_EXPANSION: {{ .Values.proxy.env.useGraphExpansion | quote }}
+  LOG_REQUESTS: {{ .Values.proxy.env.logRequests | quote }}
+  LOG_DIR: {{ .Values.proxy.env.logDir | quote }}
+  METRICS_ENABLED: {{ .Values.proxy.env.metricsEnabled | quote }}
+  LOG_FORMAT: {{ .Values.proxy.env.logFormat | quote }}
+  RATE_LIMIT_ENABLED: {{ .Values.proxy.env.rateLimitEnabled | quote }}
+  RATE_LIMIT_PER_MINUTE: {{ .Values.proxy.env.rateLimitPerMinute | quote }}
+  RATE_LIMIT_BURST: {{ .Values.proxy.env.rateLimitBurst | quote }}
+  CORS_ORIGINS: {{ .Values.proxy.env.corsOrigins | quote }}
+  AUTH_ENABLED: {{ .Values.proxy.env.authEnabled | quote }}
+  JWT_ALGORITHM: {{ .Values.proxy.env.jwtAlgorithm | quote }}
+  TOKEN_EXPIRE_HOURS: {{ .Values.proxy.env.tokenExpireHours | quote }}
+  RBAC_ENABLED: {{ .Values.proxy.env.rbacEnabled | quote }}
+  KEYCLOAK_URL: {{ .Values.proxy.env.keycloakUrl | quote }}
+  KEYCLOAK_REALM: {{ .Values.proxy.env.keycloakRealm | quote }}
+  KEYCLOAK_CLIENT_ID: {{ .Values.proxy.env.keycloakClientId | quote }}
+  SANITIZE_INPUT: {{ .Values.proxy.env.sanitizeInput | quote }}
+  AUDIT_ENABLED: {{ .Values.proxy.env.auditEnabled | quote }}
+  NAMESPACE_ISOLATION_ENABLED: {{ .Values.proxy.env.namespaceIsolationEnabled | quote }}
+  AB_TEST_ENABLED: {{ .Values.proxy.env.abTestEnabled | quote }}
+  CONFIDENCE_THRESHOLD: {{ .Values.proxy.env.confidenceThreshold | quote }}
+  NLI_GROUNDING_ENABLED: {{ .Values.proxy.env.nliGroundingEnabled | quote }}
+  SELF_CRITIQUE_ENABLED: {{ .Values.proxy.env.selfCritiqueEnabled | quote }}
+  COMPRESSION_STRATEGY: {{ .Values.proxy.env.compressionStrategy | quote }}
+  REORDER_ENABLED: {{ .Values.proxy.env.reorderEnabled | quote }}
+  CRAG_DECOMPOSITION_ENABLED: {{ .Values.proxy.env.cragDecompositionEnabled | quote }}
+  NLI_MODEL_ENABLED: {{ .Values.proxy.env.nliModelEnabled | quote }}
+  ENRICHMENT_ENABLED: {{ .Values.proxy.env.enrichmentEnabled | quote }}
+  MULTI_MODAL_ENABLED: {{ .Values.proxy.env.multiModalEnabled | quote }}
+  COLBERT_ENABLED: {{ .Values.proxy.env.colbertEnabled | quote }}
+  IMAGE_MODEL: {{ .Values.proxy.env.imageModel | quote }}
+  IMAGE_EXTRACTION_ENABLED: {{ .Values.proxy.env.imageExtractionEnabled | quote }}
+  AST_LANGUAGES: {{ .Values.proxy.env.astLanguages | quote }}
+  TABLE_EXTRACTION_ENABLED: {{ .Values.proxy.env.tableExtractionEnabled | quote }}
+  CODE_CHUNKING_ENABLED: {{ .Values.proxy.env.codeChunkingEnabled | quote }}
+  COLD_STORAGE_MAX_VERSIONS: {{ .Values.proxy.env.coldStorageMaxVersions | quote }}
+  RERANKER_FT_ENABLED: {{ .Values.proxy.env.rerankerFtEnabled | quote }}
+  TOKEN_OPTIMIZER_ENABLED: {{ .Values.proxy.env.tokenOptimizerEnabled | quote }}
+  PREFIX_CACHING_ENABLED: {{ .Values.proxy.env.prefixCachingEnabled | quote }}
+  EVAL_DATASET_PATH: {{ .Values.proxy.env.evalDatasetPath | quote }}
+  DEPENDENCY_SCAN_ENABLED: {{ .Values.proxy.env.dependencyScanEnabled | quote }}
+  ADMIN_ALERT_ENABLED: {{ .Values.proxy.env.adminAlertEnabled | quote }}
+  ADMIN_ALERT_ENDPOINT: {{ .Values.proxy.env.adminAlertEndpoint | quote }}
+  COMPRESSION_ENABLED: {{ .Values.proxy.env.compressionEnabled | quote }}
+  COMPRESSION_MIN_SIZE: {{ .Values.proxy.env.compressionMinSize | quote }}
+  COMPRESSION_LEVEL: {{ .Values.proxy.env.compressionLevel | quote }}
+  SSE_CHUNK_SIZE: {{ .Values.proxy.env.sseChunkSize | quote }}
+  STREAM_BUFFER_SIZE: {{ .Values.proxy.env.streamBufferSize | quote }}
+  WARMUP_ENABLED: {{ .Values.proxy.env.warmupEnabled | quote }}
+  WARMUP_ON_STARTUP: {{ .Values.proxy.env.warmupOnStartup | quote }}
+  HOST: {{ .Values.proxy.env.host | quote }}
+  PORT: {{ .Values.proxy.env.port | quote }}
+  RELOAD: {{ .Values.proxy.env.reload | quote }}
+  WORKERS: {{ .Values.proxy.env.workers | quote }}
