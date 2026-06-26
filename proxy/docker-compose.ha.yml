@@ -1,0 +1,313 @@
+# proxy/docker-compose.ha.yml
+# High-Availability Docker Compose configuration.
+# Proxy replicas (2+), Qdrant with 2 replicas, Redis Sentinel, Neo4j cluster.
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.ha.yml up -d
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Qdrant — 2-node replicated vector database
+  # ============================================================================
+  qdrant-0:
+    image: qdrant/qdrant:${QDRANT_TAG:-latest}
+    container_name: rag-qdrant-0
+    volumes:
+      - qdrant_data_0:/qdrant/storage
+    command: >
+      --uri "http://qdrant-0:6335"
+    environment:
+      - QDRANT__CLUSTER__ENABLED=true
+      - QDRANT__CLUSTER__P2P__PORT=6335
+      - QDRANT__CLUSTER__CONSENSUS__BIND_ADDRESS=qdrant-0:6335
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    networks:
+      - rag-network
+      - rag-internal
+
+  qdrant-1:
+    image: qdrant/qdrant:${QDRANT_TAG:-latest}
+    container_name: rag-qdrant-1
+    volumes:
+      - qdrant_data_1:/qdrant/storage
+    command: >
+      --bootstrap "http://qdrant-0:6335"
+      --uri "http://qdrant-1:6335"
+    environment:
+      - QDRANT__CLUSTER__ENABLED=true
+      - QDRANT__CLUSTER__P2P__PORT=6335
+      - QDRANT__CLUSTER__CONSENSUS__BIND_ADDRESS=qdrant-1:6335
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    depends_on:
+      - qdrant-0
+    networks:
+      - rag-network
+      - rag-internal
+
+  # ============================================================================
+  # Neo4j — cluster with core + read replica
+  # ============================================================================
+  neo4j-core:
+    image: neo4j:${NEO4J_TAG:-5-enterprise}
+    container_name: rag-neo4j-core
+    volumes:
+      - neo4j_core_data:/data
+      - neo4j_core_logs:/logs
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+      - NEO4J_dbms_mode=CORE
+      - NEO4J_initial_discovery_members=neo4j-core:5000,neo4j-read:5000
+      - NEO4J_causal__clustering_initial__discovery__members=neo4j-core:5000,neo4j-read:5000
+      - NEO4J_causal__clustering_discovery__advertised__address=neo4j-core:5000
+      - NEO4J_causal__clustering_transaction__advertised__address=neo4j-core:6000
+      - NEO4J_causal__clustering_raft__advertised__address=neo4j-core:7000
+    restart: unless-stopped
+    networks:
+      - rag-network
+      - rag-internal
+
+  neo4j-read:
+    image: neo4j:${NEO4J_TAG:-5-enterprise}
+    container_name: rag-neo4j-read
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_read_data:/data
+      - neo4j_read_logs:/logs
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_initial__size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+      - NEO4J_dbms_mode=READ_REPLICA
+      - NEO4J_initial_discovery_members=neo4j-core:5000,neo4j-read:5000
+      - NEO4J_causal__clustering_initial__discovery__members=neo4j-core:5000,neo4j-read:5000
+      - NEO4J_causal__clustering_discovery__advertised__address=neo4j-read:5000
+      - NEO4J_causal__clustering_transaction__advertised__address=neo4j-read:6000
+      - NEO4J_causal__clustering_raft__advertised__address=neo4j-read:7000
+    restart: unless-stopped
+    depends_on:
+      - neo4j-core
+    networks:
+      - rag-network
+      - rag-internal
+
+  # ============================================================================
+  # Redis Sentinel — 1 master + 2 replicas + 3 sentinels
+  # ============================================================================
+  redis-master:
+    image: redis:${REDIS_TAG:-7-alpine}
+    container_name: rag-redis-master
+    command: redis-server --appendonly yes --replica-announce-ip redis-master
+    volumes:
+      - redis_master_data:/data
+    restart: unless-stopped
+    networks:
+      - rag-network
+      - rag-internal
+
+  redis-replica-1:
+    image: redis:${REDIS_TAG:-7-alpine}
+    container_name: rag-redis-replica-1
+    command: redis-server --appendonly yes --replicaof redis-master 6379 --replica-announce-ip redis-replica-1
+    volumes:
+      - redis_replica_1_data:/data
+    restart: unless-stopped
+    depends_on:
+      - redis-master
+    networks:
+      - rag-network
+      - rag-internal
+
+  redis-replica-2:
+    image: redis:${REDIS_TAG:-7-alpine}
+    container_name: rag-redis-replica-2
+    command: redis-server --appendonly yes --replicaof redis-master 6379 --replica-announce-ip redis-replica-2
+    volumes:
+      - redis_replica_2_data:/data
+    restart: unless-stopped
+    depends_on:
+      - redis-master
+    networks:
+      - rag-network
+      - rag-internal
+
+  sentinel-1:
+    image: redis:${REDIS_TAG:-7-alpine}
+    container_name: rag-sentinel-1
+    command: >
+      redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - sentinel_1_data:/data
+      - ./redis-sentinel.conf:/etc/redis/sentinel.conf:ro
+    restart: unless-stopped
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    networks:
+      - rag-network
+      - rag-internal
+
+  sentinel-2:
+    image: redis:${REDIS_TAG:-7-alpine}
+    container_name: rag-sentinel-2
+    command: >
+      redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - sentinel_2_data:/data
+      - ./redis-sentinel.conf:/etc/redis/sentinel.conf:ro
+    restart: unless-stopped
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    networks:
+      - rag-network
+      - rag-internal
+
+  sentinel-3:
+    image: redis:${REDIS_TAG:-7-alpine}
+    container_name: rag-sentinel-3
+    command: >
+      redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - sentinel_3_data:/data
+      - ./redis-sentinel.conf:/etc/redis/sentinel.conf:ro
+    restart: unless-stopped
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    networks:
+      - rag-network
+      - rag-internal
+
+  # ============================================================================
+  # LLM server — vLLM or any OpenAI-compatible backend
+  # ============================================================================
+  vllm:
+    image: vllm/vllm-openai:${VLLM_TAG:-latest}
+    container_name: rag-vllm
+    volumes:
+      - ${MODEL_PATH:-/path/to/models}:/models:ro
+    ports:
+      - "8000:8000"
+    environment:
+      - HUGGINGFACE_HUB_CACHE=/models/cache
+    command: >
+      --model /models/${MODEL_FILE:-model.gguf}
+      --api-key ${LLM_API_KEY:-}
+      --port 8000
+      --max-model-len ${LLM_MAX_MODEL_LEN:-65536}
+      --tensor-parallel-size ${LLM_TP_SIZE:-1}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ============================================================================
+  # RAG Proxy — 2 replicas (scale with docker-compose up --scale)
+  # ============================================================================
+  rag-proxy:
+    build:
+      context: ..
+      dockerfile: proxy/Dockerfile
+    image: rag-system/proxy:${PROXY_TAG:-latest}
+    ports:
+      - "8080:8080"
+    volumes:
+      - /path/to/model_cache:/app/cache:ro
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    environment:
+      - QDRANT_HOST=qdrant-0
+      - QDRANT_PORT=6333
+      - NEO4J_URI=bolt://neo4j-read:7687
+      - REDIS_URL=redis://redis-master:6379
+      - LLM_ENDPOINT=http://vllm:8000/v1
+      - USE_REDIS=true
+      - USE_LANGGRAPH=true
+      - GRAPH_ENABLED=true
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+    depends_on:
+      - qdrant-0
+      - qdrant-1
+      - neo4j-read
+      - redis-master
+      - vllm
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ============================================================================
+  # HITL Dashboard
+  # ============================================================================
+  hitl-dashboard:
+    build:
+      context: ../hitl_dashboard
+      dockerfile: Dockerfile.dashboard
+    image: rag-system/hitl:${HITL_TAG:-latest}
+    container_name: rag-hitl
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - LOG_DIR=/app/logs
+      - STREAMLIT_SERVER_PORT=8501
+      - PROXY_URL=http://rag-proxy:8080
+    depends_on:
+      - rag-proxy
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  qdrant_data_0:
+  qdrant_data_1:
+  neo4j_core_data:
+  neo4j_core_logs:
+  neo4j_read_data:
+  neo4j_read_logs:
+  redis_master_data:
+  redis_replica_1_data:
+  redis_replica_2_data:
+  sentinel_1_data:
+  sentinel_2_data:
+  sentinel_3_data:
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  rag-network:
+    driver: bridge
+  rag-internal:
+    driver: bridge
+    internal: true
