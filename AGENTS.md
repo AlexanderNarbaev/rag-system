@@ -9,9 +9,9 @@ English for code and comments. The system supports full i18n — documentation i
 ## Current State
 - **Version:** v0.5 (June 2026)
 - **Tests:** 1248 collected, 1248 passing (100% pass rate)
-- **Maturity:** RAG Level 4 (Agentic) operational with confidence scoring, active feedback, self-enrichment, and multi-modal RAG
-- **Production readiness:** 55% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
-- **Next milestone:** v0.6 — Full RBAC, advanced auth, production hardening (see `docs/guides/roadmap.md`)
+- **Maturity:** RAG Level 4+ (Agentic) — NLI grounding, CRAG decomposition, self-critique, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k
+- **Production readiness:** 65% across 8 dimensions — see `docs/guides/best-practices-checklist.md`
+- **Next milestone:** v0.6 — Real-Time Indexing & Streaming, production hardening (see `docs/guides/roadmap.md`)
 
 ## Architecture
 Three-layer system plus supporting services, with multi-provider LLM backend support:
@@ -58,6 +58,13 @@ rag-system/
 │   │   ├── enricher.py               # Self-enrichment: feedback Q&A → chunk → Qdrant
 │   │   ├── slm_router.py             # SLM: intent classification, query decomposition, entity extraction
 │   │   ├── token_optimizer.py        # BPE-aware token counting, compression, budget allocation
+│   │   ├── evaluation.py             # Retrieval eval pipeline: MRR, Recall@k, nDCG, Precision@k
+│   │   ├── grounding.py              # NLI-based answer grounding (cosine + entailment)
+│   │   ├── exceptions.py             # RAGError, RetrievalError, LLMError, SecurityError hierarchy
+│   │   ├── auth.py                   # JWT authentication + Keycloak OIDC integration
+│   │   ├── rbac.py                   # Role-based access control (admin/expert/user/read-only)
+│   │   ├── sanitizer.py             # Input sanitization (SQL injection, XSS, length limits)
+│   │   ├── ab_test.py               # A/B test harness for pipeline variants
 │   │   ├── cache.py                  # Redis + in-memory multi-tier cache
 │   │   ├── hitl.py                   # Human-in-the-loop: async interaction logging, feedback collection
 │   │   ├── metrics.py                # Prometheus metrics (counters, histograms, gauges)
@@ -182,6 +189,8 @@ ptw tests/ -- -v
 | `/v1/chat/completions` | POST | Chat completion (streaming + non-streaming) |
 | `/v1/models` | GET | List available models |
 | `/v1/health` | GET | Health check (Qdrant + LLM status) |
+| `/v1/health/live` | GET | Liveness probe (K8s-compatible) |
+| `/v1/health/ready` | GET | Readiness probe (Qdrant + LLM connectivity) |
 | `/v1/feedback` | POST | Submit expert feedback (positive/negative + corrections) |
 | `/v1/auth/login` | POST | JWT token generation |
 | `/v1/auth/refresh` | POST | Token refresh |
