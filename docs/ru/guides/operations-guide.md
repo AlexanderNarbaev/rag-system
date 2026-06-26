@@ -363,3 +363,163 @@ scrape_configs:
 | Логи запусков ETL | 30 дней | Локальный диск |
 | Логи обратной связи HITL | 90 дней | База данных |
 | Логи Docker-контейнеров | 3 ротации по 100 MB | Локально |
+
+---
+
+## Мониторинг потокового ETL
+
+### Consumer Lag в Redis Streams
+
+Мониторинг здоровья потокового ETL через метрики Redis Streams:
+
+```bash
+# Проверка статуса групп потребителей:
+docker exec rag-redis redis-cli XINFO GROUPS etl:events
+
+# Проверка ожидающих сообщений на потребителя:
+docker exec rag-redis redis-cli XPENDING etl:events etl-extract
+docker exec rag-redis redis-cli XPENDING etl:events etl-chunk
+docker exec rag-redis redis-cli XPENDING etl:events etl-embed
+docker exec rag-redis redis-cli XPENDING etl:events etl-index
+
+# Пороги алертов consumer lag:
+# - Pending > 100: предупреждение (обнаружено узкое место)
+# - Pending > 1000: критично (потребитель может быть зависшим)
+# - Idle time > 5 мин: потребитель вероятно упал
+```
+
+### Мониторинг Dead Letter Queue
+
+```bash
+# Проверка размера DLQ:
+docker exec rag-redis redis-cli XLEN etl:events:dlq
+
+# Просмотр неудачных событий:
+docker exec rag-redis redis-cli XRANGE etl:events:dlq - + COUNT 10
+
+# Повторная обработка событий DLQ:
+python etl/scheduler/reprocess_dlq.py --stream etl:events:dlq
+```
+
+### Метрики Prometheus для потокового ETL
+
+| Метрика | Тип | Описание |
+|--------|------|----------|
+| `rag_etl_stream_events_total` | Counter | Всего событий обработано потоковым ETL |
+| `rag_etl_stream_lag` | Gauge | Ожидающих сообщений на группу потребителей |
+| `rag_etl_stream_dlq_size` | Gauge | Размер dead letter queue |
+| `rag_etl_stream_processing_duration_seconds` | Histogram | Время обработки события по этапам |
+
+### Правила алертов для потокового ETL
+
+```yaml
+- alert: StreamConsumerLag
+  expr: rag_etl_stream_lag > 100
+  for: 5m
+  annotations:
+    summary: "Consumer lag потокового ETL > 100 сообщений"
+
+- alert: StreamDLQGrowing
+  expr: rate(rag_etl_stream_dlq_size[5m]) > 0
+  for: 10m
+  annotations:
+    summary: "Dead letter queue растёт"
+
+- alert: StreamConsumerStuck
+  expr: rag_etl_stream_lag > 1000
+  for: 2m
+  annotations:
+    summary: "Потребитель потокового ETL возможно завис (> 1000 pending)"
+```
+
+---
+
+## Процедура прогрева моделей
+
+### После обновления модели
+
+При развёртывании новой модели (LLM, эмбеддер или реранкер) выполните прогрев перед подачей трафика:
+
+```bash
+# 1. Разверните новый бэкенд модели (vLLM/llama.cpp)
+docker-compose up -d llm-backend
+
+# 2. Дождитесь загрузки модели:
+until curl -sf http://localhost:8000/health; do sleep 2; done
+
+# 3. Запустите прогрев:
+curl -X POST http://localhost:8080/v1/admin/warmup
+
+# 4. Проверьте завершение прогрева:
+curl -s http://localhost:8080/v1/health | jq '.components'
+
+# 5. Проверьте нормальную задержку первого запроса:
+time curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"rag-proxy","messages":[{"role":"user","content":"ping"}],"max_tokens":10}'
+```
+
+### Автоматизация прогрева (Systemd)
+
+```ini
+# /etc/systemd/system/rag-warmup.service
+[Unit]
+Description=Прогрев моделей RAG Proxy
+After=docker-compose.service
+Requires=docker-compose.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -sf -X POST http://localhost:8080/v1/admin/warmup
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Мониторинг прогрева
+
+```bash
+# Проверка статуса прогрева через Prometheus:
+curl -s http://localhost:8080/metrics | grep rag_warmup_completed
+
+# Ожидается: rag_warmup_completed 1 (прогрев выполнен)
+# Если 0: прогрев ещё не завершён или произошла ошибка
+```
+
+---
+
+## Бенчмарки производительности сжатия
+
+### Результаты бенчмарков (v0.6)
+
+Измерено на производственной нагрузке из 10 000 запросов чат-завершения:
+
+| Сжатие | Средний размер ответа | Снижение | Накладные CPU (p95) | Экономия сети |
+|------------|-------------------|-----------|---------------------|-----------------|
+| Без сжатия | 45.2 KB | — | 0ms | 0% |
+| gzip (уровень 6) | 12.8 KB | 71.7% | 3.2ms | 32.4 MB на 1000 запросов |
+| brotli (уровень 4) | 11.3 KB | 75.0% | 11.8ms | 33.9 MB на 1000 запросов |
+
+### Когда использовать Brotli vs Gzip
+
+| Сценарий | Рекомендация |
+|----------|---------------|
+| Внутренняя сеть (LAN) | gzip — меньше CPU, разница в сжатии незначительна |
+| Внешние/WAN клиенты | brotli — более высокий коэффициент сжатия оправдывает затраты CPU |
+| Высокая нагрузка (>100 запр/с) | gzip — накладные расходы CPU становятся значимыми |
+| Мобильные/низкоскоростные клиенты | brotli — максимальное сжатие для ограниченных соединений |
+
+### Настройка сжатия
+
+```bash
+# Быстрое сжатие (ниже коэффициент, меньше CPU):
+COMPRESSION_LEVEL=1  # gzip: снижение 58%, <1ms CPU
+
+# Сбалансированное (по умолчанию):
+COMPRESSION_LEVEL=6  # gzip: снижение 72%, ~3ms CPU
+
+# Максимальное сжатие (высокий коэффициент, больше CPU):
+COMPRESSION_LEVEL=9  # gzip: снижение 76%, ~15ms CPU
+```
