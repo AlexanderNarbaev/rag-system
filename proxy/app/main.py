@@ -37,6 +37,7 @@ from app.auth import (
     verify_token,
 )
 from app.cache import CacheManager
+from app.confidence import compute_confidence
 
 # Импорт внутренних модулей
 from app.config import (
@@ -54,9 +55,8 @@ from app.config import (
     USE_LANGGRAPH,
     USE_REDIS,
 )
-from app.confidence import compute_confidence
 from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
-from app.hitl import log_interaction, generate_feedback_id
+from app.hitl import generate_feedback_id, log_interaction
 from app.logging_config import setup_logging
 from app.metrics import init_metrics, metrics_endpoint
 from app.middleware import add_cors_middleware, setup_all_middleware
@@ -396,9 +396,8 @@ async def process_rag_query(
 
 @app.get("/v1/health")
 async def health():
-    """Проверка работоспособности прокси и зависимостей."""
+    """Check proxy and dependency health."""
     status = {"status": "ok", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
-    # Проверка Qdrant (опционально)
     try:
         from app.retrieval import qdrant_client
 
@@ -407,7 +406,6 @@ async def health():
     except Exception as e:
         status["components"]["qdrant"] = f"error: {str(e)}"
         status["status"] = "degraded"
-    # Проверка LLM эндпоинта
     try:
         import requests
 
@@ -420,6 +418,40 @@ async def health():
         status["components"]["llm"] = f"error: {str(e)}"
         status["status"] = "degraded"
     return JSONResponse(status_code=200 if status["status"] == "ok" else 503, content=status)
+
+
+@app.get("/v1/health/live")
+async def health_live():
+    """Liveness probe — returns 200 if the process is alive."""
+    return JSONResponse(status_code=200, content={"status": "alive", "timestamp": datetime.now(UTC).isoformat()})
+
+
+@app.get("/v1/health/ready")
+async def health_ready():
+    """Readiness probe — checks Qdrant and LLM connectivity."""
+    status = {"status": "ready", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
+    try:
+        from app.retrieval import qdrant_client
+
+        qdrant_client.get_collections()
+        status["components"]["qdrant"] = "ok"
+    except Exception:
+        status["components"]["qdrant"] = "unavailable"
+        status["status"] = "not_ready"
+    try:
+        import requests
+
+        resp = requests.get(f"{LLM_ENDPOINT}/health", timeout=2)
+        if resp.status_code == 200:
+            status["components"]["llm"] = "ok"
+        else:
+            status["components"]["llm"] = "unavailable"
+            status["status"] = "not_ready"
+    except Exception:
+        status["components"]["llm"] = "unavailable"
+        status["status"] = "not_ready"
+    http_code = 200 if status["status"] == "ready" else 503
+    return JSONResponse(status_code=http_code, content=status)
 
 
 @app.get("/v1/models")

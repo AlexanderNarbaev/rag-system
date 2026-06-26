@@ -208,3 +208,81 @@ class TestShouldUseGraph:
 
     def test_procedural_no_graph(self):
         assert should_use_graph(IntentType.PROCEDURAL, "How to install Docker?") is False
+
+
+class TestScoreQueryComplexity:
+    """Tests for score_query_complexity heuristic."""
+
+    def test_short_query_low_complexity(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        score = score_query_complexity("Hello")
+        assert 1 <= score <= 3
+
+    def test_long_query_high_complexity(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        query = "Please explain how everything works in great detail including all the steps and configurations that need to be set up correctly"
+        score = score_query_complexity(query)
+        assert score >= 5
+
+    def test_comparison_query_high_complexity(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        with patch("proxy.app.slm_router.classify_intent", return_value=(IntentType.COMPARISON, 0.9)):
+            score = score_query_complexity("Compare Kubernetes vs Docker Swarm for production")
+            assert score >= 7
+
+    def test_procedural_query_medium_complexity(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        with patch("proxy.app.slm_router.classify_intent", return_value=(IntentType.PROCEDURAL, 0.9)):
+            score = score_query_complexity("How to set up CI/CD pipeline?")
+            assert score >= 5
+
+    def test_returns_valid_range(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        for query in ["Hi", "What is RAG?", "How to deploy and configure the entire system with all components"]:
+            score = score_query_complexity(query)
+            assert 1 <= score <= 10, f"query='{query}' score={score}"
+
+    def test_falls_back_on_classify_error(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        with patch("proxy.app.slm_router.classify_intent", side_effect=Exception("no SLM")):
+            score = score_query_complexity("test query")
+            assert 1 <= score <= 10
+
+    def test_multi_question_increases_complexity(self):
+        from proxy.app.slm_router import score_query_complexity
+
+        single_score = score_query_complexity("What is Docker?")
+        multi_score = score_query_complexity("What is Docker? How does it work? Why is it useful?")
+        assert multi_score >= single_score
+
+
+class TestDynamicTopKFromComplexity:
+    """Tests for dynamic_top_k_from_complexity mapping."""
+
+    def test_complexity_1_maps_to_5(self):
+        from proxy.app.slm_router import dynamic_top_k_from_complexity
+
+        assert dynamic_top_k_from_complexity(1) == 5
+
+    def test_complexity_5_maps_to_15(self):
+        from proxy.app.slm_router import dynamic_top_k_from_complexity
+
+        assert dynamic_top_k_from_complexity(5) == 15
+
+    def test_complexity_10_maps_to_50(self):
+        from proxy.app.slm_router import dynamic_top_k_from_complexity
+
+        assert dynamic_top_k_from_complexity(10) == 50
+
+    def test_out_of_range_uses_default(self):
+        from proxy.app.slm_router import dynamic_top_k_from_complexity
+
+        assert dynamic_top_k_from_complexity(0) == 50
+        assert dynamic_top_k_from_complexity(11) == 50
+        assert dynamic_top_k_from_complexity(100, max_default=30) == 30
