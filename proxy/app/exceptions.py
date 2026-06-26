@@ -79,6 +79,13 @@ class AuthError(RAGError):
         super().__init__(message, component=component, recoverable=False)
 
 
+class ContextError(RAGError):
+    """Errors during context grounding or assembly (cosine similarity, embedding mismatch)."""
+
+    def __init__(self, message: str = "", component: str = "context"):
+        super().__init__(message, component=component, recoverable=True)
+
+
 class ContextBuildError(RAGError):
     """Errors during context assembly."""
 
@@ -86,8 +93,22 @@ class ContextBuildError(RAGError):
         super().__init__(message, component=component, recoverable=True)
 
 
+class RerankerError(RAGError):
+    """Errors during reranking (cross-encoder failures). Kept as alias for RerankError."""
+
+    def __init__(self, message: str = "", component: str = "reranker"):
+        super().__init__(message, component=component, recoverable=True)
+
+
 class ValidationError(RAGError):
     """Input validation errors."""
 
     def __init__(self, message: str = "", component: str = "validation"):
+        super().__init__(message, component=component, recoverable=False)
+
+
+class SecurityError(RAGError):
+    """Security violations — unauthorized access, injection attempts, policy violations."""
+
+    def __init__(self, message: str = "", component: str = "security"):
         super().__init__(message, component=component, recoverable=False)

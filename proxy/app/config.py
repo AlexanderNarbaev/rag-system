@@ -96,6 +96,26 @@ JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
 TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "24"))
 AUTH_VALID_USERS = os.getenv("AUTH_VALID_USERS", "{}")  # JSON dict of valid users for login endpoint
 
+# ============ RBAC ============
+RBAC_ENABLED = os.getenv("RBAC_ENABLED", "false").lower() == "true"
+
+# ============ Keycloak OIDC ============
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "master")
+KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "rag-proxy")
+
+# ============ Input Sanitization ============
+SANITIZE_INPUT = os.getenv("SANITIZE_INPUT", "true").lower() == "true"
+
+# ============ Audit Logging ============
+AUDIT_ENABLED = os.getenv("AUDIT_ENABLED", "true").lower() == "true"
+
+# ============ Namespace Isolation ============
+NAMESPACE_ISOLATION_ENABLED = os.getenv("NAMESPACE_ISOLATION_ENABLED", "false").lower() == "true"
+
+# ============ A/B Testing ============
+AB_TEST_ENABLED = os.getenv("AB_TEST_ENABLED", "false").lower() == "true"
+
 # ============ Настройки сервера ============
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
@@ -105,10 +125,34 @@ WORKERS = int(os.getenv("WORKERS", "1"))
 
 # ============ Confidence Scoring ============
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
+CONFIDENCE_THRESHOLD_CALIBRATED = float(os.getenv("CONFIDENCE_THRESHOLD_CALIBRATED", "0"))  # 0 = use fallback
 MAX_VERIFY_LOOPS = int(os.getenv("MAX_VERIFY_LOOPS", "2"))
+NLI_GROUNDING_ENABLED = os.getenv("NLI_GROUNDING_ENABLED", "true").lower() == "true"
+
+# ============ Self-Correction ============
+SELF_CRITIQUE_ENABLED = os.getenv("SELF_CRITIQUE_ENABLED", "true").lower() == "true"
+COMPRESSION_STRATEGY = os.getenv("COMPRESSION_STRATEGY", "keyword")  # "perplexity", "keyword", "none"
+REORDER_ENABLED = os.getenv("REORDER_ENABLED", "true").lower() == "true"
+CRAG_DECOMPOSITION_ENABLED = os.getenv("CRAG_DECOMPOSITION_ENABLED", "true").lower() == "true"
+NLI_MODEL_ENABLED = os.getenv("NLI_MODEL_ENABLED", "false").lower() == "true"
 
 # ============ Self-Enrichment ============
 ENRICHMENT_ENABLED = os.getenv("ENRICHMENT_ENABLED", "false").lower() == "true"
+
+# ============ Token Optimizer ============
+TOKEN_OPTIMIZER_ENABLED = os.getenv("TOKEN_OPTIMIZER_ENABLED", "true").lower() == "true"
+
+# ============ vLLM Prefix Caching ============
+# To enable in vLLM, set --enable-prefix-caching in the vLLM launch command.
+# This reduces prefill latency by caching KV-cache from common prefixes.
+# See: https://docs.vllm.ai/en/latest/features/prefix_caching.html
+PREFIX_CACHING_ENABLED = os.getenv("PREFIX_CACHING_ENABLED", "false").lower() == "true"
+
+# ============ Retrieval Evaluation ============
+EVAL_DATASET_PATH = os.getenv("EVAL_DATASET_PATH", "./data/eval_dataset.json")
+
+# ============ Dependency Scanning ============
+DEPENDENCY_SCAN_ENABLED = os.getenv("DEPENDENCY_SCAN_ENABLED", "false").lower() == "true"
 
 # ============ Admin Alerts ============
 ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
