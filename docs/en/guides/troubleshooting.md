@@ -316,6 +316,286 @@ graph:
 
 ---
 
+## Streaming ETL Issues (Redis Streams)
+
+### Redis Stream Connection Failures
+
+```bash
+# Symptom: "Failed to connect to Redis Streams" or webhook returns 503
+# Check Redis is running and streams are configured:
+docker exec rag-redis redis-cli PING
+docker exec rag-redis redis-cli XINFO STREAM etl:events
+
+# If stream doesn't exist, create it:
+docker exec rag-redis redis-cli XADD etl:events * event test
+
+# Check consumer groups exist:
+docker exec rag-redis redis-cli XINFO GROUPS etl:events
+
+# Recreate consumer groups if missing:
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-extract $ MKSTREAM
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-chunk $
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-embed $
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-index $
+```
+
+### Consumer Lag Growing
+
+```bash
+# Symptom: Events enqueued but not processed, lag increasing
+# Check pending messages per consumer:
+docker exec rag-redis redis-cli XPENDING etl:events etl-extract
+docker exec rag-redis redis-cli XPENDING etl:events etl-chunk
+
+# Check consumer idle time:
+docker exec rag-redis redis-cli XINFO CONSUMERS etl:events etl-extract
+
+# Fix: restart stuck consumer:
+docker-compose restart rag-etl-extract
+
+# If events are permanently stuck (failed 3+ times), move to DLQ:
+docker exec rag-redis redis-cli XCLAIM etl:events etl-extract new-consumer 3600000 <message-id>
+```
+
+### Redis Streams Memory Pressure
+
+```bash
+# Symptom: Redis memory growing, OOM warnings
+# Check stream size:
+docker exec rag-redis redis-cli XLEN etl:events
+
+# Trim old messages (keep last 10000):
+docker exec rag-redis redis-cli XTRIM etl:events MAXLEN ~ 10000
+
+# Check maxmemory config:
+docker exec rag-redis redis-cli CONFIG GET maxmemory
+docker exec rag-redis redis-cli CONFIG GET stream-node-max-bytes
+
+# Fix: increase memory limit or trim more aggressively
+docker exec rag-redis redis-cli CONFIG SET maxmemory 4gb
+```
+
+---
+
+## Redis Connection Issues
+
+### Redis Unavailable for Streaming ETL
+
+```bash
+# Symptom: "Redis connection refused" in ETL logs
+# Check Redis status:
+docker exec rag-redis redis-cli PING
+
+# Check port availability:
+ss -tlnp | grep 6379
+
+# Verify .env configuration:
+grep REDIS_STREAMS_URL proxy/.env
+# Should match: redis://redis:6379
+
+# Restart Redis:
+docker-compose restart redis
+```
+
+### Redis AOF Corruption
+
+```bash
+# Symptom: Redis fails to start, AOF error in logs
+# Check AOF:
+docker exec rag-redis redis-cli BGREWRITEAOF
+
+# If corrupted, repair:
+docker exec rag-redis redis-check-aof --fix /data/appendonly.aof
+
+# Restart after repair:
+docker-compose restart redis
+```
+
+---
+
+## Webhook Verification Failures
+
+### Invalid Signature (Confluence)
+
+```bash
+# Symptom: Confluence webhook returns 401 "Invalid signature"
+# Verify WEBHOOK_SECRET matches on both sides:
+echo $WEBHOOK_SECRET  # In proxy .env
+# Must match Confluence webhook configuration secret
+
+# Test signature generation:
+echo -n '{"event":"test"}' | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET"
+
+# Test webhook endpoint with computed signature:
+SIG=$(echo -n '{"event":"test"}' | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | cut -d' ' -f2)
+curl -X POST http://localhost:8080/webhook/confluence \
+  -H "Content-Type: application/json" \
+  -H "X-Confluence-Webhook-Signature: sha256=$SIG" \
+  -d '{"event":"test"}'
+# Expected: 200 with {"status":"accepted"}
+```
+
+### Missing Webhook Header (GitLab)
+
+```bash
+# Symptom: GitLab webhook returns 401 "Missing token"
+# Verify header name:
+curl -X POST http://localhost:8080/webhook/gitlab \
+  -H "X-Gitlab-Token: $WEBHOOK_SECRET" \
+  -d '{"event_name":"push"}'
+# Expected: 200 with {"status":"accepted"}
+
+# If header is missing, check GitLab webhook config:
+# GitLab UI → Settings → Webhooks → Secret Token must match WEBHOOK_SECRET
+```
+
+### Webhook Event Not Processed
+
+```bash
+# Symptom: Webhook returns 200 but document not searchable
+# Check if event was enqueued:
+docker exec rag-redis redis-cli XRANGE etl:events - + COUNT 5
+
+# Check if consumer processed it:
+docker exec rag-redis redis-cli XACK etl:events etl-extract <message-id>
+
+# Check DLQ for failed events:
+docker exec rag-redis redis-cli XLEN etl:events:dlq
+docker exec rag-redis redis-cli XRANGE etl:events:dlq - + COUNT 10
+
+# Manually reprocess from DLQ:
+python etl/scheduler/reprocess_dlq.py
+```
+
+---
+
+## Model Warm-Up Issues
+
+### Warm-Up Timeout
+
+```bash
+# Symptom: POST /v1/admin/warmup hangs or returns timeout
+# Check individual component status:
+curl -s http://localhost:8080/v1/health | jq '.components'
+
+# Common causes:
+# - Embedder model still downloading/loading
+# - SLM endpoint unreachable
+# - GPU memory exhausted
+
+# Fix: skip problematic component and retry:
+# If SLM is down: temporarily disable SLM (SLM_ENDPOINT="")
+# If model is large: increase timeout in .env
+WARMUP_TIMEOUT=120  # seconds (default: 60)
+
+# Check warm-up logs:
+docker logs rag-proxy --tail 50 | grep warmup
+```
+
+### Warm-Up Not Completing
+
+```bash
+# Symptom: rag_warmup_completed gauge stays at 0
+# Check warm-up duration:
+curl -s http://localhost:8080/metrics | grep rag_warmup_duration
+
+# Manually warm up each component:
+curl -X POST http://localhost:8080/v1/admin/warmup
+
+# If first request still slow after warm-up:
+time curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"rag-proxy","messages":[{"role":"user","content":"test"}],"max_tokens":10}'
+
+# Expected: < 500ms (vs >3s without warm-up)
+```
+
+### Post-Update Warm-Up Required
+
+```bash
+# Symptom: After model update, first request extremely slow
+# Always run warm-up after model change:
+# 1. Restart proxy with new model
+docker-compose restart rag-proxy
+
+# 2. Wait for proxy to come up
+until curl -sf http://localhost:8080/v1/health/live; do sleep 1; done
+
+# 3. Trigger warm-up
+curl -X POST http://localhost:8080/v1/admin/warmup
+
+# 4. Verify warm-up completed
+curl -s http://localhost:8080/metrics | grep rag_warmup_completed
+# Expected: rag_warmup_completed 1
+```
+
+---
+
+## Compression-Related Issues
+
+### Client Cannot Decompress Response
+
+```bash
+# Symptom: Client receives garbled/binary response
+# Check if client sent Accept-Encoding header:
+curl -v http://localhost:8080/v1/health 2>&1 | grep -i "Accept-Encoding"
+
+# If client doesn't support compression, disable it server-side:
+COMPRESSION_ENABLED=false
+
+# Or set client to explicitly not accept compression:
+curl -H "Accept-Encoding: identity" http://localhost:8080/v1/health
+
+# For Python requests: compression is handled automatically
+# For cURL: compression is handled automatically
+# For custom HTTP clients: check if they support Content-Encoding: gzip
+```
+
+### Compression Performance Regression
+
+```bash
+# Symptom: High CPU usage after enabling compression
+# Check compression level:
+grep COMPRESSION_LEVEL proxy/.env
+
+# Lower compression level for less CPU:
+COMPRESSION_LEVEL=1  # Fastest, ~58% reduction
+# OR disable compression for internal traffic:
+COMPRESSION_MIN_SIZE=50000  # Only compress very large responses
+
+# Monitor CPU impact:
+curl -s http://localhost:8080/metrics | grep rag_request_duration_seconds
+
+# Compare before/after compression:
+# Without compression: benchmark 1000 requests
+# With gzip level 6: benchmark 1000 requests
+# Expected: p95 latency increase < 5ms
+```
+
+### Nginx Double Compression
+
+```bash
+# Symptom: Nginx re-compresses already compressed responses
+# Check nginx config for gzip directives:
+# DO NOT add 'gzip on;' to nginx if proxy handles compression
+# Proxy already compresses, nginx should just forward
+
+# Correct nginx config (no additional compression):
+location /v1/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Accept-Encoding $http_accept_encoding;
+    proxy_set_header Host $host;
+    # NO gzip directives here
+}
+
+# Verify with:
+curl -H "Accept-Encoding: gzip" -v http://localhost:8080/v1/health 2>&1 | grep -i "Content-Encoding"
+# Should show: Content-Encoding: gzip
+# If it shows gzip twice, nginx is double-compressing
+```
+
+---
+
 ## Authentication & RBAC Issues
 
 ### JWT Token Rejected (401 Unauthorized)
