@@ -546,6 +546,133 @@ curl -s http://localhost:8080/metrics | grep rag_warmup_completed
 
 ---
 
+## Backup & Restore (v1.0+)
+
+### Automated Backup Script
+
+`scripts/backup.sh` handles automated backups for all components:
+
+```bash
+#!/bin/bash
+# Daily backup to S3/MinIO
+set -euo pipefail
+
+BACKUP_DIR="/data/backups/$(date +%Y-%m-%d)"
+S3_BUCKET="s3://backup-rag"
+mkdir -p "$BACKUP_DIR"
+
+# 1. Qdrant snapshots (every 6 hours)
+echo "=== Qdrant Snapshot ==="
+curl -X POST "localhost:6333/collections/rag_chunks/snapshots"
+# Wait for snapshot creation
+sleep 10
+SNAPSHOT=$(curl -s localhost:6333/collections/rag_chunks/snapshots | jq -r '.result[-1].name')
+aws s3 cp "/data/qdrant/snapshots/$SNAPSHOT" "$S3_BUCKET/qdrant/$(date +%Y-%m-%d-%H%M)/"
+
+# 2. Neo4j dumps (every 6 hours)
+echo "=== Neo4j Dump ==="
+cypher-shell -u neo4j -p "$NEO4J_PASSWORD" "CALL apoc.export.cypher.all('$BACKUP_DIR/neo4j.cypher', {})"
+aws s3 cp "$BACKUP_DIR/neo4j.cypher" "$S3_BUCKET/neo4j/$(date +%Y-%m-%d-%H%M)/"
+
+# 3. Redis RDB (every 1 hour)
+echo "=== Redis RDB ==="
+redis-cli BGSAVE
+sleep 5
+aws s3 cp /data/redis/dump.rdb "$S3_BUCKET/redis/$(date +%Y-%m-%d-%H%M)/"
+
+# 4. Cleanup old backups
+find /data/backups/ -type d -mtime +7 -exec rm -rf {} \;
+echo "=== Backup Complete ==="
+```
+
+### Restore Procedures
+
+```bash
+# Restore everything from latest S3 backup:
+bash scripts/restore_all.sh --latest
+
+# Restore specific component:
+bash scripts/restore_all.sh qdrant --latest
+bash scripts/restore_all.sh neo4j --latest
+bash scripts/restore_all.sh redis --latest
+
+# Verify restoration:
+curl localhost:6333/collections | jq '.result.collections[].vectors_count'
+cypher-shell -u neo4j "MATCH (n) RETURN count(n)"
+redis-cli DBSIZE
+curl localhost:8080/v1/health
+```
+
+### CronJob (K8s)
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rag-backup
+  namespace: rag-system
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: amazon/aws-cli
+            command: ["/scripts/backup.sh"]
+            envFrom:
+            - secretRef:
+                name: rag-backup-secrets
+          restartPolicy: OnFailure
+```
+
+### Backup Retention Policy
+
+| Tier | Retention | Purpose |
+|------|-----------|---------|
+| Daily | 7 days | Quick restore for recent issues |
+| Weekly | 4 weeks | Medium-term recovery |
+| Monthly | 3 months | Long-term archival |
+
+---
+
+## Grafana Dashboards (v1.0+)
+
+### Available Dashboards
+
+| Dashboard | File | Key Metrics |
+|-----------|------|-------------|
+| **RAG Overview** | `infra/grafana/dashboards/rag-overview.json` | Request rate, latency, error rate, confidence |
+| **Retrieval Quality** | `infra/grafana/dashboards/rag-retrieval.json` | MRR, Recall@k, nDCG, cache hit ratio |
+| **Infrastructure** | `infra/grafana/dashboards/rag-infrastructure.json` | CPU, memory, disk, network per component |
+
+### Prometheus Alert Rules
+
+Key alerts defined in `infra/prometheus/alerts.yml`:
+
+| Alert | Severity | Condition |
+|-------|----------|-----------|
+| HighErrorRate | Critical | Error rate > 5% in 5m |
+| HighLatency | Critical | p95 latency > 5s |
+| LLMDown | Critical | LLM not responding > 2m |
+| QdrantUnhealthy | Critical | Qdrant down > 1m |
+| LowCacheHitRate | Warning | Cache hit ratio < 20% |
+| DiskNearFull | Warning | Disk < 15% free |
+| Neo4jUnhealthy | Warning | Neo4j not responding |
+| ConsumerLag | Warning | Redis Streams lag > 100 |
+
+### SLI/SLO Definitions
+
+| SLI | Target | Measurement Window |
+|-----|--------|--------------------|
+| Availability | 99.5% | 28 days |
+| p95 Latency | < 5s | 5 min window |
+| Error Rate | < 1% | 5 min window |
+| Cache Hit Ratio | > 30% | 1 hour window |
+
+---
+
 ## Compression Performance Benchmarks
 
 ### Benchmark Results (v0.6)

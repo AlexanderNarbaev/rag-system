@@ -380,6 +380,94 @@ server {
 - [ ] Back up `wal/etl_wal.json` and `wal/version_wal.json` after each ETL run
 - [ ] Keep 7 daily + 4 weekly + 3 monthly backups
 
+## Kubernetes Deployment (v1.0+)
+
+### Helm Chart Structure
+
+```
+infra/helm/rag-system/
+├── Chart.yaml
+├── values.yaml
+├── templates/
+│   ├── proxy-deployment.yaml
+│   ├── proxy-hpa.yaml
+│   ├── qdrant-statefulset.yaml
+│   ├── neo4j-statefulset.yaml
+│   ├── redis-deployment.yaml
+│   ├── secrets.yaml
+│   ├── configmap.yaml
+│   └── ingress.yaml
+└── dashboards/
+    ├── grafana-overview.json
+    ├── grafana-retrieval.json
+    └── grafana-infrastructure.json
+```
+
+### Quick Deploy
+
+```bash
+# 1. Create namespace
+kubectl create namespace rag-system
+
+# 2. Create secrets
+kubectl create secret generic rag-secrets -n rag-system \
+  --from-literal=jwt-secret=$(openssl rand -hex 32) \
+  --from-literal=llm-api-key=your-api-key \
+  --from-literal=backup-s3-key=your-s3-key
+
+# 3. Install Helm chart
+cd infra/helm
+helm upgrade --install rag-system ./rag-system \
+  -n rag-system \
+  -f values.yaml \
+  --set proxy.replicas=3 \
+  --set qdrant.replicas=3 \
+  --set neo4j.replicas=3
+
+# 4. Verify deployment
+kubectl get pods -n rag-system
+kubectl get hpa -n rag-system
+kubectl get ingress -n rag-system
+
+# 5. Check health
+kubectl exec -it deploy/rag-proxy -n rag-system -- curl -s localhost:8080/v1/health
+```
+
+### HA Configuration
+
+| Component | Replicas | Strategy | Notes |
+|-----------|----------|----------|-------|
+| RAG Proxy | 3 | HPA (min 3, max 10, CPU 70%) | `WORKERS=1` per pod |
+| Qdrant | 3 | StatefulSet, Raft consensus | Requires odd number ≥ 3 |
+| Neo4j | 3 | Causal cluster | Core nodes for read/write |
+| Redis | 3 | Sentinel | 1 master + 2 replicas |
+
+### HPA Configuration
+
+```yaml
+# In values.yaml or override:
+proxy:
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+```
+
+### Zero-Downtime Deployment
+
+```bash
+# K8s rolling update (default):
+kubectl set image deployment/rag-proxy rag-proxy=rag-proxy:v1.0.0 -n rag-system
+
+# Monitor rollout:
+kubectl rollout status deployment/rag-proxy -n rag-system
+
+# Rollback if needed:
+kubectl rollout undo deployment/rag-proxy -n rag-system
+```
+
 ## Troubleshooting Common Issues
 
 ### OOM (Out of Memory)
