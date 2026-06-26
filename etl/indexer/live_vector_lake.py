@@ -71,6 +71,10 @@ class LiveVectorLake:
         Добавляет версию чанков в холодное хранилище.
         Сохраняется полный снапшот документа или инкрементальные изменения.
         """
+        if not PANDAS_AVAILABLE:
+            logger.warning("pandas is not available — cold storage disabled")
+            return
+
         timestamp = datetime.now(UTC).isoformat()
         records = []
         for chunk in chunks:
