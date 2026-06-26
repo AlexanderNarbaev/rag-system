@@ -1,12 +1,13 @@
 # etl/indexer/qdrant_hybrid.py
 """
-Гибридная индексация в Qdrant (dense + sparse) для RAG-системы.
-Использует BAAI/bge-m3 для получения обоих типов векторов.
-Поддерживает:
-- Создание коллекции с конфигурацией dense и sparse векторов
-- Пакетную загрузку чанков (upsert)
-- Обновление существующих точек по ID (хеш чанка)
-- Совместимость с Qdrant версии 1.10+
+Hybrid indexing in Qdrant (dense + sparse + ColBERT multi-vector) for RAG.
+Uses BAAI/bge-m3 for dense, sparse, and ColBERT vectors.
+Supports:
+- Collection creation with dense, sparse, and multi-vector config
+- Batch upsert
+- Update existing points by ID (chunk hash)
+- ColBERT late interaction (bge-m3 multi-vector)
+- Compatible with Qdrant 1.10+
 """
 
 import json
@@ -42,6 +43,8 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+COLBERT_ENABLED = True
 
 
 class QdrantHybridIndexer:
@@ -275,6 +278,97 @@ class QdrantHybridIndexer:
         """Удаляет коллекцию целиком."""
         self.client.delete_collection(self.collection_name)
         logger.info(f"Deleted collection {self.collection_name}")
+
+    def _compute_colbert_vectors(self, text: str) -> list[list[float]]:
+        """Compute ColBERT-style multi-vectors using bge-m3 token embeddings.
+
+        Returns a list of per-token vectors (late interaction).
+        Falls back to single dense vector if ColBERT is disabled.
+        """
+        if not COLBERT_ENABLED:
+            return [self._compute_dense_vector(text)]
+
+        try:
+            output = self.embedder.encode(
+                text, normalize_embeddings=False, output_value="token_embeddings"
+            )
+            if hasattr(output, "tolist"):
+                token_vecs = output.tolist()
+            else:
+                token_vecs = output
+            if isinstance(token_vecs, list) and token_vecs:
+                return token_vecs if isinstance(token_vecs[0], list) else [token_vecs]
+        except Exception as e:
+            logger.debug("ColBERT token embeddings failed, falling back to dense: %s", e)
+
+        return [self._compute_dense_vector(text)]
+
+    def index_with_colbert(self, chunk_text: str, colbert_vectors: list[list[float]] | None = None) -> bool:
+        """Index a chunk with ColBERT multi-vector representation.
+
+        If colbert_vectors is not provided, computes them from chunk_text.
+
+        :param chunk_text: the text content
+        :param colbert_vectors: pre-computed ColBERT per-token vectors
+        :return: True if indexed successfully
+        """
+        if not COLBERT_ENABLED:
+            logger.debug("ColBERT indexing disabled")
+            return False
+
+        import hashlib
+
+        chunk_id = hashlib.sha256(chunk_text.encode()).hexdigest()
+
+        if colbert_vectors is None:
+            colbert_vectors = self._compute_colbert_vectors(chunk_text)
+
+        try:
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=[
+                    PointStruct(
+                        id=chunk_id,
+                        vector={"colbert": colbert_vectors},
+                        payload={"text": chunk_text},
+                    )
+                ],
+            )
+            logger.debug("ColBERT indexed chunk %s", chunk_id[:12])
+            return True
+        except Exception as e:
+            logger.error("ColBERT index failed: %s", e)
+            return False
+
+    def search_colbert(self, query: str, limit: int = 10) -> list[dict]:
+        """Search using ColBERT late interaction scoring.
+
+        Tokens from query and documents are compared via MaxSim.
+
+        :param query: search query
+        :param limit: max results
+        :return: list of dicts with id, score, payload
+        """
+        if not COLBERT_ENABLED:
+            logger.warning("ColBERT search is disabled")
+            return []
+
+        query_vectors = self._compute_colbert_vectors(query)
+
+        try:
+            results = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=("colbert", query_vectors),
+                limit=limit,
+                with_payload=True,
+            )
+            return [
+                {"id": r.id, "score": r.score, "payload": r.payload}
+                for r in results
+            ]
+        except Exception as e:
+            logger.error("ColBERT search failed: %s", e)
+            return []
 
 
 def batch_index_from_json_files(indexer: QdrantHybridIndexer, chunks_dir: Path, pattern: str = "*.json"):

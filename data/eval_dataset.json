@@ -1,0 +1,22 @@
+[
+    {"query": "How to configure CI/CD pipeline in GitLab?", "relevant_docs": ["gitlab_mr_42", "gitlab_commit_cicd"], "notes": "GitLab CI/CD setup guide"},
+    {"query": "What is RAG architecture?", "relevant_docs": ["confluence_123", "confluence_rag_overview"], "notes": "RAG overview documentation"},
+    {"query": "How to integrate RAG with corporate search?", "relevant_docs": ["jira_PROJ-123", "confluence_123"], "notes": "Jira task and RAG architecture"},
+    {"query": "What is the status of PROJ-123?", "relevant_docs": ["jira_PROJ-123"], "notes": "Jira issue for RAG integration"},
+    {"query": "How does hybrid search work in Qdrant?", "relevant_docs": ["gitlab_commit_a1b2c3d", "confluence_qdrant_guide"], "notes": "Hybrid search commit and guide"},
+    {"query": "Compare GitLab CI/CD with GitHub Actions", "relevant_docs": ["confluence_comparison_ci", "gitlab_mr_42"], "notes": "CI/CD comparison document"},
+    {"query": "How to optimize RAG retrieval latency?", "relevant_docs": ["confluence_perf_tuning", "gitlab_commit_perf"], "notes": "Performance tuning"},
+    {"query": "What is the version history of the RAG module?", "relevant_docs": ["confluence_123", "gitlab_commit_a1b2c3d"], "notes": "Version history"},
+    {"query": "How to set up Neo4j graph expansion?", "relevant_docs": ["confluence_neo4j_setup", "confluence_graph_expansion"], "notes": "Neo4j setup guides"},
+    {"query": "What embedding models are supported?", "relevant_docs": ["confluence_embeddings", "confluence_model_list"], "notes": "Embedding model documentation"},
+    {"query": "How to deploy RAG proxy with Docker?", "relevant_docs": ["confluence_deploy_guide", "gitlab_mr_deploy"], "notes": "Deployment guides"},
+    {"query": "What is the architecture of the ETL pipeline?", "relevant_docs": ["confluence_etl_arch", "gitlab_commit_etl"], "notes": "ETL architecture"},
+    {"query": "How to tune HNSW parameters in Qdrant?", "relevant_docs": ["confluence_hnsw_tuning", "confluence_qdrant_guide"], "notes": "HNSW tuning"},
+    {"query": "How does confidence scoring work?", "relevant_docs": ["confluence_confidence", "gitlab_commit_confidence"], "notes": "Confidence scoring module"},
+    {"query": "How to use the HITL dashboard?", "relevant_docs": ["confluence_hitl_guide", "confluence_dashboard"], "notes": "HITL dashboard docs"},
+    {"query": "What is token optimization and how does it work?", "relevant_docs": ["confluence_token_opt", "gitlab_commit_token_opt"], "notes": "Token optimization"},
+    {"query": "How to add a new data source to the ETL pipeline?", "relevant_docs": ["confluence_etl_extend", "confluence_etl_arch"], "notes": "ETL extensibility"},
+    {"query": "How does the rate limiter work?", "relevant_docs": ["confluence_rate_limit", "gitlab_commit_rate_limit"], "notes": "Rate limiting"},
+    {"query": "How to configure authentication with JWT?", "relevant_docs": ["confluence_auth_guide", "confluence_rbac"], "notes": "Auth configuration"},
+    {"query": "What is the roadmap for future versions?", "relevant_docs": ["confluence_roadmap", "jira_roadmap"], "notes": "Roadmap documentation"}
+]
