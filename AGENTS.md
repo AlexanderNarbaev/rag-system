@@ -8,7 +8,7 @@ English for code and comments. The system supports full i18n — documentation i
 
 ## Current State
 - **Version:** v2.0 (June 2026) — Self-Correcting RAG
-- **Tests:** 1333 collected, 1333 passing (100% pass rate)
+- **Tests:** 1503 collected, 1503 passing (100% pass rate)
 - **Maturity:** RAG Level 5 (Self-Correcting) — HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual retrieval benchmarks, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k, streaming ETL (Redis Streams), webhook-driven ingestion, model warm-up, SSE TTFT optimization, response compression (gzip/brotli), E2E test suite, chaos/resilience testing, K8s Helm chart, Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment, backup automation, DR runbook
 - **Production readiness:** 94% (75/80) across 8 dimensions — see `docs/guides/best-practices-checklist.md`
 - **Next milestone:** Beyond v2.0 — Federated RAG, Agentic Tools expansion, Model Evolution (see `docs/guides/roadmap.md`)
