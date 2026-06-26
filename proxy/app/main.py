@@ -41,6 +41,9 @@ from app.confidence import compute_confidence
 
 # Импорт внутренних модулей
 from app.config import (
+    COMPRESSION_ENABLED,
+    COMPRESSION_LEVEL,
+    COMPRESSION_MIN_SIZE,
     CORS_ORIGINS,
     LLM_ENDPOINT,
     LLM_MODEL_NAME,
@@ -52,8 +55,12 @@ from app.config import (
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_PER_MINUTE,
     REDIS_URL,
+    SSE_CHUNK_SIZE,
+    STREAM_BUFFER_SIZE,
     USE_LANGGRAPH,
     USE_REDIS,
+    WARMUP_ENABLED,
+    WARMUP_ON_STARTUP,
 )
 from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
 from app.hitl import generate_feedback_id, log_interaction
@@ -70,6 +77,7 @@ from app.token_optimizer import TokenOptimizer
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.middleware.gzip import GZipMiddleware
 
 # Опциональные модули
 if USE_LANGGRAPH:
@@ -107,6 +115,14 @@ async def lifespan(app: FastAPI):
     if USE_LANGGRAPH:
         orchestrator = get_orchestrator()
         logger.info("LangGraph orchestrator initialized")
+    # Model warm-up on startup (graceful degradation)
+    if WARMUP_ENABLED and WARMUP_ON_STARTUP:
+        try:
+            from app.warmup import warmup_all
+            warmup_result = await warmup_all()
+            logger.info(f"Model warm-up completed: {warmup_result}")
+        except Exception as e:
+            logger.warning(f"Model warm-up failed (non-blocking): {e}")
     logger.info("RAG Proxy ready")
     yield
     # Очистка
@@ -122,11 +138,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Middleware setup (order matters: CORS > correlation > request-id > logging > rate-limit)
+# Middleware setup (order matters: CORS > correlation > request-id > logging > rate-limit > compression)
 add_cors_middleware(app, origins=CORS_ORIGINS)
 setup_all_middleware(app, audit_logger=audit_logger)
 if RATE_LIMIT_ENABLED:
     add_rate_limit_middleware(app, rate_per_minute=RATE_LIMIT_PER_MINUTE, burst=RATE_LIMIT_BURST)
+if COMPRESSION_ENABLED:
+    app.add_middleware(GZipMiddleware, minimum_size=COMPRESSION_MIN_SIZE, compresslevel=COMPRESSION_LEVEL)
 
 
 # Metrics endpoint
@@ -237,6 +255,33 @@ class FeedbackResponse(BaseModel):
 
 
 # Вспомогательные функции
+
+
+class StreamOptimizer:
+    """Optimizes SSE streaming for low time-to-first-token (TTFT).
+
+    Sends an empty initial chunk immediately after receiving the request
+    to reduce client-side latency. Buffers streamed content up to the
+    configured chunk size before emitting, balancing latency and overhead.
+    """
+
+    def __init__(self, chunk_size: int | None = None, buffer_size: int | None = None):
+        self.sse_chunk_size = chunk_size or SSE_CHUNK_SIZE
+        self.stream_buffer_size = buffer_size or STREAM_BUFFER_SIZE
+        self.initial_chunk_sent = False
+
+    def initial_chunk(self) -> str:
+        """Return the initial empty SSE chunk to reduce TTFT."""
+        if self.initial_chunk_sent:
+            return ""
+        self.initial_chunk_sent = True
+        return 'data: {"role":"initial_chunk"}\n\n'
+
+    def format_chunk(self, chunk: dict) -> str:
+        """Format a single chunk as an SSE event."""
+        return f"data: {json.dumps(chunk)}\n\n"
+
+
 def generate_request_id() -> str:
     return f"rag_{int(time.time())}_{os.urandom(4).hex()}"
 
@@ -736,7 +781,12 @@ async def chat_completions(
         # Потоковый режим
         async def event_generator():
             accumulated_answer = []
+            optimizer = StreamOptimizer()
             try:
+                # Send initial empty chunk to reduce TTFT
+                initial = optimizer.initial_chunk()
+                if initial:
+                    yield initial
                 # Выполняем поиск и подготовку контекста (синхронно, но в потоке)
                 rag_context, messages_for_llm, _, _ = await process_rag_query(
                     user_query=user_query,
@@ -753,7 +803,7 @@ async def chat_completions(
                     delta_content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
                     if delta_content:
                         accumulated_answer.append(delta_content)
-                    yield f"data: {json.dumps(chunk)}\n\n"
+                    yield optimizer.format_chunk(chunk)
                 # Yield final metadata chunk with confidence + feedback_id
                 full_answer = "".join(accumulated_answer)
                 feedback_id = generate_feedback_id()
@@ -885,6 +935,31 @@ async def submit_feedback(request: FeedbackRequest, raw_request: Request):
     except Exception as e:
         logger.error(f"Failed to record feedback: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to record feedback: {e}") from e
+
+
+# ===========================================================================
+# Admin warm-up endpoint
+# ===========================================================================
+
+
+@app.post("/v1/admin/warmup")
+async def admin_warmup(user: UserContext = Depends(get_auth_context)):
+    """Trigger model warm-up (admin only).
+
+    Runs embedder, reranker, and LLM warmup to pre-load models into memory.
+    Uses graceful degradation: each component failure is logged, not fatal.
+    """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if not WARMUP_ENABLED:
+        return JSONResponse(status_code=200, content={"status": "disabled", "message": "Warm-up is disabled"})
+    try:
+        from app.warmup import warmup_all
+        result = await warmup_all()
+        return JSONResponse(status_code=200, content={"status": "ok", "results": result})
+    except Exception as e:
+        logger.error(f"Warm-up failed: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 if __name__ == "__main__":

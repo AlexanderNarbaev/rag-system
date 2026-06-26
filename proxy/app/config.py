@@ -171,6 +171,19 @@ DEPENDENCY_SCAN_ENABLED = os.getenv("DEPENDENCY_SCAN_ENABLED", "false").lower() 
 ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
 ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")
 
+# ============ Response Compression ============
+COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() == "true"
+COMPRESSION_MIN_SIZE = int(os.getenv("COMPRESSION_MIN_SIZE", "500"))
+COMPRESSION_LEVEL = int(os.getenv("COMPRESSION_LEVEL", "6"))
+
+# ============ SSE Streaming Optimization ============
+SSE_CHUNK_SIZE = int(os.getenv("SSE_CHUNK_SIZE", "4"))
+STREAM_BUFFER_SIZE = int(os.getenv("STREAM_BUFFER_SIZE", "1"))
+
+# ============ Model Warm-Up ============
+WARMUP_ENABLED = os.getenv("WARMUP_ENABLED", "true").lower() == "true"
+WARMUP_ON_STARTUP = os.getenv("WARMUP_ON_STARTUP", "true").lower() == "true"
+
 # ============ Вспомогательная функция для отладки ============
 def print_config():
     """Выводит текущую конфигурацию (скрывая секреты)."""
