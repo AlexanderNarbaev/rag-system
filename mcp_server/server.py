@@ -47,6 +47,10 @@ MCP_TRANSPORT: str = os.getenv("MCP_TRANSPORT", "stdio")
 MCP_HOST: str = os.getenv("MCP_HOST", "0.0.0.0")
 MCP_PORT: int = int(os.getenv("MCP_PORT", "8000"))
 
+# RAG proxy connection for rag_chat tool
+RAG_PROXY_URL: str = os.getenv("RAG_PROXY_URL", "http://localhost:8080")
+RAG_PROXY_API_KEY: str = os.getenv("RAG_PROXY_API_KEY", "")
+
 # ---------------------------------------------------------------------------
 # Lazy service clients
 # ---------------------------------------------------------------------------
@@ -680,6 +684,83 @@ def rag_search_graph(
             {"error": str(exc), "results": [], "graph_context": ""},
             ensure_ascii=False,
         )
+
+
+# ── rag_chat tool ──────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def rag_chat(
+    query: str,
+    stream: bool = False,
+    temperature: float = 0.2,
+    max_tokens: int = 4096,
+) -> str:
+    """Send a question to the RAG proxy chat endpoint and return the answer.
+
+    This tool calls POST /v1/chat/completions on the RAG proxy, which handles
+    retrieval, reranking, context assembly, and LLM generation.
+
+    :param query: The user's question.
+    :param stream: Whether to stream the response (default False).
+    :param temperature: LLM sampling temperature (default 0.2).
+    :param max_tokens: Maximum tokens in the response (default 4096).
+    :return: The generated answer text.
+    """
+    import urllib.request
+    import urllib.error
+
+    url = f"{RAG_PROXY_URL.rstrip('/')}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if RAG_PROXY_API_KEY:
+        headers["Authorization"] = f"Bearer {RAG_PROXY_API_KEY}"
+
+    payload = {
+        "model": "rag-model",
+        "messages": [{"role": "user", "content": query}],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": stream,
+    }
+
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+        if stream:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                chunks = []
+                buffer = ""
+                while True:
+                    raw = resp.read(4096)
+                    if not raw:
+                        break
+                    buffer += raw.decode("utf-8")
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        line = line.strip()
+                        if line.startswith("data: ") and line[6:] != "[DONE]":
+                            try:
+                                chunk = json.loads(line[6:])
+                                delta = (
+                                    chunk.get("choices", [{}])[0]
+                                    .get("delta", {})
+                                    .get("content", "")
+                                )
+                                chunks.append(delta)
+                            except json.JSONDecodeError:
+                                pass
+                return "".join(chunks)
+        else:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                return result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8") if e.fp else str(e)
+        return f"Error {e.code}: {error_body}"
+    except Exception as e:
+        return f"Error: {e}"
 
 
 # ===================================================================

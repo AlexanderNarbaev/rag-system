@@ -72,6 +72,11 @@ class RAGState(TypedDict):
     temperature: float
     max_tokens: int
     stream: bool
+    # Tool/function calling
+    tool_calls: list[dict[str, Any]]
+    tool_results: list[dict[str, Any]]
+    tool_loop_count: int
+    tools_enabled: bool
 
 
 def rewrite_query(state: RAGState) -> dict[str, Any]:
@@ -246,7 +251,7 @@ def generate(state: RAGState) -> dict[str, Any]:
 def check_confidence(state: dict) -> dict:
     """Check confidence of generated answer and decide if escalation needed."""
     from app.confidence import compute_confidence
-    from app.config import ADMIN_ALERT_ENABLED, CONFIDENCE_THRESHOLD, MAX_VERIFY_LOOPS, SELF_CRITIQUE_ENABLED
+    from app.config import ADMIN_ALERT_ENABLED, CONFIDENCE_THRESHOLD, HALLUCINATION_CHECK_ENABLED, MAX_VERIFY_LOOPS, SELF_CRITIQUE_ENABLED
 
     answer = state.get("answer", "")
     context = state.get("context", "")
@@ -255,6 +260,11 @@ def check_confidence(state: dict) -> dict:
 
     if not answer:
         return {"confidence": None, "needs_escalation": False, "needs_self_critique": False}
+
+    # HALLUCINATION_CHECK_ENABLED gates the full confidence/NLI grounding pipeline.
+    # When disabled, skip hallucination detection and accept the answer as-is.
+    if not HALLUCINATION_CHECK_ENABLED:
+        return {"confidence": 0.7, "needs_escalation": False, "needs_self_critique": False}
 
     report = compute_confidence(query=query, context=context, answer=answer)
 
@@ -439,7 +449,7 @@ def _self_reflection_route(state: dict) -> str:
 
 # Строим граф
 def build_rag_graph() -> StateGraph:
-    """Создаёт и компилирует граф RAG."""
+    """Создаёт и компилирует граф RAG с tool-calling поддержкой."""
     builder = StateGraph(RAGState)
 
     # Добавляем узлы
@@ -465,9 +475,25 @@ def build_rag_graph() -> StateGraph:
     builder.add_node("self_reflection", self_reflection)
     builder.add_node("check_confidence", check_confidence)
     builder.add_node("self_critique", self_critique)
+    builder.add_node("call_tools", call_tools)
 
-    # Flow: generate -> self_reflection -> (retrieve if gaps | check_confidence if ok)
-    builder.add_edge("generate", "self_reflection")
+    # Route from generate:
+    # - If tool_calls were requested → call_tools
+    # - Otherwise → self_reflection
+    builder.add_conditional_edges(
+        "generate",
+        _route_after_generate,
+        {
+            "call_tools": "call_tools",
+            "reflect": "self_reflection",
+        },
+    )
+
+    # After tool calls, loop back to generate with tool results
+    builder.add_edge("call_tools", "generate")
+
+    # Removed: builder.add_edge("generate", "self_reflection") — conditional edge handles this
+
     builder.add_conditional_edges(
         "self_reflection",
         _self_reflection_route,
@@ -478,9 +504,6 @@ def build_rag_graph() -> StateGraph:
     )
 
     # Route from check_confidence:
-    # - If needs_escalation → rewrite (low confidence, retry retrieval)
-    # - If needs_self_critique → self_critique (review answer usefulness)
-    # - Otherwise → done
     builder.add_conditional_edges(
         "check_confidence",
         lambda s: (
@@ -496,8 +519,6 @@ def build_rag_graph() -> StateGraph:
     )
 
     # Route from self_critique:
-    # - If needs_rewrite → rewrite (answer not useful, rewrite query)
-    # - Otherwise → done (answer is useful enough)
     builder.add_conditional_edges(
         "self_critique",
         _self_critique_route,
@@ -508,11 +529,58 @@ def build_rag_graph() -> StateGraph:
     )
 
     # Добавляем графовое расширение как опциональный узел между rerank и build_context
-    # В текущей архитектуре: retrieve -> check_sufficiency -> rerank -> graph_expand -> build_context
     builder.add_edge("rerank", "graph_expand")
     builder.add_edge("graph_expand", "build_context")
 
     return builder
+
+
+def _route_after_generate(state: RAGState) -> str:
+    """Route after generate: if tool calls were requested, go to call_tools."""
+    tool_calls = state.get("tool_calls", [])
+    tool_loop_count = state.get("tool_loop_count", 0)
+    max_tool_loops = 5
+
+    if tool_calls and tool_loop_count < max_tool_loops:
+        return "call_tools"
+    return "reflect"
+
+
+def call_tools(state: RAGState) -> dict[str, Any]:
+    """Execute tool calls requested by the LLM and collect results."""
+    from app.tools import get_tool_registry, handle_function_call
+
+    tool_calls = state.get("tool_calls", [])
+    tool_results = state.get("tool_results", [])
+    tool_loop_count = state.get("tool_loop_count", 0)
+
+    registry = get_tool_registry()
+
+    for tc in tool_calls:
+        try:
+            result = handle_function_call(tc, registry)
+            tool_results.append({
+                "tool_call_id": tc.get("id", result.tool_call_id),
+                "name": result.name,
+                "content": result.content,
+                "error": result.error,
+            })
+            logger.info("Tool %s executed successfully", result.name)
+        except Exception as e:
+            func_name = tc.get("function", {}).get("name", "")
+            logger.warning("Tool %s failed: %s", func_name, e)
+            tool_results.append({
+                "tool_call_id": tc.get("id", ""),
+                "name": func_name,
+                "content": f"Error: {e}",
+                "error": str(e),
+            })
+
+    return {
+        "tool_results": tool_results,
+        "tool_loop_count": tool_loop_count + 1,
+        "tool_calls": [],  # Clear for next iteration
+    }
 
 
 class RAGOrchestrator:
