@@ -57,6 +57,7 @@ from app.config import (
     LOG_REQUESTS,
     MAX_CHUNKS_AFTER_RERANK,
     MAX_CHUNKS_RETRIEVAL,
+    OTEL_ENABLED,
     RATE_LIMIT_BURST,
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_PER_MINUTE,
@@ -115,6 +116,16 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Starting RAG Proxy...")
     init_metrics()
+
+    # OpenTelemetry tracing (graceful degradation)
+    if OTEL_ENABLED:
+        try:
+            from app.tracing import setup_tracing
+            setup_tracing()
+            logger.info("OpenTelemetry tracing initialized")
+        except Exception as e:
+            logger.warning("OpenTelemetry tracing setup failed (non-blocking): %s", e)
+
     audit_logger = AuditLogger(log_dir=LOG_DIR)
     # Инициализация кэша
     if USE_REDIS and REDIS_URL:
@@ -191,6 +202,17 @@ if RATE_LIMIT_ENABLED:
     add_rate_limit_middleware(app, rate_per_minute=RATE_LIMIT_PER_MINUTE, burst=RATE_LIMIT_BURST)
 if COMPRESSION_ENABLED:
     app.add_middleware(GZipMiddleware, minimum_size=COMPRESSION_MIN_SIZE, compresslevel=COMPRESSION_LEVEL)
+
+# OpenTelemetry FastAPI instrumentation (auto-instruments HTTP requests)
+if OTEL_ENABLED:
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        FastAPIInstrumentor.instrument_app(app)
+        logger.info("FastAPI OpenTelemetry instrumentation enabled")
+    except ImportError:
+        logger.warning("opentelemetry-instrumentation-fastapi not installed")
+    except Exception as e:
+        logger.warning("FastAPI instrumentation failed (non-blocking): %s", e)
 
 
 # Metrics endpoint
