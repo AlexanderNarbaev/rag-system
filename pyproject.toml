@@ -1,6 +1,6 @@
 [project]
 name = "rag-system"
-version = "0.1.0"
+version = "2.0.0"
 requires-python = ">=3.11"
 
 [tool.ruff]
@@ -24,4 +24,7 @@ markers = [
     "e2e: End-to-end tests requiring running services",
     "benchmark: Performance and load tests",
     "chaos: Resilience and chaos engineering tests",
+    "asyncio: Tests using asyncio for async code paths",
+    "slow: Tests that take longer than 5 seconds to complete",
+    "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
 ]

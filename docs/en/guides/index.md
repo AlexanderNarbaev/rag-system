@@ -7,7 +7,7 @@ Comprehensive guides covering design decisions, implementation patterns, and ope
 | [RAG Maturity Assessment](rag-maturity-assessment.md) | Maturity model with capability scoring across 5 levels |
 | [Production Readiness Checklist](best-practices-checklist.md) | 8-dimension production readiness tracker (90%+ at v1.0) |
 | [Disaster Recovery Runbook](disaster-recovery-runbook.md) | Step-by-step DR procedures for all failure scenarios |
-| [SLI/SLO Definitions](sli-slo.md) | Service level indicators, objectives, and error budgets |
+| [SLI/SLO Definitions](../sli_slo.md) | Service level indicators, objectives, and error budgets |
 | [Performance & Quality](performance-quality.md) | HNSW tuning, quantization, monitoring, resilience |
 | [Extensibility: Adding Data Sources](extensibility-data-sources.md) | Plugin architecture for custom data source extractors |
 | [Access Control & RBAC](access-control-rbac.md) | Role-based access control and data classification |

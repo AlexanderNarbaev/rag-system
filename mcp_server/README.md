@@ -98,6 +98,7 @@ Or for a remote instance:
 | `rag_get_document` | `doc_id` | Retrieves a document by Qdrant point ID |
 | `rag_get_entities` | `entity_name` | Queries Neo4j for entity relationships |
 | `rag_search_graph` | `query`, `max_hops=2` | Graph-enhanced search with traversal |
+| `rag_chat` | `query`, `stream=false`, `temperature=0.2`, `max_tokens=4096` | Full RAG chat — queries proxy /v1/chat/completions |
 
 ## Available Resources
 

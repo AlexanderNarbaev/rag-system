@@ -8,10 +8,10 @@ English for code and comments. The system supports full i18n — documentation i
 
 ## Current State
 - **Version:** v2.0 (June 2026) — Self-Correcting RAG
-- **Tests:** 1503 collected, 1503 passing (100% pass rate)
+- **Tests:** 1469 collected, 1469 passing (100% pass rate)
 - **Maturity:** RAG Level 5 (Self-Correcting) — HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual retrieval benchmarks, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k, streaming ETL (Redis Streams), webhook-driven ingestion, model warm-up, SSE TTFT optimization, response compression (gzip/brotli), E2E test suite, chaos/resilience testing, K8s Helm chart, Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment, backup automation, DR runbook
-- **Production readiness:** 94% (75/80) across 8 dimensions — see `docs/guides/best-practices-checklist.md`
-- **Next milestone:** Beyond v2.0 — Federated RAG, Agentic Tools expansion, Model Evolution (see `docs/guides/roadmap.md`)
+- **Production readiness:** 94% (75/80) across 8 dimensions — see `docs/en/guides/best-practices-checklist.md`
+- **Next milestone:** Beyond v2.0 — Federated RAG, Agentic Tools expansion, Model Evolution (see `docs/en/guides/roadmap.md`)
 
 ## Architecture
 Three-layer system plus supporting services, with multi-provider LLM backend support:
@@ -47,8 +47,8 @@ rag-system/
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized)
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (8 endpoints + health + metrics)
-│   │   ├── orchestrator.py           # LangGraph agentic query pipeline (7-node state graph)
+│   │   ├── main.py                   # FastAPI entry point (14 endpoints: chat, models, health, auth, widget, feedback, admin)
+│   │   ├── orchestrator.py           # LangGraph agentic query pipeline (8-node state graph with tool calling)
 │   │   ├── provider_adapter.py       # Multi-provider LLM backend adapter (vLLM, llama.cpp, OpenAI-compatible)
 │   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
 │   │   ├── rerank.py                 # Cross-encoder reranker (MiniLM-L-6-v2)
@@ -61,8 +61,11 @@ rag-system/
 │   │   ├── evaluation.py             # Retrieval eval pipeline: MRR, Recall@k, nDCG, Precision@k
 │   │   ├── grounding.py              # NLI-based answer grounding (cosine + entailment)
 │   │   ├── exceptions.py             # RAGError, RetrievalError, LLMError, SecurityError hierarchy
-│   │   ├── auth.py                   # JWT authentication + Keycloak OIDC integration
+│   │   ├── auth.py                   # JWT authentication + Keycloak OIDC integration + token pairs
 │   │   ├── rbac.py                   # Role-based access control (admin/expert/user/read-only)
+│   │   ├── user_db.py                # SQLite user database with bcrypt + refresh token management
+│   │   ├── ldap_auth.py              # LDAP/AD authentication integration
+│   │   ├── remote_services.py        # Remote embedder/reranker clients with local fallback
 │   │   ├── sanitizer.py             # Input sanitization (SQL injection, XSS, length limits)
 │   │   ├── ab_test.py               # A/B test harness for pipeline variants
 │   │   ├── cache.py                  # Redis + in-memory multi-tier cache
@@ -93,9 +96,11 @@ rag-system/
 │   ├── mcp_server/                   # 46 MCP server tests
 │   └── conftest.py                   # Shared fixtures
 ├── docs/                             # Documentation
-│   ├── adr/                          # 7 Architecture Decision Records
-│   ├── diagrams/                     # 4 C4 diagrams (SVG + Excalidraw)
-│   └── guides/                       # 11 design & implementation guides
+│   ├── en/adr/                       # 7 Architecture Decision Records (English)
+│   ├── en/diagrams/                  # 4 C4 diagrams (SVG + Excalidraw)
+│   ├── en/guides/                    # 14 design & implementation guides (English)
+│   ├── ru/adr/                       # Russian translations of ADRs
+│   ├── ru/guides/                    # Russian translations of guides
 ├── Makefile                          # Primary dev entry point
 ├── pyproject.toml                    # Python project config (ruff, mypy, pytest)
 ├── setup.sh                          # Installation script
@@ -195,9 +200,13 @@ ptw tests/ -- -v
 | `/v1/health/live` | GET | Liveness probe (K8s-compatible) |
 | `/v1/health/ready` | GET | Readiness probe (Qdrant + LLM connectivity) |
 | `/v1/feedback` | POST | Submit expert feedback (positive/negative + corrections) |
-| `/v1/auth/login` | POST | JWT token generation |
-| `/v1/auth/refresh` | POST | Token refresh |
+| `/v1/auth/login` | POST | JWT token generation (access + refresh pair) |
+| `/v1/auth/register` | POST | User self-registration (bcrypt-hashed passwords in SQLite) |
+| `/v1/auth/refresh` | POST | Token refresh (exchange refresh token for new pair) |
+| `/v1/auth/logout` | POST | Logout (revoke refresh tokens, blacklist access token) |
 | `/v1/auth/me` | GET | Current user context |
+| `/v1/widget` | GET | Embeddable RAG chat widget (HTML) |
+| `/v1/widget.js` | GET | Standalone widget JavaScript |
 | `/metrics` | GET | Prometheus metrics (counters, histograms, gauges) |
 
 RAG-specific parameters on `/v1/chat/completions`:
@@ -236,17 +245,17 @@ See `proxy/app/config.py` for all available settings and defaults.
 
 | Document | Purpose |
 |----------|---------|
-| `docs/adr/ADR-001` through `ADR-007` | Architecture Decision Records |
-| `docs/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
-| `docs/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
-| `docs/guides/roadmap.md` | Version history and development roadmap (v0.1 → v2.0) |
-| `docs/guides/disaster-recovery-runbook.md` | DR procedures for all failure scenarios |
-| `docs/guides/sli-slo.md` | SLI/SLO definitions with error budgets |
-| `docs/guides/performance-quality.md` | HNSW tuning, quantization, monitoring, resilience |
-| `docs/guides/extensibility-data-sources.md` | Adding new ETL data sources |
-| `docs/guides/access-control-rbac.md` | RBAC and access control design |
-| `docs/guides/knowledge-graph-strategy.md` | Neo4j graph enrichment strategy |
-| `docs/guides/deployment-guide.md` | Deployment and operations |
-| `docs/guides/operations-guide.md` | Operational procedures |
-| `docs/guides/integration-opencode.md` | OpenCode IDE integration |
-| `docs/guides/troubleshooting.md` | Common issues and resolutions |
+| `docs/en/adr/ADR-001` through `ADR-007` | Architecture Decision Records (English) |
+| `docs/en/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
+| `docs/en/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
+| `docs/en/guides/roadmap.md` | Version history and development roadmap (v0.1 → v2.0) |
+| `docs/en/guides/disaster-recovery-runbook.md` | DR procedures for all failure scenarios |
+| `docs/en/sli_slo.md` | SLI/SLO definitions with error budgets |
+| `docs/en/guides/performance-quality.md` | HNSW tuning, quantization, monitoring, resilience |
+| `docs/en/guides/extensibility-data-sources.md` | Adding new ETL data sources |
+| `docs/en/guides/access-control-rbac.md` | RBAC and access control design |
+| `docs/en/guides/knowledge-graph-strategy.md` | Neo4j graph enrichment strategy |
+| `docs/en/guides/deployment-guide.md` | Deployment and operations |
+| `docs/en/guides/operations-guide.md` | Operational procedures |
+| `docs/en/guides/integration-opencode.md` | OpenCode IDE integration |
+| `docs/en/guides/troubleshooting.md` | Common issues and resolutions |

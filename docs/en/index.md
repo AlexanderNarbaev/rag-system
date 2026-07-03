@@ -5,7 +5,7 @@
 
 **OpenAI-compatible RAG proxy with full ETL pipeline.** Ingests Confluence, Jira, GitLab, documents, books, and chat history into Qdrant + Neo4j. Served via any LLM backend — vLLM, llama.cpp, Anthropic, Ollama, or any OpenAI-compatible endpoint.
 
-**Version:** v0.4.0 | **Tests:** 505 total, 483 passing (96%) | **Maturity:** RAG Level 4 (Agentic) operational, Level 5 (Self-Correcting) partially designed
+**Version:** v2.0.0 (June 2026) — Self-Correcting RAG | **Tests:** 1469 total, 100% pass | **Maturity:** RAG Level 5 (Self-Correcting)
 
 [Get Started](#quick-start){ .md-button .md-button--primary }
 [API Reference](api_reference.md){ .md-button }

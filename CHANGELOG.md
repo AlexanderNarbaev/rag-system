@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-lingual retrieval benchmarks:** Evaluation dataset with multi-language query-document pairs
 - **Live source connectors:** Direct API integration with Confluence, Jira, and GitLab for real-time data
 - **Self-reflection graph patterns:** Neo4j knowledge graph patterns for self-reflection and entity linking
+- **Remote embedder support:** Connect to external embedding services (EMBEDDER_ENDPOINT) with local SentenceTransformer fallback
+- **Remote reranker support:** Connect to external reranker services (RERANKER_ENDPOINT) with local CrossEncoder fallback
+- **Per-request LLM provider routing:** provider_type parameter on all completion methods enables dynamic backend switching
+- **User self-registration:** POST /v1/auth/register with bcrypt-hashed passwords in SQLite user store
+- **JWT token pairs:** access+refresh token rotation, token blacklist, and logout support
+- **LDAP/AD authentication:** Optional LDAP bind alongside local SQLite users (AD_ENABLED)
+- **RBAC enforcement:** role-based access checks on all protected endpoints (feedback→EXPERT, warmup→ADMIN)
+- **Chat UI widget:** Embeddable vanilla-JS chat widget served at /v1/widget with SSE streaming
+- **Tool-calling orchestration:** LangGraph call_tools node wired to tools.py registry with loop protection
+- **MCP rag_chat tool:** Full RAG chat accessible from MCP clients via proxy /v1/chat/completions
 - 12 new tests (1333 total, 100% pass rate)
 
 ### Changed
