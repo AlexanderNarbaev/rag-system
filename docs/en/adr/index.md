@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Seven architecture decisions documented using the ADR format. Each record captures the context, decision, consequences, and alternatives considered.
+Eight architecture decisions documented using the ADR format. Each record captures the context, decision, consequences, and alternatives considered.
 
 | # | Decision | Document |
 |---|----------|----------|
@@ -11,6 +11,7 @@ Seven architecture decisions documented using the ADR format. Each record captur
 | ADR-005 | Version-aware document indexing | [ADR-005](ADR-005-version-aware-indexing.md) |
 | ADR-006 | Agentic RAG with LangGraph | [ADR-006](ADR-006-agentic-rag-langgraph.md) |
 | ADR-007 | Human-in-the-loop feedback system | [ADR-007](ADR-007-hitl-feedback-system.md) |
+| ADR-008 | Java 25 + Quarkus hybrid migration | [ADR-008](ADR-008-java-quarkus-hybrid-migration.md) |
 
 ## Status Summary
 
@@ -23,5 +24,6 @@ Seven architecture decisions documented using the ADR format. Each record captur
 | 005 | Accepted | 2026-02 |
 | 006 | Accepted | 2026-03 |
 | 007 | Accepted | 2026-04 |
+| 008 | Proposed | 2026-07 |
 
-All seven ADRs have been accepted and implemented in v0.1.0.
+All seven accepted ADRs have been implemented in v2.0.0. ADR-008 is under evaluation.
