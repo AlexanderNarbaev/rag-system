@@ -22,19 +22,10 @@ try:
 except ImportError:
     QDRANT_AVAILABLE = False
 
-try:
-    from sentence_transformers import SentenceTransformer
-
-    ST_AVAILABLE = True
-except ImportError:
-    ST_AVAILABLE = False
-
 # Импорт конфигурации (будет создан отдельно)
 from app.cache import CacheManager
 from app.config import (
     COLLECTION_NAME,
-    EMBEDDER_DEVICE,
-    EMBEDDER_MODEL,
     GRAPH_ENABLED,
     NEO4J_PASSWORD,
     NEO4J_URI,
@@ -68,12 +59,14 @@ def initialize_retrieval():
     global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
     if not QDRANT_AVAILABLE:
         raise ImportError("qdrant-client is required")
-    if not ST_AVAILABLE:
-        raise ImportError("sentence-transformers is required")
 
     qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
-    embedder = SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)
-    logger.info(f"Embedder {EMBEDDER_MODEL} loaded on {EMBEDDER_DEVICE}")
+
+    # Use factory to select remote or local embedder
+    from app.remote_services import create_embedder
+    embedder = create_embedder()
+    embedder_name = getattr(embedder, "__class__", type(embedder)).__name__
+    logger.info("Embedder initialized: %s", embedder_name)
 
     # Кэш (если используется Redis)
     if USE_REDIS and REDIS_URL:

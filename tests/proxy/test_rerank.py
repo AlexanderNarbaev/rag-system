@@ -137,13 +137,13 @@ class TestInitializeReranker:
     """Tests for initialize_reranker function."""
 
     def test_raises_when_not_available(self):
-        with patch("proxy.app.rerank.CROSS_ENCODER_AVAILABLE", False):
+        with patch("app.remote_services.create_reranker", side_effect=ImportError("no st")):
             with pytest.raises(ImportError):
                 initialize_reranker()
 
     def test_initializes_with_in_memory_cache(self):
-        with patch("proxy.app.rerank.CROSS_ENCODER_AVAILABLE", True), \
-             patch("proxy.app.rerank.CrossEncoder") as mock_ce, \
+        mock_reranker = object()
+        with patch("app.remote_services.create_reranker", return_value=mock_reranker), \
              patch("proxy.app.rerank.USE_REDIS", False):
             initialize_reranker()
             from proxy.app.rerank import cache_manager
@@ -151,8 +151,8 @@ class TestInitializeReranker:
             assert cache_manager.use_redis is False
 
     def test_initializes_with_redis(self):
-        with patch("proxy.app.rerank.CROSS_ENCODER_AVAILABLE", True), \
-             patch("proxy.app.rerank.CrossEncoder") as mock_ce, \
+        mock_reranker = object()
+        with patch("app.remote_services.create_reranker", return_value=mock_reranker), \
              patch("proxy.app.rerank.USE_REDIS", True), \
              patch("proxy.app.rerank.REDIS_URL", "redis://test:6379"):
             initialize_reranker()

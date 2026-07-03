@@ -23,12 +23,24 @@ COLLECTION_NAME = os.getenv("COLLECTION_NAME", "knowledge_base")
 # Examples: BAAI/bge-m3, intfloat/multilingual-e5-large, sentence-transformers/all-MiniLM-L6-v2
 EMBEDDER_MODEL = os.getenv("EMBEDDER_MODEL", "")
 EMBEDDER_DEVICE = os.getenv("EMBEDDER_DEVICE", "cpu")
+# Remote embedding service (OpenAI /v1/embeddings or compatible). Leave empty for local model.
+# Examples: http://localhost:8081/v1, https://api.openai.com/v1
+EMBEDDER_ENDPOINT = os.getenv("EMBEDDER_ENDPOINT", "")
+EMBEDDER_API_KEY = os.getenv("EMBEDDER_API_KEY", "")
+# When remote embedder is unavailable, fall back to local SentenceTransformer
+EMBEDDER_FALLBACK_LOCAL = os.getenv("EMBEDDER_FALLBACK_LOCAL", "true").lower() == "true"
 
 # ============ Reranker / Cross-Encoder ============
 # Examples: cross-encoder/ms-marco-MiniLM-L-6-v2, BAAI/bge-reranker-v2-m3, mixedbread-ai/mxbai-rerank-large-v1
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "")
 RERANKER_MAX_LENGTH = int(os.getenv("RERANKER_MAX_LENGTH", "512"))
 RERANKER_BATCH_SIZE = int(os.getenv("RERANKER_BATCH_SIZE", "32"))
+# Remote reranker service (Cohere /v1/rerank or compatible). Leave empty for local model.
+# Examples: http://localhost:8082/v1, https://api.cohere.com/v1
+RERANKER_ENDPOINT = os.getenv("RERANKER_ENDPOINT", "")
+RERANKER_API_KEY = os.getenv("RERANKER_API_KEY", "")
+# When remote reranker is unavailable, fall back to local CrossEncoder
+RERANKER_FALLBACK_LOCAL = os.getenv("RERANKER_FALLBACK_LOCAL", "true").lower() == "true"
 
 # ============ LLM / Primary Language Model ============
 # Supports any OpenAI-compatible endpoint (vLLM, llama.cpp, Ollama, LiteLLM, etc.)
@@ -96,6 +108,22 @@ JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
 TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "24"))
 AUTH_VALID_USERS = os.getenv("AUTH_VALID_USERS", "{}")  # JSON dict of valid users for login endpoint
 
+# ── User Database (SQLite) ──
+USER_DB_PATH = os.getenv("USER_DB_PATH", "./data/users.db")
+BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
+
+# ── Token Management ──
+ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))
+REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
+TOKEN_BLACKLIST_MAX_ENTRIES = int(os.getenv("TOKEN_BLACKLIST_MAX_ENTRIES", "10000"))
+
+# ── AD/LDAP Integration ──
+AD_ENABLED = os.getenv("AD_ENABLED", "false").lower() == "true"
+AD_URL = os.getenv("AD_URL", "")
+AD_BASE_DN = os.getenv("AD_BASE_DN", "")
+AD_USER_DN_TEMPLATE = os.getenv("AD_USER_DN_TEMPLATE", "cn={username},{base_dn}")
+AD_GROUP_DN = os.getenv("AD_GROUP_DN", "")
+
 # ============ RBAC ============
 RBAC_ENABLED = os.getenv("RBAC_ENABLED", "false").lower() == "true"
 
@@ -137,9 +165,13 @@ CRAG_DECOMPOSITION_ENABLED = os.getenv("CRAG_DECOMPOSITION_ENABLED", "true").low
 NLI_MODEL_ENABLED = os.getenv("NLI_MODEL_ENABLED", "false").lower() == "true"
 
 # ============ Level 5: Self-Correcting RAG ============
-HYDE_ENABLED = os.getenv("HYDE_ENABLED", "false").lower() == "true"
-REFLECTION_ENABLED = os.getenv("REFLECTION_ENABLED", "false").lower() == "true"
+HYDE_ENABLED = os.getenv("HYDE_ENABLED", "true").lower() == "true"
+REFLECTION_ENABLED = os.getenv("REFLECTION_ENABLED", "true").lower() == "true"
 REFLECTION_DEPTH = int(os.getenv("REFLECTION_DEPTH", "2"))
+# HALLUCINATION_CHECK_ENABLED gates the full hallucination detection pipeline
+# (confidence scoring + NLI grounding + self-reflection). When enabled, acts
+# as an alias for NLI_GROUNDING_ENABLED in the confidence layer.
+# For granular control, use NLI_GROUNDING_ENABLED (grounding only).
 HALLUCINATION_CHECK_ENABLED = os.getenv("HALLUCINATION_CHECK_ENABLED", "false").lower() == "true"
 
 # ============ Self-Enrichment ============

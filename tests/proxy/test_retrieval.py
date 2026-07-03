@@ -238,15 +238,15 @@ class TestInitializeRetrieval:
 
     def test_raises_if_st_not_available(self):
         with patch("proxy.app.retrieval.QDRANT_AVAILABLE", True), \
-             patch("proxy.app.retrieval.ST_AVAILABLE", False):
+             patch("app.remote_services.create_embedder", side_effect=ImportError("no st")):
             with pytest.raises(ImportError):
                 initialize_retrieval()
 
     def test_initializes_in_memory_cache(self):
+        mock_embedder = object()
         with patch("proxy.app.retrieval.QDRANT_AVAILABLE", True), \
-             patch("proxy.app.retrieval.ST_AVAILABLE", True), \
+             patch("app.remote_services.create_embedder", return_value=mock_embedder), \
              patch("proxy.app.retrieval.QdrantClient") as mock_qdrant, \
-             patch("proxy.app.retrieval.SentenceTransformer") as mock_st, \
              patch("proxy.app.retrieval.USE_REDIS", False), \
              patch("proxy.app.retrieval._GRAPH_ENABLED", False):
             initialize_retrieval()
@@ -259,11 +259,11 @@ class TestInitializeRetrieval:
         mock_graph = MagicMock()
         mock_graph.driver.side_effect = Exception("connection failed")
         mock_neo4j.GraphDatabase = mock_graph
+        mock_embedder = object()
 
         with patch("proxy.app.retrieval.QDRANT_AVAILABLE", True), \
-             patch("proxy.app.retrieval.ST_AVAILABLE", True), \
+             patch("app.remote_services.create_embedder", return_value=mock_embedder), \
              patch("proxy.app.retrieval.QdrantClient"), \
-             patch("proxy.app.retrieval.SentenceTransformer"), \
              patch("proxy.app.retrieval.USE_REDIS", False), \
              patch("proxy.app.retrieval._GRAPH_ENABLED", True), \
              patch.dict("sys.modules", {"neo4j": mock_neo4j}):

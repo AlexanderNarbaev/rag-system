@@ -70,17 +70,13 @@ def chunk_qa_pair(qa: dict) -> dict | None:
 async def _index_chunk(chunk: dict) -> bool:
     """Index a chunk in Qdrant. Returns True on success."""
     try:
-        from app.config import EMBEDDER_DEVICE, EMBEDDER_MODEL
+        from app.remote_services import create_embedder
         from qdrant_client import QdrantClient
         from qdrant_client.models import PointStruct
-        from sentence_transformers import SentenceTransformer
 
-        if not EMBEDDER_MODEL:
-            logger.warning("EMBEDDER_MODEL not configured — skipping enrichment index")
-            return False
+        model = create_embedder()
 
         client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
-        model = SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)
 
         embedding = model.encode(chunk["text"]).tolist()
 

@@ -20,15 +20,11 @@ def _get_embedder():
     global _embedder
     if _embedder is None:
         try:
-            from app.config import EMBEDDER_DEVICE, EMBEDDER_MODEL
-            from sentence_transformers import SentenceTransformer
+            from app.remote_services import create_embedder
 
-            if EMBEDDER_MODEL:
-                _embedder = SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)
-            else:
-                _embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
-        except ImportError:
-            logger.warning("sentence-transformers not available, grounding disabled")
+            _embedder = create_embedder()
+        except Exception:
+            logger.warning("Embedder not available, grounding disabled", exc_info=True)
             return None
     return _embedder
 

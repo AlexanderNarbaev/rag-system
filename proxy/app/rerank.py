@@ -34,7 +34,7 @@ from app.config import REDIS_URL, RERANKER_MAX_LENGTH, RERANKER_MODEL, USE_REDIS
 
 logger = logging.getLogger(__name__)
 
-RERANKER_FT_ENABLED = True
+RERANKER_FT_ENABLED = os.getenv("RERANKER_FT_ENABLED", "false").lower() == "true"
 FEEDBACK_LOG_DIR = os.getenv("FEEDBACK_LOG_DIR", "./logs/feedback")
 FT_MODEL_DIR = os.getenv("FT_MODEL_DIR", "./models/reranker_ft")
 
@@ -44,13 +44,18 @@ cache_manager = None
 
 
 def initialize_reranker():
-    """Инициализирует кросс-энкодер и кэш (вызывается при старте прокси)."""
-    global reranker, cache_manager
-    if not CROSS_ENCODER_AVAILABLE:
-        raise ImportError("sentence-transformers is required for cross-encoder")
+    """Инициализирует реранкер и кэш (вызывается при старте прокси).
 
-    reranker = CrossEncoder(RERANKER_MODEL, max_length=RERANKER_MAX_LENGTH)
-    logger.info(f"Cross-encoder {RERANKER_MODEL} loaded (max_length={RERANKER_MAX_LENGTH})")
+    Uses remote_services.create_reranker() to select between remote HTTP service
+    and local CrossEncoder with graceful fallback.
+    """
+    global reranker, cache_manager
+
+    from app.remote_services import create_reranker
+
+    reranker = create_reranker()
+    reranker_name = getattr(reranker, "__class__", type(reranker)).__name__
+    logger.info("Reranker initialized: %s", reranker_name)
 
     # Инициализация кэша (если используется Redis)
     if USE_REDIS and REDIS_URL:

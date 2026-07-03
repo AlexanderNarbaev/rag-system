@@ -100,7 +100,7 @@ class TestGetEmbedder:
         from proxy.app import grounding
 
         grounding._embedder = None
-        with patch("sentence_transformers.SentenceTransformer", side_effect=ImportError("no st")):
+        with patch("app.remote_services.create_embedder", side_effect=ImportError("no st")):
             embedder = grounding._get_embedder()
             assert embedder is None
 
@@ -109,7 +109,7 @@ class TestGetEmbedder:
 
         grounding._embedder = None
         mock_embedder = object()
-        with patch("sentence_transformers.SentenceTransformer", return_value=mock_embedder):
+        with patch("app.remote_services.create_embedder", return_value=mock_embedder):
             e1 = grounding._get_embedder()
             e2 = grounding._get_embedder()
             assert e1 is e2
