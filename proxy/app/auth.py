@@ -35,22 +35,23 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.config import (
+    ACCESS_TOKEN_MINUTES,
+    AUTH_ENABLED,
+    JWT_ALGORITHM,
+    JWT_PUBLIC_KEY,
+    JWT_SECRET,
+    KEYCLOAK_CLIENT_ID,
+    KEYCLOAK_REALM,
+    KEYCLOAK_URL,
+    TOKEN_EXPIRE_HOURS,
+)
+
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-JWT_SECRET = os.getenv("JWT_SECRET", "")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")  # for RS256 verification
-TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "24"))
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "")
-KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "master")
-KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "rag-proxy")
+# Configuration is imported from app.config at the top of this module.
 
 # ---------------------------------------------------------------------------
 # User context
@@ -441,3 +442,94 @@ def create_mock_token(
         namespace=namespace,
         secret=secret or JWT_SECRET or "test-secret-key-for-unit-tests",
     )
+
+
+# ---------------------------------------------------------------------------
+# Token pair creation (access + refresh)
+# ---------------------------------------------------------------------------
+
+
+async def create_token_pair(user: dict) -> dict:
+    """Create an access + refresh token pair for a user.
+
+    Returns:
+        dict with access_token, refresh_token, token_type, expires_in.
+    """
+    import secrets as _secrets
+
+    now = int(time.time())
+    access_expires = now + ACCESS_TOKEN_MINUTES * 60
+    jti = _secrets.token_hex(16)
+
+    # Access token
+    payload: dict[str, Any] = {
+        "sub": user["id"],
+        "preferred_username": user["username"],
+        "roles": user.get("roles", ["user"]),
+        "groups": user.get("groups", []),
+        "access_level": user.get("access_level", "user"),
+        "namespace": user.get("namespace", ""),
+        "iat": now,
+        "exp": access_expires,
+        "jti": jti,
+        "type": "access",
+    }
+    key = JWT_SECRET
+    if not key:
+        raise ValueError("JWT_SECRET is not configured — cannot create tokens")
+
+    access_token = jwt.encode(payload, key, algorithm=JWT_ALGORITHM)
+
+    # Refresh token — opaque random string, stored in DB
+    refresh_token = _secrets.token_urlsafe(48)
+
+    # Store refresh token in database
+    from app.user_db import get_user_db
+
+    db = get_user_db()
+    await db.store_refresh_token(user["id"], refresh_token)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_MINUTES * 60,
+    }
+
+
+async def verify_refresh_token(refresh_token: str) -> dict | None:
+    """Validate a refresh token and return the user dict.
+
+    Consumes the refresh token (one-time use).
+    Returns None if invalid/expired/revoked.
+    """
+    from app.user_db import get_user_db
+
+    db = get_user_db()
+    return await db.consume_refresh_token(refresh_token)
+
+
+async def blacklist_access_token(token: str) -> None:
+    """Add an access token's JTI to the blacklist (for logout)."""
+    key = _get_verify_key()
+    algorithms = [JWT_ALGORITHM] if JWT_ALGORITHM else ["HS256"]
+
+    try:
+        # Decode without expiry check to get JTI even for expired tokens
+        payload = jwt.decode(
+            token, key=key, algorithms=algorithms,
+            options={"verify_exp": False},
+        )
+        jti = payload.get("jti", "")
+        exp = payload.get("exp", 0)
+        from datetime import datetime, timezone
+
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
+
+        from app.user_db import get_user_db
+
+        db = get_user_db()
+        if jti:
+            await db.add_to_blacklist(jti, expires_at)
+    except jwt.InvalidTokenError:
+        pass  # Can't blacklist an invalid token

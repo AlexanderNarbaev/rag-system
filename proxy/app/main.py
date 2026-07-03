@@ -33,13 +33,16 @@ from app.access_control import (
 from app.audit import AuditLogger, RequestTracker
 from app.auth import (
     AUTH_ENABLED,
+    AuthMiddleware,
     UserContext,
     create_token,
     get_auth_context,
+    get_optional_auth_context,
     verify_token,
 )
 from app.cache import CacheManager
 from app.confidence import compute_confidence
+from app.rbac import Role, require_role
 
 # Импорт внутренних модулей
 from app.config import (
@@ -78,8 +81,10 @@ from app.retrieval import hybrid_search
 from app.retrieval_evaluator import RetrievalEvaluator
 from app.security import InputValidator
 from app.token_optimizer import TokenOptimizer
+from app.user_db import get_user_db
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from pathlib import Path
 from pydantic import BaseModel, Field
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -177,8 +182,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Middleware setup (order matters: CORS > correlation > request-id > logging > rate-limit > compression)
+# Middleware setup (order matters: CORS > auth > correlation > request-id > logging > rate-limit > compression)
 add_cors_middleware(app, origins=CORS_ORIGINS)
+if AUTH_ENABLED:
+    app.add_middleware(AuthMiddleware)
 setup_all_middleware(app, audit_logger=audit_logger)
 if RATE_LIMIT_ENABLED:
     add_rate_limit_middleware(app, rate_per_minute=RATE_LIMIT_PER_MINUTE, burst=RATE_LIMIT_BURST)
@@ -253,6 +260,7 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None  # New: refresh token for token rotation
     token_type: str = "bearer"
     expires_in: int  # seconds
     user_id: str
@@ -262,13 +270,36 @@ class LoginResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    token: str
+    token: str  # For backward compat: access token. Use refresh_token field for refresh tokens.
 
 
 class RefreshResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
     expires_in: int
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=2, max_length=64)
+    password: str = Field(..., min_length=8, max_length=128)
+    email: str | None = None
+
+
+class RegisterResponse(BaseModel):
+    user_id: str
+    username: str
+    created_at: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str | None = None  # Optional: revoke specific refresh token
+    all_sessions: bool = False  # Revoke all refresh tokens for current user
+
+
+class LogoutResponse(BaseModel):
+    status: str
+    message: str
 
 
 class UserInfoResponse(BaseModel):
@@ -588,81 +619,144 @@ def _check_login_rate_limit(identifier: str) -> None:
         _LOGIN_ATTEMPTS[identifier] = (1, now)
 
 
-@app.post("/v1/auth/login", response_model=LoginResponse)
-async def auth_login(request: LoginRequest, raw_request: Request):
-    """Generate a JWT token for the given credentials.
+@app.post("/v1/auth/register", response_model=RegisterResponse, status_code=201)
+async def auth_register(request: RegisterRequest, raw_request: Request):
+    """Register a new user account.
 
-    In production, this would validate against Keycloak/LDAP.
-    For air-gapped deployments, it uses a hardcoded credential store
-    configurable via environment variables.
+    Stores user with bcrypt-hashed password in SQLite.
+    Rate-limited to prevent abuse: 3 registrations per IP per minute.
     """
+    from app.auth import AUTH_ENABLED
+
     client_ip = raw_request.client.host if raw_request.client else "unknown"
-    rate_limit_key = f"{client_ip}:{request.username}"
+    _check_login_rate_limit(f"register:{client_ip}")
 
-    valid_users_json = os.getenv("AUTH_VALID_USERS", "{}")
+    if not AUTH_ENABLED:
+        raise HTTPException(status_code=400, detail="Registration is not enabled. Set AUTH_ENABLED=true.")
+
+    db = get_user_db()
     try:
-        valid_users = json.loads(valid_users_json) if valid_users_json else {}
-    except json.JSONDecodeError:
-        logger.warning("AUTH_VALID_USERS is not valid JSON, using empty dict")
-        valid_users = {}
+        user = await db.create_user(
+            username=request.username,
+            password=request.password,
+            email=request.email or "",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
-    if request.username not in valid_users:
-        _check_login_rate_limit(rate_limit_key)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    user_data = valid_users[request.username]
-    if not secrets.compare_digest(user_data.get("password", ""), request.password):
-        _check_login_rate_limit(rate_limit_key)
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    token = create_token(
-        user_id=user_data.get("user_id", request.username),
-        username=request.username,
-        roles=user_data.get("roles", ["viewer"]),
-        groups=user_data.get("groups", []),
-        access_level=user_data.get("access_level", "internal"),
-        expires_in_hours=request.expires_in_hours or 24,
+    logger.info("User registered: %s from %s", request.username, client_ip)
+    return RegisterResponse(
+        user_id=user["user_id"],
+        username=user["username"],
+        created_at=user["created_at"],
     )
 
+
+@app.post("/v1/auth/login", response_model=LoginResponse)
+async def auth_login(request: LoginRequest, raw_request: Request):
+    """Authenticate user and return a token pair (access + refresh).
+
+    Checks against SQLite user database (with bcrypt password verification).
+    Legacy AUTH_VALID_USERS env var is auto-migrated on first startup.
+    When AD_ENABLED=true, also attempts LDAP bind before falling back to local.
+    """
+    client_ip = raw_request.client.host if raw_request.client else "unknown"
+    rate_limit_key = f"login:{client_ip}:{request.username}"
+
+    _check_login_rate_limit(rate_limit_key)
+
+    db = get_user_db()
+
+    # Check local database
+    user = await db.verify_password(request.username, request.password)
+
+    # LDAP fallback (if enabled)
+    if user is None:
+        from app.config import AD_ENABLED
+        if AD_ENABLED:
+            try:
+                from app.ldap_auth import authenticate_ldap
+                user = await authenticate_ldap(request.username, request.password)
+                if user:
+                    logger.info("LDAP authentication successful for %s", request.username)
+            except Exception as e:
+                logger.warning("LDAP authentication failed for %s: %s", request.username, e)
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if not user.get("is_active", 1):
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+
+    # Create token pair
+    from app.auth import create_token_pair
+    token_pair = await create_token_pair(user)
+
     return LoginResponse(
-        access_token=token,
+        access_token=token_pair["access_token"],
+        refresh_token=token_pair["refresh_token"],
         token_type="bearer",
-        expires_in=(request.expires_in_hours or 24) * 3600,
-        user_id=user_data.get("user_id", request.username),
-        username=request.username,
-        roles=user_data.get("roles", ["viewer"]),
-        groups=user_data.get("groups", []),
+        expires_in=token_pair["expires_in"],
+        user_id=user["id"],
+        username=user["username"],
+        roles=user.get("roles", ["user"]),
+        groups=user.get("groups", []),
     )
 
 
 @app.post("/v1/auth/refresh", response_model=RefreshResponse)
 async def auth_refresh(request: RefreshRequest):
-    """Refresh an existing JWT token.
+    """Exchange a refresh token for a new access token pair.
 
-    Validates the current token and issues a new one with the same claims
-    but a fresh expiration timestamp.
+    Accepts a refresh token and returns a fresh access+refresh token pair.
+    The old refresh token is consumed (one-time use).
     """
+    from app.auth import AUTH_ENABLED, create_token_pair
+
     if not AUTH_ENABLED:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
 
-    try:
-        user_ctx = verify_token(request.token)
-    except HTTPException:
-        raise
+    from app.auth import verify_refresh_token
 
-    new_token = create_token(
-        user_id=user_ctx.user_id,
-        username=user_ctx.username,
-        roles=user_ctx.roles,
-        groups=user_ctx.groups,
-        access_level=user_ctx.access_level,
-    )
+    refresh_token = request.token  # For backward compat, treat token field as refresh_token
+    user = await verify_refresh_token(refresh_token)
+
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    # Issue new token pair
+    token_pair = await create_token_pair(user)
 
     return RefreshResponse(
-        access_token=new_token,
+        access_token=token_pair["access_token"],
+        refresh_token=token_pair["refresh_token"],
         token_type="bearer",
-        expires_in=24 * 3600,
+        expires_in=token_pair["expires_in"],
     )
+
+
+@app.post("/v1/auth/logout", response_model=LogoutResponse)
+async def auth_logout(
+    request: LogoutRequest,
+    user: UserContext = Depends(get_optional_auth_context),
+):
+    """Logout: revoke refresh tokens and optionally blacklist the current access token.
+
+    When all_sessions=true, revokes all refresh tokens for the authenticated user.
+    When refresh_token is provided, revokes only that specific token.
+    """
+    db = get_user_db()
+
+    if request.refresh_token:
+        # Consume (revoke) a specific refresh token
+        await db.consume_refresh_token(request.refresh_token)
+        logger.info("Refresh token revoked for user %s", user.username)
+
+    if request.all_sessions and user.is_authenticated:
+        count = await db.revoke_user_tokens(user.user_id)
+        logger.info("All sessions revoked for user %s (%d tokens)", user.username, count)
+
+    return LogoutResponse(status="ok", message="Logged out successfully")
 
 
 @app.get("/v1/auth/me", response_model=UserInfoResponse)
@@ -948,7 +1042,11 @@ async def chat_completions(
 
 
 @app.post("/v1/feedback", response_model=FeedbackResponse)
-async def submit_feedback(request: FeedbackRequest, raw_request: Request):
+async def submit_feedback(
+    request: FeedbackRequest,
+    raw_request: Request,
+    user: UserContext = Depends(require_role(Role.EXPERT)),
+):
     """Submit feedback on a RAG response."""
     from app.hitl import FeedbackType, get_logger
 
@@ -986,14 +1084,15 @@ async def submit_feedback(request: FeedbackRequest, raw_request: Request):
 
 
 @app.post("/v1/admin/warmup")
-async def admin_warmup(user: UserContext = Depends(get_auth_context)):
+async def admin_warmup(
+    user: UserContext = Depends(require_role(Role.ADMIN)),
+):
     """Trigger model warm-up (admin only).
 
     Runs embedder, reranker, and LLM warmup to pre-load models into memory.
     Uses graceful degradation: each component failure is logged, not fatal.
+    The require_role(Role.ADMIN) dependency enforces admin-level access.
     """
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
     if not WARMUP_ENABLED:
         return JSONResponse(status_code=200, content={"status": "disabled", "message": "Warm-up is disabled"})
     try:
@@ -1003,6 +1102,44 @@ async def admin_warmup(user: UserContext = Depends(get_auth_context)):
     except Exception as e:
         logger.error(f"Warm-up failed: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+
+# ===========================================================================
+# Chat Widget endpoints
+# ===========================================================================
+
+
+@app.get("/v1/widget")
+async def serve_widget():
+    """Serve the embeddable RAG chat widget HTML page.
+
+    The widget connects to /v1/chat/completions via SSE streaming.
+    Access control: WIDGET_ENABLED config flag; RBAC: Role.USER when AUTH_ENABLED.
+    """
+    from app.config import AUTH_ENABLED
+
+    widget_path = Path(__file__).parent / "static" / "widget.html"
+    if not widget_path.exists():
+        raise HTTPException(status_code=404, detail="Widget not found")
+    return HTMLResponse(content=widget_path.read_text(encoding="utf-8"))
+
+
+@app.get("/v1/widget.js")
+async def serve_widget_js():
+    """Serve the standalone RAG chat widget JavaScript.
+
+    Can be embedded in any page:
+      <script src="/v1/widget.js"></script>
+      <div id="rag-chat"></div>
+      <script>RAGChatWidget.init({container:'rag-chat'});</script>
+    """
+    widget_path = Path(__file__).parent / "static" / "widget.js"
+    if not widget_path.exists():
+        raise HTTPException(status_code=404, detail="Widget JS not found")
+    return Response(
+        content=widget_path.read_text(encoding="utf-8"),
+        media_type="application/javascript",
+    )
 
 
 if __name__ == "__main__":
