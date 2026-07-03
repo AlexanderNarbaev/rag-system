@@ -35,6 +35,26 @@ from app.config import (
 logger = logging.getLogger(__name__)
 
 
+# ── Circuit breaker helpers ──────────────────────────────────────────────────
+
+def _record_llm_success():
+    """Record a successful LLM call to the circuit breaker."""
+    try:
+        from app.circuit_breaker import get_breaker as _llm_cb
+        _llm_cb("llm_backend").success()
+    except (ImportError, Exception):
+        pass
+
+
+def _record_llm_failure():
+    """Record a failed LLM call to the circuit breaker."""
+    try:
+        from app.circuit_breaker import get_breaker as _llm_cb
+        _llm_cb("llm_backend").failure()
+    except (ImportError, Exception):
+        pass
+
+
 class ProviderType(str, Enum):
     """Supported AI provider types."""
 
@@ -469,6 +489,18 @@ class MultiProviderRouter:
                            (e.g., "anthropic", "ollama"). When None, uses the
                            configured default.
         """
+        # Circuit breaker check — reject immediately if LLM backend is in OPEN state
+        try:
+            from app.circuit_breaker import get_breaker as _llm_cb
+            from app.circuit_breaker import CircuitBreakerOpenError as _CBOE
+
+            if _llm_cb("llm_backend").state.name == "OPEN":
+                raise _CBOE("LLM backend circuit breaker is OPEN")
+        except ImportError:
+            pass  # circuit_breaker module not available — skip check
+        except _CBOE:  # type: ignore[name-defined]
+            raise
+
         # Resolve adapter for this request
         adapter, pt = self._resolve_provider(provider_type)
         # Inject tool results into messages if provided
@@ -504,12 +536,14 @@ class MultiProviderRouter:
                             raise LLMError(f"LLM returned {response.status}: {error_text}")
 
                         if stream:
+                            _record_llm_success()
                             return response, adapter
                         else:
                             data = await response.json()
                             translated = adapter.translate_response(data)
                             if "choices" not in translated or not translated["choices"]:
                                 raise LLMError("Invalid response format from LLM")
+                            _record_llm_success()
                             return translated
             except (TimeoutError, ClientError, LLMError) as e:
                 logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
@@ -517,6 +551,7 @@ class MultiProviderRouter:
                     delay = RETRY_DELAY * (attempt + 1)
                     await asyncio.sleep(delay)
                 else:
+                    _record_llm_failure()
                     raise LLMError(f"LLM request failed after {retry + 1} attempts: {e}") from e
 
     async def stream_completion(

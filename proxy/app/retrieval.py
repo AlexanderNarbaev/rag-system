@@ -53,6 +53,13 @@ if _GRAPH_ENABLED:
         logger.warning("Neo4j driver not installed, graph expansion disabled")
         _GRAPH_ENABLED = False
 
+# Circuit breaker for Qdrant service calls (graceful degradation)
+try:
+    from app.circuit_breaker import get_breaker as _get_cb, CircuitBreakerOpenError  # noqa: F811
+except ImportError:
+    _get_cb = None  # type: ignore[assignment]
+    CircuitBreakerOpenError = RuntimeError  # type: ignore[assignment,misc]
+
 
 def initialize_retrieval():
     """Инициализирует клиенты и кэш (вызывается при старте прокси)."""
@@ -172,19 +179,48 @@ def hybrid_search(
 
     # Dense поиск
     dense_vec = _compute_dense_embedding(query)
-    dense_results = qdrant_client.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=("dense", dense_vec),
-        limit=top_k,
-        query_filter=q_filter,
-        with_payload=True,
-    )
+    if _get_cb:
+        try:
+            dense_results = _get_cb("qdrant").call_sync(
+                lambda: qdrant_client.search(
+                    collection_name=COLLECTION_NAME,
+                    query_vector=("dense", dense_vec),
+                    limit=top_k,
+                    query_filter=q_filter,
+                    with_payload=True,
+                )
+            )
+        except CircuitBreakerOpenError:
+            logger.warning("Qdrant circuit breaker OPEN — returning empty dense results")
+            dense_results = []
+    else:
+        dense_results = qdrant_client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=("dense", dense_vec),
+            limit=top_k,
+            query_filter=q_filter,
+            with_payload=True,
+        )
 
     # Sparse поиск (если поддерживается)
     sparse_vec = _compute_sparse_embedding(query)
     sparse_results = []
     if sparse_vec is not None:
-        sparse_results = qdrant_client.search(
+        if _get_cb:
+            try:
+                sparse_results = _get_cb("qdrant").call_sync(
+                    lambda: qdrant_client.search(
+                        collection_name=COLLECTION_NAME,
+                        query_vector=("sparse", sparse_vec),
+                        limit=top_k,
+                        query_filter=q_filter,
+                        with_payload=True,
+                    )
+                )
+            except CircuitBreakerOpenError:
+                logger.warning("Qdrant circuit breaker OPEN — returning empty sparse results")
+        else:
+            sparse_results = qdrant_client.search(
             collection_name=COLLECTION_NAME,
             query_vector=("sparse", sparse_vec),
             limit=top_k,

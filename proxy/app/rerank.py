@@ -75,6 +75,26 @@ def _truncate_text(text: str, max_tokens: int = None) -> str:
     return text
 
 
+def _call_reranker_safe(pairs: list[tuple[str, str]]) -> "list[float]":  # type: ignore[no-untyped-def]
+    """Call reranker.predict() with circuit breaker protection.
+
+    When the circuit breaker is open, returns neutral scores (0.5) for all pairs
+    to allow graceful degradation of the ranking pipeline.
+    """
+    try:
+        from app.circuit_breaker import get_breaker as _get_cb, CircuitBreakerOpenError
+
+        return _get_cb("reranker").call_sync(lambda: reranker.predict(pairs))
+    except ImportError:
+        pass  # circuit_breaker module not available — direct call
+    except CircuitBreakerOpenError:
+        logger.warning("Reranker circuit breaker OPEN — returning neutral scores")
+        return [0.5] * len(pairs)
+
+    # Fallback: direct call without circuit breaker
+    return reranker.predict(pairs)
+
+
 def _get_cache_key(query: str, chunk_text: str) -> str:
     """Генерирует ключ кэша для пары (запрос, чанк)."""
     content = f"{query}|{chunk_text}"
@@ -118,13 +138,13 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
         if scores is None:
             # Вычисляем скоры для всех пар, где нет кэша
             # Для простоты вычисляем все заново, но можно вычислить только отсутствующие
-            scores = reranker.predict(pairs)
+            scores = _call_reranker_safe(pairs)
             # Сохраняем в кэш
             for i, (q, c) in enumerate(pairs):
                 cache_key = _get_cache_key(q, c)
                 cache_manager.set_sync(cache_key, str(scores[i]), ttl=3600)
     else:
-        scores = reranker.predict(pairs)
+        scores = _call_reranker_safe(pairs)
 
     # Сортировка индексов по убыванию скора
     indexed_scores = list(enumerate(scores))
