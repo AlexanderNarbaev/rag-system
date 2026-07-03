@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))
 
 
 def test_check_confidence_high_score_no_escalation():
-    with patch("proxy.app.config.CONFIDENCE_THRESHOLD", 0.5):
+    with patch("app.config.CONFIDENCE_THRESHOLD", 0.5):
         from proxy.app.orchestrator import check_confidence
 
         state = {
@@ -28,9 +28,10 @@ def test_check_confidence_high_score_no_escalation():
 
 def test_check_confidence_low_score_escalation():
     with (
-        patch("proxy.app.config.CONFIDENCE_THRESHOLD", 0.5),
-        patch("proxy.app.config.MAX_VERIFY_LOOPS", 2),
-        patch("proxy.app.config.ADMIN_ALERT_ENABLED", False),
+        patch("app.config.CONFIDENCE_THRESHOLD", 0.5),
+        patch("app.config.MAX_VERIFY_LOOPS", 2),
+        patch("app.config.ADMIN_ALERT_ENABLED", False),
+        patch("app.config.HALLUCINATION_CHECK_ENABLED", True),
     ):
         from proxy.app.orchestrator import check_confidence
 
@@ -47,9 +48,10 @@ def test_check_confidence_low_score_escalation():
 
 def test_check_confidence_max_loops_no_escalation():
     with (
-        patch("proxy.app.config.CONFIDENCE_THRESHOLD", 0.5),
-        patch("proxy.app.config.MAX_VERIFY_LOOPS", 2),
-        patch("proxy.app.config.ADMIN_ALERT_ENABLED", False),
+        patch("app.config.CONFIDENCE_THRESHOLD", 0.5),
+        patch("app.config.MAX_VERIFY_LOOPS", 2),
+        patch("app.config.ADMIN_ALERT_ENABLED", False),
+        patch("app.config.HALLUCINATION_CHECK_ENABLED", True),
     ):
         from proxy.app.orchestrator import check_confidence
 

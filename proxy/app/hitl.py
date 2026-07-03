@@ -11,6 +11,7 @@ Human-in-the-Loop модуль для сбора обратной связи.
 import json
 import logging
 import os
+import shutil
 import uuid
 from datetime import UTC, datetime
 from enum import Enum
@@ -20,6 +21,12 @@ from typing import Any
 from app.config import LOG_DIR, LOG_REQUESTS
 
 logger = logging.getLogger(__name__)
+
+# JSONL log rotation: rotate when file exceeds this size (bytes)
+# Default: 10 MB for interactions, 5 MB for feedback
+_DEFAULT_MAX_INTERACTIONS_SIZE = 10 * 1024 * 1024  # 10 MB
+_DEFAULT_MAX_FEEDBACK_SIZE = 5 * 1024 * 1024  # 5 MB
+_MAX_BACKUP_COUNT = 5  # Keep up to 5 rotated files
 
 
 def generate_feedback_id() -> str:
@@ -44,6 +51,40 @@ class InteractionLogger:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.interactions_file = self.log_dir / "interactions.jsonl"
         self.feedback_file = self.log_dir / "feedback.jsonl"
+
+    @staticmethod
+    def _rotate_if_needed(filepath: Path, max_size: int, max_backups: int = _MAX_BACKUP_COUNT) -> Path:
+        """Rotate JSONL file if it exceeds max_size. Returns the active file path.
+
+        Renames the current file to filepath.1 (shifting older backups to .2, .3, ...)
+        and returns a fresh file path. If file is under max_size, returns filepath as-is.
+
+        :param filepath: Path to the JSONL log file.
+        :param max_size: Maximum file size in bytes before rotation is triggered.
+        :param max_backups: Number of rotated backups to retain (oldest deleted).
+        :return: The active (writable) file path.
+        """
+        if not filepath.exists():
+            return filepath
+        try:
+            if filepath.stat().st_size < max_size:
+                return filepath
+        except OSError:
+            return filepath
+
+        # Shift existing backups: file.N → file.N+1, delete oldest
+        for i in range(max_backups, 0, -1):
+            old_backup = Path(f"{filepath}.{i}")
+            new_backup = Path(f"{filepath}.{i + 1}")
+            if i == max_backups and new_backup.exists():
+                new_backup.unlink(missing_ok=True)
+            if old_backup.exists():
+                old_backup.rename(new_backup)
+
+        # Rename current file to .1
+        first_backup = Path(f"{filepath}.1")
+        shutil.move(str(filepath), str(first_backup))
+        return filepath
 
     def log_interaction(
         self,
@@ -72,7 +113,8 @@ class InteractionLogger:
             record["corrected_response"] = corrected_response
 
         try:
-            with open(self.interactions_file, "a", encoding="utf-8") as f:
+            active_file = self._rotate_if_needed(self.interactions_file, _DEFAULT_MAX_INTERACTIONS_SIZE)
+            with open(active_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
             logger.debug(f"Logged interaction {request_id}")
         except Exception as e:
@@ -98,7 +140,8 @@ class InteractionLogger:
             "expert_id": expert_id,
         }
         try:
-            with open(self.feedback_file, "a", encoding="utf-8") as f:
+            active_file = self._rotate_if_needed(self.feedback_file, _DEFAULT_MAX_FEEDBACK_SIZE)
+            with open(active_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
             logger.info(f"Feedback recorded for {request_id}: {feedback_type.value}")
         except Exception as e:

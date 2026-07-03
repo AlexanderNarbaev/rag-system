@@ -14,7 +14,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-IMAGE_EXTRACTION_ENABLED = True
+IMAGE_EXTRACTION_ENABLED = os.getenv("IMAGE_EXTRACTION_ENABLED", "false").lower() == "true"
 IMAGE_MODEL = "clip-ViT-B-32"
 
 

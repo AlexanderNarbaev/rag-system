@@ -16,7 +16,7 @@ class TestSelfReflectionNode:
             "rewrite_count": 0,
             "reflection_count": 0,
         }
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="FULLY_SUPPORTED"):
+        with patch("app.slm_router._call_slm_sync", return_value="FULLY_SUPPORTED"):
             with patch("proxy.app.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
                 assert isinstance(result, dict)
@@ -31,7 +31,7 @@ class TestSelfReflectionNode:
             "rewrite_count": 0,
             "reflection_count": 0,
         }
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="PARTIALLY_SUPPORTED\nMISSING: release date details"):
+        with patch("app.slm_router._call_slm_sync", return_value="PARTIALLY_SUPPORTED\nMISSING: release date details"):
             with patch("proxy.app.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
                 assert isinstance(result, dict)
@@ -60,7 +60,7 @@ class TestSelfReflectionNode:
             "rewrite_count": 0,
             "reflection_count": 0,
         }
-        with patch("proxy.app.slm_router._call_slm_sync", side_effect=Exception("SLM error")):
+        with patch("app.slm_router._call_slm_sync", side_effect=Exception("SLM error")):
             with patch("proxy.app.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
                 assert isinstance(result, dict)
@@ -90,7 +90,7 @@ class TestSelfReflectionNode:
             "rewrite_count": 0,
             "reflection_count": 0,
         }
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="FULLY_SUPPORTED"):
+        with patch("app.slm_router._call_slm_sync", return_value="FULLY_SUPPORTED"):
             with patch("proxy.app.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
                 assert isinstance(result, dict)

@@ -216,12 +216,14 @@ def compute_confidence(
         score -= 0.15
 
     # F1: NLI grounding integration
+    # HALLUCINATION_CHECK_ENABLED is an alias — either flag gates NLI grounding
     try:
-        from proxy.app.config import NLI_GROUNDING_ENABLED
+        from proxy.app.config import HALLUCINATION_CHECK_ENABLED, NLI_GROUNDING_ENABLED
     except ImportError:
         NLI_GROUNDING_ENABLED = True
+        HALLUCINATION_CHECK_ENABLED = False
 
-    if NLI_GROUNDING_ENABLED and answer.strip() and context.strip():
+    if (NLI_GROUNDING_ENABLED or HALLUCINATION_CHECK_ENABLED) and answer.strip() and context.strip():
         nli_report = compute_nli_grounding(answer, context)
         nli_score = nli_report.score
         if nli_report.unsupported:
