@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Chat</title>
+  <style>
+    :root {
+      --rag-bg: #1a1a2e;
+      --rag-surface: #16213e;
+      --rag-border: #2a3a5c;
+      --rag-text: #e0e0e0;
+      --rag-accent: #4fc3f7;
+      --rag-user-bg: #1b3a5c;
+      --rag-assistant-bg: #16213e;
+      --rag-error: #ef5350;
+      --rag-radius: 8px;
+    }
+
+    #rag-chat-widget {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: var(--rag-text);
+      background: var(--rag-bg);
+      border: 1px solid var(--rag-border);
+      border-radius: var(--rag-radius);
+      width: 100%;
+      max-width: 720px;
+      height: 560px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    #rag-chat-widget .rag-header {
+      padding: 12px 16px;
+      background: var(--rag-surface);
+      border-bottom: 1px solid var(--rag-border);
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #rag-chat-widget .rag-header .rag-logo {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--rag-accent);
+    }
+
+    #rag-chat-widget .rag-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    #rag-chat-widget .rag-message {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: var(--rag-radius);
+      line-height: 1.5;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    #rag-chat-widget .rag-message.rag-user {
+      align-self: flex-end;
+      background: var(--rag-user-bg);
+    }
+
+    #rag-chat-widget .rag-message.rag-assistant {
+      align-self: flex-start;
+      background: var(--rag-assistant-bg);
+      border: 1px solid var(--rag-border);
+    }
+
+    #rag-chat-widget .rag-message.rag-error {
+      align-self: center;
+      background: rgba(239, 83, 80, 0.15);
+      color: var(--rag-error);
+      font-size: 12px;
+      border: 1px solid var(--rag-error);
+    }
+
+    #rag-chat-widget .rag-sources {
+      font-size: 11px;
+      color: #888;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--rag-border);
+    }
+
+    #rag-chat-widget .rag-sources a {
+      color: var(--rag-accent);
+      text-decoration: none;
+    }
+
+    #rag-chat-widget .rag-input-row {
+      display: flex;
+      border-top: 1px solid var(--rag-border);
+      padding: 8px;
+      gap: 8px;
+      background: var(--rag-surface);
+    }
+
+    #rag-chat-widget .rag-input-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--rag-border);
+      border-radius: var(--rag-radius);
+      background: var(--rag-bg);
+      color: var(--rag-text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #rag-chat-widget .rag-input-row input:focus {
+      border-color: var(--rag-accent);
+    }
+
+    #rag-chat-widget .rag-input-row button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--rag-radius);
+      background: var(--rag-accent);
+      color: #1a1a2e;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    #rag-chat-widget .rag-input-row button:hover {
+      opacity: 0.85;
+    }
+
+    #rag-chat-widget .rag-input-row button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #rag-chat-widget .rag-typing {
+      display: flex;
+      gap: 4px;
+      padding: 4px 0;
+    }
+
+    #rag-chat-widget .rag-typing span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--rag-accent);
+      animation: rag-bounce 1.2s infinite;
+    }
+
+    #rag-chat-widget .rag-typing span:nth-child(2) { animation-delay: 0.2s; }
+    #rag-chat-widget .rag-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes rag-bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-6px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="rag-chat-widget">
+    <div class="rag-header">
+      <div class="rag-logo"></div>
+      RAG Assistant
+    </div>
+    <div class="rag-messages" id="rag-messages">
+      <div class="rag-message rag-assistant">
+        Hello! Ask me anything about your knowledge base.
+      </div>
+    </div>
+    <div class="rag-input-row">
+      <input type="text" id="rag-input" placeholder="Type your question..." autofocus>
+      <button id="rag-send">Send</button>
+    </div>
+  </div>
+  <script src="/v1/widget.js"></script>
+  <script>
+    // Initialize widget with default config
+    RAGChatWidget.init({
+      container: 'rag-chat-widget',
+      endpoint: '/v1/chat/completions',
+      messagesContainer: 'rag-messages',
+      inputId: 'rag-input',
+      sendId: 'rag-send',
+    });
+  </script>
+</body>
+</html>
