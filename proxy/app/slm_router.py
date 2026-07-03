@@ -8,13 +8,32 @@ SLM используется для быстрых, дешёвых операц�
 - Извлечение ключевых сущностей
 
 Поддерживает любой OpenAI-совместимый API (vLLM, llama.cpp, Ollama, LiteLLM и др.).
+А также локальный запуск llama.cpp через subprocess для air-gapped окружений.
 """
 
+import atexit
 import json
 import logging
+import os
+import subprocess
+import threading
+import time
 from enum import Enum
 
-from app.config import SLM_API_KEY, SLM_ENDPOINT, SLM_MODEL_NAME
+import requests
+
+from app.config import (
+    SLM_API_KEY,
+    SLM_ENDPOINT,
+    SLM_LOCAL_BINARY,
+    SLM_LOCAL_CONTEXT_SIZE,
+    SLM_LOCAL_ENABLED,
+    SLM_LOCAL_MODEL_PATH,
+    SLM_LOCAL_PORT,
+    SLM_LOCAL_STARTUP_TIMEOUT,
+    SLM_LOCAL_THREADS,
+    SLM_MODEL_NAME,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +64,284 @@ INTENT_COMPLEXITY_MAP: dict[IntentType, int] = {
 }
 
 
-# Вспомогательная функция для вызова SLM (синхронная, так как используется в основном коде)
+# ── Local llama.cpp SLM client (air-gapped deployments) ──
+
+
+class LocalSLMClient:
+    """Manages a local llama-server subprocess for SLM inference.
+
+    Starts llama-server on first use, keeps it running for subsequent calls,
+    and shuts it down on process exit. Communicates via OpenAI-compatible
+    HTTP API exposed by llama-server.
+
+    Attributes:
+        binary: Path to the llama-server binary.
+        model_path: Path to the .gguf model file.
+        context_size: LLM context size in tokens.
+        threads: Number of CPU threads.
+        port: Port for the llama-server HTTP API.
+    """
+
+    def __init__(
+        self,
+        binary: str,
+        model_path: str,
+        context_size: int = 4096,
+        threads: int = 4,
+        port: int = 8081,
+        startup_timeout: int = 60,
+    ):
+        self._binary = binary
+        self._model_path = model_path
+        self._context_size = context_size
+        self._threads = threads
+        self._port = port
+        self._startup_timeout = startup_timeout
+        self._process: subprocess.Popen | None = None
+        self._lock = threading.Lock()
+
+    @property
+    def endpoint(self) -> str:
+        """Return the local server's base URL."""
+        return f"http://127.0.0.1:{self._port}/v1"
+
+    def _is_server_ready(self) -> bool:
+        """Check whether the local llama-server is accepting requests."""
+        try:
+            resp = requests.get(
+                f"http://127.0.0.1:{self._port}/health",
+                timeout=2,
+            )
+            return resp.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def _ensure_server_running(self) -> None:
+        """Start llama-server if it is not already running.
+
+        Thread-safe: uses a lock so multiple concurrent callers don't race
+        to launch the process.
+        """
+        if self._is_server_ready():
+            return
+
+        with self._lock:
+            # Double-check inside the lock in case another thread
+            # already started the server while we were waiting.
+            if self._is_server_ready():
+                return
+
+            # If a dead process exists, clean it up first.
+            if self._process is not None and self._process.poll() is not None:
+                logger.info(
+                    "Local SLM process died (rc=%s), restarting",
+                    self._process.returncode,
+                )
+                self._process = None
+
+            if self._process is not None:
+                # Already starting in another thread's critical section.
+                # Wait for it to become ready.
+                deadline = time.monotonic() + self._startup_timeout
+                while time.monotonic() < deadline:
+                    if self._is_server_ready():
+                        return
+                    time.sleep(0.5)
+                raise RuntimeError(
+                    "Local SLM server did not become ready within "
+                    f"{self._startup_timeout}s"
+                )
+
+            logger.info(
+                "Starting local SLM server: %s --port %s -m %s -c %s -t %s",
+                self._binary,
+                self._port,
+                self._model_path,
+                self._context_size,
+                self._threads,
+            )
+
+            self._process = subprocess.Popen(
+                [
+                    self._binary,
+                    "--port", str(self._port),
+                    "-m", self._model_path,
+                    "-c", str(self._context_size),
+                    "-t", str(self._threads),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                # Detach from the parent process group so signals
+                # sent to the proxy don't kill the server before we
+                # have a chance to shut it down gracefully.
+                start_new_session=True,
+            )
+
+            # Wait for the server to become ready.
+            deadline = time.monotonic() + self._startup_timeout
+            while time.monotonic() < deadline:
+                if self._process.poll() is not None:
+                    raise RuntimeError(
+                        "Local SLM server exited prematurely "
+                        f"(rc={self._process.returncode})"
+                    )
+                if self._is_server_ready():
+                    logger.info("Local SLM server ready on port %s", self._port)
+                    return
+                time.sleep(0.5)
+
+            # Timed out — kill the process and raise.
+            self._shutdown()
+            raise RuntimeError(
+                "Local SLM server did not become ready within "
+                f"{self._startup_timeout}s"
+            )
+
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 256,
+        temperature: float = 0.1,
+    ) -> str:
+        """Run inference through the local llama-server.
+
+        Automatically starts the server on first call and restarts it if
+        the process has crashed.
+        """
+        try:
+            self._ensure_server_running()
+        except RuntimeError as e:
+            logger.error("Local SLM server unavailable: %s", e)
+            return ""
+
+        url = f"{self.endpoint}/chat/completions"
+        headers = {"Content-Type": "application/json"}
+
+        payload = {
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["choices"][0]["message"]["content"].strip()
+        except requests.RequestException as e:
+            logger.error("Local SLM request failed: %s", e)
+            # If the server process died, reset so next call restarts it.
+            if self._process is not None and self._process.poll() is not None:
+                self._process = None
+            return ""
+
+    def _shutdown(self) -> None:
+        """Terminate the local llama-server process."""
+        if self._process is None:
+            return
+        try:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+                self._process.wait(timeout=5)
+        except Exception as e:
+            logger.warning("Error shutting down local SLM server: %s", e)
+        finally:
+            self._process = None
+
+    def shutdown(self) -> None:
+        """Public shutdown method, safe to call multiple times."""
+        with self._lock:
+            self._shutdown()
+
+    def __del__(self) -> None:
+        """Ensure the subprocess is cleaned up on garbage collection."""
+        self.shutdown()
+
+
+# ── Module-level singleton ──
+
+_local_slm_client: LocalSLMClient | None = None
+_local_slm_client_lock = threading.Lock()
+
+
+def _get_local_slm_client() -> LocalSLMClient | None:
+    """Return the module-level LocalSLMClient singleton.
+
+    Lazily creates the instance on first access.  Returns ``None`` when
+    local SLM mode is not configured (no model path provided).
+    """
+    global _local_slm_client
+
+    if _local_slm_client is not None:
+        return _local_slm_client
+
+    if not SLM_LOCAL_MODEL_PATH:
+        logger.warning("SLM_LOCAL_ENABLED=true but SLM_LOCAL_MODEL_PATH is empty")
+        return None
+
+    with _local_slm_client_lock:
+        if _local_slm_client is not None:
+            return _local_slm_client
+
+        _local_slm_client = LocalSLMClient(
+            binary=SLM_LOCAL_BINARY,
+            model_path=SLM_LOCAL_MODEL_PATH,
+            context_size=SLM_LOCAL_CONTEXT_SIZE,
+            threads=SLM_LOCAL_THREADS,
+            port=SLM_LOCAL_PORT,
+            startup_timeout=SLM_LOCAL_STARTUP_TIMEOUT,
+        )
+        return _local_slm_client
+
+
+def _shutdown_local_slm() -> None:
+    """Cleanup handler registered with atexit."""
+    global _local_slm_client
+    if _local_slm_client is not None:
+        _local_slm_client.shutdown()
+        _local_slm_client = None
+
+
+atexit.register(_shutdown_local_slm)
+
+
+# ── SLM call helper ──
+
+
 def _call_slm_sync(prompt: str, max_tokens: int = 256, temperature: float = 0.1) -> str:
+    """Call the SLM in synchronous mode.
+
+    Supports three modes, tried in order of priority:
+
+    1. **Local llama.cpp** — when ``SLM_LOCAL_ENABLED`` is true, runs
+       llama-server as a subprocess and communicates via its
+       OpenAI-compatible HTTP API.
+    2. **Remote OpenAI-compatible API** — when ``SLM_ENDPOINT`` is set.
+    3. **Fallback** — returns an empty string (``""``) so callers use
+       heuristics instead.
     """
-    Вызов SLM в синхронном режиме. Поддерживает два режима:
-    1. Локальный llama.cpp через subprocess (TODO)
-    2. OpenAI-совместимый API (vLLM)
-    """
+    # ── Mode 1: Local llama-server subprocess ──
+    if SLM_LOCAL_ENABLED:
+        client = _get_local_slm_client()
+        if client is None:
+            return ""
+        try:
+            return client.generate(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        except Exception as e:
+            logger.error("Local SLM generation failed: %s", e)
+            return ""
+
+    # ── Mode 2: Remote OpenAI-compatible API ──
     if not SLM_ENDPOINT:
         logger.warning("SLM endpoint not configured, falling back to heuristics")
         return ""
-
-    import requests
 
     url = f"{SLM_ENDPOINT}/chat/completions"
     headers = {"Content-Type": "application/json"}

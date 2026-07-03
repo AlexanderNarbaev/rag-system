@@ -61,6 +61,24 @@ SLM_MODEL_NAME = os.getenv("SLM_MODEL_NAME", "")
 SLM_API_KEY = os.getenv("SLM_API_KEY", None)
 SLM_MAX_TOKENS = int(os.getenv("SLM_MAX_TOKENS", "256"))
 
+# ============ SLM Local (llama.cpp subprocess) ============
+# Enable local llama.cpp subprocess mode for air-gapped deployments.
+# When enabled, the SLM runs locally via a llama-server subprocess instead of
+# an external OpenAI-compatible API endpoint.
+SLM_LOCAL_ENABLED = os.getenv("SLM_LOCAL_ENABLED", "false").lower() == "true"
+# Path to the llama.cpp server binary (llama-server).
+SLM_LOCAL_BINARY = os.getenv("SLM_LOCAL_BINARY", "llama.cpp/build/bin/llama-server")
+# Path to the .gguf model file to load.
+SLM_LOCAL_MODEL_PATH = os.getenv("SLM_LOCAL_MODEL_PATH", "")
+# LLM context size (in tokens) for the local model.
+SLM_LOCAL_CONTEXT_SIZE = int(os.getenv("SLM_LOCAL_CONTEXT_SIZE", "4096"))
+# Number of CPU threads for inference.
+SLM_LOCAL_THREADS = int(os.getenv("SLM_LOCAL_THREADS", "4"))
+# Port the local llama-server will listen on (auto-assigned if 0).
+SLM_LOCAL_PORT = int(os.getenv("SLM_LOCAL_PORT", "8081"))
+# Maximum seconds to wait for the local server to become ready.
+SLM_LOCAL_STARTUP_TIMEOUT = int(os.getenv("SLM_LOCAL_STARTUP_TIMEOUT", "60"))
+
 # ============ Параметры RAG ============
 MAX_CHUNKS_RETRIEVAL = int(os.getenv("MAX_CHUNKS_RETRIEVAL", "50"))
 MAX_CHUNKS_AFTER_RERANK = int(os.getenv("MAX_CHUNKS_AFTER_RERANK", "20"))
@@ -91,6 +109,13 @@ SENSITIVE_SECRETS = os.getenv("SENSITIVE_SECRETS", "").split(",") if os.getenv("
 # ============ Observability ============
 METRICS_ENABLED = os.getenv("METRICS_ENABLED", "true").lower() == "true"
 LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" or "text"
+
+# ── OpenTelemetry Tracing ──
+OTEL_ENABLED = os.getenv("OTEL_ENABLED", "false").lower() == "true"
+OTEL_EXPORTER_ENDPOINT = os.getenv("OTEL_EXPORTER_ENDPOINT", "http://localhost:4318/v1/traces")
+OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "rag-proxy")
+OTEL_BATCH_TIMEOUT = int(os.getenv("OTEL_BATCH_TIMEOUT", "5"))
+OTEL_MAX_ATTRIBUTES_PER_SPAN = int(os.getenv("OTEL_MAX_ATTRIBUTES_PER_SPAN", "128"))
 
 # ============ Rate Limiting ============
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "false").lower() == "true"

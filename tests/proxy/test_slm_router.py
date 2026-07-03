@@ -3,6 +3,7 @@ import json
 from unittest.mock import patch, MagicMock
 
 import pytest
+import requests
 
 from proxy.app.slm_router import (
     IntentType,
@@ -344,3 +345,294 @@ class TestMultilingualIntentClassification:
 
         intent, _ = classify_intent_multilingual("你好")
         assert intent == IntentType.GREETING
+
+
+# ── LocalSLMClient tests ──
+
+# Patch path for requests inside the slm_router module.
+_SLM_REQUESTS = "proxy.app.slm_router.requests"
+
+
+class TestLocalSLMClientGenerate:
+    """Tests for LocalSLMClient.generate() with mocked subprocess and network."""
+
+    @staticmethod
+    def _make_health_side_effect(*, fail_count: int = 1):
+        """Return a side_effect for requests.get that fails N times then succeeds."""
+        call_count = 0
+
+        def _side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= fail_count:
+                raise requests.exceptions.ConnectionError("not ready")
+            resp = MagicMock()
+            resp.status_code = 200
+            return resp
+
+        return _side_effect
+
+    @pytest.fixture
+    def mock_server_startup(self):
+        """Simulate a server that starts after a brief health check delay."""
+        with patch("subprocess.Popen") as mock_popen, \
+             patch(_SLM_REQUESTS + ".get") as mock_get, \
+             patch(_SLM_REQUESTS + ".post") as mock_post:
+            # Simulate a running process (poll returns None = still running).
+            mock_proc = MagicMock()
+            mock_proc.poll.return_value = None
+            mock_popen.return_value = mock_proc
+
+            # Health check fails twice (first check + double-check inside lock),
+            # then succeeds on the third call (after Popen starts the server).
+            mock_get.side_effect = self._make_health_side_effect(fail_count=2)
+
+            # Generate returns valid JSON.
+            mock_gen = MagicMock()
+            mock_gen.json.return_value = {
+                "choices": [{"message": {"content": " factual"}}],
+            }
+            mock_gen.raise_for_status = MagicMock()
+            mock_post.return_value = mock_gen
+
+            yield mock_popen, mock_get, mock_post, mock_proc
+
+    @pytest.fixture
+    def mock_already_running(self):
+        """Simulate a server that is already running (health check passes)."""
+        with patch("subprocess.Popen") as mock_popen, \
+             patch(_SLM_REQUESTS + ".get") as mock_get, \
+             patch(_SLM_REQUESTS + ".post") as mock_post:
+            mock_proc = MagicMock()
+            mock_proc.poll.return_value = None
+            mock_popen.return_value = mock_proc
+
+            # Health check passes immediately (server already running).
+            mock_health = MagicMock()
+            mock_health.status_code = 200
+            mock_get.return_value = mock_health
+
+            mock_gen = MagicMock()
+            mock_gen.json.return_value = {
+                "choices": [{"message": {"content": " factual"}}],
+            }
+            mock_gen.raise_for_status = MagicMock()
+            mock_post.return_value = mock_gen
+
+            yield mock_popen, mock_get, mock_post, mock_proc
+
+    def test_generates_text(self, mock_already_running):
+        """LocalSLMClient.generate() should return generated text."""
+        from proxy.app.slm_router import LocalSLMClient
+
+        client = LocalSLMClient(
+            binary="/usr/bin/llama-server",
+            model_path="/models/slm.gguf",
+            port=18081,
+        )
+        result = client.generate("classify this", max_tokens=10, temperature=0)
+        assert result == "factual"
+
+    def test_starts_server_on_first_call(self, mock_server_startup):
+        """First generate() call should start the subprocess."""
+        mock_popen, mock_get, mock_post, mock_proc = mock_server_startup
+
+        from proxy.app.slm_router import LocalSLMClient
+
+        client = LocalSLMClient(
+            binary="/usr/bin/llama-server",
+            model_path="/models/slm.gguf",
+            port=18082,
+        )
+        client.generate("hello")
+
+        mock_popen.assert_called_once()
+        # Verify the correct CLI arguments.
+        call_args = mock_popen.call_args[0][0]
+        assert "--port" in call_args
+        assert "18082" in call_args
+        assert "-m" in call_args
+        assert "/models/slm.gguf" in call_args
+
+    def test_reuses_running_server(self, mock_server_startup):
+        """Second generate() call should not restart the server."""
+        mock_popen, mock_get, mock_post, mock_proc = mock_server_startup
+
+        from proxy.app.slm_router import LocalSLMClient
+
+        client = LocalSLMClient(
+            binary="/usr/bin/llama-server",
+            model_path="/models/slm.gguf",
+            port=18083,
+        )
+        client.generate("first")
+        client.generate("second")
+
+        # Popen should only have been called once (first call starts, second reuses).
+        assert mock_popen.call_count == 1
+
+    def test_handles_server_crash(self, mock_server_startup):
+        """After the process dies, the next call should restart it."""
+        mock_popen, mock_get, mock_post, mock_proc = mock_server_startup
+
+        from proxy.app.slm_router import LocalSLMClient
+
+        client = LocalSLMClient(
+            binary="/usr/bin/llama-server",
+            model_path="/models/slm.gguf",
+            port=18084,
+        )
+        # First call — health fails once, then succeeds → server starts.
+        client.generate("first")
+        assert mock_popen.call_count == 1
+
+        # Simulate server crash: poll returns a non-None return code.
+        mock_proc.poll.return_value = 1
+
+        # Reset the health side effect so the restart loop works.
+        # Need fail_count=2: first check + double-check before Popen.
+        mock_get.side_effect = self._make_health_side_effect(fail_count=2)
+
+        # Next call should detect the dead process and restart.
+        client.generate("second")
+        assert mock_popen.call_count == 2
+
+    def test_handles_request_timeout(self):
+        """When the HTTP request times out, returns empty string."""
+        with patch("subprocess.Popen") as mock_popen, \
+             patch(_SLM_REQUESTS + ".get") as mock_get, \
+             patch(_SLM_REQUESTS + ".post", side_effect=requests.exceptions.Timeout):
+            mock_proc = MagicMock()
+            mock_proc.poll.return_value = None
+            mock_popen.return_value = mock_proc
+
+            mock_health = MagicMock()
+            mock_health.status_code = 200
+            mock_get.return_value = mock_health
+
+            from proxy.app.slm_router import LocalSLMClient
+
+            client = LocalSLMClient(
+                binary="/usr/bin/llama-server",
+                model_path="/models/slm.gguf",
+                port=18085,
+            )
+            result = client.generate("prompt")
+            assert result == ""
+
+    def test_handles_server_unavailable(self):
+        """When the server never becomes healthy, generate returns empty."""
+        with patch("subprocess.Popen") as mock_popen, \
+             patch(_SLM_REQUESTS + ".get") as mock_get:
+            mock_proc = MagicMock()
+            mock_proc.poll.return_value = None
+            mock_popen.return_value = mock_proc
+
+            # Health check always fails.
+            mock_get.side_effect = requests.exceptions.ConnectionError
+
+            from proxy.app.slm_router import LocalSLMClient
+
+            client = LocalSLMClient(
+                binary="/usr/bin/llama-server",
+                model_path="/models/slm.gguf",
+                port=18086,
+                startup_timeout=1,  # Short timeout for test speed.
+            )
+            result = client.generate("prompt")
+            assert result == ""
+
+    def test_shutdown_terminates_process(self, mock_server_startup):
+        """shutdown() should terminate the subprocess."""
+        mock_popen, mock_get, mock_post, mock_proc = mock_server_startup
+
+        from proxy.app.slm_router import LocalSLMClient
+
+        client = LocalSLMClient(
+            binary="/usr/bin/llama-server",
+            model_path="/models/slm.gguf",
+            port=18087,
+        )
+        client.generate("test")  # Ensure process is started.
+        client.shutdown()
+
+        mock_proc.terminate.assert_called_once()
+
+    def test_shutdown_idempotent(self, mock_server_startup):
+        """Multiple shutdown() calls are safe."""
+        mock_popen, mock_get, mock_post, mock_proc = mock_server_startup
+
+        from proxy.app.slm_router import LocalSLMClient
+
+        client = LocalSLMClient(
+            binary="/usr/bin/llama-server",
+            model_path="/models/slm.gguf",
+            port=18088,
+        )
+        client.generate("test")
+        client.shutdown()
+        client.shutdown()
+        client.shutdown()
+
+        # terminate should only have been called once.
+        mock_proc.terminate.assert_called_once()
+
+
+class TestCallSlmSyncLocalMode:
+    """Tests for _call_slm_sync when SLM_LOCAL_ENABLED is True."""
+
+    def test_routes_to_local_client_when_enabled(self):
+        """When SLM_LOCAL_ENABLED=True, use LocalSLMClient."""
+        mock_client = MagicMock()
+        mock_client.generate.return_value = "factual"
+
+        with patch("proxy.app.slm_router.SLM_LOCAL_ENABLED", True), \
+             patch("proxy.app.slm_router._get_local_slm_client", return_value=mock_client):
+            result = _call_slm_sync("classify this", max_tokens=10, temperature=0)
+            assert result == "factual"
+            mock_client.generate.assert_called_once_with(
+                "classify this",
+                max_tokens=10,
+                temperature=0,
+            )
+
+    def test_returns_empty_when_no_model_path(self):
+        """When SLM_LOCAL_ENABLED=True but no model path, returns empty."""
+        with patch("proxy.app.slm_router.SLM_LOCAL_ENABLED", True), \
+             patch("proxy.app.slm_router.SLM_LOCAL_MODEL_PATH", ""):
+            result = _call_slm_sync("prompt")
+            assert result == ""
+
+    def test_falls_back_to_empty_on_local_error(self):
+        """When the local client raises RuntimeError, returns empty."""
+        mock_client = MagicMock()
+        mock_client.generate.side_effect = RuntimeError("server crashed")
+
+        with patch("proxy.app.slm_router.SLM_LOCAL_ENABLED", True), \
+             patch("proxy.app.slm_router._get_local_slm_client", return_value=mock_client):
+            result = _call_slm_sync("prompt")
+            assert result == ""
+
+
+class TestGetLocalSlmClient:
+    """Tests for the module-level _get_local_slm_client singleton factory."""
+
+    def test_returns_none_without_model_path(self):
+        """When SLM_LOCAL_MODEL_PATH is empty, returns None."""
+        from proxy.app.slm_router import _get_local_slm_client
+
+        with patch("proxy.app.slm_router.SLM_LOCAL_MODEL_PATH", ""):
+            # Reset the singleton before testing.
+            with patch("proxy.app.slm_router._local_slm_client", None):
+                client = _get_local_slm_client()
+                assert client is None
+
+    def test_singleton_returns_same_instance(self):
+        """Multiple calls return the same LocalSLMClient instance."""
+        from proxy.app.slm_router import _get_local_slm_client
+
+        with patch("proxy.app.slm_router.SLM_LOCAL_MODEL_PATH", "/models/test.gguf"):
+            with patch("proxy.app.slm_router._local_slm_client", None):
+                client1 = _get_local_slm_client()
+                client2 = _get_local_slm_client()
+                assert client1 is client2
