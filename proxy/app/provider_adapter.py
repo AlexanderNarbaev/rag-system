@@ -393,6 +393,7 @@ class MultiProviderRouter:
     """
     Routes LLM requests through the appropriate provider adapter.
     Handles streaming and non-streaming with transparent translation.
+    Supports per-request provider_type override for multi-provider routing.
     """
 
     ADAPTERS = {
@@ -412,6 +413,36 @@ class MultiProviderRouter:
         self.adapter = self.ADAPTERS[self.provider_type]()
         self.endpoint = LLM_ENDPOINT
         self.api_key = LLM_API_KEY
+        # Cache of per-provider-type adapters for per-request overrides
+        self._adapter_cache: dict[ProviderType, ProviderAdapter] = {}
+
+    def _resolve_provider(self, provider_type: str | None = None) -> tuple[ProviderAdapter, ProviderType]:
+        """Resolve the adapter and provider type for a request.
+
+        When provider_type is given, returns (or creates + caches) an adapter
+        for that type. Otherwise returns the default adapter.
+        """
+        if not provider_type:
+            return self.adapter, self.provider_type
+
+        pt_str = provider_type.lower()
+        try:
+            pt = ProviderType(pt_str)
+        except ValueError:
+            logger.warning(f"Unknown per-request provider type '{pt_str}', using default")
+            return self.adapter, self.provider_type
+
+        if pt == self.provider_type:
+            return self.adapter, self.provider_type
+
+        if pt not in self._adapter_cache:
+            adapter_cls = self.ADAPTERS.get(pt)
+            if adapter_cls is None:
+                logger.warning(f"No adapter for '{pt}', using default")
+                return self.adapter, self.provider_type
+            self._adapter_cache[pt] = adapter_cls()
+
+        return self._adapter_cache[pt], pt
 
     async def _send_request(
         self,
@@ -422,8 +453,24 @@ class MultiProviderRouter:
         tools: list[ToolDefinition] | None = None,
         tool_results: list[ToolResult] | None = None,
         retry: int = MAX_RETRIES,
+        provider_type: str | None = None,
     ) -> Any:
-        """Send request through the appropriate adapter."""
+        """Send request through the appropriate adapter.
+
+        Args:
+            messages: Chat messages in OpenAI format.
+            temperature: Sampling temperature.
+            max_tokens: Maximum tokens to generate.
+            stream: Whether to stream the response.
+            tools: Optional tool/function definitions.
+            tool_results: Optional tool execution results to inject.
+            retry: Number of retry attempts.
+            provider_type: Override the default provider type for this request
+                           (e.g., "anthropic", "ollama"). When None, uses the
+                           configured default.
+        """
+        # Resolve adapter for this request
+        adapter, pt = self._resolve_provider(provider_type)
         # Inject tool results into messages if provided
         if tool_results:
             messages = list(messages)
@@ -437,12 +484,12 @@ class MultiProviderRouter:
                     }
                 )
 
-        payload = self.adapter.translate_request(messages, temperature, max_tokens, tools, stream)
-        headers = self.adapter.headers
+        payload = adapter.translate_request(messages, temperature, max_tokens, tools, stream)
+        headers = adapter.headers
         url = f"{self.endpoint}/chat/completions"
 
         # Anthropic uses a different endpoint path
-        if self.provider_type == ProviderType.ANTHROPIC:
+        if pt == ProviderType.ANTHROPIC:
             url = f"{self.endpoint}/messages"
 
         timeout = ClientTimeout(total=REQUEST_TIMEOUT)
@@ -457,10 +504,10 @@ class MultiProviderRouter:
                             raise LLMError(f"LLM returned {response.status}: {error_text}")
 
                         if stream:
-                            return response
+                            return response, adapter
                         else:
                             data = await response.json()
-                            translated = self.adapter.translate_response(data)
+                            translated = adapter.translate_response(data)
                             if "choices" not in translated or not translated["choices"]:
                                 raise LLMError("Invalid response format from LLM")
                             return translated
@@ -478,12 +525,24 @@ class MultiProviderRouter:
         temperature: float = 0.2,
         max_tokens: int = 4096,
         tools: list[ToolDefinition] | None = None,
+        provider_type: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Streaming completion with provider translation."""
-        response = await self._send_request(messages, temperature, max_tokens, stream=True, tools=tools)
+        """Streaming completion with provider translation.
+
+        Args:
+            messages: Chat messages in OpenAI format.
+            temperature: Sampling temperature.
+            max_tokens: Maximum tokens to generate.
+            tools: Optional tool/function definitions.
+            provider_type: Override the default provider type for this request.
+        """
+        response, adapter = await self._send_request(
+            messages, temperature, max_tokens, stream=True, tools=tools,
+            provider_type=provider_type,
+        )
 
         async for raw_line in response.content:
-            chunk = self.adapter.translate_stream_chunk(raw_line)
+            chunk = adapter.translate_stream_chunk(raw_line)
             if chunk is None:
                 continue
             if chunk.get("_done"):
@@ -497,11 +556,22 @@ class MultiProviderRouter:
         max_tokens: int = 4096,
         tools: list[ToolDefinition] | None = None,
         tool_results: list[ToolResult] | None = None,
+        provider_type: str | None = None,
     ) -> dict[str, Any]:
         """Non-streaming completion with provider translation.
-        Returns full response dict including content and optional tool_calls."""
+        Returns full response dict including content and optional tool_calls.
+
+        Args:
+            messages: Chat messages in OpenAI format.
+            temperature: Sampling temperature.
+            max_tokens: Maximum tokens to generate.
+            tools: Optional tool/function definitions.
+            tool_results: Optional tool execution results to inject.
+            provider_type: Override the default provider type for this request.
+        """
         return await self._send_request(
-            messages, temperature, max_tokens, stream=False, tools=tools, tool_results=tool_results
+            messages, temperature, max_tokens, stream=False,
+            tools=tools, tool_results=tool_results, provider_type=provider_type,
         )
 
     async def non_stream_completion_text(
@@ -509,9 +579,12 @@ class MultiProviderRouter:
         messages: list[dict[str, Any]],
         temperature: float = 0.2,
         max_tokens: int = 4096,
+        provider_type: str | None = None,
     ) -> str:
         """Convenience method that returns just the text content."""
-        data = await self.non_stream_completion(messages, temperature, max_tokens)
+        data = await self.non_stream_completion(
+            messages, temperature, max_tokens, provider_type=provider_type,
+        )
         try:
             return data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError) as e:
@@ -524,9 +597,12 @@ class MultiProviderRouter:
         tools: list[ToolDefinition],
         temperature: float = 0.2,
         max_tokens: int = 4096,
+        provider_type: str | None = None,
     ) -> list[ToolCall]:
         """Request tool calls from the LLM. Returns list of tool calls."""
-        data = await self.non_stream_completion(messages, temperature, max_tokens, tools=tools)
+        data = await self.non_stream_completion(
+            messages, temperature, max_tokens, tools=tools, provider_type=provider_type,
+        )
         try:
             message = data["choices"][0]["message"]
             tool_calls = message.get("tool_calls", [])
@@ -542,12 +618,18 @@ class MultiProviderRouter:
             logger.error(f"Failed to parse tool calls: {e}")
             return []
 
-    def non_stream_completion_sync(self, messages, temperature=0.2, max_tokens=4096) -> str:
+    def non_stream_completion_sync(
+        self, messages, temperature=0.2, max_tokens=4096, provider_type: str | None = None,
+    ) -> str:
         """Synchronous wrapper for non-async contexts (e.g., LangGraph nodes)."""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            return loop.run_until_complete(self.non_stream_completion_text(messages, temperature, max_tokens))
+            return loop.run_until_complete(
+                self.non_stream_completion_text(
+                    messages, temperature, max_tokens, provider_type=provider_type,
+                )
+            )
         finally:
             loop.close()
 
@@ -575,9 +657,12 @@ async def stream_completion(
     messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
+    provider_type: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     router = get_router()
-    async for chunk in router.stream_completion(messages, temperature, max_tokens):
+    async for chunk in router.stream_completion(
+        messages, temperature, max_tokens, provider_type=provider_type,
+    ):
         yield chunk
 
 
@@ -585,15 +670,21 @@ async def non_stream_completion(
     messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
+    provider_type: str | None = None,
 ) -> str:
     router = get_router()
-    return await router.non_stream_completion_text(messages, temperature, max_tokens)
+    return await router.non_stream_completion_text(
+        messages, temperature, max_tokens, provider_type=provider_type,
+    )
 
 
 def non_stream_completion_sync(
     messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
+    provider_type: str | None = None,
 ) -> str:
     router = get_router()
-    return router.non_stream_completion_sync(messages, temperature, max_tokens)
+    return router.non_stream_completion_sync(
+        messages, temperature, max_tokens, provider_type=provider_type,
+    )
