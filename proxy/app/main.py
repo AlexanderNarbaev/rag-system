@@ -728,23 +728,34 @@ async def auth_login(request: LoginRequest, raw_request: Request):
 
 @app.post("/v1/auth/refresh", response_model=RefreshResponse)
 async def auth_refresh(request: RefreshRequest):
-    """Exchange a refresh token for a new access token pair.
+    """Exchange a refresh token (or valid access token) for a new token pair.
 
-    Accepts a refresh token and returns a fresh access+refresh token pair.
-    The old refresh token is consumed (one-time use).
+    Backward-compatible: tries refresh token first. Falls back to validating
+    as an access token for old clients that don't have refresh tokens yet.
+    On access token validation, issues a full token pair (upgrade path).
     """
-    from app.auth import AUTH_ENABLED, create_token_pair
+    from app.auth import AUTH_ENABLED, create_token_pair, verify_refresh_token, verify_token
 
     if not AUTH_ENABLED:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
 
-    from app.auth import verify_refresh_token
-
-    refresh_token = request.token  # For backward compat, treat token field as refresh_token
-    user = await verify_refresh_token(refresh_token)
+    # Try refresh token first (preferred path)
+    user = await verify_refresh_token(request.token)
 
     if user is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+        # Fallback: try as access token (backward compat for old clients)
+        try:
+            user_ctx = verify_token(request.token)
+            user = {
+                "id": user_ctx.user_id,
+                "username": user_ctx.username,
+                "roles": user_ctx.roles,
+                "groups": user_ctx.groups,
+                "access_level": user_ctx.access_level,
+                "namespace": user_ctx.namespace,
+            }
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     # Issue new token pair
     token_pair = await create_token_pair(user)

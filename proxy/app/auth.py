@@ -310,7 +310,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Public endpoints — no auth required
-        if path in ("/v1/auth/login", "/v1/auth/refresh", "/v1/health", "/metrics"):
+        _PUBLIC_PATHS = {
+            "/v1/auth/login",
+            "/v1/auth/register",
+            "/v1/auth/refresh",
+            "/v1/health",
+            "/v1/health/live",
+            "/v1/health/ready",
+            "/v1/models",
+            "/v1/widget",
+            "/v1/widget.js",
+            "/metrics",
+        }
+        _PUBLIC_PREFIXES = (  # allow sub-paths like /v1/health/live, /v1/widget, etc.
+        )
+
+        if path in _PUBLIC_PATHS or path.rstrip("/") in _PUBLIC_PATHS:
             request.state.user_context = UserContext.anonymous()
             return await call_next(request)
 
