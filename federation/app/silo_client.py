@@ -12,7 +12,7 @@ async def query_silo(
     top_k: int = 30,
     timeout_s: int | None = None,
 ) -> SiloSearchResult:
-    timeout = timeout_s or silo.timeout_s
+    timeout = timeout_s if timeout_s is not None else silo.timeout_s
     headers = {"Content-Type": "application/json"}
     if silo.api_key:
         headers["Authorization"] = f"Bearer {silo.api_key}"

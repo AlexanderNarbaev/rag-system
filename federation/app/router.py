@@ -1,6 +1,5 @@
 import asyncio
 import time
-import logging
 from .models import (
     SiloConfig, SiloSearchResult, FederatedSearchResult, FederationContext
 )
@@ -8,13 +7,8 @@ from .silo_registry import SiloRegistry
 from .silo_client import query_silo
 from .merger import merge
 from .auto_router import classify_query
-from .config import (
-    FEDERATION_PER_INSTANCE_TIMEOUT_S,
-    FEDERATION_MERGE_K,
-    FEDERATION_RRF_K,
-)
-
-logger = logging.getLogger("federation")
+from .circuit_breaker import get_breaker
+from .config import FEDERATION_PER_INSTANCE_TIMEOUT_S
 
 
 def _resolve_target_silos(
@@ -61,25 +55,47 @@ async def federated_search(
         )
 
     timeout = FEDERATION_PER_INSTANCE_TIMEOUT_S
-    tasks = [
-        query_silo(silo, ctx.query, ctx.merge_k, timeout_s=timeout)
-        for silo in silos
-    ]
-    silo_results: list[SiloSearchResult] = await asyncio.gather(*tasks, return_exceptions=True)
+    active_silos: list[SiloConfig] = []
+    for silo in silos:
+        breaker = get_breaker(f"federation_{silo.id}")
+        if breaker.allow_request():
+            active_silos.append(silo)
+        else:
+            skipped.append(silo.id)
+
+    if active_silos:
+        tasks = [
+            query_silo(silo, ctx.query, ctx.merge_k, timeout_s=timeout)
+            for silo in active_silos
+        ]
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+    else:
+        raw_results = []
+
+    silo_map: dict[str, SiloConfig] = {s.id: s for s in active_silos}
+    raw_list: list[SiloSearchResult | BaseException] = list(raw_results)
 
     results: list[SiloSearchResult] = []
-    for i, result in enumerate(silo_results):
-        if isinstance(result, Exception):
-            silo_id = silos[i].id
-            errors.append(f"{silo_id}: {result}")
-            results.append(SiloSearchResult(
-                silo_id=silo_id, silo_name=silos[i].name,
-                chunks=[], latency_ms=0, error=str(result), partial=True
-            ))
-        else:
+    for silo in active_silos:
+        matching = [r for r in raw_list if not isinstance(r, BaseException) and r.silo_id == silo.id]
+        if matching:
+            result = matching[0]
             results.append(result)
             if result.error:
                 errors.append(f"{result.silo_id}: {result.error}")
+                breaker = get_breaker(f"federation_{silo.id}")
+                breaker.record_failure()
+            else:
+                breaker = get_breaker(f"federation_{silo.id}")
+                breaker.record_success()
+        else:
+            errors.append(f"{silo.id}: no response")
+            results.append(SiloSearchResult(
+                silo_id=silo.id, silo_name=silo.name,
+                chunks=[], latency_ms=0, error="no response", partial=True
+            ))
+            breaker = get_breaker(f"federation_{silo.id}")
+            breaker.record_failure()
 
     merged_chunks = merge(
         [r for r in results if r.chunks],
