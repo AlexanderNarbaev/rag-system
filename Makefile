@@ -2,7 +2,9 @@
 # Primary entry point for development, testing, and deployment workflows.
 
 .PHONY: help install install-dev test test-proxy test-etl test-integration \
-        lint format typecheck clean docker-build docker-up docker-down docs all
+        lint format typecheck clean docker-build docker-up docker-down docs all \
+        train-slum train-llm train-reranker eval-model promote-model \
+        model-evolution-up model-evolution-down
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -73,6 +75,39 @@ docs: ## Show documentation locations
 
 # ── CI pipeline (all-in-one) ───────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests
+
+# ── Model Evolution ──────────────────────────────────────────────────────────
+train-slum: ## Train SLM intent classifier (LoRA fine-tuning)
+	@cd $(ROOT) && python scripts/model_evolution/train_slm.py --profile prod --data-dir ./data/training
+
+train-llm: ## Train LLM domain generator (QLoRA fine-tuning)
+	@cd $(ROOT) && python scripts/model_evolution/train_llm.py --profile prod --data-dir ./data/training
+
+train-reranker: ## Train reranker from HITL feedback data
+	@cd $(ROOT) && python scripts/model_evolution/train_reranker.py --profile prod --data-dir ./data/training
+
+eval-model: ## Run evaluation gate (usage: make eval-model MODEL=slm METRICS_FILE=./results.json)
+	@cd $(ROOT) && python scripts/model_evolution/evaluate_model.py \
+		--model $(MODEL) \
+		$(if $(METRICS),--metrics '$(METRICS)') \
+		$(if $(METRICS_FILE),--metrics-file $(METRICS_FILE)) \
+		$(if $(FROM_REGISTRY),--from-registry) \
+		$(if $(VERSION),--version $(VERSION)) \
+		$(if $(BASELINE_FILE),--baseline-file $(BASELINE_FILE))
+
+promote-model: ## Promote model version (usage: make promote-model MODEL=slm-intent-classifier VERSION=3)
+	@cd $(ROOT) && python scripts/model_evolution/promote_model.py \
+		--model $(MODEL) \
+		$(if $(VERSION),--version $(VERSION)) \
+		$(if $(LATEST),--latest) \
+		$(if $(TO),--to $(TO)) \
+		$(if $(FORCE),--force)
+
+model-evolution-up: ## Start MLflow + MinIO services
+	@cd $(ROOT)/proxy && docker-compose up -d mlflow minio
+
+model-evolution-down: ## Stop MLflow + MinIO services
+	@cd $(ROOT)/proxy && docker-compose down mlflow minio
 
 # ── Federation ──────────────────────────────────────────────────────────────
 federation-build: ## Build federation Docker image

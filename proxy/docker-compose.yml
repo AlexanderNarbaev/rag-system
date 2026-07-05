@@ -114,6 +114,76 @@ services:
     networks:
       - rag-network
 
+  # MinIO — S3-совместимое объектное хранилище для артефактов MLflow
+  minio:
+    image: minio/minio:latest
+    container_name: rag-minio
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"      # S3 API
+      - "9001:9001"      # Web Console
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # Автосоздание MinIO бакета для MLflow артефактов
+  minio-create-bucket:
+    image: minio/mc:latest
+    container_name: rag-minio-create-bucket
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY:-minioadmin} $${MINIO_SECRET_KEY:-minioadmin} &&
+      mc mb --ignore-existing local/$${MINIO_BUCKET:-rag-artifacts}
+      "
+    networks:
+      - rag-network
+
+  # MLflow Tracking Server — experiment tracking + model registry
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: rag-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MLFLOW_S3_IGNORE_TLS=true
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root s3://${MINIO_BUCKET:-rag-artifacts}
+    volumes:
+      - mlflow_data:/mlflow
+    depends_on:
+      minio-create-bucket:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
   # HITL дашборд (Streamlit)
   hitl-dashboard:
     build:
@@ -140,6 +210,8 @@ volumes:
   neo4j_import:
   neo4j_plugins:
   redis_data:
+  mlflow_data:
+  minio_data:
 
 networks:
   rag-network:

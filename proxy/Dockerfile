@@ -17,8 +17,16 @@ RUN pip install --no-cache-dir -r requirements_proxy.txt
 
 # Копирование исходного кода прокси
 COPY proxy/app /app/app
+# Model Evolution — дообучение моделей (опционально, только при включенном флаге MODEL_EVOLUTION_ENABLED)
+COPY proxy/app/model_evolution /app/app/model_evolution
 # Если есть дополнительные файлы (например, .env.example), можно скопировать
 COPY proxy/.env.example /app/.env.example
+
+# ── Опционально: поддержка GPU для дообучения моделей ──
+# Для использования GPU раскомментировать следующие строки и пересобрать образ
+# COPY proxy/requirements_proxy_gpu.txt /app/requirements_proxy_gpu.txt
+# RUN pip install --no-cache-dir -r /app/requirements_proxy_gpu.txt
+# После сборки добавить в docker run: --gpus all
 
 # Создание директорий для логов и кэша (опционально, будут переопределены томами)
 RUN mkdir -p /app/logs /app/cache

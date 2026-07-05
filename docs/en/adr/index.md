@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Eight architecture decisions documented using the ADR format. Each record captures the context, decision, consequences, and alternatives considered.
+Ten architecture decisions documented using the ADR format. Each record captures the context, decision, consequences, and alternatives considered.
 
 | # | Decision | Document |
 |---|----------|----------|
@@ -11,7 +11,9 @@ Eight architecture decisions documented using the ADR format. Each record captur
 | ADR-005 | Version-aware document indexing | [ADR-005](ADR-005-version-aware-indexing.md) |
 | ADR-006 | Agentic RAG with LangGraph | [ADR-006](ADR-006-agentic-rag-langgraph.md) |
 | ADR-007 | Human-in-the-loop feedback system | [ADR-007](ADR-007-hitl-feedback-system.md) |
+| ADR-008 | Agentic Tools Expansion Architecture | [ADR-008](ADR-008-agentic-tools-expansion.md) |
 | ADR-008 | Java 25 + Quarkus hybrid migration | [ADR-008](ADR-008-java-quarkus-hybrid-migration.md) |
+| ADR-009 | Model Evolution — Fine-Tuning Pipeline & Canary Deployment | [ADR-009](ADR-009-model-evolution.md) |
 
 ## Status Summary
 
@@ -24,6 +26,8 @@ Eight architecture decisions documented using the ADR format. Each record captur
 | 005 | Accepted | 2026-02 |
 | 006 | Accepted | 2026-03 |
 | 007 | Accepted | 2026-04 |
-| 008 | Proposed | 2026-07 |
+| 008 (Tools) | Proposed | 2026-07 |
+| 008 (Java) | Proposed | 2026-07 |
+| 009 | Proposed | 2026-07 |
 
-All seven accepted ADRs have been implemented in v2.0.0. ADR-008 is under evaluation.
+All seven accepted ADRs (001-007) have been implemented in v2.0.0. ADR-008 and ADR-009 are under evaluation for v2.1.

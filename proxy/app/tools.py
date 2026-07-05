@@ -9,6 +9,9 @@ For new-style tool definitions:
 
 For tool errors:
     from proxy.app.tools.errors import ToolError, ToolNotFoundError, ...
+
+For enhanced registry:
+    from proxy.app.tools import get_enhanced_registry
 """
 
 import warnings
@@ -19,7 +22,23 @@ warnings.warn(
     stacklevel=2,
 )
 
-from proxy.app.tools.definition import (
+from proxy.app.tools import (  # noqa: E402
+    EnhancedToolRegistry,
+    ToolDefinition,
+    ToolRegistry,
+    ToolResult,
+    _get_document_metadata,
+    _search_by_version,
+    _search_documents,
+    _UNSET,
+    classify_error,
+    execute_tool,
+    format_tools_for_llm,
+    get_enhanced_registry,
+    get_tool_registry,
+    handle_function_call,
+)
+from proxy.app.tools.definition import (  # noqa: E402
     RetryPolicy,
     ToolCall,
     ToolDefinition as _NewToolDefinition,
@@ -27,9 +46,8 @@ from proxy.app.tools.definition import (
     ToolParam,
     ToolResult as _NewToolResult,
     ToolVisibility,
-    _UNSET,
 )
-from proxy.app.tools.errors import (
+from proxy.app.tools.errors import (  # noqa: E402,F811
     ToolDependencyError,
     ToolError,
     ToolExecutionError,
@@ -38,38 +56,4 @@ from proxy.app.tools.errors import (
     ToolRateLimitError,
     ToolTimeoutError,
     ToolValidationError,
-    classify_error,
 )
-from proxy.app.tools._legacy import (
-    ToolDefinition,
-    ToolRegistry,
-    ToolResult,
-    _get_document_metadata,
-    _search_by_version,
-    _search_documents,
-    execute_tool,
-    get_tool_registry,
-    handle_function_call,
-)
-
-
-def format_tools_for_llm(tools: list) -> list[dict]:
-    """Convert tool definitions to OpenAI function calling format.
-
-    Handles both old-style (parameters_schema) and new-style
-    (to_openai_format) ToolDefinition.
-    """
-    formatted = []
-    for t in tools:
-        if isinstance(t, _NewToolDefinition):
-            formatted.append(t.to_openai_format())
-        else:
-            formatted.append({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.parameters_schema,
-                },
-            })
-    return formatted

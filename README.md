@@ -8,9 +8,9 @@
 
 ## Status · Статус
 
-**EN:** **v2.0 (Self-Correcting RAG)** — Production-ready RAG system with self-correction capabilities: HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual benchmarks, K8s Helm chart (HPA, probes, secrets), Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment (Qdrant replication, Neo4j cluster, Redis Sentinel), backup automation (S3/MinIO), DR runbook, zero-downtime deployment, E2E test suite, chaos/resilience testing, 1469 tests passing. See [ADR documents](docs/en/adr/) for architecture decisions and [C4 diagrams](docs/en/diagrams/) for visual architecture.
+**EN:** **v2.0 (Self-Correcting RAG)** — Production-ready RAG system with self-correction capabilities: HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual benchmarks, Federated RAG, Agentic Tools Expansion, Model Evolution (LoRA/QLoRA fine-tuning, MLflow, MinIO, canary), K8s Helm chart (HPA, probes, secrets), Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment (Qdrant replication, Neo4j cluster, Redis Sentinel), backup automation (S3/MinIO), DR runbook, zero-downtime deployment, E2E test suite, chaos/resilience testing, 2275 tests passing. See [ADR documents](docs/en/adr/) for architecture decisions and [C4 diagrams](docs/en/diagrams/) for visual architecture.
 
-**RU:** **v2.0 (Self-Correcting RAG)** — Production-готовая RAG-система с самокоррекцией: HyDE-расширение запросов, CRAG-оценщик, циклы саморефлексии, обнаружение и заземление галлюцинаций, корректирующая регенерация, NLI-верификация ответов, агентный вызов инструментов (живые запросы к Confluence/Jira/GitLab), мультиязычная поддержка (RU/EN/DE/FR/ZH), кросс-языковые бенчмарки, K8s Helm-чарт (HPA, пробы, секреты), Grafana-дашборды, правила алертов Prometheus, определения SLI/SLO, HA-развёртывание (репликация Qdrant, кластер Neo4j, Redis Sentinel), автоматизация бэкапов (S3/MinIO), DR runbook, развёртывание без простоя, E2E-тесты, chaos/отказоустойчивое тестирование, 1333 теста проходят. См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
+**RU:** **v2.0 (Self-Correcting RAG)** — Production-готовая RAG-система с самокоррекцией: HyDE-расширение запросов, CRAG-оценщик, циклы саморефлексии, обнаружение и заземление галлюцинаций, корректирующая регенерация, NLI-верификация ответов, агентный вызов инструментов (живые запросы к Confluence/Jira/GitLab), мультиязычная поддержка (RU/EN/DE/FR/ZH), кросс-языковые бенчмарки, Федеративный RAG, Расширение агентных инструментов, Эволюция моделей (LoRA/QLoRA дообучение, MLflow, MinIO, canary), K8s Helm-чарт (HPA, пробы, секреты), Grafana-дашборды, правила алертов Prometheus, определения SLI/SLO, HA-развёртывание (репликация Qdrant, кластер Neo4j, Redis Sentinel), автоматизация бэкапов (S3/MinIO), DR runbook, развёртывание без простоя, E2E-тесты, chaos/отказоустойчивое тестирование, 2275 тестов проходят. См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
 
 ---
 
@@ -22,6 +22,8 @@
 2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing
 3. **HITL Layer** — Streamlit expert dashboard for feedback and quality control
 4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude Desktop)
+5. **Model Evolution** — LoRA/QLoRA fine-tuning pipeline for SLM, LLM, and Reranker; MLflow experiment tracking; MinIO artifact storage; EvalGate CI/CD quality gating; AdapterManager hot-reload; CanaryController gradual rollout
+6. **Agentic Tools Expansion** — Custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI auto-discovery; parallel tool execution with dependency resolution
 
 **RU:** Трёхуровневая архитектура с вспомогательными сервисами:
 
@@ -29,6 +31,8 @@
 2. **Уровень Прокси** — FastAPI с OpenAI-совместимым API, гибридный поиск, реранкинг, мультипровайдерная маршрутизация LLM
 3. **Уровень HITL** — Streamlit дашборд экспертной оценки и контроля качества
 4. **MCP Сервер** — Model Context Protocol сервер, предоставляющий RAG-инструменты MCP-совместимым клиентам (OpenCode, Claude Desktop)
+5. **Эволюция Моделей** — LoRA/QLoRA пайплайн дообучения для SLM, LLM и Reranker; MLflow отслеживание экспериментов; MinIO хранение артефактов; EvalGate CI/CD контроль качества; AdapterManager горячая замена; CanaryController постепенный rollout
+6. **Расширение Агентных Инструментов** — SDK для пользовательских инструментов; декларативные определения; авто-обнаружение OpenAPI; параллельное выполнение с разрешением зависимостей
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -125,8 +129,8 @@ rag-system/
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized) · в Docker
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (8 endpoints + health + metrics)
-│   │   ├── orchestrator.py           # LangGraph agentic query pipeline (7-node state graph)
+│   │   ├── main.py                   # FastAPI entry point (25 endpoints + health + metrics)
+│   │   ├── orchestrator.py           # LangGraph agentic query pipeline (8-node state graph)
 │   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
 │   │   ├── rerank.py                 # Cross-encoder reranker
 │   │   ├── context_builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
@@ -141,6 +145,19 @@ rag-system/
 │   │   ├── middleware.py             # Request ID, correlation ID, logging middleware
 │   │   ├── logging_config.py         # Structured logging (text/JSON), secret masking
 │   │   ├── config.py                 # Environment-based configuration (all settings)
+│   │   ├── model_evolution/            # Fine-tuning pipeline (13 modules)
+│   │   │   ├── trainer.py               # Base trainer classes + TrainingJob + registry
+│   │   │   ├── trainer_base.py          # ABC for all trainers
+│   │   │   ├── slm_trainer.py           # SLM LoRA fine-tuning
+│   │   │   ├── llm_trainer.py           # LLM QLoRA fine-tuning
+│   │   │   ├── reranker_trainer.py      # Reranker Full/LoRA fine-tuning
+│   │   │   ├── adapter_manager.py       # Hot-reload trained adapters
+│   │   │   ├── canary_controller.py     # Gradual rollout with traffic splitting
+│   │   │   ├── model_registry.py        # Model artifact registry (MLflow + MinIO)
+│   │   │   ├── eval_gate.py             # EvalGate CI/CD quality gating
+│   │   │   ├── env_profile.py           # Dev/Prod/CI training profiles
+│   │   │   ├── exceptions.py            # Model evolution error hierarchy
+│   │   │   └── __init__.py
 │   │   └── utils.py                  # Shared utilities: token counting, hashing, masking, safe division
 │   ├── .env                          # Configuration (edit before first run) · настройка перед запуском
 │   ├── Dockerfile
@@ -155,16 +172,19 @@ rag-system/
 ├── scripts/                          # Utility scripts · утилиты
 │   ├── init_collections.py           # Initialize Qdrant collections
 │   └── download_models_offline.py    # Pre-download models for air-gapped env
-├── tests/                            # Test suite (1333+ tests passing)
-│   ├── proxy/                        # 282 proxy unit tests
-│   ├── etl/                          # 121 ETL unit tests
-│   ├── integration/                  # 56 integration tests
+├── tests/                            # Test suite (2275+ tests passing)
+│   ├── proxy/                        # 1417 proxy unit tests
+│   ├── etl/                          # 361 ETL unit tests
+│   ├── integration/                  # 59 integration tests
+│   ├── model_evolution/              # 358 model evolution tests
+│   ├── e2e/                          # 18 end-to-end tests
+│   ├── benchmark/                    # 4 load/benchmark tests
 │   ├── mcp_server/                   # 46 MCP server tests
 │   └── conftest.py                   # Shared fixtures
 ├── docs/                             # Documentation · документация
-│   ├── adr/                          # 7 Architecture Decision Records
+│   ├── adr/                          # 10 Architecture Decision Records
 │   ├── diagrams/                     # 4 C4 diagrams (SVG + Excalidraw)
-│   └── guides/                       # 11 design & implementation guides
+│   └── guides/                       # 14 design & implementation guides
 ├── Makefile                          # Primary dev entry point
 ├── pyproject.toml                    # Python project config (ruff, mypy, pytest)
 ├── setup.sh                          # Installation script
@@ -229,9 +249,9 @@ rag-system/
 
 ## Multi-Provider Support · Мультипровайдерная поддержка
 
-**EN:** v2.0 adds HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), and cross-lingual retrieval benchmarks. 1333 tests pass at 100%.
+**EN:** v2.0 adds HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), Federated RAG, Agentic Tools Expansion, Model Evolution (LoRA/QLoRA, MLflow, MinIO, canary), and cross-lingual retrieval benchmarks. 2275 tests pass at 99%+.
 
-**RU:** v2.0 добавляет HyDE-расширение запросов, CRAG-оценщик, циклы саморефлексии, обнаружение и заземление галлюцинаций, корректирующую регенерацию, NLI-верификацию ответов, агентный вызов инструментов (живые запросы к Confluence/Jira/GitLab), мультиязычную поддержку (RU/EN/DE/FR/ZH) и кросс-языковые бенчмарки. 1333 теста проходят со 100% результатом.
+**RU:** v2.0 добавляет HyDE-расширение запросов, CRAG-оценщик, циклы саморефлексии, обнаружение и заземление галлюцинаций, корректирующую регенерацию, NLI-верификацию ответов, агентный вызов инструментов (живые запросы к Confluence/Jira/GitLab), мультиязычную поддержку (RU/EN/DE/FR/ZH), Федеративный RAG, Расширение Агентных Инструментов, Эволюцию Моделей (LoRA/QLoRA, MLflow, MinIO, canary) и кросс-языковые бенчмарки. 2275 тестов проходят с 99%+ результатом.
 
 The proxy supports multiple AI providers through a unified adapter layer. Configure via `LLM_PROVIDER_TYPE`:
 
@@ -425,9 +445,9 @@ See `proxy/app/config.py` for all available settings and defaults.
 pytest tests/ -v
 
 # Specific suites · Конкретные наборы:
-pytest tests/proxy/ -v        # 282 proxy unit tests
-pytest tests/etl/ -v          # 121 ETL unit tests
-pytest tests/integration/ -v  # 56 integration tests
+pytest tests/proxy/ -v        # 1417 proxy unit tests
+pytest tests/etl/ -v          # 361 ETL unit tests
+pytest tests/integration/ -v  # 59 integration tests
 
 # Coverage · Покрытие:
 pytest tests/ --cov=proxy --cov=etl --cov-report=html
@@ -440,7 +460,7 @@ pytest tests/ --cov=proxy --cov=etl --cov-report=html
 ```bash
 make install        # Full setup (proxy + ETL) · полная установка
 make install-dev    # Setup with dev dependencies · установка с dev-зависимостями
-make test           # Run all tests (1333+ passing) · все тесты
+make test           # Run all tests (2275+ passing) · все тесты
 make lint           # Lint with ruff · линтинг
 make format         # Format with ruff · форматирование
 make typecheck      # Run mypy static type checker · статическая типизация

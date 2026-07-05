@@ -209,20 +209,28 @@ def log_feedback_sync(
 
 
 # Функция для экспорта датасета для fine-tuning
-def export_training_dataset(output_path: Path, min_length: int = 50):
+def export_training_dataset(output_path: Path, min_length: int = 50, use_processor: bool = False):
     """
     Экспортирует пары (вопрос, ответ) из взаимодействий, у которых есть положительная обратная связь
     или исправленные ответы, в формат для fine-tuning.
+
+    When ``use_processor=True``, delegates to ``DataProcessor.export_training_dataset()``
+    for richer query-answer-correction triples with feedback metadata.
     """
+    if use_processor:
+        from app.model_evolution.data_processor import DataProcessor
+
+        processor = DataProcessor(logger_instance=get_logger())
+        processor.export_training_dataset(output_path)
+        return
+
     interaction_logger = get_logger()
     interactions = interaction_logger.get_interactions(limit=10000)
 
     training_pairs = []
     for item in interactions:
-        # Берём только те, где есть исправленный ответ
         if "corrected_response" in item:
             training_pairs.append({"prompt": item["user_query"], "completion": item["corrected_response"]})
-        # Или положительный фидбек
         elif item.get("user_feedback") == "positive":
             training_pairs.append({"prompt": item["user_query"], "completion": item["response"]})
 
@@ -230,6 +238,40 @@ def export_training_dataset(output_path: Path, min_length: int = 50):
         for pair in training_pairs:
             f.write(json.dumps(pair, ensure_ascii=False) + "\n")
     logger.info(f"Exported {len(training_pairs)} training pairs to {output_path}")
+
+
+def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingual: bool = False):
+    """
+    Экспортирует пары (query, intent) из логов взаимодействий
+    в формат JSONL для обучения классификатора интентов.
+
+    :param output_path: Путь к выходному JSONL-файлу.
+    :param limit: Максимальное количество взаимодействий для обработки.
+    :param use_multilingual: Использовать classify_intent_multilingual
+        (поддержка DE/FR/ZH) вместо classify_intent.
+    """
+    from proxy.app.slm_router import classify_intent, classify_intent_multilingual
+
+    classify_fn = classify_intent_multilingual if use_multilingual else classify_intent
+
+    interaction_logger = get_logger()
+    interactions = interaction_logger.get_interactions(limit=limit)
+
+    # get_interactions returns newest first; reverse to chronological order
+    interactions = list(reversed(interactions))
+
+    intent_pairs = []
+    for item in interactions:
+        query = (item.get("user_query") or "").strip()
+        if not query:
+            continue
+        intent, _ = classify_fn(query)
+        intent_pairs.append({"query": query, "intent": intent.value})
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        for pair in intent_pairs:
+            f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+    logger.info(f"Exported {len(intent_pairs)} intent pairs to {output_path}")
 
 
 if __name__ == "__main__":

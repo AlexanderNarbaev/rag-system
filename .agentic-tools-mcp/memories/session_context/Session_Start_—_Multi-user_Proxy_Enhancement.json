@@ -1,0 +1,8 @@
+{
+  "id": "bd7a3403-e243-4e08-b0d6-89c0cbd0ce6b",
+  "title": "Session Start — Multi-user Proxy Enhancement",
+  "details": "Starting session 2026-07-03. Project: RAG System v2.0. Branch: main. Last commit: deeaffd (fix aiohttp BasicAuth). 1503 tests passing. \n\nGoal: Enhance proxy with: (1) remote embedder/reranker support, (2) user self-registration + AD/LDAP + proper JWT token management, (3) embeddable chat UI widget, (4) wire tools into orchestrator + MCP expansion.\n\nCurrent gaps identified:\n- Embedder & reranker are local-only (SentenceTransformer, CrossEncoder)\n- No user database (users in AUTH_VALID_USERS env var, plaintext passwords)\n- No self-registration, no refresh token pairs, no token revocation\n- RBAC defined but not enforced on endpoints\n- No chat UI whatsoever\n- tools.py registry exists but not connected to orchestrator\n- MCP server has search tools but no rag_chat tool",
+  "category": "session_context",
+  "dateCreated": "2026-07-03T16:31:49.012Z",
+  "dateUpdated": "2026-07-03T16:31:49.012Z"
+}

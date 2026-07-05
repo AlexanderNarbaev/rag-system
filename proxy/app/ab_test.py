@@ -2,13 +2,21 @@
 
 Allows comparing different pipeline configurations (rerankers, top-k values,
 LangGraph on/off) with statistical significance testing via Welch's t-test.
+Also supports model variant selection for multi-model A/B testing with
+optional canary traffic splitting.
 """
+
+from __future__ import annotations
 
 import math
 import os
 import random
 from dataclasses import dataclass, field
 from statistics import mean, stdev
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from proxy.app.model_evolution.canary_controller import CanaryController
 
 
 AB_TEST_ENABLED = os.getenv("AB_TEST_ENABLED", "false").lower() == "true"
@@ -279,3 +287,117 @@ def _betacf(a: float, b: float, x: float, max_iter: int = 100) -> float:
             break
 
     return h
+
+
+@dataclass
+class ModelVariant:
+    """A model variant for A/B testing with model name, adapter version, and selection weight.
+
+    Equality is based on model_name and adapter_version, not weight.
+    """
+
+    model_name: str
+    adapter_version: str = "baseline"
+    weight: float = 1.0
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelVariant):
+            return NotImplemented
+        return (
+            self.model_name == other.model_name
+            and self.adapter_version == other.adapter_version
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.model_name, self.adapter_version))
+
+
+class ABTestRunner:
+    """Manages model variant selection with weighted random routing.
+
+    Supports registration of multiple ModelVariant instances and weighted
+    random selection. Optionally integrates with CanaryController for
+    traffic splitting between stable and canary model pools.
+
+    Usage:
+        runner = ABTestRunner("llm_routing")
+        runner.register_variant(ModelVariant("llama-3-8b", weight=0.6))
+        runner.register_variant(ModelVariant("qwen-2.5-7b", weight=0.4))
+
+        selected = runner.select_model()
+        # -> ModelVariant(model_name="llama-3-8b") with ~60% probability
+    """
+
+    def __init__(
+        self,
+        name: str,
+        canary_controller: CanaryController | None = None,
+    ) -> None:
+        self.name = name
+        self._canary_controller = canary_controller
+        self._variants: dict[str, ModelVariant] = {}
+        self._rng = random.Random()
+
+    @property
+    def variants(self) -> list[ModelVariant]:
+        return list(self._variants.values())
+
+    def register_variant(self, variant: ModelVariant) -> None:
+        self._variants[variant.model_name] = variant
+
+    def remove_variant(self, model_name: str) -> None:
+        self._variants.pop(model_name, None)
+
+    def clear(self) -> None:
+        self._variants.clear()
+
+    def select_model(self) -> ModelVariant:
+        if not self._variants:
+            raise ValueError(
+                f"No model variants registered in runner '{self.name}'"
+            )
+
+        names = list(self._variants.keys())
+        weights = [self._variants[n].weight for n in names]
+        total = sum(weights)
+        if total <= 0:
+            return self._variants[self._rng.choice(names)]
+
+        normalized = [w / total for w in weights]
+        choice = self._rng.choices(names, weights=normalized, k=1)[0]
+        return self._variants[choice]
+
+    def select_model_with_canary(self, model_name: str) -> ModelVariant:
+        if not self._variants:
+            raise ValueError(
+                f"No model variants registered in runner '{self.name}'"
+            )
+
+        if self._canary_controller is None:
+            return self.select_model()
+
+        route = self._canary_controller.route(model_name)
+        config = self._canary_controller._configs.get(model_name)
+        if config is None:
+            return self.select_model()
+
+        pool: dict[str, ModelVariant] = {}
+        for variant in self._variants.values():
+            if route == "stable" and variant.adapter_version != config.stable_version:
+                continue
+            if route == "canary" and variant.adapter_version != config.canary_version:
+                continue
+            pool[variant.model_name] = variant
+
+        if not pool:
+            return self.select_model()
+
+        names = list(pool.keys())
+        weights = [pool[n].weight for n in names]
+        total = sum(weights)
+        if total <= 0:
+            return pool[self._rng.choice(names)]
+
+        normalized = [w / total for w in weights]
+        choice = self._rng.choices(names, weights=normalized, k=1)[0]
+        return pool[choice]

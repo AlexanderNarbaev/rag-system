@@ -237,6 +237,10 @@ ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")
 # ============ Tool Calling / Function Calling ============
 TOOLS_ENABLED = os.getenv("TOOLS_ENABLED", "false").lower() == "true"
 LIVE_SOURCES_ENABLED = os.getenv("LIVE_SOURCES_ENABLED", "false").lower() == "true"
+TOOLS_PARALLEL_EXECUTION = os.getenv("TOOLS_PARALLEL_EXECUTION", "true").lower() == "true"
+TOOLS_MAX_CONCURRENCY = int(os.getenv("TOOLS_MAX_CONCURRENCY", "10"))
+TOOLS_DECLARATIVE_DIR = os.getenv("TOOLS_DECLARATIVE_DIR", "./tools/declarative")
+TOOLS_OPENAPI_SPECS = os.getenv("TOOLS_OPENAPI_SPECS", "")
 
 # ============ Live Source APIs ============
 CONFLUENCE_API_URL = os.getenv("CONFLUENCE_API_URL", "")
@@ -267,6 +271,46 @@ STREAM_BUFFER_SIZE = int(os.getenv("STREAM_BUFFER_SIZE", "1"))
 # ============ Model Warm-Up ============
 WARMUP_ENABLED = os.getenv("WARMUP_ENABLED", "true").lower() == "true"
 WARMUP_ON_STARTUP = os.getenv("WARMUP_ON_STARTUP", "true").lower() == "true"
+
+# ============ Model Evolution ============
+MODEL_EVOLUTION_ENABLED = os.getenv("MODEL_EVOLUTION_ENABLED", "false").lower() == "true"
+
+# MLflow
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+MLFLOW_EXPERIMENT_NAME = os.getenv("MLFLOW_EXPERIMENT_NAME", "rag-system")
+MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://rag-artifacts")
+
+# MinIO
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "rag-artifacts")
+MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
+
+# Training
+TRAINING_PROFILE = os.getenv("TRAINING_PROFILE", "dev")
+
+# Hot-Reload
+HOT_RELOAD_ENABLED = os.getenv("HOT_RELOAD_ENABLED", "false").lower() == "true"
+HOT_RELOAD_WATCH_INTERVAL = int(os.getenv("HOT_RELOAD_WATCH_INTERVAL", "5"))
+HOT_RELOAD_SIGNAL_ENABLED = os.getenv("HOT_RELOAD_SIGNAL_ENABLED", "true").lower() == "true"
+
+# Canary
+CANARY_ENABLED = os.getenv("CANARY_ENABLED", "false").lower() == "true"
+CANARY_PHASE_DURATION_5 = int(os.getenv("CANARY_PHASE_DURATION_5", "300"))
+CANARY_PHASE_DURATION_25 = int(os.getenv("CANARY_PHASE_DURATION_25", "600"))
+CANARY_PHASE_DURATION_50 = int(os.getenv("CANARY_PHASE_DURATION_50", "900"))
+CANARY_PHASE_DURATION_75 = int(os.getenv("CANARY_PHASE_DURATION_75", "1200"))
+CANARY_COOLDOWN_SECONDS = int(os.getenv("CANARY_COOLDOWN_SECONDS", "3600"))
+
+# Eval Gate Thresholds
+EVAL_GATE_LLM_BERTSCORE_MIN = float(os.getenv("EVAL_GATE_LLM_BERTSCORE_MIN", "0.70"))
+EVAL_GATE_LLM_HALLUCINATION_MAX = float(os.getenv("EVAL_GATE_LLM_HALLUCINATION_MAX", "0.05"))
+EVAL_GATE_LLM_ROUGE_L_MIN = float(os.getenv("EVAL_GATE_LLM_ROUGE_L_MIN", "0.35"))
+EVAL_GATE_SLM_F1_MIN = float(os.getenv("EVAL_GATE_SLM_F1_MIN", "0.85"))
+EVAL_GATE_SLM_ACCURACY_MIN = float(os.getenv("EVAL_GATE_SLM_ACCURACY_MIN", "0.90"))
+EVAL_GATE_RERANKER_MRR_MIN = float(os.getenv("EVAL_GATE_RERANKER_MRR_MIN", "0.75"))
+EVAL_GATE_RERANKER_NDCG_MIN = float(os.getenv("EVAL_GATE_RERANKER_NDCG_MIN", "0.70"))
 
 # ============ Graceful Shutdown ============
 GRACEFUL_SHUTDOWN_ENABLED = os.getenv("GRACEFUL_SHUTDOWN_ENABLED", "true").lower() == "true"

@@ -8,7 +8,7 @@ English for code and comments. The system supports full i18n — documentation i
 
 ## Current State
 - **Version:** v2.0 (June 2026) — Self-Correcting RAG
-- **Tests:** 1469 collected, 1469 passing (100% pass rate)
+- **Tests:** 2275 collected, ~2269 passing (99%+ pass rate)
 - **Maturity:** RAG Level 5 (Self-Correcting) — HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual retrieval benchmarks, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k, streaming ETL (Redis Streams), webhook-driven ingestion, model warm-up, SSE TTFT optimization, response compression (gzip/brotli), E2E test suite, chaos/resilience testing, K8s Helm chart, Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment, backup automation, DR runbook
 - **Production readiness:** 94% (75/80) across 8 dimensions — see `docs/en/guides/best-practices-checklist.md`
 - **Next milestone:** Beyond v2.0 — Federated RAG, Agentic Tools expansion, Model Evolution (see `docs/en/guides/roadmap.md`)
@@ -20,6 +20,8 @@ Three-layer system plus supporting services, with multi-provider LLM backend sup
 2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing (vLLM, llama.cpp, or any OpenAI-compatible endpoint)
 3. **HITL Layer** — Streamlit expert dashboard for feedback and quality control
 4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude Desktop)
+5. **Model Evolution** — LoRA/QLoRA fine-tuning pipeline for SLM, LLM, and Reranker; MLflow experiment tracking; MinIO artifact storage; EvalGate CI/CD quality gating; AdapterManager hot-reload; CanaryController gradual rollout
+6. **Agentic Tools Expansion** — Custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI auto-discovery; parallel tool execution with dependency resolution
 
 ## Key Architectural Principles
 
@@ -47,7 +49,7 @@ rag-system/
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized)
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (14 endpoints: chat, models, health, auth, widget, feedback, admin)
+│   │   ├── main.py                   # FastAPI entry point (25 endpoints: chat, models, health, auth, widget, feedback, admin, tools, model evolution)
 │   │   ├── orchestrator.py           # LangGraph agentic query pipeline (8-node state graph with tool calling)
 │   │   ├── provider_adapter.py       # Multi-provider LLM backend adapter (vLLM, llama.cpp, OpenAI-compatible)
 │   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
@@ -75,6 +77,19 @@ rag-system/
 │   │   ├── middleware.py             # Request ID, correlation ID, logging middleware
 │   │   ├── logging_config.py         # Structured logging (text/JSON), secret masking
 │   │   ├── config.py                 # Environment-based configuration (all settings)
+│   │   ├── model_evolution/            # Fine-tuning pipeline (13 modules)
+│   │   │   ├── trainer.py               # Base trainer classes + TrainingJob + registry
+│   │   │   ├── trainer_base.py          # ABC for all trainers
+│   │   │   ├── slm_trainer.py           # SLM LoRA fine-tuning
+│   │   │   ├── llm_trainer.py           # LLM QLoRA fine-tuning
+│   │   │   ├── reranker_trainer.py      # Reranker Full/LoRA fine-tuning
+│   │   │   ├── adapter_manager.py       # Hot-reload trained adapters
+│   │   │   ├── canary_controller.py     # Gradual rollout with traffic splitting
+│   │   │   ├── model_registry.py        # Model artifact registry (MLflow + MinIO)
+│   │   │   ├── eval_gate.py             # EvalGate CI/CD quality gating
+│   │   │   ├── env_profile.py           # Dev/Prod/CI training profiles
+│   │   │   ├── exceptions.py            # Model evolution error hierarchy
+│   │   │   └── __init__.py
 │   │   └── utils.py                  # Shared utilities: token counting, hashing, masking, safe division
 │   ├── .env                          # Configuration (edit before first run)
 │   ├── Dockerfile
@@ -90,9 +105,12 @@ rag-system/
 │   ├── init_collections.py           # Initialize Qdrant collections
 │   └── download_models_offline.py    # Pre-download models for air-gapped env
 ├── tests/                            # Test suite
-│   ├── proxy/                        # 282 proxy unit tests
-│   ├── etl/                          # 121 ETL unit tests
-│   ├── integration/                  # 56 integration tests
+│   ├── proxy/                        # 1417 proxy unit tests
+│   ├── etl/                          # 361 ETL unit tests
+│   ├── integration/                  # 59 integration tests
+│   ├── model_evolution/              # 358 model evolution tests
+│   ├── e2e/                          # 18 end-to-end tests
+│   ├── benchmark/                    # 4 load/benchmark tests
 │   ├── mcp_server/                   # 46 MCP server tests
 │   └── conftest.py                   # Shared fixtures
 ├── docs/                             # Documentation
@@ -155,10 +173,10 @@ rag-system/
 # ── Quick commands (preferred) ──
 make install        # Full setup (proxy + ETL)
 make install-dev    # Setup with dev dependencies
-make test           # Run all tests (1333+ passing)
-make test-proxy     # Proxy unit tests only (282)
-make test-etl       # ETL unit tests only (121)
-make test-integration  # Integration tests (56)
+make test           # Run all tests (2275+ passing)
+make test-proxy     # Proxy unit tests only (1417)
+make test-etl       # ETL unit tests only (361)
+make test-integration  # Integration tests (59)
 make lint           # Lint with ruff
 make format         # Format with ruff
 make format-check   # Check formatting without changes
@@ -207,6 +225,16 @@ ptw tests/ -- -v
 | `/v1/auth/me` | GET | Current user context |
 | `/v1/widget` | GET | Embeddable RAG chat widget (HTML) |
 | `/v1/widget.js` | GET | Standalone widget JavaScript |
+| `/v1/tools` | GET | List available tools with optional category/tag filters |
+| `/v1/tools/{name}` | GET | Get a single tool's details (parameters, visibility, provider) |
+| `/v1/admin/models/train` | POST | Trigger a model training job (SLM/LLM/Reranker) |
+| `/v1/admin/models/status/{job_id}` | GET | Poll training job status and metrics |
+| `/v1/admin/models` | GET | List registered models with versions and metrics |
+| `/v1/admin/models/promote` | POST | Promote a model version to production |
+| `/v1/admin/models/rollback` | POST | Rollback model to a previous version |
+| `/v1/admin/models/evaluate` | POST | Evaluate model quality against baseline |
+| `/v1/admin/models/canary/split` | POST | Configure canary traffic split ratio |
+| `/v1/admin/models/canary/status` | GET | Get current canary deployment status |
 | `/metrics` | GET | Prometheus metrics (counters, histograms, gauges) |
 
 RAG-specific parameters on `/v1/chat/completions`:
@@ -245,7 +273,7 @@ See `proxy/app/config.py` for all available settings and defaults.
 
 | Document | Purpose |
 |----------|---------|
-| `docs/en/adr/ADR-001` through `ADR-007` | Architecture Decision Records (English) |
+| `docs/en/adr/ADR-001` through `ADR-010` | Architecture Decision Records (English) |
 | `docs/en/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
 | `docs/en/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
 | `docs/en/guides/roadmap.md` | Version history and development roadmap (v0.1 → v2.0) |

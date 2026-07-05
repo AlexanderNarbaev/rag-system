@@ -222,8 +222,11 @@ def collect_training_pairs() -> list[tuple[str, str, float]]:
 def fine_tune_reranker(pairs: list[tuple[str, str, float]], epochs: int = 3) -> Any:
     """Fine-tune the cross-encoder reranker on pairs from HITL feedback.
 
-    Uses SentenceTransformer CrossEncoder.fit() for training.
-    Saves the fine-tuned model to FT_MODEL_DIR.
+    Two modes:
+    - GPU available: delegates to RerankerTrainer for LoRA fine-tuning (~5 MB adapter)
+    - CPU only: full fine-tune via CrossEncoder.fit() (existing behavior)
+
+    Saves the fine-tuned model/adapter to FT_MODEL_DIR.
 
     :param pairs: list of (query, chunk_text, relevance_score) tuples
     :param epochs: number of training epochs
@@ -237,6 +240,67 @@ def fine_tune_reranker(pairs: list[tuple[str, str, float]], epochs: int = 3) -> 
         logger.warning("No training pairs provided for fine-tuning")
         return None
 
+    gpu_available = TORCH_AVAILABLE and torch.cuda.is_available()
+    use_lora = gpu_available
+
+    if use_lora and gpu_available:
+        return _fine_tune_with_lora(pairs, epochs)
+
+    return _fine_tune_full(pairs, epochs)
+
+
+def _fine_tune_with_lora(pairs: list[tuple[str, str, float]], epochs: int = 3) -> Any:
+    """LoRA fine-tune the reranker using RerankerTrainer (GPU mode)."""
+    try:
+        from app.model_evolution.reranker_trainer import RerankerTrainer
+        from app.model_evolution.trainer import TrainerType, TrainingConfig
+        from app.model_evolution.env_profile import EnvProfile
+    except ImportError as e:
+        logger.error("Model evolution module not available: %s", e)
+        return None
+
+    output_dir = Path(FT_MODEL_DIR)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    pairs_file = output_dir / "reranker_train.json"
+    pairs_file.write_text(json.dumps(pairs, ensure_ascii=False))
+
+    eval_count = max(1, int(len(pairs) * 0.2))
+    eval_pairs = pairs[:eval_count]
+    (output_dir / "reranker_eval.json").write_text(json.dumps(eval_pairs, ensure_ascii=False))
+
+    config = TrainingConfig.from_profile(
+        TrainerType.RERANKER,
+        EnvProfile.PROD if torch.cuda.is_available() else EnvProfile.DEV,
+        base_model=RERANKER_MODEL or "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        output_dir=str(output_dir),
+        epochs=epochs,
+        use_lora=True,
+        lora_r=RERANKER_LORA_R,
+        lora_alpha=RERANKER_LORA_ALPHA,
+    )
+
+    try:
+        trainer = RerankerTrainer()
+        job = trainer.train(config)
+        if job.status == "completed":
+            logger.info(
+                "LoRA fine-tuned reranker saved to %s (mrr=%.4f, ndcg@10=%.4f)",
+                job.artifact_uri,
+                job.metrics.get("mrr", 0.0),
+                job.metrics.get("ndcg_at_10", 0.0),
+            )
+            return job.artifact_uri
+        else:
+            logger.error("Reranker LoRA training failed: %s", job.error_message)
+            return None
+    except Exception as e:
+        logger.error("Reranker LoRA training failed: %s", e)
+        return None
+
+
+def _fine_tune_full(pairs: list[tuple[str, str, float]], epochs: int = 3) -> Any:
+    """Full fine-tune the reranker via CrossEncoder.fit() (CPU mode, existing behavior)."""
     if not CROSS_ENCODER_AVAILABLE:
         logger.error("sentence-transformers not available for fine-tuning")
         return None
@@ -250,7 +314,7 @@ def fine_tune_reranker(pairs: list[tuple[str, str, float]], epochs: int = 3) -> 
         train_inputs = [(q, c) for q, c, _ in pairs]
         train_scores = [s for _, _, s in pairs]
 
-        logger.info("Fine-tuning reranker on %d pairs for %d epochs", len(pairs), epochs)
+        logger.info("Fine-tuning reranker on %d pairs for %d epochs (full FT, CPU)", len(pairs), epochs)
         reranker.fit(
             train_inputs=train_inputs,
             train_labels=train_scores,
@@ -267,6 +331,10 @@ def fine_tune_reranker(pairs: list[tuple[str, str, float]], epochs: int = 3) -> 
     except Exception as e:
         logger.error("Reranker fine-tuning failed: %s", e)
         return None
+
+
+RERANKER_LORA_R = 4
+RERANKER_LORA_ALPHA = 8
 
 
 # Пример использования (для тестирования)

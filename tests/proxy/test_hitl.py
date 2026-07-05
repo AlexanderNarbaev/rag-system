@@ -13,6 +13,7 @@ from proxy.app.hitl import (
     log_interaction,
     log_feedback_sync,
     export_training_dataset,
+    export_intent_dataset,
 )
 
 
@@ -253,3 +254,157 @@ class TestExportTrainingDataset:
         prompts = [p["prompt"] for p in pairs]
         assert "How to X?" in prompts
         assert "What is Y?" in prompts
+
+
+class TestExportIntentDataset:
+    """Tests for export_intent_dataset function."""
+
+    def test_exports_query_intent_pairs(self, tmp_path):
+        logger = InteractionLogger(log_dir=tmp_path)
+        logger.log_interaction(
+            request_id="r1",
+            user_query="How to set up CI/CD?",
+            context="ctx",
+            response="Use .gitlab-ci.yml",
+        )
+        logger.log_interaction(
+            request_id="r2",
+            user_query="What is Docker?",
+            context="ctx",
+            response="A container platform",
+        )
+        logger.log_interaction(
+            request_id="r3",
+            user_query="Compare Kubernetes vs Nomad",
+            context="ctx",
+            response="Both are orchestrators",
+        )
+
+        output = tmp_path / "intent_dataset.jsonl"
+
+        def mock_classify(query):
+            from proxy.app.slm_router import IntentType
+            if "CI/CD" in query:
+                return IntentType.PROCEDURAL, 0.8
+            elif "Docker" in query:
+                return IntentType.FACTUAL, 0.9
+            elif "Compare" in query:
+                return IntentType.COMPARISON, 0.85
+            return IntentType.UNKNOWN, 0.5
+
+        with (
+            patch("proxy.app.hitl.get_logger", return_value=logger),
+            patch("proxy.app.slm_router.classify_intent", side_effect=mock_classify),
+        ):
+            export_intent_dataset(output)
+
+        with open(output) as f:
+            pairs = [json.loads(line) for line in f]
+        assert len(pairs) == 3
+        assert pairs[0] == {"query": "How to set up CI/CD?", "intent": "procedural"}
+        assert pairs[1] == {"query": "What is Docker?", "intent": "factual"}
+        assert pairs[2] == {"query": "Compare Kubernetes vs Nomad", "intent": "comparison"}
+
+    def test_empty_dataset(self, tmp_path):
+        logger = InteractionLogger(log_dir=tmp_path)
+        output = tmp_path / "intent_dataset.jsonl"
+
+        with (
+            patch("proxy.app.hitl.get_logger", return_value=logger),
+        ):
+            export_intent_dataset(output)
+
+        with open(output) as f:
+            pairs = [json.loads(line) for line in f]
+        assert len(pairs) == 0
+
+    def test_writes_jsonl_format(self, tmp_path):
+        logger = InteractionLogger(log_dir=tmp_path)
+        logger.log_interaction(
+            request_id="r1",
+            user_query="Hello",
+            context="ctx",
+            response="Hi there!",
+        )
+
+        output = tmp_path / "intent_dataset.jsonl"
+
+        def mock_classify(query):
+            from proxy.app.slm_router import IntentType
+            return IntentType.GREETING, 0.95
+
+        with (
+            patch("proxy.app.hitl.get_logger", return_value=logger),
+            patch("proxy.app.slm_router.classify_intent", side_effect=mock_classify),
+        ):
+            export_intent_dataset(output)
+
+        with open(output) as f:
+            lines = f.readlines()
+        assert len(lines) == 1
+        record = json.loads(lines[0])
+        assert "query" in record
+        assert "intent" in record
+        assert record["intent"] in (
+            "greeting", "simple_fact", "factual", "procedural",
+            "comparison", "summarize", "complex", "unknown",
+        )
+
+    def test_skips_interactions_with_empty_query(self, tmp_path):
+        logger = InteractionLogger(log_dir=tmp_path)
+        logger.log_interaction(
+            request_id="r1",
+            user_query="",
+            context="ctx",
+            response="resp",
+        )
+        logger.log_interaction(
+            request_id="r2",
+            user_query="Valid query",
+            context="ctx",
+            response="resp",
+        )
+
+        output = tmp_path / "intent_dataset.jsonl"
+
+        def mock_classify(query):
+            from proxy.app.slm_router import IntentType
+            return IntentType.FACTUAL, 0.7
+
+        with (
+            patch("proxy.app.hitl.get_logger", return_value=logger),
+            patch("proxy.app.slm_router.classify_intent", side_effect=mock_classify),
+        ):
+            export_intent_dataset(output)
+
+        with open(output) as f:
+            pairs = [json.loads(line) for line in f]
+        assert len(pairs) == 1
+        assert pairs[0]["query"] == "Valid query"
+
+    def test_uses_multilingual_classification_when_available(self, tmp_path):
+        logger = InteractionLogger(log_dir=tmp_path)
+        logger.log_interaction(
+            request_id="r1",
+            user_query="Bonjour",
+            context="ctx",
+            response="Bonjour!",
+        )
+
+        output = tmp_path / "intent_dataset.jsonl"
+
+        def mock_multilingual(query):
+            from proxy.app.slm_router import IntentType
+            return IntentType.GREETING, 0.85
+
+        with (
+            patch("proxy.app.hitl.get_logger", return_value=logger),
+            patch("proxy.app.slm_router.classify_intent_multilingual", side_effect=mock_multilingual),
+        ):
+            export_intent_dataset(output, use_multilingual=True)
+
+        with open(output) as f:
+            pairs = [json.loads(line) for line in f]
+        assert len(pairs) == 1
+        assert pairs[0]["query"] == "Bonjour"
+        assert pairs[0]["intent"] == "greeting"
