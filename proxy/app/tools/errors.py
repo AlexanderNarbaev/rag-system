@@ -1,16 +1,20 @@
 # proxy/app/tools/errors.py
-"""Tool error taxonomy — precise classification for agentic tool execution.
+"""Tool error taxonomy and classification.
 
-Each error carries tool_name, tool_call_id, and retryable so the
-orchestrator can decide whether to retry, report, or escalate.
+Provides typed tool-specific errors extending RAGError for better
+error handling, retry decisions, and structured logging.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from proxy.app.exceptions import RAGError
 
 
 class ToolError(RAGError):
+    """Base error for all tool-related failures."""
+
     def __init__(
         self,
         tool_name: str,
@@ -18,17 +22,15 @@ class ToolError(RAGError):
         retryable: bool = False,
         message: str = "",
     ):
-        super().__init__(
-            message=message or f"Error in tool '{tool_name}'",
-            component="tools",
-            recoverable=retryable,
-        )
+        super().__init__(message or f"Error in tool '{tool_name}'", component="tools")
         self.tool_name = tool_name
         self.tool_call_id = tool_call_id
         self.retryable = retryable
 
 
 class ToolNotFoundError(ToolError):
+    """Requested tool is not registered."""
+
     def __init__(
         self,
         tool_name: str,
@@ -44,6 +46,8 @@ class ToolNotFoundError(ToolError):
 
 
 class ToolExecutionError(ToolError):
+    """Tool execution raised an unhandled exception."""
+
     def __init__(
         self,
         tool_name: str,
@@ -55,18 +59,19 @@ class ToolExecutionError(ToolError):
             tool_name=tool_name,
             tool_call_id=tool_call_id,
             retryable=True,
-            message=message or f"Tool '{tool_name}' execution failed"
-            + (f": {original_error}" if original_error else ""),
+            message=message or f"Tool '{tool_name}' execution failed",
         )
         self.original_error = original_error
 
 
 class ToolTimeoutError(ToolError):
+    """Tool execution timed out."""
+
     def __init__(
         self,
         tool_name: str,
         tool_call_id: str = "",
-        timeout_seconds: float = 0.0,
+        timeout_seconds: float = 30.0,
         message: str = "",
     ):
         super().__init__(
@@ -79,6 +84,8 @@ class ToolTimeoutError(ToolError):
 
 
 class ToolPermissionError(ToolError):
+    """Caller lacks required visibility/role for the tool."""
+
     def __init__(
         self,
         tool_name: str,
@@ -91,15 +98,15 @@ class ToolPermissionError(ToolError):
             tool_name=tool_name,
             tool_call_id=tool_call_id,
             retryable=False,
-            message=message
-            or f"Insufficient permissions for tool '{tool_name}'"
-            f" (required: {required_visibility}, current: {user_role})",
+            message=message or f"Permission denied for tool '{tool_name}' (requires {required_visibility}, user has {user_role})",
         )
         self.required_visibility = required_visibility
         self.user_role = user_role
 
 
 class ToolValidationError(ToolError):
+    """Tool parameters failed validation."""
+
     def __init__(
         self,
         tool_name: str,
@@ -117,25 +124,27 @@ class ToolValidationError(ToolError):
 
 
 class ToolRateLimitError(ToolError):
+    """Tool rate limit exceeded."""
+
     def __init__(
         self,
         tool_name: str,
         tool_call_id: str = "",
-        retry_after_seconds: float = 0.0,
+        retry_after_seconds: float = 60.0,
         message: str = "",
     ):
         super().__init__(
             tool_name=tool_name,
             tool_call_id=tool_call_id,
             retryable=True,
-            message=message
-            or f"Rate limit exceeded for tool '{tool_name}'"
-            f" (retry after {retry_after_seconds}s)",
+            message=message or f"Rate limit exceeded for tool '{tool_name}', retry after {retry_after_seconds}s",
         )
         self.retry_after_seconds = retry_after_seconds
 
 
 class ToolDependencyError(ToolError):
+    """A tool dependency is not satisfied."""
+
     def __init__(
         self,
         tool_name: str,
@@ -147,8 +156,7 @@ class ToolDependencyError(ToolError):
             tool_name=tool_name,
             tool_call_id=tool_call_id,
             retryable=False,
-            message=message
-            or f"Dependency '{dependency_name}' failed for tool '{tool_name}'",
+            message=message or f"Tool '{tool_name}' depends on unavailable tool '{dependency_name}'",
         )
         self.dependency_name = dependency_name
 
@@ -158,27 +166,22 @@ def classify_error(
     error: Exception,
     tool_call_id: str = "",
 ) -> ToolError:
-    if isinstance(error, TimeoutError):
-        return ToolTimeoutError(
-            tool_name=tool_name,
-            tool_call_id=tool_call_id,
-            message=str(error),
-        )
-    if isinstance(error, (ValueError, TypeError, KeyError, AttributeError)):
-        return ToolValidationError(
-            tool_name=tool_name,
-            tool_call_id=tool_call_id,
-            validation_errors=[str(error)],
-        )
-    if isinstance(error, PermissionError):
-        return ToolPermissionError(
-            tool_name=tool_name,
-            tool_call_id=tool_call_id,
-            message=str(error),
-        )
+    """Map a Python exception to the most specific ToolError subtype."""
+    _classify_map: dict[type[Exception], type[ToolError]] = {
+        TimeoutError: ToolTimeoutError,
+        ValueError: ToolValidationError,
+        TypeError: ToolValidationError,
+        KeyError: ToolValidationError,
+        AttributeError: ToolValidationError,
+        PermissionError: ToolPermissionError,
+    }
+    for exc_type, tool_err_type in _classify_map.items():
+        if isinstance(error, exc_type):
+            if tool_err_type is ToolTimeoutError:
+                return ToolTimeoutError(tool_name=tool_name, tool_call_id=tool_call_id)
+            return tool_err_type(tool_name=tool_name, tool_call_id=tool_call_id)
     return ToolExecutionError(
         tool_name=tool_name,
         tool_call_id=tool_call_id,
         original_error=error,
-        message=str(error),
     )

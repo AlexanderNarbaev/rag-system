@@ -1,27 +1,35 @@
-# proxy/app/tools/__init__.py
-"""Tools package — SDK, declarative, OpenAPI, orchestration.
+# proxy/app/tools.py
+"""DEPRECATED: This module is a deprecation shim.
 
-Canonical import point. Re-exports all public symbols from definition.py,
-errors.py, and _legacy.py for backward compatibility.
+Import from proxy.app.tools package instead:
+    from proxy.app.tools import ToolRegistry, execute_tool, ...
 
-Backward compat: ``from proxy.app.tools import ToolDefinition`` returns the
-legacy ToolDefinition (with parameters_schema). For the new unified model,
-use ``from proxy.app.tools.definition import ToolDefinition``.
+For new-style tool definitions:
+    from proxy.app.tools.definition import ToolDefinition, ToolParam, ...
+
+For tool errors:
+    from proxy.app.tools.errors import ToolError, ToolNotFoundError, ...
 """
 
-from app.config import TOOLS_ENABLED
+import warnings
 
-from .definition import (
+warnings.warn(
+    "proxy.app.tools module is deprecated. Import from proxy.app.tools package instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from proxy.app.tools.definition import (
     RetryPolicy,
     ToolCall,
-    ToolDefinition as NewToolDefinition,
+    ToolDefinition as _NewToolDefinition,
     ToolErrorBase,
     ToolParam,
-    ToolResult as NewToolResult,
+    ToolResult as _NewToolResult,
     ToolVisibility,
     _UNSET,
 )
-from .errors import (
+from proxy.app.tools.errors import (
     ToolDependencyError,
     ToolError,
     ToolExecutionError,
@@ -32,7 +40,7 @@ from .errors import (
     ToolValidationError,
     classify_error,
 )
-from ._legacy import (
+from proxy.app.tools._legacy import (
     ToolDefinition,
     ToolRegistry,
     ToolResult,
@@ -44,19 +52,16 @@ from ._legacy import (
     handle_function_call,
 )
 
-_global_registry = None
-
 
 def format_tools_for_llm(tools: list) -> list[dict]:
     """Convert tool definitions to OpenAI function calling format.
 
-    Handles both old-style ToolDefinition (from _legacy, with
-    parameters_schema) and new-style ToolDefinition (from definition,
-    with to_openai_format()).
+    Handles both old-style (parameters_schema) and new-style
+    (to_openai_format) ToolDefinition.
     """
     formatted = []
     for t in tools:
-        if isinstance(t, NewToolDefinition):
+        if isinstance(t, _NewToolDefinition):
             formatted.append(t.to_openai_format())
         else:
             formatted.append({
