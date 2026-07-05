@@ -16,7 +16,6 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -31,6 +30,7 @@ from app.config import (
     REQUEST_TIMEOUT,
     RETRY_DELAY,
 )
+from proxy.app.tools.definition import ToolCall, ToolDefinition, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -62,34 +62,6 @@ class ProviderType(str, Enum):
     ANTHROPIC = "anthropic"
     OLLAMA = "ollama"
     GENERIC = "generic"
-
-
-@dataclass
-class ToolDefinition:
-    """Tool/function definition compatible with OpenAI function calling format."""
-
-    name: str
-    description: str
-    parameters: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ToolCall:
-    """A tool call requested by the LLM."""
-
-    id: str
-    name: str
-    arguments: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ToolResult:
-    """Result of a tool execution."""
-
-    tool_call_id: str
-    name: str
-    content: str
-    error: str | None = None
 
 
 class ProviderAdapter:
@@ -145,17 +117,7 @@ class OpenAIAdapter(ProviderAdapter):
             "stream": stream,
         }
         if tools:
-            payload["tools"] = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters,
-                    },
-                }
-                for t in tools
-            ]
+            payload["tools"] = [t.to_openai_format() for t in tools]
             payload["tool_choice"] = "auto"
         return payload
 
@@ -241,14 +203,7 @@ class AnthropicAdapter(ProviderAdapter):
         if system:
             payload["system"] = system
         if tools:
-            payload["tools"] = [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "input_schema": t.parameters,
-                }
-                for t in tools
-            ]
+            payload["tools"] = [t.to_anthropic_format() for t in tools]
         if stream:
             payload["stream"] = True
         return payload
@@ -723,3 +678,8 @@ def non_stream_completion_sync(
     return router.non_stream_completion_sync(
         messages, temperature, max_tokens, provider_type=provider_type,
     )
+
+
+# Backward-compat alias for code that still imports from provider_adapter
+class _DeprecatedToolDef(ToolDefinition):
+    pass
