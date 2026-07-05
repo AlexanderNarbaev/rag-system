@@ -226,6 +226,38 @@ class TestChatCompletionsNonStreaming:
         assert "id" in data
         assert "created" in data
 
+    def test_rag_skip_generation_returns_chunks_only(self, client, mock_rag_pipeline):
+        mock_rag_pipeline["non_stream_completion"].return_value = "Should not be called"
+        chunk_a = {"text": "Chunk A", "source_type": "confluence", "title": "Doc", "doc_title": "Doc", "version": "1"}
+        chunk_b = {"text": "Chunk B", "source_type": "wiki", "title": "Page", "doc_title": "Page", "version": "2"}
+        mock_rag_pipeline["hybrid_search"].return_value = [
+            MagicMock(payload=chunk_a, score=0.95),
+            MagicMock(payload=chunk_b, score=0.85),
+        ]
+        mock_rag_pipeline["rerank_chunks"].return_value = [0, 1]
+        mock_rag_pipeline["deduplicate_chunks"].return_value = [
+            (chunk_a, 0.95),
+            (chunk_b, 0.85),
+        ]
+        mock_rag_pipeline["build_context"].return_value = "Built context"
+
+        response = client.post("/v1/chat/completions", json={
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "test query"}],
+            "rag_skip_generation": True,
+            "rag_return_chunks": True,
+            "rag_top_k": 30,
+            "stream": False,
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert "rag_sources" in data
+        assert len(data["rag_sources"]) == 2
+        assert data["choices"][0]["message"]["content"] == ""
+        assert data["choices"][0]["message"]["role"] == "assistant"
+        assert data["choices"][0]["finish_reason"] == "stop"
+        mock_rag_pipeline["non_stream_completion"].assert_not_called()
+
 
 class TestChatCompletionsStreaming:
     """Tests for /v1/chat/completions in streaming mode."""

@@ -237,6 +237,9 @@ class ChatCompletionRequest(BaseModel):
     # Нестандартные параметры для RAG
     rag_version: str | None = None  # конкретная версия документа
     rag_force_refresh: bool | None = False  # игнорировать кэш
+    rag_skip_generation: bool | None = False  # federation: return chunks only, skip LLM call
+    rag_return_chunks: bool | None = False  # federation: include full chunk texts in response
+    rag_top_k: int | None = None  # federation: override retrieval top_k
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -387,6 +390,7 @@ async def process_rag_query(
     stream: bool = False,
     other_messages: list[dict] = None,
     user_context: UserContext | None = None,
+    top_k_override: int | None = None,
 ):
     """
     Основной RAG-пайплайн:
@@ -413,7 +417,7 @@ async def process_rag_query(
 
     # 2. Гибридный поиск
     try:
-        search_results = hybrid_search(query=user_query, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
+        search_results = hybrid_search(query=user_query, version=version, top_k=top_k_override or MAX_CHUNKS_RETRIEVAL)
     except Exception as e:
         logger.warning(f"Hybrid search failed (degraded mode): {e}")
         search_results = None
@@ -860,6 +864,46 @@ async def chat_completions(
     # Track request lifecycle
     request_tracker.start(request_id, metadata={"model": request.model, "client_ip": client_ip})
 
+    # Federation: skip LLM generation, return chunks only
+    if request.rag_skip_generation:
+        rag_context, _, _, sources = await process_rag_query(
+            user_query=user_query,
+            version=version,
+            force_refresh=request.rag_force_refresh,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            stream=True,  # retrieval only, no LLM call
+            other_messages=other_messages,
+            user_context=user,
+            top_k_override=request.rag_top_k,
+        )
+        skip_response = ChatCompletionResponse(
+            id=request_id,
+            created=int(time.time()),
+            model=request.model,
+            choices=[
+                ChatCompletionResponseChoice(
+                    index=0, message=ChatMessage(role="assistant", content=""), finish_reason="stop"
+                )
+            ],
+            rag_sources=sources,
+        )
+        duration_ms = (time.time() - start_time) * 1000
+        request_tracker.complete(request_id, status="success", tokens=0)
+        if audit_logger:
+            audit_logger.log_query(
+                user_id=client_ip,
+                query=user_query,
+                response_preview="[skip_generation]",
+                chunks=len(sources),
+                duration_ms=duration_ms,
+                tokens=0,
+                client_ip=client_ip,
+                result_status="success",
+                metadata={"version": version, "model": request.model, "skip_generation": True},
+            )
+        return skip_response
+
     # Используем оркестратор LangGraph, если включён
     if USE_LANGGRAPH and orchestrator:
         # Агентный пайплайн
@@ -967,6 +1011,7 @@ async def chat_completions(
                     stream=True,
                     other_messages=other_messages,
                     user_context=user,
+                    top_k_override=request.rag_top_k,
                 )
                 # Передаём сообщения в LLM с потоковой генерацией
                 async for chunk in stream_completion(messages_for_llm, request.temperature, request.max_tokens):
@@ -1018,6 +1063,7 @@ async def chat_completions(
             stream=False,
             other_messages=other_messages,
             user_context=user,
+            top_k_override=request.rag_top_k,
         )
         feedback_id = generate_feedback_id()
         confidence = compute_confidence(query=user_query, context=rag_context, answer=response_text)
