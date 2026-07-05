@@ -74,6 +74,16 @@ docs: ## Show documentation locations
 # ── CI pipeline (all-in-one) ───────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests
 
+# ── Federation ──────────────────────────────────────────────────────────────
+federation-build: ## Build federation Docker image
+	docker build -t rag-federation -f federation/Dockerfile .
+
+federation-run: ## Run federation container
+	docker run -p 8001:8001 --env-file federation/.env rag-federation
+
+federation-test: ## Run federation unit tests
+	python -m pytest federation/tests/ -v
+
 # ── Help ───────────────────────────────────────────────────────────────────
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
