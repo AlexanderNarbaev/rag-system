@@ -15,8 +15,6 @@ from dataclasses import dataclass, field
 from collections.abc import Callable
 from typing import Any
 
-from app.config import TOOLS_ENABLED
-
 logger = logging.getLogger(__name__)
 
 
@@ -196,16 +194,18 @@ def _get_document_metadata(doc_id: str) -> str:
 
 # ── Global singleton registry ──
 
-_global_registry: ToolRegistry | None = None
-
 
 def get_tool_registry() -> ToolRegistry:
     """Get or create the global tool registry with built-in tools."""
-    global _global_registry
-    if _global_registry is None:
-        _global_registry = ToolRegistry()
+    import sys
+
+    from . import TOOLS_ENABLED
+
+    _tools_pkg = sys.modules[__package__]
+    if _tools_pkg._global_registry is None:
+        _tools_pkg._global_registry = ToolRegistry()
         if TOOLS_ENABLED:
-            _global_registry.register(
+            _tools_pkg._global_registry.register(
                 ToolDefinition(
                     name="search_documents",
                     description="Search indexed documents using hybrid (dense+sparse) search",
@@ -222,7 +222,7 @@ def get_tool_registry() -> ToolRegistry:
                     category="search",
                 )
             )
-            _global_registry.register(
+            _tools_pkg._global_registry.register(
                 ToolDefinition(
                     name="search_by_version",
                     description="Search documents by a specific version string",
@@ -239,7 +239,7 @@ def get_tool_registry() -> ToolRegistry:
                     category="search",
                 )
             )
-            _global_registry.register(
+            _tools_pkg._global_registry.register(
                 ToolDefinition(
                     name="get_document_metadata",
                     description="Get metadata for a specific document by its ID",
@@ -254,4 +254,4 @@ def get_tool_registry() -> ToolRegistry:
                     category="metadata",
                 )
             )
-    return _global_registry
+    return _tools_pkg._global_registry
