@@ -43,6 +43,7 @@ from app.auth import (
 from app.cache import CacheManager
 from app.confidence import compute_confidence
 from app.rbac import Role, require_role
+from app.tools.registry import get_enhanced_registry
 
 # Импорт внутренних модулей
 from app.config import (
@@ -65,6 +66,9 @@ from app.config import (
     SHUTDOWN_TIMEOUT,
     SSE_CHUNK_SIZE,
     STREAM_BUFFER_SIZE,
+    TOOLS_DECLARATIVE_DIR,
+    TOOLS_ENABLED,
+    TOOLS_OPENAPI_SPECS,
     USE_LANGGRAPH,
     USE_REDIS,
     WARMUP_ENABLED,
@@ -139,6 +143,34 @@ async def lifespan(app: FastAPI):
     if USE_LANGGRAPH:
         orchestrator = get_orchestrator()
         logger.info("LangGraph orchestrator initialized")
+    # Tool discovery from all providers (S3: startup trigger)
+    if TOOLS_ENABLED:
+        registry = get_enhanced_registry()
+        # SDK tools are auto-registered by @tool decorator imports
+
+        # Declarative provider
+        if os.path.isdir(TOOLS_DECLARATIVE_DIR):
+            try:
+                from app.tools.declarative import DeclarativeProvider
+                provider = DeclarativeProvider()
+                discovered = await provider.discover()
+                for tool in discovered:
+                    registry.register(tool)
+                logger.info("Startup: loaded %d tools from declarative provider", len(discovered))
+            except Exception as e:
+                logger.warning("Startup: declarative tool discovery failed: %s", e)
+
+        # OpenAPI provider
+        if TOOLS_OPENAPI_SPECS:
+            try:
+                from app.tools.openapi_discovery import OpenAPIProvider
+                provider = OpenAPIProvider()
+                discovered = await provider.discover()
+                for tool in discovered:
+                    registry.register(tool)
+                logger.info("Startup: loaded %d tools from OpenAPI provider", len(discovered))
+            except Exception as e:
+                logger.warning("Startup: OpenAPI tool discovery failed: %s", e)
     # Model warm-up on startup (graceful degradation)
     if WARMUP_ENABLED and WARMUP_ON_STARTUP:
         try:
@@ -347,6 +379,23 @@ class FeedbackRequest(BaseModel):
 class FeedbackResponse(BaseModel):
     status: str
     message: str
+
+
+# ===========================================================================
+# Tool Conversion Helpers
+# ===========================================================================
+
+
+def _highest_role_from_user(user: UserContext) -> str | None:
+    """Map a UserContext to the highest visibility role string for tool filtering.
+
+    Returns 'admin', 'expert', 'user', or None (public only).
+    """
+    roles_lower = {r.lower() for r in user.roles}
+    for role in ("admin", "expert", "user"):
+        if role in roles_lower:
+            return role
+    return None
 
 
 # Вспомогательные функции
@@ -1118,6 +1167,76 @@ async def chat_completions(
                 metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
             )
         return completion
+
+
+# ===========================================================================
+# Tool discovery endpoints
+# ===========================================================================
+
+
+@app.get("/v1/tools")
+async def list_tools(
+    category: str | None = None,
+    tag: str | None = None,
+    provider: str | None = None,
+    user: UserContext = Depends(get_optional_auth_context),
+):
+    """List available tools with optional filters. RBAC: visibility-filtered by user role."""
+    registry = get_enhanced_registry()
+    user_role = _highest_role_from_user(user)
+    tags = [tag] if tag else None
+    tools = registry.list_tools(
+        category=category, tags=tags, provider=provider,
+        visibility_filter=user_role or "read_only",
+    )
+    return {
+        "count": len(tools),
+        "tools": [
+            {
+                "name": t.name,
+                "description": t.description,
+                "category": t.category,
+                "tags": t.tags,
+                "version": t.version,
+                "parameters": t.to_json_schema(),
+                "provider": t.provider,
+            }
+            for t in tools
+        ],
+    }
+
+
+@app.get("/v1/tools/{name}")
+async def get_tool(
+    name: str,
+    user: UserContext = Depends(get_optional_auth_context),
+):
+    """Get a single tool's details by name. Never exposes handler code."""
+    registry = get_enhanced_registry()
+    tool = registry.get_tool(name)
+    if tool is None:
+        raise HTTPException(status_code=404, detail=f"Tool '{name}' not found")
+    user_role = _highest_role_from_user(user)
+    visible = registry.list_tools(visibility_filter=user_role or "read_only")
+    if tool not in visible:
+        raise HTTPException(status_code=403, detail="Tool not visible to your role")
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "category": tool.category,
+        "tags": tool.tags,
+        "version": tool.version,
+        "visibility": tool.visibility.value,
+        "timeout_seconds": tool.timeout_seconds,
+        "parameters": tool.to_json_schema(),
+        "provider": tool.provider,
+        "depends_on": tool.depends_on,
+    }
+
+
+# ===========================================================================
+# Feedback endpoint
+# ===========================================================================
 
 
 @app.post("/v1/feedback", response_model=FeedbackResponse)

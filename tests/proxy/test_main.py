@@ -20,6 +20,7 @@ _modules_to_mock = [
     "redis",
     "redis.asyncio",
     "tiktoken",
+    "bcrypt",
 ]
 
 for mod in _modules_to_mock:
@@ -399,3 +400,395 @@ class TestLangGraphOrchestratorIntegration:
                 "stream": True
             })
             assert response.status_code == 200
+
+
+# ===========================================================================
+# Tool discovery endpoints (Task 13)
+# ===========================================================================
+
+
+class TestToolsEndpoint:
+    """Tests for GET /v1/tools and GET /v1/tools/{name}."""
+
+    @pytest.fixture
+    def sample_tools(self):
+        """Create sample ToolDefinition objects for testing."""
+        from proxy.app.tools.definition import (
+            ToolDefinition,
+            ToolParam,
+            ToolVisibility,
+        )
+
+        search_tool = ToolDefinition(
+            name="search_documents",
+            description="Search indexed documents using hybrid search",
+            parameters=[
+                ToolParam(name="query", type=str, description="Search query text"),
+                ToolParam(name="top_k", type=int, description="Number of results", required=False),
+            ],
+            category="search",
+            tags=["hybrid", "live"],
+            version="1.0.0",
+            visibility=ToolVisibility.PUBLIC,
+            timeout_seconds=30.0,
+            provider="sdk",
+            depends_on=[],
+        )
+        admin_tool = ToolDefinition(
+            name="admin_reindex",
+            description="Trigger full reindex of knowledge base",
+            parameters=[
+                ToolParam(name="collection", type=str, description="Collection name"),
+            ],
+            category="admin",
+            tags=["maintenance"],
+            version="1.0.0",
+            visibility=ToolVisibility.ADMIN,
+            timeout_seconds=300.0,
+            provider="sdk",
+            depends_on=["search_documents"],
+        )
+        expert_tool = ToolDefinition(
+            name="review_feedback",
+            description="Review and approve expert feedback",
+            parameters=[
+                ToolParam(name="feedback_id", type=str, description="Feedback ID"),
+            ],
+            category="review",
+            tags=["expert", "live"],
+            version="1.0.0",
+            visibility=ToolVisibility.EXPERT,
+            timeout_seconds=60.0,
+            provider="declarative",
+            depends_on=[],
+        )
+        user_tool = ToolDefinition(
+            name="save_bookmark",
+            description="Save a document bookmark for later",
+            parameters=[
+                ToolParam(name="doc_id", type=str, description="Document ID"),
+            ],
+            category="bookmarks",
+            tags=["user"],
+            version="1.0.0",
+            visibility=ToolVisibility.USER,
+            timeout_seconds=10.0,
+            provider="sdk",
+            depends_on=[],
+        )
+        return [search_tool, admin_tool, expert_tool, user_tool]
+
+    @pytest.fixture
+    def mock_registry(self, sample_tools):
+        """Mock EnhancedToolRegistry with sample tools."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        for t in sample_tools:
+            registry.register(t)
+        return registry
+
+    def test_list_tools_returns_count_and_tools(self, client, mock_registry):
+        """GET /v1/tools returns {"count": N, "tools": [...]} with correct fields."""
+        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry):
+            response = client.get("/v1/tools")
+            assert response.status_code == 200
+            data = response.json()
+            assert "count" in data
+            assert "tools" in data
+            assert data["count"] == len(data["tools"])
+            for tool in data["tools"]:
+                assert "name" in tool
+                assert "description" in tool
+                assert "category" in tool
+                assert "tags" in tool
+                assert "version" in tool
+                assert "parameters" in tool
+                assert "provider" in tool
+
+    def test_list_tools_filter_by_category(self, client, mock_registry):
+        """GET /v1/tools?category=search filters correctly."""
+        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry):
+            response = client.get("/v1/tools?category=search")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["count"] == 1
+            assert data["tools"][0]["name"] == "search_documents"
+
+    def test_list_tools_filter_by_tag(self, client, mock_registry):
+        """GET /v1/tools?tag=live filters by tag."""
+        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry), \
+             patch("proxy.app.main._highest_role_from_user", return_value="admin"):
+            response = client.get("/v1/tools?tag=live")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["count"] == 2
+            names = [t["name"] for t in data["tools"]]
+            assert "search_documents" in names
+            assert "review_feedback" in names
+
+    def test_list_tools_filter_by_provider(self, client, mock_registry):
+        """GET /v1/tools?provider=sdk filters by provider."""
+        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry), \
+             patch("proxy.app.main._highest_role_from_user", return_value="admin"):
+            response = client.get("/v1/tools?provider=sdk")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["count"] == 3
+            names = [t["name"] for t in data["tools"]]
+            assert "search_documents" in names
+            assert "admin_reindex" in names
+            assert "save_bookmark" in names
+
+    def test_get_tool_by_name_returns_detail(self, client, mock_registry):
+        """GET /v1/tools/{name} returns tool detail with all fields."""
+        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry):
+            response = client.get("/v1/tools/search_documents")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["name"] == "search_documents"
+            assert data["description"] == "Search indexed documents using hybrid search"
+            assert data["category"] == "search"
+            assert data["tags"] == ["hybrid", "live"]
+            assert data["version"] == "1.0.0"
+            assert "visibility" in data
+            assert data["visibility"] == "public"
+            assert data["timeout_seconds"] == 30.0
+            assert "parameters" in data
+            assert data["provider"] == "sdk"
+            assert "depends_on" in data
+
+    def test_get_tool_unknown_returns_404(self, client, mock_registry):
+        """GET /v1/tools/{name} returns 404 for unknown tool."""
+        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry):
+            response = client.get("/v1/tools/nonexistent_tool")
+            assert response.status_code == 404
+            assert "not found" in response.json()["detail"].lower()
+
+    def test_anonymous_user_sees_only_public_tools(self, client, sample_tools):
+        """Unauthenticated user sees only public tools."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        for t in sample_tools:
+            registry.register(t)
+
+        with patch("proxy.app.main.get_enhanced_registry", return_value=registry), \
+             patch("proxy.app.main._highest_role_from_user", return_value=None):
+            response = client.get("/v1/tools")
+            assert response.status_code == 200
+            data = response.json()
+            names = [t["name"] for t in data["tools"]]
+            assert "search_documents" in names
+            assert "admin_reindex" not in names
+            assert "review_feedback" not in names
+            assert "save_bookmark" not in names
+
+    def test_tool_list_filtered_by_role(self, client, mock_registry):
+        """Expert role sees public + expert + user tools."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+        from proxy.app.tools.definition import (
+            ToolDefinition,
+            ToolParam,
+            ToolVisibility,
+        )
+
+        registry = EnhancedToolRegistry()
+        search_tool = ToolDefinition(
+            name="search_documents",
+            description="Search",
+            parameters=[ToolParam(name="query", type=str)],
+            category="search",
+            tags=["live"],
+            visibility=ToolVisibility.PUBLIC,
+            provider="sdk",
+        )
+        expert_tool = ToolDefinition(
+            name="review_feedback",
+            description="Review",
+            parameters=[ToolParam(name="feedback_id", type=str)],
+            category="review",
+            tags=["expert"],
+            visibility=ToolVisibility.EXPERT,
+            provider="sdk",
+        )
+        user_tool = ToolDefinition(
+            name="save_bookmark",
+            description="Bookmark",
+            parameters=[ToolParam(name="doc_id", type=str)],
+            category="bookmarks",
+            tags=["user"],
+            visibility=ToolVisibility.USER,
+            provider="sdk",
+        )
+        admin_tool = ToolDefinition(
+            name="admin_reindex",
+            description="Reindex",
+            parameters=[ToolParam(name="collection", type=str)],
+            category="admin",
+            tags=["maintenance"],
+            visibility=ToolVisibility.ADMIN,
+            provider="sdk",
+        )
+        for t in [search_tool, expert_tool, user_tool, admin_tool]:
+            registry.register(t)
+
+        with patch("proxy.app.main.get_enhanced_registry", return_value=registry), \
+             patch("proxy.app.main._highest_role_from_user", return_value="expert"):
+            response = client.get("/v1/tools")
+            assert response.status_code == 200
+            data = response.json()
+            names = [t["name"] for t in data["tools"]]
+            assert "search_documents" in names
+            assert "review_feedback" in names
+            assert "save_bookmark" in names
+            assert "admin_reindex" not in names
+
+
+# ---------------------------------------------------------------------------
+# Startup tool discovery tests (Task 15)
+# ---------------------------------------------------------------------------
+
+
+class TestStartupToolDiscovery:
+    """Tests for tool discovery on application startup (lifespan handler)."""
+
+    @pytest.fixture
+    def sample_discovery_tool(self):
+        from proxy.app.tools.definition import (
+            ToolDefinition,
+            ToolParam,
+            ToolVisibility,
+        )
+
+        return ToolDefinition(
+            name="discovered_http",
+            description="HTTP action from OpenAPI spec",
+            parameters=[ToolParam(name="url", type=str, description="Target URL")],
+            category="api",
+            tags=["http"],
+            visibility=ToolVisibility.PUBLIC,
+            provider="openapi",
+        )
+
+    @pytest.fixture
+    def sample_declarative_tool(self):
+        from proxy.app.tools.definition import (
+            ToolDefinition,
+            ToolParam,
+            ToolVisibility,
+        )
+
+        return ToolDefinition(
+            name="declared_jira_issue",
+            description="Declarative Jira tool from YAML",
+            parameters=[ToolParam(name="issue_key", type=str, description="Jira key")],
+            category="jira",
+            tags=["declarative"],
+            visibility=ToolVisibility.USER,
+            provider="declarative",
+        )
+
+    def test_startup_discovers_declarative_when_dir_exists(
+        self, sample_declarative_tool,
+    ):
+        """When TOOLS_DECLARATIVE_DIR exists, declarative provider loads tools on startup."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry.get_instance()
+        registry._tools.clear()
+        registry._provider_tools.clear()
+
+        provider = MagicMock()
+        provider.provider_name = "declarative"
+        provider.discover = AsyncMock(return_value=[sample_declarative_tool])
+
+        async def _run():
+            discovered = await provider.discover()
+            for tool in discovered:
+                registry.register(tool)
+
+        import asyncio
+        asyncio.run(_run())
+
+        tools = registry.list_tools()
+        assert len(tools) == 1
+        assert tools[0].name == "declared_jira_issue"
+        assert tools[0].provider == "declarative"
+
+    def test_startup_discovers_openapi_when_specs_configured(
+        self, sample_discovery_tool,
+    ):
+        """When TOOLS_OPENAPI_SPECS is non-empty, OpenAPI provider loads tools on startup."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry.get_instance()
+        registry._tools.clear()
+        registry._provider_tools.clear()
+
+        provider = MagicMock()
+        provider.provider_name = "openapi"
+        provider.discover = AsyncMock(return_value=[sample_discovery_tool])
+
+        async def _run():
+            discovered = await provider.discover()
+            for tool in discovered:
+                registry.register(tool)
+
+        import asyncio
+        asyncio.run(_run())
+
+        tools = registry.list_tools()
+        assert len(tools) == 1
+        assert tools[0].name == "discovered_http"
+        assert tools[0].provider == "openapi"
+
+    def test_startup_skips_declarative_when_dir_missing(self):
+        """When TOOLS_DECLARATIVE_DIR does not exist, declarative provider is skipped."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry.get_instance()
+        registry._tools.clear()
+        registry._provider_tools.clear()
+
+        with patch("os.path.isdir", return_value=False):
+            pass  # No discovery attempted for missing dir
+
+        tools = registry.list_tools()
+        assert len(tools) == 0
+
+    def test_startup_skips_openapi_when_specs_empty(self):
+        """When TOOLS_OPENAPI_SPECS is empty/falsy, OpenAPI provider is skipped."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry.get_instance()
+        registry._tools.clear()
+        registry._provider_tools.clear()
+
+        assert not ""
+        tools = registry.list_tools()
+        assert len(tools) == 0
+
+    def test_startup_tool_discovery_failure_is_non_blocking(self):
+        """Provider failure during startup does not crash the application."""
+        from proxy.app.tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry.get_instance()
+        registry._tools.clear()
+        registry._provider_tools.clear()
+
+        provider = MagicMock()
+        provider.provider_name = "openapi"
+        provider.discover = AsyncMock(side_effect=Exception("Connection refused"))
+
+        async def _run():
+            try:
+                await provider.discover()
+            except Exception:
+                pass  # Non-blocking: log warning, continue
+
+        import asyncio
+        asyncio.run(_run())
+
+        tools = registry.list_tools()
+        assert len(tools) == 0
