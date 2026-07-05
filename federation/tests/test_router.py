@@ -5,6 +5,7 @@ from federation.app.models import (
 )
 from federation.app.silo_registry import SiloRegistry
 from federation.app.router import federated_search
+from federation.app.auto_router import classify_query
 
 
 HR_SILO = SiloConfig(id="hr", name="HR KB", proxy_url="http://hr/v1", weight=1.0, access_groups=["hr", "admin"])
@@ -127,3 +128,25 @@ class TestFederatedSearch:
         assert result.merged_chunks == []
         assert len(result.silo_results) == 0
         mock_query.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_mode_uses_classifier(self):
+        ctx = FederationContext(
+            mode="auto", target_silos=[], merge_strategy="weighted_rrf",
+            merge_k=10, rrf_k=60, user_groups=["admin"], query="sick leave policy"
+        )
+        registry = SiloRegistry([HR_SILO, ENG_SILO])
+
+        mock_hr = make_silo_result("hr", "HR KB", [
+            {"id": "c1", "text": "HR text", "score": 0.9, "_silo_weight": 1.0}
+        ])
+
+        with patch("federation.app.router.classify_query", new_callable=AsyncMock) as mock_classify, \
+             patch("federation.app.router.query_silo") as mock_query:
+            mock_classify.return_value = ["hr"]
+            mock_query.return_value = mock_hr
+
+            result = await federated_search(ctx, registry)
+
+        assert len(result.silo_results) == 1
+        assert result.silo_results[0].silo_id == "hr"

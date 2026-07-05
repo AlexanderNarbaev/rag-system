@@ -7,6 +7,7 @@ from .models import (
 from .silo_registry import SiloRegistry
 from .silo_client import query_silo
 from .merger import merge
+from .auto_router import classify_query
 from .config import (
     FEDERATION_PER_INSTANCE_TIMEOUT_S,
     FEDERATION_MERGE_K,
@@ -29,12 +30,24 @@ def _resolve_target_silos(
     return registry.list_accessible(ctx.user_groups)
 
 
+async def _resolve_auto_silos(
+    ctx: FederationContext, registry: SiloRegistry
+) -> list[SiloConfig]:
+    target_ids = await classify_query(ctx.query, registry)
+    ctx.cross_silo = len(target_ids) > 1
+    ctx.target_silos = target_ids
+    return [registry.get(sid) for sid in target_ids if registry.get(sid)]
+
+
 async def federated_search(
     ctx: FederationContext,
     registry: SiloRegistry,
 ) -> FederatedSearchResult:
     start = time.monotonic()
-    silos = _resolve_target_silos(ctx, registry)
+    if ctx.mode == "auto":
+        silos = await _resolve_auto_silos(ctx, registry)
+    else:
+        silos = _resolve_target_silos(ctx, registry)
     errors: list[str] = []
     skipped: list[str] = []
 
