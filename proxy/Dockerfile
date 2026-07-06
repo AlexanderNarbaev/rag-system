@@ -7,6 +7,7 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -17,8 +18,6 @@ RUN pip install --no-cache-dir -r requirements_proxy.txt
 
 # Копирование исходного кода прокси
 COPY proxy/app /app/app
-# Model Evolution — дообучение моделей (опционально, только при включенном флаге MODEL_EVOLUTION_ENABLED)
-COPY proxy/app/model_evolution /app/app/model_evolution
 # Если есть дополнительные файлы (например, .env.example), можно скопировать
 COPY proxy/.env.example /app/.env.example
 

@@ -1,290 +1,185 @@
-# RAG System — Corporate Knowledge Assistant
+# RAG System v2.0 — Documentation
 
 <div class="hero" markdown>
-<div class="hero-content" markdown>
 
-**OpenAI-compatible RAG proxy with full ETL pipeline.** Ingests Confluence, Jira, GitLab, documents, books, and chat history into Qdrant + Neo4j. Served via any LLM backend — vLLM, llama.cpp, Anthropic, Ollama, or any OpenAI-compatible endpoint.
+**Production-ready self-correcting RAG system.** Deploy on-prem, air-gapped. Query Confluence, Jira, GitLab — get answers with hallucination detection, NLI verification, and agentic tool integration.
 
-**Version:** v2.0.0 (June 2026) — Self-Correcting RAG | **Tests:** 1469 total, 100% pass | **Maturity:** RAG Level 5 (Self-Correcting)
-
-[Get Started](#quick-start){ .md-button .md-button--primary }
+[Quick Start](#quick-start){ .md-button .md-button--primary }
 [API Reference](api_reference.md){ .md-button }
+[Deploy](guides/deployment-guide.md){ .md-button }
 
 </div>
-</div>
-
----
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph "Data Sources"
-        CONF[Confluence]
-        JIRA[Jira]
-        GL[GitLab]
-        DOCS[Documents & Books]
-        CHATS[Chat History]
-    end
-
-    subgraph "ETL Pipeline"
-        EXTRACT[Extractors]
-        CHUNK[Semantic Chunker]
-        EMBED[Embedding BGE-M3]
-        INDEX[Indexer]
-    end
-
-    subgraph "Storage"
-        QDRANT[(Qdrant<br/>Vector DB)]
-        NEO4J[(Neo4j<br/>Graph DB)]
-        REDIS[(Redis<br/>Cache)]
-    end
-
-    subgraph "RAG Proxy :8080"
-        API[OpenAI-compatible API]
-        ORCH[LangGraph Orchestrator]
-        RETR[Hybrid Retrieval]
-        RERANK[Cross-Encoder Rerank]
-        CTX[Context Builder]
-        TOKEN[Token Optimizer]
-    end
-
-    subgraph "LLM Backend"
-        VLLM[vLLM]
-        LLAMACPP[llama.cpp]
-        ANTHROPIC[Anthropic]
-        OLLAMA[Ollama]
-    end
-
-    subgraph "Supporting Services"
-        HITL[Streamlit HITL Dashboard]
-        MCP[MCP Server]
-        METRICS[Prometheus Metrics]
-        AUTH[Keycloak Auth]
-    end
-
-    CONF & JIRA & GL & DOCS & CHATS --> EXTRACT
-    EXTRACT --> CHUNK --> EMBED --> INDEX
-    INDEX --> QDRANT
-    EXTRACT --> NEO4J
-
-    API --> ORCH --> RETR --> RERANK --> CTX --> TOKEN
-    RETR --> QDRANT
-    RETR --> NEO4J
-    CTX --> REDIS
-    TOKEN --> VLLM & LLAMACPP & ANTHROPIC & OLLAMA
-
-    MCP --> API
-    HITL --> REDIS
-    API --> METRICS
-
-    style QDRANT fill:#6c5ce7,color:#fff
-    style NEO4J fill:#00b894,color:#fff
-    style REDIS fill:#e17055,color:#fff
-    style API fill:#0984e3,color:#fff
-    style ORCH fill:#fd79a8,color:#fff
-```
-
-The system has four primary components:
-
-| Layer | Role | Technology |
-|-------|------|------------|
-| **ETL Pipeline** | Data extraction, semantic chunking, embedding (BGE-M3), indexing | Python, spaCy, sentence-transformers |
-| **RAG Proxy** | OpenAI-compatible API, agentic orchestration, hybrid retrieval, LLM routing | FastAPI, LangGraph, Qdrant, Neo4j |
-| **HITL Dashboard** | Expert review, feedback collection, response correction | Streamlit |
-| **MCP Server** | Model Context Protocol server exposing RAG tools to IDEs | FastMCP |
-
-See the [C4 Diagrams](diagrams/index.md) for detailed container and component views.
 
 ---
 
 ## Quick Start
 
-=== "Docker Compose (Recommended)"
+### 1. Clone & Install
 
-    ```bash
-    # Clone and configure
-    git clone https://github.com/AlexanderNarbaev/rag-system
-    cd rag-system/proxy
-    cp .env.example .env     # edit with your settings
-    vim .env                 # set LLM_ENDPOINT, LLM_MODEL_NAME, etc.
+```bash
+git clone https://github.com/AlexanderNarbaev/rag-system.git
+cd rag-system
+make install-dev
+```
 
-    # Start everything
-    docker-compose up -d
+### 2. Configure
 
-    # Verify
-    curl http://localhost:8080/v1/health
-    curl http://localhost:8080/v1/models
-    ```
+```bash
+cd proxy
+cp .env.example .env
+# Edit .env — set LLM_ENDPOINT, LLM_MODEL_NAME, QDRANT_HOST
+```
 
-=== "Manual Install"
+### 3. Start Services
 
-    ```bash
-    # Full installation
-    bash setup.sh --rag-system
+```bash
+docker compose up -d     # Qdrant + Redis + Neo4j + Proxy
+```
 
-    # Configure proxy
-    cd rag-system/proxy
-    cp .env.example .env
-    vim .env
+### 4. Test
 
-    # Start proxy (without Docker)
-    pip install -r requirements_proxy.txt
-    uvicorn app.main:app --host 0.0.0.0 --port 8080
+```bash
+# Health check
+curl http://localhost:8080/v1/health
 
-    # Run ETL pipeline
-    cd ../etl
-    pip install -r requirements_etl.txt
-    python scheduler/run_etl.py --config config/etl_config.yaml
-    ```
+# First query
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "What is the company vacation policy?"}]
+  }'
+```
 
-=== "Air-Gapped Deployment"
+**Prerequisites:** Docker 24+, Python 3.11+, 16 GB RAM, 20 GB free disk.
 
-    ```bash
-    # Pre-download all models on a connected machine
-    python scripts/download_models_offline.py --all
+---
 
-    # Transfer model cache to air-gapped host
-    rsync -av ~/.cache/huggingface/ target:/path/to/models/
+## Usage Scenarios
 
-    # Configure proxy for offline mode
-    export EMBEDDER_DEVICE=cpu
-    export LLM_ENDPOINT=http://localhost:8000/v1
-    export SLM_ENDPOINT=   # empty = disable SLM, fallback to heuristics
-
-    docker-compose -f docker-compose.airgap.yml up -d
-    ```
-
-### First Query
+### Basic RAG Query
 
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "rag-proxy",
-    "messages": [{"role": "user", "content": "How does the ETL pipeline handle incremental updates?"}],
-    "temperature": 0.2,
-    "max_tokens": 1024
+    "messages": [{"role": "user", "content": "Explain the deployment process"}],
+    "temperature": 0.3
   }'
 ```
 
-Response includes RAG extensions: `rag_feedback_id`, `rag_confidence`, and `rag_sources` for full traceability.
+### Streaming Response
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "Summarize the Q3 report"}],
+    "stream": true
+  }'
+```
+
+### Agentic Tool Calling
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "What Jira tickets are blocking the release?"}],
+    "tools": [{"type": "function", "function": {"name": "jira_search"}}]
+  }'
+```
+
+### Python Client (OpenAI SDK)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8080/v1", api_key="not-needed")
+
+response = client.chat.completions.create(
+    model="rag-proxy",
+    messages=[{"role": "user", "content": "What is our security policy?"}],
+    temperature=0.3,
+)
+print(response.choices[0].message.content)
+```
+
+### Federated Search
+
+```bash
+curl -X POST http://localhost:8081/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "employee benefits policy",
+    "federation_mode": "auto"
+  }'
+```
+
+### Embeddable Widget
+
+```html
+<script src="http://localhost:8080/v1/widget.js"></script>
+<rag-chat
+  api-url="http://localhost:8080/v1"
+  placeholder="Ask me anything...">
+</rag-chat>
+```
 
 ---
 
-## Key Features
+## Architecture
 
-<div class="grid cards" markdown>
+```
+┌──────────────────────────────────────────────────────┐
+│                    RAG Proxy :8080                     │
+│                                                        │
+│  ┌─────────────────────────────────────────────────┐  │
+│  │         LangGraph Orchestrator (10 nodes)         │  │
+│  │                                                   │  │
+│  │  rewrite → retrieve → check → rerank             │  │
+│  │     ↓                                              │  │
+│  │  graph_expand → build → generate                  │  │
+│  │     ↓                                              │  │
+│  │  call_tools → self_reflection → confidence        │  │
+│  └─────────────────────────────────────────────────┘  │
+│                                                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
+│  │  Qdrant  │  │  Neo4j   │  │  Redis   │            │
+│  │  Vector  │  │  Graph   │  │  Cache   │            │
+│  └──────────┘  └──────────┘  └──────────┘            │
+└──────────────────────────────────────────────────────┘
+```
 
--   :material-database-search: **Hybrid Retrieval**
+| Component | Technology | Role |
+|-----------|-----------|------|
+| **Orchestrator** | LangGraph, 10 nodes | Agentic query pipeline with self-correction |
+| **Retrieval** | Qdrant hybrid (dense+sparse+ColBERT) | Multi-vector search, RRF fusion |
+| **Reranker** | Cross-encoder (MiniLM-L-6-v2) | Precision filtering, fine-tunable |
+| **Graph** | Neo4j (10 entity types, 9 relations) | Entity extraction, multi-hop traversal |
+| **Cache** | Redis multi-tier | Embedding, rerank, response caching |
+| **LLM** | vLLM / llama.cpp / OpenAI-compatible / Anthropic | Response generation |
+| **SLM** | ~2-3B params: Llama, Gemma, Qwen | Intent classification, entity extraction |
+| **Auth** | JWT + Keycloak OIDC + LDAP/AD | SSO, RBAC (4 roles), token pairs |
 
-    ---
+### RAG Maturity: Level 5 — Self-Correcting
 
-    Dense (1024-dim BGE-M3) + sparse (lexical BM25-style) vectors with Reciprocal Rank Fusion (RRF) via Qdrant. Combines semantic understanding with exact keyword matching.
+| Level | Capability | Status |
+|-------|-----------|--------|
+| 1 | Naive RAG — single dense retrieval | ✅ Exceeded |
+| 2 | Advanced RAG — hybrid, rerank, dedup, versioning | ✅ Implemented |
+| 3 | GraphRAG — Neo4j entity extraction, multi-hop | ✅ Implemented |
+| 4 | Agentic — 10-node LangGraph, retrieval loops, tool calling | ✅ Implemented |
+| 5 | Self-Correcting — CRAG, HyDE, self-reflection, NLI | ✅ Implemented |
 
--   :material-sort-variant: **Cross-Encoder Reranking**
-
-    ---
-
-    MiniLM-L-6-v2 cross-encoder reranks top-50 candidates to top-20, boosting precision by 15-25% over raw vector similarity scores. Batch inference at 32 chunks per pass.
-
--   :material-graph: **Knowledge Graph**
-
-    ---
-
-    Neo4j with 10 entity types (Person, Document, Project, Component, Technology, Team, Meeting, Decision, Milestone, Issue) and 9 relation types. Multi-hop traversal enriches context with related entities.
-
--   :material-brain: **Dual-Model Architecture**
-
-    ---
-
-    Lightweight SLM (2-3B params) handles fast routing: intent classification (5 classes), query decomposition (up to 3 sub-queries), entity extraction. Full-scale LLM reserved for response generation.
-
--   :material-api: **OpenAI-Compatible API**
-
-    ---
-
-    Drop-in replacement for any OpenAI client. Supports `/v1/chat/completions` (streaming + non-streaming), `/v1/models`, `/v1/health`, `/v1/feedback`. Extended with RAG-specific parameters.
-
--   :material-puzzle: **Multi-Provider Support**
-
-    ---
-
-    Pluggable adapters for vLLM, llama.cpp, Anthropic, Ollama, and any OpenAI-compatible endpoint. Provider-specific quirks (Anthropic `system` field, Ollama `options` block) handled transparently.
-
--   :material-tools: **Tool & Function Calling**
-
-    ---
-
-    Full OpenAI-compatible function calling with automatic provider translation. Multi-turn tool use supported. MCP server exposes RAG tools (`search_knowledge_base`, `get_document_context`) to IDEs via STDIO and Streamable HTTP.
-
--   :material-refresh: **Incremental ETL**
-
-    ---
-
-    WAL-based checkpointing with SHA-256 content-addressable chunks. Only changed documents are reindexed. Supports resume after interruption via `--reset-wal` flag.
-
--   :material-shield-check: **Air-Gapped Ready**
-
-    ---
-
-    All models pre-downloaded via `download_models_offline.py`. No external API calls at runtime — LLM, embedder, reranker, and SLM all run locally. Secret masking in logs.
-
--   :material-chart-line: **Observability**
-
-    ---
-
-    Prometheus metrics (counters, histograms, gauges) at `/metrics`. Structured JSON logging with component-labeled loggers. Health check with graceful degradation (returns 503 when LLM/Qdrant unreachable).
-
--   :material-lock: **Authentication & RBAC**
-
-    ---
-
-    JWT-based authentication with token refresh. Access control at document and source level via `build_access_filter()`. Keycloak SSO integration planned for v0.4.
-
--   :material-speedometer: **Token Economy**
-
-    ---
-
-    BPE-aware token counting, 4 compression strategies (relevance-based truncation, chunk header enrichment, surrounding chunk expansion, smart budget allocation). Projected 43% token reduction across query types.
-
-</div>
+**Composite score: 4.5/5.0.** [Full assessment →](guides/rag-maturity-assessment.md)
 
 ---
 
-## Technology Stack
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **LLM** | Any OpenAI-compatible model (Llama, Mistral, Gemma, Qwen, Claude) via vLLM, llama.cpp, Anthropic, or Ollama | Response generation (configurable context length) |
-| **SLM** | Lightweight model (~2–3B params: Llama-3B, Gemma-2B, Qwen-2.5-3B) | Query routing, entity extraction, query decomposition (fast path) |
-| **Embeddings** | BAAI/bge-m3 | Dense (1024-dim) + sparse (lexical) + ColBERT multi-vectors |
-| **Vector DB** | Qdrant | Hybrid search (dense + sparse), RRF fusion, on-disk sparse index, scalar quantization |
-| **Graph DB** | Neo4j | 10 entity types, 9 relation types, Cypher-based multi-hop traversal |
-| **Cache** | Redis | Multi-tier: embedding cache (MD5-keyed), rerank results cache (5min TTL), response cache (1h TTL) |
-| **Proxy** | FastAPI + LangGraph | OpenAI-compatible API with 7-node agentic state graph |
-| **ETL** | Python, requests, BeautifulSoup, spaCy, sentence-transformers | Data extraction, semantic chunking, entity extraction, embedding, indexing |
-| **Dashboard** | Streamlit | HITL expert review, response correction, feedback analytics |
-| **MCP** | FastMCP | Model Context Protocol server (STDIO + Streamable HTTP transports) |
-| **Auth** | JWT + Keycloak (planned v0.4) | Token-based auth, corporate SSO, RBAC |
-
----
-
-## RAG Maturity
-
-| Level | Name | Key Capabilities | Status |
-|-------|------|-----------------|--------|
-| 1 | **Naive RAG** | Single dense retrieval, no rerank, no dedup | :material-check-circle: Exceeded |
-| 2 | **Advanced RAG** | Hybrid (dense+sparse), cross-encoder rerank, dedup, version filtering | :material-check-circle: Implemented |
-| 3 | **GraphRAG** | Entity extraction, Neo4j knowledge graph, multi-hop traversal | :material-check-circle: Implemented |
-| 4 | **Agentic** | LangGraph 7-node orchestrator, retrieval loops, query rewriting | :material-check-circle: Implemented |
-| 5 | **Self-Correcting** | CRAG-style evaluator, HyDE, self-reflection, hallucination grounding | :material-alert-circle: Partial |
-
-**Current composite score: 3.2 / 5.0** (full details in [RAG Maturity Assessment](guides/rag-maturity-assessment.md)).
-
----
-
-## Navigation Guide
+## Navigation
 
 ### Getting Started
 
@@ -292,30 +187,41 @@ Response includes RAG extensions: `rag_feedback_id`, `rag_confidence`, and `rag_
 |-------------|---------|
 | Deploy the proxy | [Proxy Deployment](deploy_proxy.md) |
 | Deploy the ETL pipeline | [ETL Deployment](deploy_etl.md) |
-| Set up in air-gapped environment | [Deployment Guide](guides/deployment-guide.md) |
 | Call the API | [API Reference](api_reference.md) |
-| Integrate with OpenCode IDE | [OpenCode Integration](guides/integration-opencode.md) |
-
-### Architecture & Decisions
-
-| I want to... | Go to... |
-|-------------|---------|
-| Understand design decisions | [Architecture Decision Records](adr/index.md) |
-| See system architecture visually | [C4 Diagrams](diagrams/index.md) |
-| Understand the knowledge graph | [Knowledge Graph Strategy](guides/knowledge-graph-strategy.md) |
-| Understand access control | [Access Control & RBAC](guides/access-control-rbac.md) |
+| Integrate with IDE | [OpenCode Integration](guides/integration-opencode.md) |
+| Set up air-gapped | [Deployment Guide](guides/deployment-guide.md) |
 
 ### Deep Dives
 
 | I want to... | Go to... |
 |-------------|---------|
-| Understand retrieval quality | [RAG Maturity Assessment](guides/rag-maturity-assessment.md) |
-| Assess production readiness | [Best Practices Checklist](guides/best-practices-checklist.md) |
-| Tune performance | [Performance & Quality Guide](guides/performance-quality.md) |
-| Add a new data source | [Extensibility Guide](guides/extensibility-data-sources.md) |
+| Understand architecture | [Architecture Decision Records](adr/index.md) |
+| See visual architecture | [C4 Diagrams](diagrams/index.md) |
+| Understand knowledge graph | [Knowledge Graph Strategy](guides/knowledge-graph-strategy.md) |
+| Understand access control | [Access Control & RBAC](guides/access-control-rbac.md) |
+| Assess retrieval quality | [RAG Maturity Assessment](guides/rag-maturity-assessment.md) |
+| Assess production readiness | [Production Checklist](guides/best-practices-checklist.md) |
+
+### Features
+
+| I want to... | Go to... |
+|-------------|---------|
+| Define custom tools (Python) | [Agentic Tools SDK](guides/agentic-tools-sdk.md) |
+| Define tools in YAML/JSON | [Declarative Tools](guides/agentic-tools-declarative.md) |
+| Auto-discover API tools | [OpenAPI Discovery](guides/agentic-tools-openapi.md) |
+| Set up federated search | Deployment Guide |
+| Fine-tune models | [Model Evolution](#) |
+| Add a data source | [Extensibility Guide](guides/extensibility-data-sources.md) |
+
+### Operations
+
+| I want to... | Go to... |
+|-------------|---------|
 | Monitor in production | [Operations Guide](guides/operations-guide.md) |
+| Tune performance | [Performance & Quality](guides/performance-quality.md) |
+| Recover from failure | [Disaster Recovery Runbook](guides/disaster-recovery-runbook.md) |
 | Debug an issue | [Troubleshooting](guides/troubleshooting.md) |
-| See what's coming next | [Development Roadmap](guides/roadmap.md) |
+| See what's coming | [Roadmap](guides/roadmap.md) |
 
 ---
 
@@ -323,50 +229,60 @@ Response includes RAG extensions: `rag_feedback_id`, `rag_confidence`, and `rag_
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/v1/chat/completions` | Optional | Chat completion with RAG augmentation (streaming + non-streaming) |
-| `GET` | `/v1/models` | No | List available models (LLM + `rag-proxy` virtual model) |
-| `GET` | `/v1/health` | No | Health check (Qdrant + LLM status, returns 503 on degradation) |
-| `GET` | `/metrics` | No | Prometheus metrics in OpenMetrics format |
-| `POST` | `/v1/auth/login` | No | JWT token generation |
-| `POST` | `/v1/auth/refresh` | Yes | Token refresh with same claims |
-| `GET` | `/v1/auth/me` | Yes | Current user context (roles, groups, access level) |
-| `POST` | `/v1/feedback` | No | Submit expert feedback on a RAG response |
+| `POST` | `/v1/chat/completions` | Optional | Main RAG endpoint (streaming + non-streaming) |
+| `GET` | `/v1/models` | No | Available models |
+| `GET` | `/v1/health` | No | Health (Qdrant + LLM status) |
+| `GET` | `/v1/health/live` | No | K8s liveness probe |
+| `GET` | `/v1/health/ready` | No | K8s readiness probe |
+| `POST` | `/v1/feedback` | Expert | Expert feedback submission |
+| `POST` | `/v1/auth/register` | No | Self-registration |
+| `POST` | `/v1/auth/login` | No | JWT access + refresh tokens |
+| `POST` | `/v1/auth/refresh` | JWT | Refresh token exchange |
+| `POST` | `/v1/auth/logout` | JWT | Token revocation |
+| `GET` | `/v1/auth/me` | JWT | User context |
+| `GET` | `/v1/widget` | No | Embeddable chat widget (HTML) |
+| `GET` | `/v1/widget.js` | No | Widget JavaScript |
+| `GET` | `/v1/tools` | Optional | List tools (with filters) |
+| `GET` | `/v1/tools/{name}` | Optional | Tool details |
+| `POST` | `/v1/admin/models/train` | Admin | Trigger training |
+| `GET` | `/v1/admin/models/status/{id}` | Admin | Training progress |
+| `GET` | `/v1/admin/models` | Admin | Model registry |
+| `POST` | `/v1/admin/models/promote` | Admin | Promote version |
+| `POST` | `/v1/admin/models/rollback` | Admin | Rollback version |
+| `POST` | `/v1/admin/models/evaluate` | Admin | Evaluate quality |
+| `POST` | `/v1/admin/models/canary/split` | Admin | Canary traffic |
+| `GET` | `/v1/admin/models/canary/status` | Admin | Canary status |
+| `GET` | `/metrics` | No | Prometheus metrics |
 
-Full reference: [API Reference](api_reference.md)
-
----
-
-## Design Principles
-
-1. **Air-gapped first** — all models pre-downloaded, no external API calls at runtime
-2. **Graceful degradation** — every component can fail independently without crashing the proxy
-3. **Incremental by default** — WAL checkpointing, SHA-256 content-addressable chunks, changed-only reindexing
-4. **OpenAI compatibility** — drop-in replacement for any OpenAI client, RAG extensions silently ignored by standard clients
-5. **Dual-model routing** — lightweight SLM for fast preprocessing, full-scale LLM for generation
-6. **Multi-provider support** — pluggable adapters for vLLM, llama.cpp, Anthropic, Ollama, and any OpenAI-compatible API
-7. **Optional complexity** — LangGraph, Neo4j, Redis are all optional; system runs in simple RAG mode by default
-8. **Token economy** — BPE-aware counting, 4 compression strategies, smart budget allocation
+[Full API Reference →](api_reference.md)
 
 ---
 
 ## Project Status
 
-| Dimension | Completed | Total | Ready |
-|-----------|-----------|-------|-------|
-| Code Quality | 6/10 | 10 | 60% |
-| Testing | 4/10 | 10 | 40% |
-| Security | 3/10 | 10 | 30% |
-| Observability | 3/10 | 10 | 30% |
-| Reliability | 4/10 | 10 | 40% |
-| Performance | 5/10 | 10 | 50% |
-| Operations | 3/10 | 10 | 30% |
-| Documentation | 8/10 | 10 | 80% |
-| **Overall** | **36/80** | **80** | **45%** |
+| Dimension | Ready | Details |
+|-----------|-------|---------|
+| **Code Quality** | 90% | ruff, mypy, pre-commit hooks |
+| **Testing** | 90% | 2275 tests, 99%+ pass rate, E2E + chaos |
+| **Security** | 90% | JWT + RBAC + LDAP + input sanitization |
+| **Observability** | 90% | Prometheus + Grafana + structured logging |
+| **Reliability** | 100% | Circuit breakers, graceful degradation, HA |
+| **Performance** | 100% | HNSW, quantization, SSE TTFT, compression |
+| **Operations** | 90% | K8s Helm, backup automation, DR runbook |
+| **Documentation** | 100% | 10 ADRs, 4 C4 diagrams, 16 guides |
+| **Overall** | **94%** (75/80) | Production-ready |
 
-Full analysis: [Best Practices Checklist](guides/best-practices-checklist.md)
+[Full assessment →](guides/best-practices-checklist.md)
 
 ---
 
-## License
+## Design Principles
 
-MIT © 2026 Alexander Narbaev — [View on GitHub :fontawesome-brands-github:](https://github.com/AlexanderNarbaev/rag-system)
+1. **Air-gapped first** — Models pre-downloaded. No external API calls. Fully offline.
+2. **Graceful degradation** — Every component fails independently. Proxy never crashes.
+3. **Incremental by default** — WAL checkpointing, SHA-256 content addressing.
+4. **OpenAI compatibility** — Drop-in replacement. RAG extensions transparent.
+5. **Dual-model routing** — SLM for fast preprocessing, LLM for generation.
+6. **Multi-provider** — vLLM, llama.cpp, Anthropic, Ollama, OpenAI-compatible.
+7. **Optional complexity** — LangGraph, Neo4j, Redis all optional.
+8. **Token economy** — BPE counting, 4 compression strategies, budget allocation.

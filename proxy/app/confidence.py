@@ -78,8 +78,9 @@ def _check_claim_supported(claim: str, context: str) -> bool:
 def compute_nli_grounding(answer: str, context: str) -> GroundingReport:
     """Compute NLI-grounded confidence by checking each claim against context.
 
-    Uses lightweight cosine similarity + keyword overlap as NLI proxy
-    (no external NLI model needed — air-gapped compatible).
+    Attempts to use the real NLI model (DeBERTa-v3) when available.
+    Falls back to lightweight cosine similarity + keyword overlap proxy
+    (air-gapped compatible).
 
     Returns a GroundingReport with score 0.0–1.0 and unsupported claims list.
     """
@@ -95,6 +96,35 @@ def compute_nli_grounding(answer: str, context: str) -> GroundingReport:
             score=0.0, supported_claims=0, total_claims=len(claims), unsupported=list(claims)
         )
 
+    try:
+        from proxy.app.model_evolution.nli_evaluator import is_nli_model_available
+        if is_nli_model_available():
+            return _compute_nli_with_real_model(answer, claims, context)
+    except Exception:
+        logger.debug("NLI model not available, using lightweight proxy")
+
+    return _compute_nli_lightweight(claims, context)
+
+
+def _compute_nli_with_real_model(answer: str, claims: list[str], context: str) -> GroundingReport:
+    from proxy.app.model_evolution.nli_evaluator import evaluate_nli
+
+    result = evaluate_nli(answer, context, use_real_nli=True)
+    supported = result.entailed_claims
+    unsupported_claims = [
+        c["claim"] for c in result.per_claim_scores
+        if c["label"] != "entailment"
+    ]
+
+    return GroundingReport(
+        score=result.overall_score,
+        supported_claims=supported,
+        total_claims=result.total_claims,
+        unsupported=unsupported_claims,
+    )
+
+
+def _compute_nli_lightweight(claims: list[str], context: str) -> GroundingReport:
     supported = 0
     unsupported = []
     for claim in claims:

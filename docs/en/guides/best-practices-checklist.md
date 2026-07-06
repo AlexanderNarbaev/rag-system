@@ -142,7 +142,7 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 
 | # | Criterion | Status | Pass Criteria | Verification | Remediation |
 |---|-----------|--------|---------------|-------------|-------------|
-| 8.1 | Architecture Decision Records | ✅ Pass | 7 ADRs covering all major architectural decisions; each ADR has context, decision, consequences, status | `ls docs/en/adr/ADR-*.md | wc -l` → ≥ 7 | Add ADR-008 for token optimizer design; ADR-009 for feedback enrichment; keep existing ADRs updated |
+| 8.1 | Architecture Decision Records | ✅ Pass | 10 ADRs covering all major architectural decisions; each ADR has context, decision, consequences, status | `ls docs/en/adr/ADR-*.md \| wc -l` → 10 | Keep existing ADRs updated; add new ADRs for Federated RAG and future features |
 | 8.2 | C4 architecture diagrams | ✅ Pass | 4 diagram levels: System Context (L1), Container (L2), Proxy Components (L3), ETL Components (L3); available as SVG + Excalidraw source | `ls docs/en/diagrams/c4-*.svg | wc -l` → ≥ 4 | Add Component diagram for MCP Server; add Dynamic diagram for query processing sequence |
 | 8.3 | README with quick start | ✅ Pass | README.md covers: project description, quick start (docker-compose), API overview, tech stack, development commands, links to docs | Check `README.md` has all sections | Keep version badge and test count badge current; add architecture diagram thumbnail |
 | 8.4 | AGENTS.md | ✅ Pass | Covers: identity, language, current state, architecture, project structure, tech stack, constraints, development commands | `cat AGENTS.md` has all sections | Update version and test counts in AGENTS.md; keep in sync with README |

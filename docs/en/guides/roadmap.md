@@ -28,8 +28,8 @@
 - Graceful degradation design for all components
 - Air-gapped deployment support (models pre-downloaded)
 - Cross-encoder reranker fine-tuning from HITL feedback
-- 1248 tests passing (100% pass rate)
-- 7 Architecture Decision Records, 4 C4 diagrams, 8 design guides
+- 2275 tests passing (99%+ pass rate)
+- 10 Architecture Decision Records, 4 C4 diagrams, 16 design guides
 
 **Known issues:**
 - No retrieval quality evaluation dataset or metrics
@@ -53,7 +53,7 @@
 - **Self-enrichment** — positive feedback with corrections indexed back into Qdrant as Q&A pairs (`ENRICHMENT_ENABLED`)
 - **Admin alerts** — low-confidence answers beyond loop limit trigger admin alerts (`ADMIN_ALERT_ENABLED`)
 - **Response metadata** — `rag_confidence` score and `rag_feedback_id` injected into both streaming and non-streaming responses
-- **919 tests passing** (100% pass rate)
+- **2275 tests passing** (99%+ pass rate)
 
 ---
 

@@ -48,8 +48,8 @@ env:
   MLFLOW_EXPERIMENT_NAME: rag-system-ci
   MLFLOW_ARTIFACT_ROOT: s3://rag-artifacts
   MINIO_ENDPOINT: localhost:9000
-  MINIO_ACCESS_KEY: minioadmin
-  MINIO_SECRET_KEY: minioadmin
+  MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY || 'minioadmin' }}
+  MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY || 'minioadmin' }}
   MINIO_BUCKET: rag-artifacts
   MINIO_SECURE: "false"
   MODEL_REGISTRY_PATH: ./data/model_registry.json
@@ -147,8 +147,8 @@ jobs:
         env:
           MLFLOW_BACKEND_STORE_URI: sqlite:///mlflow.db
           MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://rag-artifacts
-          AWS_ACCESS_KEY_ID: minioadmin
-          AWS_SECRET_ACCESS_KEY: minioadmin
+          AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY || 'minioadmin' }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY || 'minioadmin' }}
           MLFLOW_S3_ENDPOINT_URL: http://minio:9000
         ports:
           - 5000:5000
@@ -160,8 +160,8 @@ jobs:
       minio:
         image: minio/minio:RELEASE.2024-08-17T01-24-54Z
         env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER || 'minioadmin' }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD || 'minioadmin' }}
         ports:
           - 9000:9000
           - 9001:9001

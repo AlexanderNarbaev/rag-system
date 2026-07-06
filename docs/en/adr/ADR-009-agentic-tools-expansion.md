@@ -1,4 +1,4 @@
-# ADR-008: Agentic Tools Expansion Architecture
+# ADR-009: Agentic Tools Expansion Architecture
 
 **Status:** Proposed  
 **Date:** 2026-07-05  
@@ -953,7 +953,7 @@ Execution plan:
 
 ## 5. Architecture Decision Records
 
-### ADR-008-1: Tool Definition Consolidation
+### ADR-009-1: Tool Definition Consolidation
 
 **Context:** Three separate `ToolDefinition` classes exist in the codebase:
 - `proxy/app/tools.py::ToolDefinition` (registry dataclass)
@@ -975,7 +975,7 @@ Execution plan:
 
 ---
 
-### ADR-008-2: Subpackage vs. Flat Module
+### ADR-009-2: Subpackage vs. Flat Module
 
 **Context:** The tool system functionality spans 10+ concerns (SDK, declarative, OpenAPI, orchestration, errors, security, metrics, audit, registry, definition).
 
@@ -992,7 +992,7 @@ Execution plan:
 
 ---
 
-### ADR-008-3: Async Execution Strategy
+### ADR-009-3: Async Execution Strategy
 
 **Context:** Current `call_tools` is synchronous sequential (`for tc in tool_calls: handle_function_call(tc, registry)`). Live sources are async but not registered as tools.
 
@@ -1009,7 +1009,7 @@ Execution plan:
 
 ---
 
-### ADR-008-4: JSON Schema Generation Strategy
+### ADR-009-4: JSON Schema Generation Strategy
 
 **Context:** Current tools require manual JSON Schema writing (`parameters_schema` dict). Error-prone and verbose.
 
@@ -1026,7 +1026,7 @@ Execution plan:
 
 ---
 
-### ADR-008-5: Backward Compatibility Strategy
+### ADR-009-5: Backward Compatibility Strategy
 
 **Context:** Existing 3 built-in tools, existing `ToolRegistry` API, existing `execute_tool()` and `handle_function_call()` functions must continue working.
 
@@ -1054,7 +1054,7 @@ Existing imports continue working. Tests pass. No breakage.
 
 ---
 
-### ADR-008-6: Shell Tool Safety
+### ADR-009-6: Shell Tool Safety
 
 **Context:** Declarative tools include shell command support. This is inherently dangerous.
 
@@ -1079,7 +1079,7 @@ Existing imports continue working. Tests pass. No breakage.
 
 ---
 
-### ADR-008-7: Tool Discovery Caching
+### ADR-009-7: Tool Discovery Caching
 
 **Context:** OpenAPI specs may be remote. Declarative files may be numerous. Registration happens at startup.
 

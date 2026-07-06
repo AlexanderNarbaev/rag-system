@@ -1,4 +1,4 @@
-# ADR-009: Model Evolution — Fine-Tuning Pipeline & Canary Deployment
+# ADR-010: Model Evolution — Fine-Tuning Pipeline & Canary Deployment
 
 **Status:** Proposed  
 **Date:** 2026-07-05  
@@ -934,7 +934,7 @@ rag-system/
 └── docs/
     └── en/
         ├── adr/
-        │   └── ADR-009-model-evolution.md     # This document
+        │   └── ADR-010-model-evolution.md     # This document
         └── guides/
             └── model-evolution-guide.md       # User guide (future)
 ```

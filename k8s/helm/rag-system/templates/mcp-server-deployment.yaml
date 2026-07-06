@@ -1,0 +1,56 @@
+{{- if .Values.mcpServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rag-system.fullname" . }}-mcp-server
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.mcpServerLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mcpServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "rag-system.mcpServerSelector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "rag-system.mcpServerLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "rag-system.fullname" . }}
+      securityContext:
+        {{- toYaml .Values.mcpServer.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mcp-server
+          securityContext:
+            {{- toYaml .Values.mcpServer.securityContext | nindent 12 }}
+          image: "{{ .Values.global.imageRegistry | default "" }}{{ .Values.mcpServer.image.repository }}:{{ .Values.mcpServer.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.mcpServer.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.mcpServer.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: PROXY_URL
+              value: {{ .Values.mcpServer.env.proxyUrl | quote }}
+            - name: TRANSPORT_MODE
+              value: {{ .Values.mcpServer.env.transportMode | quote }}
+          resources:
+            {{- toYaml .Values.mcpServer.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rag-system.fullname" . }}-mcp-server
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.mcpServerLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.mcpServer.service.type }}
+  ports:
+    - port: {{ .Values.mcpServer.service.port }}
+      targetPort: {{ .Values.mcpServer.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "rag-system.mcpServerSelector" . | nindent 4 }}
+{{- end }}

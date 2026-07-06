@@ -1,4 +1,4 @@
-# SLI/SLO Definitions — RAG System v1.0
+# SLI/SLO Definitions — RAG System v2.0
 
 ## Overview
 

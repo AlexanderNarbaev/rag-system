@@ -2,9 +2,10 @@
 # Primary entry point for development, testing, and deployment workflows.
 
 .PHONY: help install install-dev test test-proxy test-etl test-integration \
-        lint format typecheck clean docker-build docker-up docker-down docs all \
-        train-slum train-llm train-reranker eval-model promote-model \
-        model-evolution-up model-evolution-down
+        test-model-evolution lint format typecheck clean docker-build docker-up docker-down docs all \
+        train-slm train-llm train-reranker eval-model promote-model \
+        model-evolution-up model-evolution-down \
+        federation-build federation-run federation-test
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -77,7 +78,7 @@ docs: ## Show documentation locations
 all: install lint test ## Install deps, lint, then run all tests
 
 # ── Model Evolution ──────────────────────────────────────────────────────────
-train-slum: ## Train SLM intent classifier (LoRA fine-tuning)
+train-slm: ## Train SLM intent classifier (LoRA fine-tuning)
 	@cd $(ROOT) && python scripts/model_evolution/train_slm.py --profile prod --data-dir ./data/training
 
 train-llm: ## Train LLM domain generator (QLoRA fine-tuning)
@@ -109,11 +110,15 @@ model-evolution-up: ## Start MLflow + MinIO services
 model-evolution-down: ## Stop MLflow + MinIO services
 	@cd $(ROOT)/proxy && docker-compose down mlflow minio
 
+test-model-evolution: ## Run model evolution tests
+	@cd $(ROOT) && python -m pytest tests/model_evolution/ -v
+
 # ── Federation ──────────────────────────────────────────────────────────────
 federation-build: ## Build federation Docker image
 	docker build -t rag-federation -f federation/Dockerfile .
 
 federation-run: ## Run federation container
+	cp -n federation/.env.example federation/.env 2>/dev/null || true
 	docker run -p 8001:8001 --env-file federation/.env rag-federation
 
 federation-test: ## Run federation unit tests

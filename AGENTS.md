@@ -283,6 +283,11 @@ See `proxy/app/config.py` for all available settings and defaults.
 | `docs/en/guides/extensibility-data-sources.md` | Adding new ETL data sources |
 | `docs/en/guides/access-control-rbac.md` | RBAC and access control design |
 | `docs/en/guides/knowledge-graph-strategy.md` | Neo4j graph enrichment strategy |
+| `docs/en/guides/federated-rag.md` | Multi-silo federated RAG with fan-out and RRF merge |
+| `docs/en/guides/model-evolution.md` | LoRA/QLoRA fine-tuning, EvalGate, canary deployment |
+| `docs/en/guides/agentic-tools-sdk.md` | `@tool` decorator, `ToolBuilder`, `ToolContext` |
+| `docs/en/guides/agentic-tools-declarative.md` | YAML/JSON declarative tool definitions |
+| `docs/en/guides/agentic-tools-openapi.md` | OpenAPI/Swagger auto-discovery |
 | `docs/en/guides/deployment-guide.md` | Deployment and operations |
 | `docs/en/guides/operations-guide.md` | Operational procedures |
 | `docs/en/guides/integration-opencode.md` | OpenCode IDE integration |

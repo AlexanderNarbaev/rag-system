@@ -59,16 +59,26 @@ nav:
       - "ADR-005: Version-Aware Indexing": adr/ADR-005-version-aware-indexing.md
       - "ADR-006: Agentic RAG with LangGraph": adr/ADR-006-agentic-rag-langgraph.md
       - "ADR-007: HITL Feedback System": adr/ADR-007-hitl-feedback-system.md
+      - "ADR-008: Java/Quarkus Hybrid Migration": adr/ADR-008-java-quarkus-hybrid-migration.md
+      - "ADR-009: Agentic Tools Expansion": adr/ADR-009-agentic-tools-expansion.md
+      - "ADR-010: Model Evolution Pipeline": adr/ADR-010-model-evolution.md
   - C4 Architecture Diagrams:
       - diagrams/index.md
   - Design Guides:
       - guides/index.md
       - RAG Maturity Assessment: guides/rag-maturity-assessment.md
       - Production Readiness Checklist: guides/best-practices-checklist.md
+      - Disaster Recovery Runbook: guides/disaster-recovery-runbook.md
+      - SLI/SLO Definitions: ../sli_slo.md
       - "Performance & Quality": guides/performance-quality.md
       - "Extensibility: Adding Data Sources": guides/extensibility-data-sources.md
       - "Access Control & RBAC": guides/access-control-rbac.md
       - Knowledge Graph Strategy: guides/knowledge-graph-strategy.md
+      - "Federated RAG": guides/federated-rag.md
+      - "Model Evolution": guides/model-evolution.md
+      - "Agentic Tools - SDK": guides/agentic-tools-sdk.md
+      - "Agentic Tools - Declarative": guides/agentic-tools-declarative.md
+      - "Agentic Tools - OpenAPI": guides/agentic-tools-openapi.md
       - Integration with OpenCode: guides/integration-opencode.md
       - Development Roadmap: guides/roadmap.md
       - Deployment Guide: guides/deployment-guide.md

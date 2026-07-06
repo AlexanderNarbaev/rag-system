@@ -1,485 +1,358 @@
 # RAG System — Корпоративный ассистент знаний · Corporate Knowledge Assistant
 
-**EN:** OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab, documents, books, and chat history — indexed into Qdrant + Neo4j, served via any LLM through an OpenAI-compatible inference server.
+**EN:** OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab, documents, books, and chat history — indexed into Qdrant + Neo4j, served via any LLM. Self-correcting RAG (Level 5): HyDE, CRAG, hallucination detection, NLI verification, agentic tools, federated search, model fine-tuning.
 
-**RU:** OpenAI-совместимый RAG-прокси с ETL-конвейером для Confluence, Jira, GitLab, документов, книг и истории чатов — индексация в Qdrant + Neo4j, обслуживается любой LLM через OpenAI-совместимый сервер инференса.
-
----
-
-## Status · Статус
-
-**EN:** **v2.0 (Self-Correcting RAG)** — Production-ready RAG system with self-correction capabilities: HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual benchmarks, Federated RAG, Agentic Tools Expansion, Model Evolution (LoRA/QLoRA fine-tuning, MLflow, MinIO, canary), K8s Helm chart (HPA, probes, secrets), Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment (Qdrant replication, Neo4j cluster, Redis Sentinel), backup automation (S3/MinIO), DR runbook, zero-downtime deployment, E2E test suite, chaos/resilience testing, 2275 tests passing. See [ADR documents](docs/en/adr/) for architecture decisions and [C4 diagrams](docs/en/diagrams/) for visual architecture.
-
-**RU:** **v2.0 (Self-Correcting RAG)** — Production-готовая RAG-система с самокоррекцией: HyDE-расширение запросов, CRAG-оценщик, циклы саморефлексии, обнаружение и заземление галлюцинаций, корректирующая регенерация, NLI-верификация ответов, агентный вызов инструментов (живые запросы к Confluence/Jira/GitLab), мультиязычная поддержка (RU/EN/DE/FR/ZH), кросс-языковые бенчмарки, Федеративный RAG, Расширение агентных инструментов, Эволюция моделей (LoRA/QLoRA дообучение, MLflow, MinIO, canary), K8s Helm-чарт (HPA, пробы, секреты), Grafana-дашборды, правила алертов Prometheus, определения SLI/SLO, HA-развёртывание (репликация Qdrant, кластер Neo4j, Redis Sentinel), автоматизация бэкапов (S3/MinIO), DR runbook, развёртывание без простоя, E2E-тесты, chaos/отказоустойчивое тестирование, 2275 тестов проходят. См. [ADR-документы](docs/adr/) с архитектурными решениями и [C4-диаграммы](docs/diagrams/) с визуальной архитектурой.
-
----
-
-## Architecture · Архитектура
-
-**EN:** Three-layer architecture with supporting services:
-
-1. **ETL Layer** — data extraction, semantic chunking, embedding, indexing (runs on a separate machine)
-2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing
-3. **HITL Layer** — Streamlit expert dashboard for feedback and quality control
-4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude Desktop)
-5. **Model Evolution** — LoRA/QLoRA fine-tuning pipeline for SLM, LLM, and Reranker; MLflow experiment tracking; MinIO artifact storage; EvalGate CI/CD quality gating; AdapterManager hot-reload; CanaryController gradual rollout
-6. **Agentic Tools Expansion** — Custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI auto-discovery; parallel tool execution with dependency resolution
-
-**RU:** Трёхуровневая архитектура с вспомогательными сервисами:
-
-1. **Уровень ETL** — извлечение данных, семантический чанкинг, эмбеддинг, индексация (на отдельной машине)
-2. **Уровень Прокси** — FastAPI с OpenAI-совместимым API, гибридный поиск, реранкинг, мультипровайдерная маршрутизация LLM
-3. **Уровень HITL** — Streamlit дашборд экспертной оценки и контроля качества
-4. **MCP Сервер** — Model Context Protocol сервер, предоставляющий RAG-инструменты MCP-совместимым клиентам (OpenCode, Claude Desktop)
-5. **Эволюция Моделей** — LoRA/QLoRA пайплайн дообучения для SLM, LLM и Reranker; MLflow отслеживание экспериментов; MinIO хранение артефактов; EvalGate CI/CD контроль качества; AdapterManager горячая замена; CanaryController постепенный rollout
-6. **Расширение Агентных Инструментов** — SDK для пользовательских инструментов; декларативные определения; авто-обнаружение OpenAPI; параллельное выполнение с разрешением зависимостей
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ETL Machine · Машина ETL                    │
-│  extractors/ → chunker/ → graph_builder/ → indexer/ → scheduler/ │
-│  (Confluence, Jira, GitLab, Books, Docs, Chats → Qdrant+Neo4j)  │
-└──────────────────┬──────────────────────────────────────────────┘
-                   │ shared volumes / API
-                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Proxy Machine · Машина прокси (Docker)          │
-│  ┌──────────────────────────────────────────────────────┐       │
-│  │ rag-proxy (FastAPI :8080)                             │       │
-│  │  ├─ retrieval (Qdrant hybrid: dense+sparse RRF)      │       │
-│  │  ├─ rerank (cross-encoder)                            │       │
-│  │  ├─ context_builder (dedup + versioning)              │       │
-│  │  ├─ provider_adapter (OpenAI / Anthropic / Ollama)    │       │
-│  │  ├─ llm_router (streaming + non-streaming + tools)    │       │
-│  │  ├─ slm_router (intent classification, decomposition) │       │
-│  │  ├─ token_optimizer (BPE counting, compression)       │       │
-│  │  ├─ orchestrator (LangGraph: agentic multi-step)      │       │
-│  │  ├─ cache (Redis: embeddings, rerank, responses)      │       │
-│  │  └─ hitl (interaction logging + feedback)             │       │
-│  ├─ qdrant (vector DB :6333)                              │       │
-│  ├─ redis (cache :6379)                                   │       │
-│  └─ neo4j (graph DB :7687)                                │       │
-└──────────────────┬──────────────────────────────────────────────┘
-                   │ OpenAI-compatible API (/v1/chat/completions)
-                   ▼
-         OpenWebUI, OpenCode, n8n, custom clients
-                   │
-                   ▼
-         HITL Dashboard (Streamlit :8501) — expert feedback
-                   │
-                   ▼
-         MCP Server — RAG tools for MCP clients (OpenCode, Claude)
-```
-
-### C4 Architecture Diagrams · C4-диаграммы
-
-| Level | Scope | File |
-|-------|-------|------|
-| **L1** | System Context (11 nodes) | [`c4-level1-context`](docs/diagrams/c4-level1-context.svg) |
-| **L2** | Containers (10 nodes) | [`c4-level2-containers`](docs/diagrams/c4-level2-containers.svg) |
-| **L3** | RAG Proxy Components (13 nodes) | [`c4-level3-proxy-components`](docs/diagrams/c4-level3-proxy-components.svg) |
-| **L3** | ETL Pipeline Components (14 nodes) | [`c4-level3-etl-components`](docs/diagrams/c4-level3-etl-components.svg) |
-
-**EN:** Editable `.excalidraw` files available in `docs/diagrams/`.
-
-**RU:** Редактируемые `.excalidraw` файлы доступны в `docs/diagrams/`.
-
----
-
-## Key Principles · Ключевые принципы
-
-**EN:**
-
-1. **Air-gapped first** — all models pre-downloaded, no external API calls at runtime. The system must function fully offline.
-2. **Graceful degradation** — every component can fail independently: Neo4j unavailable → skip graph expansion; Reranker OOM → use raw hybrid scores; Redis down → fall back to in-memory cache. The proxy never crashes on component failure.
-3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents are reindexed.
-4. **OpenAI compatibility** — drop-in replacement for any OpenAI client. RAG-specific extensions (`rag_version`, `rag_force_refresh`) are silently ignored by standard clients.
-5. **Multi-provider routing** — supports OpenAI-compatible (vLLM, llama.cpp, Ollama, LiteLLM), Anthropic (Claude API), and Generic REST. Tool/function calling works across all providers.
-6. **Dual-model routing** — a small language model (SLM) handles fast preprocessing (intent classification, query decomposition); a large language model (LLM) handles heavy generation. Keeps latency low for routing tasks.
-7. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The system runs in simple RAG mode by default.
-8. **Token economy** — BPE-aware token counting, 4 compression strategies, smart budget allocation.
-9. **Self-improving RAG** — confidence scoring on every answer, VERIFY_CASCADE routing triggers query rewrites for low-confidence responses, active feedback via `/v1/feedback` endpoint, knowledge base self-enrichment from expert corrections.
-
-**RU:**
-
-1. **Air-gapped first** — все модели предварительно загружены, никаких внешних API-вызовов во время работы. Система полностью автономна.
-2. **Graceful degradation** — каждый компонент может отказать независимо: Neo4j недоступен → пропускаем графовое расширение; реранкер OOM → используем сырые гибридные оценки; Redis недоступен → переключаемся на in-memory кэш. Прокси никогда не падает при отказе компонента.
-3. **Инкрементальность по умолчанию** — WAL-контрольные точки ETL. SHA-256 контентно-адресуемые чанки. Только изменённые документы переиндексируются.
-4. **OpenAI-совместимость** — совместим с любым OpenAI-клиентом. RAG-расширения (`rag_version`, `rag_force_refresh`) игнорируются стандартными клиентами.
-5. **Мультипровайдерная маршрутизация** — поддержка OpenAI-совместимых (vLLM, llama.cpp, Ollama, LiteLLM), Anthropic (Claude API) и Generic REST. Tool/function calling работает для всех провайдеров.
-6. **Двухмодельная маршрутизация** — малая языковая модель (SLM) для быстрой предобработки; большая языковая модель (LLM) для генерации. Минимизирует задержки.
-7. **Опциональная сложность** — LangGraph-оркестратор, Neo4j-расширение графом и Redis-кэширование опциональны. По умолчанию система работает в простом RAG-режиме.
-8. **Экономия токенов** — BPE-осознанный подсчёт токенов, 4 стратегии сжатия, умное распределение бюджета.
-9. **Самоулучшающийся RAG** — оценка уверенности для каждого ответа, VERIFY_CASCADE-маршрутизация запускает перезапрос при низкой уверенности, активная обратная связь через `/v1/feedback`, самообогащение базы знаний из экспертных исправлений.
-
----
-
-## Project Structure · Структура проекта
-
-```
-rag-system/
-├── etl/                              # ETL pipeline (runs separately) · запускается отдельно
-│   ├── extractors/                   # confluence.py, jira.py, gitlab.py, books.py, docs.py, chats.py
-│   ├── chunker/                      # semantic_chunker.py, hash_versioning.py
-│   ├── graph_builder/                # entity_extractor.py, neo4j_loader.py, schema.yaml
-│   ├── indexer/                      # qdrant_hybrid.py, live_vector_lake.py, wal_manager.py
-│   ├── scheduler/                    # run_etl.py (orchestrates full pipeline)
-│   ├── config/                       # etl_config.yaml
-│   ├── Dockerfile.etl
-│   └── requirements_etl.txt
-├── proxy/                            # RAG proxy (Dockerized) · в Docker
-│   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (25 endpoints + health + metrics)
-│   │   ├── orchestrator.py           # LangGraph agentic query pipeline (8-node state graph)
-│   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
-│   │   ├── rerank.py                 # Cross-encoder reranker
-│   │   ├── context_builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
-│   │   ├── provider_adapter.py       # Multi-provider adapter (OpenAI, Anthropic, Ollama, Generic)
-│   │   ├── llm_router.py             # Async LLM adapter (streaming + non-streaming + tools)
-│   │   ├── slm_router.py             # SLM: intent classification, query decomposition, entity extraction
-│   │   ├── token_optimizer.py        # BPE-aware token counting, compression, budget allocation
-│   │   ├── cache.py                  # Redis + in-memory multi-tier cache
-│   │   ├── hitl.py                   # Human-in-the-loop: async interaction logging, feedback
-│   │   ├── metrics.py                # Prometheus metrics (counters, histograms, gauges)
-│   │   ├── rate_limiter.py           # Token bucket rate limiting middleware (per IP)
-│   │   ├── middleware.py             # Request ID, correlation ID, logging middleware
-│   │   ├── logging_config.py         # Structured logging (text/JSON), secret masking
-│   │   ├── config.py                 # Environment-based configuration (all settings)
-│   │   ├── model_evolution/            # Fine-tuning pipeline (13 modules)
-│   │   │   ├── trainer.py               # Base trainer classes + TrainingJob + registry
-│   │   │   ├── trainer_base.py          # ABC for all trainers
-│   │   │   ├── slm_trainer.py           # SLM LoRA fine-tuning
-│   │   │   ├── llm_trainer.py           # LLM QLoRA fine-tuning
-│   │   │   ├── reranker_trainer.py      # Reranker Full/LoRA fine-tuning
-│   │   │   ├── adapter_manager.py       # Hot-reload trained adapters
-│   │   │   ├── canary_controller.py     # Gradual rollout with traffic splitting
-│   │   │   ├── model_registry.py        # Model artifact registry (MLflow + MinIO)
-│   │   │   ├── eval_gate.py             # EvalGate CI/CD quality gating
-│   │   │   ├── env_profile.py           # Dev/Prod/CI training profiles
-│   │   │   ├── exceptions.py            # Model evolution error hierarchy
-│   │   │   └── __init__.py
-│   │   └── utils.py                  # Shared utilities: token counting, hashing, masking, safe division
-│   ├── .env                          # Configuration (edit before first run) · настройка перед запуском
-│   ├── Dockerfile
-│   ├── requirements_proxy.txt
-│   └── docker-compose.yml            # Qdrant + Redis + Neo4j + Proxy
-├── mcp_server/                       # MCP server for OpenCode/Claude Desktop integration
-│   ├── server.py                     # STDIO + Streamable HTTP transports, tools/resources/prompts
-│   └── __init__.py
-├── hitl_dashboard/                   # Streamlit expert review dashboard
-│   ├── dashboard.py
-│   └── feedback_logger.py
-├── scripts/                          # Utility scripts · утилиты
-│   ├── init_collections.py           # Initialize Qdrant collections
-│   └── download_models_offline.py    # Pre-download models for air-gapped env
-├── tests/                            # Test suite (2275+ tests passing)
-│   ├── proxy/                        # 1417 proxy unit tests
-│   ├── etl/                          # 361 ETL unit tests
-│   ├── integration/                  # 59 integration tests
-│   ├── model_evolution/              # 358 model evolution tests
-│   ├── e2e/                          # 18 end-to-end tests
-│   ├── benchmark/                    # 4 load/benchmark tests
-│   ├── mcp_server/                   # 46 MCP server tests
-│   └── conftest.py                   # Shared fixtures
-├── docs/                             # Documentation · документация
-│   ├── adr/                          # 10 Architecture Decision Records
-│   ├── diagrams/                     # 4 C4 diagrams (SVG + Excalidraw)
-│   └── guides/                       # 14 design & implementation guides
-├── Makefile                          # Primary dev entry point
-├── pyproject.toml                    # Python project config (ruff, mypy, pytest)
-├── setup.sh                          # Installation script
-├── opencode.json                     # OpenCode IDE configuration
-├── AGENTS.md
-└── README.md
-```
-
----
-
-## Tech Stack · Технологический стек
-
-| Component | Technology | Purpose / Назначение |
-|-----------|-----------|---------|
-| **LLM** | Any model via OpenAI-compatible API (e.g., Gemma, Llama, Mistral, Qwen) | Response generation · Генерация ответов |
-| **SLM** | Any small model via OpenAI-compatible API (e.g., Gemma-2B, Phi-3, Qwen2.5-1.5B) | Query routing, entity extraction · Маршрутизация, извлечение сущностей |
-| **Embeddings** | BAAI/bge-m3 (or any SentenceTransformer model) | Dense (1024-dim) + sparse (lexical) + ColBERT |
-| **Vector DB** | Qdrant | Hybrid search (dense + sparse), RRF fusion |
-| **Graph DB** | Neo4j | Entity relationships, multi-hop traversal |
-| **Cache** | Redis | Embedding cache, rerank results, response cache |
-| **Proxy** | FastAPI + LangGraph | OpenAI-compatible API, agentic orchestration · агентная оркестрация |
-| **Inference** | Any OpenAI-compatible server (vLLM, llama.cpp, Ollama, LiteLLM, etc.) | LLM/SLM serving · обслуживание моделей |
-| **Providers** | OpenAI, Anthropic, Ollama, Generic REST | Multi-provider routing with tool/function calling |
-| **ETL** | Python, requests, BeautifulSoup, spaCy | Data extraction, chunking, indexing |
-| **Dashboard** | Streamlit | HITL expert review · экспертная оценка |
-| **MCP** | FastMCP | Model Context Protocol server for IDE integration |
-| **Auth** | Keycloak OIDC | Corporate SSO, RBAC · корпоративная аутентификация |
-| **Infra** | Kubernetes + Helm | Production-grade deployment · production-развёртывание |
-| **Backup** | S3/MinIO | Automated snapshots · автоматические бэкапы |
-
----
-
-## Key Design Decisions · Ключевые проектные решения
-
-**EN:**
-
-1. **Hybrid embeddings** — BAAI/bge-m3 provides dense + sparse + ColBERT in one model
-2. **Qdrant** — native hybrid search with RRF fusion, on-disk sparse index
-3. **Semantic chunking** — MDKeyChunker, structure-aware splitting by headers/sections
-4. **Version-aware** — SHA-256 hashing, LiveVectorLake for hot/cold storage stratification
-5. **Dual LLM** — SLM for fast query routing + LLM for generation (any OpenAI-compatible models)
-6. **Multi-provider** — transparent routing to OpenAI, Anthropic, Ollama, or Generic endpoints with tool/function calling
-7. **OpenAI-compatible** — drop-in replacement for any OpenAI client
-8. **WAL-based ETL** — incremental checkpointing with resume capability
-9. **Air-gapped** — all models pre-downloaded, no external API dependencies
-10. **LangGraph** — optional agentic orchestration with multi-step retrieval and self-correction
-
-**RU:**
-
-1. **Гибридные эмбеддинги** — BAAI/bge-m3 предоставляет dense + sparse + ColBERT в одной модели
-2. **Qdrant** — нативный гибридный поиск с RRF-фьюжном, on-disk sparse index
-3. **Семантический чанкинг** — MDKeyChunker, структурно-осознанное разделение по заголовкам/секциям
-4. **Версионирование** — SHA-256 хеширование, LiveVectorLake для стратификации hot/cold хранения
-5. **Двухмодельная LLM** — SLM для быстрой маршрутизации + LLM для генерации (любые OpenAI-совместимые модели)
-6. **Мультипровайдер** — прозрачная маршрутизация к OpenAI, Anthropic, Ollama или Generic эндпоинтам с поддержкой tool/function calling
-7. **OpenAI-совместимость** — совместим с любым OpenAI-клиентом
-8. **WAL-based ETL** — инкрементальные контрольные точки с возможностью возобновления
-9. **Автономность (Air-gapped)** — все модели загружены заранее, внешние API не требуются
-10. **LangGraph** — опциональная агентная оркестрация с многошаговым поиском и самокоррекцией
-
----
-
-## Multi-Provider Support · Мультипровайдерная поддержка
-
-**EN:** v2.0 adds HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), Federated RAG, Agentic Tools Expansion, Model Evolution (LoRA/QLoRA, MLflow, MinIO, canary), and cross-lingual retrieval benchmarks. 2275 tests pass at 99%+.
-
-**RU:** v2.0 добавляет HyDE-расширение запросов, CRAG-оценщик, циклы саморефлексии, обнаружение и заземление галлюцинаций, корректирующую регенерацию, NLI-верификацию ответов, агентный вызов инструментов (живые запросы к Confluence/Jira/GitLab), мультиязычную поддержку (RU/EN/DE/FR/ZH), Федеративный RAG, Расширение Агентных Инструментов, Эволюцию Моделей (LoRA/QLoRA, MLflow, MinIO, canary) и кросс-языковые бенчмарки. 2275 тестов проходят с 99%+ результатом.
-
-The proxy supports multiple AI providers through a unified adapter layer. Configure via `LLM_PROVIDER_TYPE`:
-
-| Provider | `LLM_PROVIDER_TYPE` | Protocol | Tool Calling |
-|----------|---------------------|----------|-------------|
-| **OpenAI-compatible** | `openai` | OpenAI `/v1/chat/completions` | Yes · Да |
-| **Anthropic** | `anthropic` | Claude Messages API | Yes · Да |
-| **Ollama** | `ollama` | OpenAI-compatible via `ollama serve` | Yes · Да |
-| **Generic REST** | `generic` | Custom endpoint, configurable mapping | Partial |
-
-**RU:** Прокси поддерживает несколько AI-провайдеров через унифицированный слой адаптеров. Настройка через `LLM_PROVIDER_TYPE`:
-
-| Провайдер | `LLM_PROVIDER_TYPE` | Протокол | Tool Calling |
-|-----------|---------------------|----------|-------------|
-| **OpenAI-совместимый** | `openai` | OpenAI `/v1/chat/completions` | Да |
-| **Anthropic** | `anthropic` | Claude Messages API | Да |
-| **Ollama** | `ollama` | OpenAI-совместимый через `ollama serve` | Да |
-| **Generic REST** | `generic` | Произвольный эндпоинт, настраиваемый маппинг | Частично |
-
-Tool/function calling is supported across all providers. The adapter automatically translates between internal OpenAI-compatible format and provider-specific schemas (Anthropic content blocks, Ollama native tools, etc.). Streaming is fully supported with real-time translation.
-
-Tool/function calling поддерживается для всех провайдеров. Адаптер автоматически транслирует между внутренним OpenAI-совместимым форматом и схемами конкретных провайдеров. Стриминг полностью поддерживается с трансляцией в реальном времени.
-
----
-
-## RAG Maturity Levels · Уровни зрелости RAG
-
-**EN:**
-
-| Level | Retrieval | Ranking | Multi-hop | Self-correction |
-|-------|-----------|---------|-----------|-----------------|
-| Naive | Dense only | None | No | No |
-| Advanced | Hybrid (dense+BM25) | Cross-encoder | Query rewrite | No |
-| **GraphRAG** | Graph+vector | Node centrality | Graph composition | Partial |
-| Agentic | Adaptive multi-try | Sufficiency eval | Task decomposition | Full iterative |
-| **Self-Correcting** | HyDE + CRAG | Self-reflection | NLI grounding | Full self-correcting |
-
-This project implements **Self-Correcting RAG** (Level 5) with HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, and agentic tool calling against live Confluence/Jira/GitLab APIs. Production-ready with K8s HA deployment, automated backups, DR runbook, and comprehensive monitoring.
-
-**RU:**
-
-| Уровень | Поиск | Ранжирование | Многошаговость | Самокоррекция |
-|---------|-------|-------------|----------------|---------------|
-| Наивный | Только dense | Нет | Нет | Нет |
-| Продвинутый | Гибридный (dense+BM25) | Cross-encoder | Перезапись запроса | Нет |
-| **GraphRAG** | Граф+вектор | Центральность узлов | Графовая композиция | Частичная |
-| Агентный | Адаптивный multi-try | Оценка достаточности | Декомпозиция задач | Полная итеративная |
-| **Самокорректирующий** | HyDE + CRAG | Саморефлексия | NLI-заземление | Полная самокоррекция |
-
-Проект реализует **Самокорректирующий RAG** (уровень 5) с HyDE-расширением запросов, CRAG-оценщиком, циклами саморефлексии, обнаружением и заземлением галлюцинаций, корректирующей регенерацией, NLI-верификацией ответов и агентным вызовом инструментов к живым API Confluence/Jira/GitLab. Production-готовность с K8s HA-развёртыванием, автоматическими бэкапами, DR runbook и комплексным мониторингом.
-
----
-
-## Documentation Index · Индекс документации
-
-### Architecture Decision Records (ADRs)
-
-| # | Decision / Решение | Document |
-|---|--------------------|----------|
-| 001 | BAAI/bge-m3 as embedding model | [`ADR-001`](docs/adr/ADR-001-bge-m3-embedding-model.md) |
-| 002 | Qdrant for hybrid vector search | [`ADR-002`](docs/adr/ADR-002-qdrant-hybrid-search.md) |
-| 003 | Dual-LLM (SLM + LLM) architecture | [`ADR-003`](docs/adr/ADR-003-dual-llm-architecture.md) |
-| 004 | OpenAI-compatible proxy pattern | [`ADR-004`](docs/adr/ADR-004-openai-compatible-proxy.md) |
-| 005 | Version-aware document indexing | [`ADR-005`](docs/adr/ADR-005-version-aware-indexing.md) |
-| 006 | Agentic RAG with LangGraph | [`ADR-006`](docs/adr/ADR-006-agentic-rag-langgraph.md) |
-| 007 | Human-in-the-loop feedback system | [`ADR-007`](docs/adr/ADR-007-hitl-feedback-system.md) |
-
-### Design Guides · Руководства
-
-| Guide / Руководство | Document |
-|---------------------|----------|
-| Extensibility: adding new data sources | [`extensibility-data-sources.md`](docs/guides/extensibility-data-sources.md) |
-| Access control & RBAC | [`access-control-rbac.md`](docs/guides/access-control-rbac.md) |
-| Knowledge graph enrichment & unrolling | [`knowledge-graph-strategy.md`](docs/guides/knowledge-graph-strategy.md) |
-| Performance & quality best practices | [`performance-quality.md`](docs/guides/performance-quality.md) |
-| RAG maturity assessment | [`rag-maturity-assessment.md`](docs/guides/rag-maturity-assessment.md) |
-| Production readiness checklist | [`best-practices-checklist.md`](docs/guides/best-practices-checklist.md) |
-| Roadmap (v0.1 → v2.0) | [`roadmap.md`](docs/guides/roadmap.md) |
-| Deployment guide | [`deployment-guide.md`](docs/guides/deployment-guide.md) |
-| Operations guide | [`operations-guide.md`](docs/guides/operations-guide.md) |
-| OpenCode IDE integration | [`integration-opencode.md`](docs/guides/integration-opencode.md) |
-| Troubleshooting | [`troubleshooting.md`](docs/guides/troubleshooting.md) |
+**RU:** OpenAI-совместимый RAG-прокси с ETL-конвейером для Confluence, Jira, GitLab, документов, книг и истории чатов. Самокорректирующийся RAG (Уровень 5): HyDE, CRAG, детекция галлюцинаций, NLI-верификация, агентные инструменты, федеративный поиск, дообучение моделей.
 
 ---
 
 ## Quick Start · Быстрый старт
 
-**EN:**
-
 ```bash
-# 1. Install (one-time):
-curl -fsSL https://raw.githubusercontent.com/AlexanderNarbaev/opencode_initializer/main/setup.sh | bash -s -- --full
-bash setup.sh --rag-system
+# Clone and install
+git clone https://github.com/AlexanderNarbaev/rag-system.git
+cd rag-system
+make install-dev
 
-# 2. Configure:
-cd rag-system/proxy
-cp .env.example .env  # edit with your settings
+# Start services (Qdrant + Redis + Neo4j + Proxy)
+cd proxy && docker compose up -d
 
-# 3. Start the proxy:
-docker-compose up -d
-
-# 4. Run ETL pipeline:
-cd ../etl
-python scheduler/run_etl.py --config config/etl_config.yaml
+# Test the API
+curl http://localhost:8080/v1/health
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"rag-proxy","messages":[{"role":"user","content":"What is RAG?"}]}'
 ```
 
-**RU:**
+**Prerequisites:** Docker, Python 3.11+, 16 GB RAM, 20 GB disk. See [Deployment Guide](docs/en/guides/deployment-guide.md) for production setup.
 
-```bash
-# 1. Установка (однократно):
-curl -fsSL https://raw.githubusercontent.com/AlexanderNarbaev/opencode_initializer/main/setup.sh | bash -s -- --full
-bash setup.sh --rag-system
+---
 
-# 2. Настройка:
-cd rag-system/proxy
-cp .env.example .env  # отредактируйте под свои параметры
+## Status · Статус
 
-# 3. Запуск прокси:
-docker-compose up -d
+| Metric | Value |
+|--------|-------|
+| **Version** | v2.0.0 (June 2026) |
+| **RAG Maturity** | Level 5 — Self-Correcting |
+| **Production Readiness** | 94% (75/80 across 8 dimensions) |
+| **Tests** | ~2275 passing (99%+) |
+| **Endpoints** | 25 REST + Prometheus metrics |
+| **Languages** | RU, EN, DE, FR, ZH |
+| **License** | MIT |
 
-# 4. Запуск ETL-конвейера:
-cd ../etl
-python scheduler/run_etl.py --config config/etl_config.yaml
+---
+
+## Architecture · Архитектура
+
+Six-layer architecture with multi-provider LLM support:
+
 ```
+Client (OpenAI SDK / curl / OpenWebUI / n8n)
+       │
+       ▼
+┌──────────────────────────────────────────────┐
+│  RAG Proxy (FastAPI :8080)                    │
+│  ┌──────────────────────────────────────────┐ │
+│  │ Orchestrator (LangGraph, 10-node graph)   │ │
+│  │  rewrite→retrieve→check→rerank→graph_expand│ │
+│  │  →build→generate→call_tools→reflect→check │ │
+│  │                                           │ │
+│  │ Features:                                 │ │
+│  │  • HyDE query expansion                   │ │
+│  │  • CRAG evaluator + self-reflection       │ │
+│  │  • Hallucination detection & NLI grounding│ │
+│  │  • Agentic tool calling (live sources)    │ │
+│  │  • Multi-language support                 │ │
+│  │  • SSE streaming with TTFT optimization   │ │
+│  │  • RBAC (4 roles) + JWT + LDAP/AD         │ │
+│  │  • Circuit breakers + graceful degradation│ │
+│  └──────────────────────────────────────────┘ │
+│                                               │
+│  ┌─────────┐ ┌──────────┐ ┌───────┐          │
+│  │ Qdrant  │ │  Neo4j   │ │ Redis │          │
+│  │ Vector  │ │  Graph   │ │ Cache │          │
+│  └─────────┘ └──────────┘ └───────┘          │
+└──────────────────────────────────────────────┘
+       │                    │
+       ▼                    ▼
+┌─────────────┐   ┌────────────────┐
+│ ETL Pipeline │   │ LLM Backend    │
+│ (extraction, │   │ (vLLM, llama.  │
+│  chunking,   │   │  cpp, OpenAI-  │
+│  embedding,  │   │  compatible,   │
+│  indexing)   │   │  Anthropic)    │
+└─────────────┘   └────────────────┘
+```
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **1. ETL** | Python, spaCy, BGE-M3 | Extract, chunk, embed, index data sources |
+| **2. Proxy** | FastAPI, LangGraph | OpenAI-compatible API, hybrid retrieval + generation |
+| **3. HITL** | Streamlit | Expert feedback dashboard, quality control |
+| **4. MCP Server** | FastMCP | STDIO + Streamable HTTP, IDE integration |
+| **5. Model Evolution** | LoRA/QLoRA, MLflow, MinIO | Fine-tune SLM/LLM/Reranker, canary deployment |
+| **6. Federated RAG** | FastAPI, asyncio | Multi-silo fan-out, weighted RRF merge |
+
+[Full architecture →](docs/en/index.md) | [C4 Diagrams →](docs/en/diagrams/)
+
+---
+
+## Key Features · Ключевые возможности
+
+### RAG Pipeline
+- **HyDE query expansion** — Generate hypothetical documents to improve retrieval
+- **CRAG evaluator** — Assess retrieval quality and trigger corrective loops
+- **Self-reflection** — Critique and regenerate answers for quality
+- **Hallucination grounding** — NLI-based fact verification against retrieved context
+- **Hybrid search** — Dense (BGE-M3 1024-dim) + Sparse (BM25 lexical) + ColBERT multi-vectors
+- **Cross-encoder reranking** — MiniLM-L-6-v2 with fine-tuning support
+- **Graph expansion** — Neo4j knowledge graph with entity extraction and multi-hop traversal
+
+### Agentic Tools
+- **Python SDK** — `@tool` decorator with automatic JSON Schema from type hints
+- **Declarative tools** — YAML/JSON definitions for HTTP and shell commands
+- **OpenAPI auto-discovery** — Convert REST APIs to tools automatically
+- **Parallel execution** — Dependency-aware tool orchestration
+- **RBAC visibility** — Per-tool access control (public/user/internal/admin)
+
+### Federated RAG (New in v2.0)
+- **Multi-silo fan-out** — Query multiple independent RAG instances simultaneously
+- **Weighted RRF merge** — Cross-silo result fusion with configurable weights
+- **Auto-routing** — SLM-based query classification to target silos
+- **Circuit breakers** — Per-silo resilience with automatic recovery
+- **Generation delegation** — Route to primary silo or direct LLM
+
+### Model Evolution (New in v2.0)
+- **LoRA/QLoRA fine-tuning** — SLM, LLM, and Reranker training pipelines
+- **MLflow + MinIO** — Experiment tracking and artifact storage
+- **Hot-reload adapters** — Zero-downtime model swapping
+- **Canary deployment** — Gradual rollout with automatic rollback
+- **EvalGate CI/CD** — Automated quality gating before promotion
+
+### Production Features
+- **JWT auth + Keycloak OIDC** — Corporate SSO with token pairs
+- **RBAC** — 4 roles: admin, expert, user, read-only
+- **LDAP/AD integration** — Enterprise directory authentication
+- **Rate limiting** — Token bucket per IP
+- **Prometheus metrics** — 30+ counters, histograms, gauges
+- **Response compression** — gzip/brotli
+- **K8s Helm chart** — HPA, probes, secrets, network policies
+
+---
+
+## API Endpoints · API эндпоинты
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/v1/chat/completions` | Optional | Chat completion with RAG (streaming + non-streaming) |
+| `GET` | `/v1/models` | No | Available LLM models |
+| `GET` | `/v1/health` | No | Service health (Qdrant + LLM status) |
+| `GET` | `/v1/health/live` | No | K8s liveness probe |
+| `GET` | `/v1/health/ready` | No | K8s readiness probe |
+| `POST` | `/v1/feedback` | Expert | Submit expert feedback |
+| `POST` | `/v1/auth/register` | No | User self-registration |
+| `POST` | `/v1/auth/login` | No | JWT token pair (access + refresh) |
+| `POST` | `/v1/auth/refresh` | JWT | Refresh token exchange |
+| `POST` | `/v1/auth/logout` | JWT | Token revocation + blacklist |
+| `GET` | `/v1/auth/me` | JWT | Current user context |
+| `GET` | `/v1/widget` | No | Embeddable chat widget (HTML) |
+| `GET` | `/v1/widget.js` | No | Widget JavaScript |
+| `GET` | `/v1/tools` | Optional | List available tools |
+| `GET` | `/v1/tools/{name}` | Optional | Tool details |
+| `POST` | `/v1/admin/models/train` | Admin | Trigger training job |
+| `GET` | `/v1/admin/models/status/{job_id}` | Admin | Training status |
+| `GET` | `/v1/admin/models` | Admin | List registered models |
+| `POST` | `/v1/admin/models/promote` | Admin | Promote model version |
+| `POST` | `/v1/admin/models/rollback` | Admin | Rollback model version |
+| `POST` | `/v1/admin/models/evaluate` | Admin | Evaluate model quality |
+| `POST` | `/v1/admin/models/canary/split` | Admin | Configure canary traffic |
+| `GET` | `/v1/admin/models/canary/status` | Admin | Canary deployment status |
+| `GET` | `/metrics` | No | Prometheus metrics |
+
+RAG-specific parameters on `/v1/chat/completions`:
+- `rag_version` — Request specific document version
+- `rag_force_refresh` — Bypass response cache
+- `rag_skip_generation` — Search-only mode (federation)
+- `rag_return_chunks` — Return retrieved chunks
+- `rag_top_k` — Override chunks after rerank
+- Response: `rag_feedback_id`, `rag_confidence`, `rag_sources`
+
+[Full API Reference →](docs/en/api_reference.md)
 
 ---
 
 ## Configuration · Конфигурация
 
-**EN:** All configuration via environment variables or `.env` file in `proxy/.env`. Key settings:
+All settings via environment variables or `proxy/.env`. See [Configuration Reference](docs/en/guides/deployment-guide.md).
+
+### Essential
 
 ```bash
-# Required / Обязательные
-QDRANT_HOST=localhost                        # Qdrant server
-LLM_ENDPOINT=http://localhost:8000/v1        # OpenAI-compatible inference server
-LLM_MODEL_NAME=your-model-name               # e.g., gemma-4-26b-it, meta-llama/Llama-3.1-70B
-LLM_PROVIDER_TYPE=openai                     # openai, anthropic, ollama, generic
-
-# SLM (optional, disabled if endpoint is empty)
-SLM_ENDPOINT=http://localhost:8001/v1        # SLM inference server
-SLM_MODEL_NAME=your-slm-model-name           # e.g., gemma-2b-it, Phi-3-mini-4k-instruct
-
-# Optional features (disabled by default) / Опционально (выключены по умолчанию)
-USE_LANGGRAPH=true                           # Enable agentic orchestration
-USE_REDIS=true                               # Enable Redis caching
-GRAPH_ENABLED=true                           # Enable Neo4j graph expansion
-USE_GRAPH_EXPANSION=true                     # Enable graph context enrichment
-RATE_LIMIT_ENABLED=true                      # Enable rate limiting
-METRICS_ENABLED=true                         # Enable Prometheus metrics
-LOG_FORMAT=json                              # Structured JSON logging
-AUTH_ENABLED=true                            # Enable JWT authentication
+QDRANT_HOST=localhost              # Qdrant server address
+LLM_ENDPOINT=http://llm:8000/v1    # LLM backend URL
+LLM_MODEL_NAME=your-model-name      # Model identifier
+LLM_PROVIDER=vllm                   # vllm | llama_cpp | openai_compatible
 ```
 
-See `proxy/app/config.py` for all available settings and defaults.
+### Feature Flags
 
-**RU:** Вся конфигурация через переменные окружения или файл `.env` в `proxy/.env`. См. `proxy/app/config.py` для всех настроек и значений по умолчанию.
+```bash
+USE_LANGGRAPH=true          # Agentic orchestration
+USE_REDIS=true              # Redis caching
+GRAPH_ENABLED=true          # Neo4j knowledge graph
+AUTH_ENABLED=true           # JWT authentication
+RATE_LIMIT_ENABLED=true     # Rate limiting
+METRICS_ENABLED=true        # Prometheus metrics
+MODEL_EVOLUTION_ENABLED=true # Fine-tuning pipelines
+```
+
+### Multi-Provider LLM
+
+Supports any OpenAI-compatible endpoint, vLLM, llama.cpp, Anthropic Claude, or generic REST API. Configure per-request via `provider_type` parameter.
 
 ---
 
-## API Endpoints · API-эндпоинты
+## Deployment · Развёртывание
 
-| Endpoint | Method | Description / Описание |
-|----------|--------|------------------------|
-| `/v1/chat/completions` | POST | Chat completion (streaming + non-streaming + tools) |
-| `/v1/models` | GET | List available models · список моделей |
-| `/v1/health` | GET | Health check (Qdrant + LLM status) · проверка здоровья |
-| `/metrics` | GET | Prometheus metrics · метрики Prometheus |
+### Docker Compose (development / single-server)
 
-**EN:** The `/v1/chat/completions` endpoint accepts standard OpenAI parameters plus:
-- `rag_version` — request a specific document version
-- `rag_force_refresh` — bypass response cache
-- `lang` — response language (ru, en, de, fr, zh; default: en)
-- `tools` — tool/function calling definitions (works across all providers, includes live Confluence/Jira/GitLab queries)
-- `stream` — streaming via SSE (works across all providers)
-- Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`
+```bash
+cd proxy
+cp .env.example .env          # Edit configuration
+docker compose up -d           # Qdrant + Redis + Neo4j + Proxy
+```
 
-**RU:** Эндпоинт `/v1/chat/completions` принимает стандартные OpenAI-параметры плюс:
-- `rag_version` — запросить конкретную версию документа
-- `rag_force_refresh` — обойти кэш ответов
-- `lang` — язык ответа (ru, en, de, fr, zh; по умолчанию: en)
-- `tools` — определения tool/function calling (работает со всеми провайдерами, включает живые запросы к Confluence/Jira/GitLab)
-- `stream` — стриминг через SSE (работает со всеми провайдерами)
-- Расширения ответа: `rag_feedback_id`, `rag_confidence`, `rag_sources`
+### Kubernetes (production)
+
+```bash
+helm install rag-system ./k8s/helm/rag-system \
+  --set proxy.replicaCount=3 \
+  --set qdrant.persistence.size=100Gi \
+  --set auth.enabled=true
+```
+
+See [K8s Deployment Guide](docs/en/guides/deployment-guide.md) for HA setup with HPA, probes, and secrets.
+
+### Air-Gapped Environment
+
+```bash
+python scripts/download_models_offline.py --all
+# Transfer models/ directory to air-gapped machine
+MODEL_CACHE_DIR=/data/models docker compose up -d
+```
 
 ---
 
-## Running Tests · Запуск тестов
+## Key Principles · Ключевые принципы
 
-```bash
-# All tests (no external services required) · Все тесты (внешние сервисы не требуются):
-pytest tests/ -v
+1. **Air-gapped first** — All models pre-downloaded. No external API calls at runtime. Fully offline operation.
+2. **Graceful degradation** — Neo4j unavailable → skip graph expansion. Reranker OOM → raw hybrid scores. Redis down → in-memory cache. Proxy never crashes.
+3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents reindexed.
+4. **OpenAI compatibility** — Drop-in replacement for any OpenAI client. RAG extensions silently ignored by standard clients.
+5. **Dual-model routing** — SLM (2-3B params) for fast preprocessing. LLM for heavy generation. Keeps latency low.
+6. **Multi-provider** — Pluggable adapters for vLLM, llama.cpp, OpenAI-compatible, Anthropic, Ollama.
+7. **Optional complexity** — LangGraph, Neo4j, Redis all optional. Runs in simple RAG mode by default.
+8. **Token economy** — BPE-aware counting, 4 compression strategies, smart budget allocation.
 
-# Specific suites · Конкретные наборы:
-pytest tests/proxy/ -v        # 1417 proxy unit tests
-pytest tests/etl/ -v          # 361 ETL unit tests
-pytest tests/integration/ -v  # 59 integration tests
+---
 
-# Coverage · Покрытие:
-pytest tests/ --cov=proxy --cov=etl --cov-report=html
-```
+## Documentation · Документация
+
+| Document | Description |
+|----------|-------------|
+| [Architecture Decision Records](docs/en/adr/) | 10 ADRs covering all major design decisions |
+| [C4 Architecture Diagrams](docs/en/diagrams/) | L1 (System Context), L2 (Containers), L3 (Components) |
+| [API Reference](docs/en/api_reference.md) | Complete endpoint reference with request/response schemas |
+| [Deployment Guide](docs/en/guides/deployment-guide.md) | Docker + K8s production deployment |
+| [Operations Guide](docs/en/guides/operations-guide.md) | Monitoring, backup, scaling, maintenance |
+| [Access Control & RBAC](docs/en/guides/access-control-rbac.md) | JWT, Keycloak OIDC, LDAP/AD, roles |
+| [Performance & Quality](docs/en/guides/performance-quality.md) | HNSW tuning, quantization, caching, monitoring |
+| [Knowledge Graph Strategy](docs/en/guides/knowledge-graph-strategy.md) | Neo4j entity extraction, graph enrichment |
+| [Agentic Tools — SDK](docs/en/guides/agentic-tools-sdk.md) | `@tool` decorator, `ToolBuilder`, `ToolContext` |
+| [Agentic Tools — Declarative](docs/en/guides/agentic-tools-declarative.md) | YAML/JSON tool definitions |
+| [Agentic Tools — OpenAPI](docs/en/guides/agentic-tools-openapi.md) | Auto-discover tools from OpenAPI specs |
+| [Extensibility Guide](docs/en/guides/extensibility-data-sources.md) | Adding custom data sources |
+| [Disaster Recovery](docs/en/guides/disaster-recovery-runbook.md) | Restore procedures for all failure scenarios |
+| [SLI/SLO Definitions](docs/en/sli_slo.md) | Service level indicators and error budgets |
+| [RAG Maturity Assessment](docs/en/guides/rag-maturity-assessment.md) | Capability scoring across 5 levels |
+| [Production Checklist](docs/en/guides/best-practices-checklist.md) | 8-dimension readiness tracker |
+| [Roadmap](docs/en/guides/roadmap.md) | Version history and future milestones |
+| [Troubleshooting](docs/en/guides/troubleshooting.md) | Common issues and resolutions |
 
 ---
 
 ## Development · Разработка
 
 ```bash
-make install        # Full setup (proxy + ETL) · полная установка
-make install-dev    # Setup with dev dependencies · установка с dev-зависимостями
-make test           # Run all tests (2275+ passing) · все тесты
-make lint           # Lint with ruff · линтинг
-make format         # Format with ruff · форматирование
-make typecheck      # Run mypy static type checker · статическая типизация
-make docker-build   # Build Docker images · сборка образов
-make docker-up      # Start docker-compose services · запуск сервисов
-make docker-down    # Stop docker-compose services · остановка сервисов
-make all            # CI pipeline: install → lint → test · CI-конвейер
-make help           # Show all available targets · все цели
+make install        # Full setup
+make install-dev    # With dev deps (lint, test, typecheck)
+make test           # All tests (~2275)
+make test-proxy     # Proxy only
+make test-etl       # ETL only
+make lint           # ruff
+make format         # ruff format
+make typecheck      # mypy
+make all            # CI: install → lint → test
+
+# Single test
+python -m pytest tests/proxy/test_retrieval.py::TestHybridSearch::test_rrf_fusion -v
+
+# Coverage
+python -m pytest tests/ --cov=proxy --cov=etl --cov-report=html
+```
+
+### Project Structure
+
+```
+rag-system/
+├── proxy/                 # RAG proxy (FastAPI + LangGraph)
+│   ├── app/               # 45+ source modules
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── etl/                   # ETL pipeline (standalone)
+├── federation/            # Federated RAG proxy
+│   ├── app/               # Fan-out, merge, circuit breakers
+│   └── tests/
+├── mcp_server/            # MCP server (STDIO + HTTP)
+├── hitl_dashboard/        # Streamlit expert dashboard
+├── k8s/helm/rag-system/   # K8s Helm chart
+├── tests/                 # 2275+ tests
+│   ├── proxy/             # 1417 unit tests
+│   ├── etl/               # 361 unit tests
+│   ├── model_evolution/   # 358 tests
+│   ├── integration/       # 59 tests
+│   ├── e2e/               # 18 tests
+│   └── mcp_server/        # 46 tests
+├── docs/                  # Documentation (EN + RU)
+├── scripts/               # Utility scripts
+├── Makefile               # Primary dev entry point
+└── pyproject.toml         # Python project config
 ```
 
 ---
 
-## Git Remotes
+## Tech Stack · Технологический стек
 
-- GitHub: https://github.com/AlexanderNarbaev/rag-system
-- GitVerse: https://gitverse.ru/AlexandrNarbaev/rag-system
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **LLM** | Any OpenAI-compatible (vLLM, llama.cpp, Anthropic, Ollama) | Response generation |
+| **SLM** | Lightweight (~2-3B: Llama, Gemma, Qwen) | Query routing, entity extraction |
+| **Embeddings** | BAAI/bge-m3 | Dense (1024-dim) + sparse (lexical) + ColBERT |
+| **Vector DB** | Qdrant | Hybrid search (dense + sparse), RRF fusion |
+| **Graph DB** | Neo4j | Entity relationships, multi-hop traversal |
+| **Cache** | Redis | Multi-tier: embeddings, rerank, responses |
+| **Proxy** | FastAPI + LangGraph | OpenAI-compatible API, agentic orchestration |
+| **ETL** | Python, spaCy, BeautifulSoup | Data extraction, chunking, indexing |
+| **Dashboard** | Streamlit | HITL expert review |
+| **MCP** | FastMCP | Model Context Protocol server |
+| **Auth** | JWT + Keycloak OIDC | Corporate SSO, RBAC (4 roles) |
+| **Infra** | Kubernetes + Helm | HPA, probes, secrets, network policies |
+| **Backup** | S3/MinIO | Automated snapshots, dumps, RDB backups |
+| **Fine-tuning** | LoRA/QLoRA, MLflow, MinIO | Model training, tracking, deployment |
 
 ---
 
-## License · Лицензия
+## Git Remotes · Удалённые репозитории
 
-MIT © 2026 Alexander Narbaev
+- GitHub: https://github.com/AlexanderNarbaev/rag-system
+- GitVerse: https://gitverse.ru/AlexandrNarbaev/rag-system

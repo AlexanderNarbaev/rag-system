@@ -2,15 +2,19 @@
 
 Reads metrics, compares against configurable thresholds, detects
 baseline regression, and produces pass/fail/warn decisions.
+Includes NLI-based answer grounding evaluation via nli_evaluator module.
 
 Integrates with ExperimentTracker for MLflow run context.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class GateStatus(Enum):
@@ -259,3 +263,35 @@ class EvalGate:
         Only FAIL blocks promotion.
         """
         return result.status != GateStatus.FAIL
+
+    @staticmethod
+    def evaluate_with_nli(
+        metrics: dict[str, float],
+        config: EvalGateConfig,
+        answer_context_pairs: list[tuple[str, str]] | None = None,
+        baseline_metrics: dict[str, float] | None = None,
+        version: str | None = None,
+        use_real_nli: bool = True,
+    ) -> GateResult:
+        """Evaluate metrics + NLI grounding against thresholds and baseline.
+
+        Args:
+            metrics: Current model evaluation metrics.
+            config: EvalGateConfig with thresholds.
+            answer_context_pairs: Optional list of (answer, context) pairs for NLI scoring.
+            baseline_metrics: Optional baseline metrics for regression detection.
+            version: Model version string.
+            use_real_nli: Whether to attempt real NLI model (falls back to proxy otherwise).
+
+        Returns:
+            GateResult with pass/fail/warn status including NLI metrics.
+        """
+        from proxy.app.model_evolution.nli_evaluator import evaluate_nli_batch
+
+        if answer_context_pairs:
+            nli_metrics = evaluate_nli_batch(answer_context_pairs, use_real_nli=use_real_nli)
+            metrics = {**metrics, **nli_metrics}
+
+        return EvalGate.evaluate(
+            metrics, config, baseline_metrics=baseline_metrics, version=version,
+        )

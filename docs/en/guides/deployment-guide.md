@@ -1,83 +1,987 @@
 # Deployment Guide
 
-## Prerequisites
+**Version:** v2.0.0 | **Last Updated:** 2026-07-06
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
+Comprehensive deployment reference for the RAG Knowledge Assistant. Covers single-server Docker Compose, production multi-node, Kubernetes with Helm, air-gapped environments, LLM backend configuration, federation, model evolution infrastructure, security hardening, monitoring, and backup strategies.
+
+---
+
+## 1. Prerequisites
+
+### Hardware
+
+| Resource | Minimum | Recommended (production) |
+|----------|---------|---------------------------|
+| **CPU** | 8 cores | 16+ cores |
+| **RAM** | 16 GB | 64+ GB |
+| **GPU VRAM** | 12 GB (quantized GGUF) | 48+ GB (full precision) |
+| **Disk** | 20 GB SSD | 500+ GB NVMe |
+| **Network** | 1 Gbps | 10 Gbps (internal) |
+
+**Disk breakdown for production:**
+
+| Component | Typical Size |
+|-----------|-------------|
+| Qdrant vectors | ~30 GB |
+| Neo4j graph | ~10 GB |
+| Model files (embedder, reranker, LLM, SLM) | ~20 GB |
+| Raw data + chunks (cold storage Parquet) | ~20 GB |
+| Redis persistence (RDB + AOF) | ~5 GB |
+| Logs | ~10 GB |
+| **Total** | **~100 GB** |
+
+### Software
+
+| Component | Minimum Version | Recommended |
+|-----------|----------------|-------------|
 | **Docker** | 24.0+ | 27.0+ |
 | **Docker Compose** | v2.20+ (plugin) | v2.30+ |
 | **NVIDIA Driver** | 535+ | 550+ |
 | **NVIDIA Container Toolkit** | 1.14+ | 1.17+ |
 | **Python** | 3.11 | 3.12 |
+| **kubectl** (K8s) | 1.28+ | 1.30+ |
+| **Helm** (K8s) | 3.14+ | 3.16+ |
 
-Verify GPU availability:
+### Verify GPU Availability
+
 ```bash
+# Confirm driver
 nvidia-smi
+
+# Confirm Docker GPU access
 docker run --rm --gpus all nvidia/cuda:12.4-base nvidia-smi
 ```
 
-## Infrastructure Requirements
+### Verify Ports
 
-| Resource | Minimum | Recommended (prod) |
-|----------|---------|---------------------|
-| **CPU** | 8 cores | 16+ cores |
-| **RAM** | 32 GB | 64+ GB |
-| **GPU VRAM** | 24 GB (quantized GGUF) | 48+ GB (full precision) |
-| **Disk** | 100 GB SSD | 500+ GB NVMe |
-| **Network** | 1 Gbps | 10 Gbps (internal) |
+The RAG system uses these default ports — ensure they are free:
 
-**Disk breakdown**: Qdrant vectors ~30 GB, Neo4j graph ~10 GB, model files ~20 GB, raw data + chunks ~20 GB, logs ~10 GB.
-
-## Air-Gapped Deployment
-
-In an air-gapped environment, download all assets on an internet-connected machine, then transfer them.
-
-### 1. Download Models Offline
+| Port | Service |
+|------|---------|
+| 6333, 6334 | Qdrant (HTTP, gRPC) |
+| 6379 | Redis |
+| 7474, 7687 | Neo4j (HTTP, Bolt) |
+| 8000 | LLM Backend (vLLM / llama.cpp) |
+| 8080 | RAG Proxy (FastAPI) |
+| 8081 | Federation Proxy |
+| 8082 | MCP Server |
+| 8501 | HITL Dashboard (Streamlit) |
+| 9000, 9001 | MinIO (S3 API, Console) |
+| 5000 | MLflow Tracking Server |
 
 ```bash
-# On internet-connected machine:
-cd rag-system
+# Check for port conflicts
+ss -tlnp | grep -E '6333|6379|7687|8000|808[0-2]|8501|900[01]|5000'
+```
+
+---
+
+## 2. Quick Docker Compose Deployment (Development / Single-Server)
+
+This deploys all services on one machine for development or small production workloads.
+
+### 2.1 Clone and Configure
+
+```bash
+# Clone the repository
+git clone https://github.com/AlexanderNarbaev/rag-system.git /opt/rag-system
+cd /opt/rag-system
+
+# Create .env from defaults
+cp proxy/.env.example proxy/.env  2>/dev/null || cp proxy/.env proxy/.env.bak
+```
+
+### 2.2 Edit proxy/.env
+
+Set only the required variables; all others have safe defaults:
+
+```ini
+# ── REQUIRED ───────────────────────────────────────────
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+COLLECTION_NAME=knowledge_base
+
+# Embedder model — must match what you downloaded
+EMBEDDER_MODEL=BAAI/bge-m3
+EMBEDDER_DEVICE=cpu
+
+# Reranker model
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+RERANKER_MAX_LENGTH=512
+RERANKER_BATCH_SIZE=32
+
+# LLM backend — any OpenAI-compatible endpoint
+LLM_ENDPOINT=http://vllm:8000/v1
+LLM_MODEL_NAME=your-model-name   # ← SET THIS
+LLM_API_KEY=                     # Only if backend requires it
+REQUEST_TIMEOUT=120
+
+# SLM — leave empty to disable (heuristic fallback)
+SLM_ENDPOINT=
+SLM_MODEL_NAME=
+
+# ── OPTIONAL (enabled by default in docker-compose) ────
+USE_REDIS=true
+REDIS_URL=redis://redis:6379
+USE_LANGGRAPH=true
+MAX_RETRIEVAL_LOOPS=3
+GRAPH_ENABLED=true
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=change-this-password   # ← CHANGE THIS
+USE_GRAPH_EXPANSION=true
+
+# ── PRODUCTION SETTINGS ─────────────────────────────────
+RATE_LIMIT_ENABLED=true
+METRICS_ENABLED=true
+LOG_FORMAT=json
+LOG_LEVEL=INFO
+MAX_CONTEXT_TOKENS=8000
+RERANK_TOP_K=20
+WORKERS=1         # Keep at 1 per replica for production
+
+# ── AUTH (optional) ─────────────────────────────────────
+AUTH_ENABLED=false
+JWT_SECRET=       # Generate: openssl rand -hex 32
+RBAC_ENABLED=false
+```
+
+### 2.3 Set Model Path
+
+In `proxy/docker-compose.yml`, update the LLM model mount:
+
+```yaml
+vllm:
+  volumes:
+    - /opt/models:/models:ro   # ← Your actual model directory
+```
+
+And the proxy model cache:
+
+```yaml
+rag-proxy:
+  volumes:
+    - /opt/models/cache:/app/cache:ro
+```
+
+### 2.4 Start Services
+
+```bash
+cd proxy
+
+# Start all services (detached)
+docker compose -f docker-compose.yml up -d
+
+# Watch startup progress
+docker compose logs -f --tail=20
+
+# Check all containers are healthy
+docker compose ps
+# Expected: qdrant, neo4j, redis, vllm, rag-proxy, minio, mlflow, hitl-dashboard — all "Up" and "healthy"
+```
+
+### 2.5 Initialize Qdrant Collections
+
+```bash
+# Once Qdrant is running (wait ~15s):
+python scripts/init_collections.py --qdrant-recreate
+
+# Verify collection exists
+curl http://localhost:6333/collections/knowledge_base
+# → {"result": {"collections": [{"name": "knowledge_base"}]}}
+```
+
+### 2.6 Verify Health
+
+```bash
+# Proxy health check
+curl http://localhost:8080/v1/health
+# → {"status": "healthy", "qdrant": "connected", "llm": "available"}
+
+# Kubernetes-style probes
+curl http://localhost:8080/v1/health/live    # Process alive → 200
+curl http://localhost:8080/v1/health/ready   # All deps ready → 200
+
+# List models
+curl http://localhost:8080/v1/models
+# → {"data": [{"id": "your-model-name", ...}]}
+
+# Test a completion
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "What is this system?"}],
+    "max_tokens": 50
+  }'
+```
+
+### 2.7 Run First ETL Pipeline
+
+```bash
+cd /opt/rag-system
+
+# Edit ETL config with source credentials
+cp etl/config/etl_config.yaml etl/config/etl_config.local.yaml
+# Edit etl_config.local.yaml — set Confluence, Jira, GitLab URLs and tokens
+
+# Run ETL
+cd etl
+python scheduler/run_etl.py --config config/etl_config.local.yaml
+
+# Or via Docker:
+docker build -f Dockerfile.etl -t rag-etl .
+docker run --rm --network proxy_rag-network \
+  -v "$(pwd)/etl/wal:/wal" \
+  -v "$(pwd)/etl/cold_chunks:/chunks" \
+  -e QDRANT_HOST=qdrant \
+  -e QDRANT_PORT=6333 \
+  rag-etl --config /app/config/etl_config.yaml
+```
+
+### 2.8 Stop Services
+
+```bash
+cd proxy
+docker compose down       # Stops, does not remove volumes
+docker compose down -v    # Stops AND removes volumes (⚠ destroys data)
+```
+
+---
+
+## 3. Production Docker Deployment
+
+### 3.1 Production Docker Compose (standalone)
+
+Use `docker-compose.standalone.yml` for a self-contained production deployment with resource limits, health checks, and nginx reverse proxy:
+
+```bash
+cd proxy
+
+# GPU-backed deployment
+COMPOSE_PROFILES=gpu docker compose -f docker-compose.standalone.yml up -d
+
+# CPU-only deployment (llama.cpp)
+COMPOSE_PROFILES=cpu docker compose -f docker-compose.standalone.yml up -d
+```
+
+The standalone compose file pins exact image tags (e.g., `qdrant/qdrant:v1.10.0`, `neo4j:5.25-community`, `redis:7.4-alpine`, `vllm/vllm-openai:v0.6.4`) and includes:
+
+- **Resource limits** on every service (`deploy.resources.limits`)
+- **Health checks** with `start_period` for slow-starting services
+- **`127.0.0.1` port bindings** — prevents external access to database ports
+- **nginx reverse proxy** on ports 80/443 with TLS
+- **Bridge network** with fixed subnet (`172.28.0.0/16`)
+
+### 3.2 High-Availability Docker Compose
+
+For multi-node clustering, layer `docker-compose.ha.yml` on top:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ha.yml up -d
+```
+
+This adds:
+
+| Component | HA Configuration |
+|-----------|-----------------|
+| **Qdrant** | 2 nodes with Raft consensus (`qdrant-0` as bootstrap) |
+| **Neo4j** | 1 CORE + 1 READ_REPLICA causal cluster |
+| **Redis** | 1 master + 2 replicas + 3 Sentinel monitors |
+| **RAG Proxy** | 2 replicas (`deploy.replicas: 2`) |
+| **Network** | Separate `rag-internal` network for inter-node cluster traffic |
+
+Scale proxy replicas at runtime:
+
+```bash
+docker compose scale rag-proxy=4
+```
+
+**Redis Sentinel config** (`proxy/redis-sentinel.conf`):
+
+```conf
+sentinel monitor rag-redis redis-master 6379 2
+sentinel down-after-milliseconds rag-redis 5000
+sentinel failover-timeout rag-redis 30000
+sentinel parallel-syncs rag-redis 1
+```
+
+### 3.3 Custom Dockerfiles
+
+#### Proxy Dockerfile (`proxy/Dockerfile`)
+
+```dockerfile
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements_proxy.txt .
+RUN pip install --no-cache-dir -r requirements_proxy.txt
+
+COPY proxy/app /app/app
+
+# Model cache directories
+ENV HF_HOME=/app/cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/cache/huggingface/transformers
+ENV SENTENCE_TRANSFORMERS_HOME=/app/cache/huggingface/sentence-transformers
+
+RUN mkdir -p /app/logs /app/cache
+RUN useradd --system --uid 1000 --create-home raguser && chown -R raguser:raguser /app
+USER raguser
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=5s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:8080/v1/health/live || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+```
+
+**Build and push:**
+
+```bash
+docker build -f proxy/Dockerfile -t rag-proxy:v2.0.0 .
+docker tag rag-proxy:v2.0.0 registry.example.com/rag-proxy:v2.0.0
+docker push registry.example.com/rag-proxy:v2.0.0
+```
+
+#### ETL Dockerfile (`etl/Dockerfile.etl`)
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements_etl.txt .
+RUN pip install --no-cache-dir -r requirements_etl.txt
+COPY etl/ /app/etl/
+CMD ["python", "scheduler/run_etl.py", "--config", "config/etl_config.yaml"]
+```
+
+### 3.4 Resource Limits Reference
+
+| Service | CPU Limit | Memory Limit | Justification |
+|---------|-----------|-------------|---------------|
+| Qdrant | 4 cores | 4 GB | HNSW graph traversal, sparse vector indexing |
+| Neo4j | 2 cores | 2 GB | Graph traversal, page cache |
+| Redis | 1 core | 2 GB | Key-value cache, append-only file |
+| vLLM backend | 16 cores | 48 GB | GPU offload; CPU for tokenizer and dispatch |
+| llama.cpp backend | 16 cores | 64 GB | Full CPU inference, no GPU |
+| RAG Proxy | 4 cores | 8 GB | Embedder + reranker loaded in-process |
+| nginx | 0.5 cores | 256 MB | Static reverse proxy |
+
+### 3.5 Volume Strategy
+
+```yaml
+volumes:
+  qdrant_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /data/qdrant
+      o: bind
+
+  neo4j_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /data/neo4j
+      o: bind
+
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /data/redis
+      o: bind
+
+  model_cache:
+    driver: local
+    driver_opts:
+      type: none
+      device: /opt/models
+      o: bind
+```
+
+**Ensure correct permissions:**
+
+```bash
+mkdir -p /data/{qdrant,neo4j,redis,minio,mlflow}
+chown -R 1000:1000 /data/{qdrant,neo4j,redis,minio,mlflow}
+chmod 755 /data/{qdrant,neo4j,redis,minio,mlflow}
+```
+
+### 3.6 Docker Logging Limits
+
+```yaml
+services:
+  rag-proxy:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  vllm:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "2"
+```
+
+---
+
+## 4. Kubernetes Deployment with Helm
+
+### 4.1 Helm Chart Structure
+
+```
+infra/helm/rag-system/
+├── Chart.yaml                     # Chart metadata
+├── values.yaml                    # Default configuration values
+├── values-prod.yaml               # Production overrides
+├── values-airgap.yaml             # Air-gapped overrides
+├── templates/
+│   ├── _helpers.tpl               # Name, label helpers
+│   ├── namespace.yaml
+│   ├── secrets.yaml               # Kubernetes Secret resource
+│   ├── configmap.yaml             # Non-sensitive config
+│   ├── proxy-deployment.yaml      # RAG Proxy Deployment
+│   ├── proxy-service.yaml         # Proxy ClusterIP Service
+│   ├── proxy-hpa.yaml             # Horizontal Pod Autoscaler
+│   ├── proxy-pdb.yaml             # Pod Disruption Budget
+│   ├── federation-deployment.yaml # Federation Proxy (port 8081)
+│   ├── federation-service.yaml
+│   ├── mcp-deployment.yaml        # MCP Server (port 8082)
+│   ├── mcp-service.yaml
+│   ├── qdrant-statefulset.yaml    # Qdrant StatefulSet
+│   ├── qdrant-service.yaml
+│   ├── neo4j-statefulset.yaml     # Neo4j StatefulSet
+│   ├── neo4j-service.yaml
+│   ├── redis-statefulset.yaml     # Redis Sentinel StatefulSet
+│   ├── redis-service.yaml
+│   ├── minio-deployment.yaml      # MinIO for model artifacts
+│   ├── mlflow-deployment.yaml     # MLflow tracking server
+│   ├── network-policy.yaml        # Network isolation rules
+│   ├── ingress.yaml               # Ingress with TLS
+│   ├── service-monitor.yaml       # Prometheus ServiceMonitor
+│   ├── backup-cronjob.yaml        # Automated backup CronJob
+│   └── training-cronjob.yaml      # Model fine-tuning CronJob
+```
+
+### 4.2 Quick Deploy
+
+```bash
+# 1. Create namespace
+kubectl create namespace rag-system
+
+# 2. Create required secrets
+kubectl create secret generic rag-secrets -n rag-system \
+  --from-literal=jwt-secret=$(openssl rand -hex 32) \
+  --from-literal=llm-api-key=your-llm-api-key \
+  --from-literal=neo4j-password=$(openssl rand -hex 16) \
+  --from-literal=minio-access-key=minioadmin \
+  --from-literal=minio-secret-key=$(openssl rand -hex 16) \
+  --from-literal=backup-s3-access-key=your-s3-access-key \
+  --from-literal=backup-s3-secret-key=your-s3-secret-key
+
+# 3. Install Helm chart
+cd infra/helm
+helm upgrade --install rag-system ./rag-system \
+  -n rag-system \
+  -f values.yaml \
+  -f values-prod.yaml \
+  --set proxy.replicas=3 \
+  --set qdrant.replicas=3 \
+  --set neo4j.replicas=3 \
+  --wait \
+  --timeout 10m
+
+# 4. Verify deployment
+kubectl get pods,svc,hpa,ing -n rag-system
+
+# 5. Check health
+kubectl exec -it deploy/rag-proxy -n rag-system -- curl -s localhost:8080/v1/health
+```
+
+### 4.3 values.yaml Walkthrough
+
+```yaml
+# ── Global settings ──────────────────────────────────────
+global:
+  imageRegistry: ""             # Override for air-gapped (e.g., "registry.airgap.local")
+  imagePullSecrets: []
+  storageClass: "ssd"           # Use SSD-backed StorageClass
+  environment: "production"
+
+# ── RAG Proxy ───────────────────────────────────────────
+proxy:
+  enabled: true
+  replicas: 3
+  image:
+    repository: rag-system/proxy
+    tag: "v2.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+  env:
+    QDRANT_HOST: "qdrant.rag-system.svc.cluster.local"
+    QDRANT_PORT: "6333"
+    NEO4J_URI: "bolt://neo4j.rag-system.svc.cluster.local:7687"
+    REDIS_URL: "redis://redis.rag-system.svc.cluster.local:6379"
+    LLM_ENDPOINT: "http://vllm.rag-system.svc.cluster.local:8000/v1"
+    LLM_MODEL_NAME: "your-model-name"
+    USE_REDIS: "true"
+    USE_LANGGRAPH: "true"
+    GRAPH_ENABLED: "true"
+    METRICS_ENABLED: "true"
+    LOG_FORMAT: "json"
+    WORKERS: "1"
+
+  # Probes
+  livenessProbe:
+    httpGet:
+      path: /v1/health/live
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /v1/health/ready
+      port: 8080
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+  startupProbe:
+    httpGet:
+      path: /v1/health/live
+      port: 8080
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30    # 150 seconds total for model loading
+
+  # Post-start warm-up
+  lifecycle:
+    postStart:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - |
+            until curl -sf http://localhost:8080/v1/health/live; do sleep 1; done
+            curl -sf -X POST http://localhost:8080/v1/admin/warmup
+
+  # Pod Disruption Budget
+  pdb:
+    enabled: true
+    minAvailable: 2
+
+# ── Horizontal Pod Autoscaler ──────────────────────────
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    scaleDown:
+      stabilizationWindowSeconds: 300
+
+# ── Federation Proxy ───────────────────────────────────
+federation:
+  enabled: false               # Enable for multi-silo deployment
+  replicas: 1
+  service:
+    port: 8081
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  env:
+    FEDERATION_MODE: "hub"    # "hub" or "spoke"
+    FEDERATION_HUB_URL: ""    # Set for spoke instances
+
+# ── MCP Server ─────────────────────────────────────────
+mcp:
+  enabled: true
+  replicas: 1
+  service:
+    port: 8082
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+# ── Qdrant ─────────────────────────────────────────────
+qdrant:
+  enabled: true
+  replicas: 3                 # Must be odd for Raft
+  image:
+    repository: qdrant/qdrant
+    tag: "v1.10.0"
+  persistence:
+    size: 100Gi
+  resources:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+  env:
+    QDRANT__CLUSTER__ENABLED: "true"
+    QDRANT__LOG_LEVEL: "INFO"
+
+# ── Neo4j ──────────────────────────────────────────────
+neo4j:
+  enabled: true
+  replicas: 3                 # Core cluster nodes
+  image:
+    repository: neo4j
+    tag: "5.25-enterprise"
+  persistence:
+    size: 50Gi
+  resources:
+    requests:
+      cpu: "2"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "4Gi"
+  env:
+    NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+    NEO4J_dbms_memory_pagecache_size: "1G"
+    NEO4J_dbms_memory_heap_max__size: "2G"
+    NEO4J_PLUGINS: '["apoc"]'
+
+# ── Redis Sentinel ─────────────────────────────────────
+redis:
+  enabled: true
+  replicas: 3                 # 1 master + 2 replicas
+  image:
+    repository: redis
+    tag: "7.4-alpine"
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: "0.5"
+      memory: "1Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+  config:
+    maxmemory: "2gb"
+    maxmemoryPolicy: "allkeys-lru"
+    save: "900 1 300 10"
+
+# ── Ingress ────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"    # SSE streaming
+  hosts:
+    - host: rag.example.com
+      paths:
+        - path: /v1/
+          pathType: Prefix
+          serviceName: proxy
+          servicePort: 8080
+        - path: /metrics
+          pathType: Exact
+          serviceName: proxy
+          servicePort: 8080
+  tls:
+    - hosts:
+        - rag.example.com
+      secretName: rag-tls
+
+# ── Network Policies ───────────────────────────────────
+networkPolicy:
+  enabled: true
+  # Deny all ingress by default; allow only:
+  ingressAllow:
+    - from: ingress-nginx      # From ingress controller
+    - from: monitoring          # From Prometheus/Grafana namespace
+
+# ── Backup CronJob ─────────────────────────────────────
+backup:
+  enabled: true
+  schedule: "0 */6 * * *"     # Every 6 hours
+  s3:
+    endpoint: "s3.amazonaws.com"
+    bucket: "rag-backups"
+    region: "us-east-1"
+
+# ── Training CronJob ───────────────────────────────────
+training:
+  enabled: false                # Enable for model evolution
+  schedule: "0 2 * * 0"       # Weekly, Sunday 2am
+  profile: "prod"              # dev / prod / ci
+```
+
+### 4.4 K8s Secrets Management
+
+Never store secrets in `values.yaml`. Use one of these approaches:
+
+#### Option A: Kubernetes Secrets (simple)
+
+```bash
+kubectl create secret generic rag-secrets -n rag-system \
+  --from-literal=jwt-secret=$(openssl rand -hex 32) \
+  --from-literal=neo4j-password=$(openssl rand -hex 16) \
+  --from-literal=minio-secret-key=$(openssl rand -hex 16)
+```
+
+In `templates/secrets.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rag-secrets
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+data: {}   # Populated externally; not from Helm values
+```
+
+Reference in Deployment:
+
+```yaml
+env:
+  - name: NEO4J_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: rag-secrets
+        key: neo4j-password
+  - name: JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: rag-secrets
+        key: jwt-secret
+```
+
+#### Option B: External Secrets Operator (ESO)
+
+```yaml
+# templates/external-secret.yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: rag-secrets
+  namespace: {{ .Release.Namespace }}
+spec:
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: rag-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: jwt-secret
+      remoteRef:
+        key: "rag/production/jwt-secret"
+    - secretKey: neo4j-password
+      remoteRef:
+        key: "rag/production/neo4j-password"
+    - secretKey: llm-api-key
+      remoteRef:
+        key: "rag/production/llm-api-key"
+```
+
+#### Option C: Sealed Secrets
+
+```bash
+kubectl create secret generic rag-secrets -n rag-system \
+  --from-literal=jwt-secret=... \
+  --dry-run=client -o yaml | \
+  kubeseal --controller-namespace sealed-secrets -o yaml > templates/sealed-secrets.yaml
+```
+
+### 4.5 Network Policies
+
+```yaml
+# templates/network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rag-system-restrict
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from the ingress controller namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+          protocol: TCP
+    # Allow from monitoring namespace (Prometheus scraping)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+        - port: 3000
+          protocol: TCP
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+    # Allow intra-namespace traffic
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+```
+
+### 4.6 Zero-Downtime Deployments
+
+```bash
+# Standard rolling update (default strategy)
+kubectl set image deployment/rag-proxy rag-proxy=rag-proxy:v2.0.1 -n rag-system
+
+# Monitor rollout
+kubectl rollout status deployment/rag-proxy -n rag-system
+
+# Manual canary with two Deployments:
+helm upgrade --install rag-system ./rag-system -n rag-system --reuse-values \
+  --set proxy.image.tag=v2.0.1-canary \
+  --set proxy.replicas=1
+
+# If canary is healthy, promote:
+helm upgrade --install rag-system ./rag-system -n rag-system \
+  --set proxy.image.tag=v2.0.1 \
+  --set proxy.replicas=3
+
+# Rollback if needed
+kubectl rollout undo deployment/rag-proxy -n rag-system
+```
+
+### 4.7 Probes Reference
+
+| Probe | Endpoint | Purpose | Initial Delay | Period |
+|-------|----------|---------|---------------|--------|
+| **startup** | `/v1/health/live` | Model loading grace period | 0s | 5s |
+| **liveness** | `/v1/health/live` | Process is alive | 30s | 10s |
+| **readiness** | `/v1/health/ready` | All dependencies available | 60s | 15s |
+
+Qdrant startup probe uses the native `:6333/health` endpoint. vLLM startup probe uses `:8000/health` with `start_period: 180s`.
+
+---
+
+## 5. Air-Gapped Deployment
+
+For environments without internet access, pre-download all assets on a connected machine, then transfer.
+
+### 5.1 Download Models Offline
+
+```bash
+# On the internet-connected machine:
+cd /opt/rag-system
 python scripts/download_models_offline.py \
   --output-dir ./offline_models \
   --models embedder reranker spacy_ru spacy_en slm \
   --gguf-url https://huggingface.co/your-org/your-model-GGUF/resolve/main/your-model-Q4_K_M.gguf
 
 # This downloads:
-# - BAAI/bge-m3 (embedder + sparse)
+# - BAAI/bge-m3 (embedder + sparse vectors)
 # - cross-encoder/ms-marco-MiniLM-L-6-v2 (reranker)
-# - ru_core_news_sm, en_core_web_sm (spaCy)
-# - your-slm-model (SLM)
-# - your-llm-model GGUF (LLM)
-
-# Transfer to air-gapped machine:
-tar -czf offline_models.tar.gz offline_models/
-scp offline_models.tar.gz user@airgap-machine:/opt/rag-system/
+# - ru_core_news_sm, en_core_web_sm (spaCy models)
+# - SLM model (e.g., Qwen2.5-3B)
+# - LLM GGUF file (if --gguf-url provided)
 ```
 
-### 2. Transfer Docker Images
+### 5.2 Transfer Assets
 
 ```bash
-# On internet-connected machine:
-docker pull qdrant/qdrant:latest
-docker pull neo4j:5-enterprise
-docker pull redis:7-alpine
+# Package models
+tar -czf offline_models.tar.gz offline_models/
+
+# Transfer to air-gapped host
+scp offline_models.tar.gz admin@airgap-host:/opt/rag-system/
+
+# On air-gapped host:
+cd /opt/rag-system
+tar -xzf offline_models.tar.gz
+```
+
+### 5.3 Transfer Docker Images
+
+```bash
+# On internet-connected machine — pull all images:
+docker pull qdrant/qdrant:v1.10.0
+docker pull neo4j:5.25-community
+docker pull redis:7.4-alpine
+docker pull vllm/vllm-openai:v0.6.4
+docker pull ghcr.io/ggerganov/llama.cpp:server
+docker pull minio/minio:latest
+docker pull ghcr.io/mlflow/mlflow:latest
+docker pull nginx:1.27-alpine
 docker pull python:3.11-slim
 
-docker save qdrant/qdrant:latest neo4j:5-enterprise redis:7-alpine \
-  python:3.11-slim -o rag-images.tar
+# Save to tar
+docker save \
+  qdrant/qdrant:v1.10.0 \
+  neo4j:5.25-community \
+  redis:7.4-alpine \
+  vllm/vllm-openai:v0.6.4 \
+  ghcr.io/ggerganov/llama.cpp:server \
+  minio/minio:latest \
+  ghcr.io/mlflow/mlflow:latest \
+  nginx:1.27-alpine \
+  python:3.11-slim \
+  -o rag-images.tar
 
-# For LLM backend (choose one):
-# - vLLM: docker pull vllm/vllm-openai:latest
-# - llama.cpp: docker pull ghcr.io/ggerganov/llama.cpp:server
-# - Any OpenAI-compatible server
+# Transfer
+scp rag-images.tar admin@airgap-host:/opt/rag-system/
 
-scp rag-images.tar user@airgap-machine:/opt/rag-system/
-
-# On air-gapped machine:
+# On air-gapped host:
 docker load -i rag-images.tar
 ```
 
-### 3. Offline pip Packages
+### 5.4 Transfer pip Packages
 
 ```bash
 # On internet-connected machine:
@@ -86,429 +990,1330 @@ pip download -r proxy/requirements_proxy.txt -d pip-offline/
 pip download -r etl/requirements_etl.txt -d pip-offline/
 
 tar -czf pip-offline.tar.gz pip-offline/
-scp pip-offline.tar.gz user@airgap-machine:/opt/rag-system/
+scp pip-offline.tar.gz admin@airgap-host:/opt/rag-system/
+
+# On air-gapped host — install from local directory:
+pip install --no-index --find-links /opt/rag-system/pip-offline \
+  -r /opt/rag-system/proxy/requirements_proxy.txt
 ```
 
-## Step-by-Step Deployment
-
-### Step 1: Configure Environment
+### 5.5 Configure Model Paths for Air-Gapped
 
 ```bash
-cp proxy/.env proxy/.env.bak
-# Edit proxy/.env with your settings:
+# proxy/.env
+MODEL_CACHE_DIR=/opt/rag-system/offline_models
+EMBEDDER_MODEL=/opt/rag-system/offline_models/bge-m3
+RERANKER_MODEL=/opt/rag-system/offline_models/ms-marco-MiniLM-L-6-v2
 ```
 
-Key variables to configure:
-```ini
-QDRANT_HOST=qdrant
-QDRANT_PORT=6333
-LLM_ENDPOINT=http://llm-backend:8000/v1
-LLM_MODEL_NAME=your-model-name
-REQUEST_TIMEOUT=120
-USE_REDIS=true
-REDIS_URL=redis://redis:6379
-USE_LANGGRAPH=true
-GRAPH_ENABLED=true
-NEO4J_URI=bolt://neo4j:7687
-NEO4J_PASSWORD=your_secure_password
-```
-
-### Step 2: Update Model Paths
-
-In `proxy/docker-compose.yml`, update the LLM backend volume:
-```yaml
-volumes:
-  - /opt/rag-system/offline_models:/models:ro
-```
-And the rag-proxy volume:
-```yaml
-volumes:
-  - /opt/rag-system/offline_models/cache:/app/cache:ro
-```
-
-### Step 3: Initialize Qdrant Collections
+For local SLM (no external API):
 
 ```bash
-# Ensure Qdrant is running first, then:
-python scripts/init_collections.py --qdrant-recreate
-
-# Verify:
-curl http://localhost:6333/collections/knowledge_base
+SLM_LOCAL_ENABLED=true
+SLM_LOCAL_BINARY=/usr/local/bin/llama-server
+SLM_LOCAL_MODEL_PATH=/opt/rag-system/offline_models/slm-model.gguf
+SLM_LOCAL_CONTEXT_SIZE=4096
+SLM_LOCAL_THREADS=4
+SLM_LOCAL_PORT=8081
 ```
 
-### Step 4: Start Services
-
-```bash
-cd proxy
-docker-compose up -d
-
-# Check all containers are healthy:
-docker-compose ps
-# Expected: qdrant, neo4j, redis, llm-backend, rag-proxy, hitl-dashboard — all "Up"
-```
-
-### Step 5: Verify Health
-
-```bash
-# Proxy health endpoint:
-curl http://localhost:8080/v1/health
-# Response: {"status": "healthy", "qdrant": "connected", "llm": "available"}
-
-# List models:
-curl http://localhost:8080/v1/models
-# Response: {"data": [{"id": "your-model-name", ...}]}
-```
-
-### Step 6: Run First ETL Pipeline
-
-```bash
-cd ../etl
-# Edit config/etl_config.yaml with your source credentials
-python scheduler/run_etl.py --config config/etl_config.yaml
-
-# Or via Docker:
-docker build -f Dockerfile.etl -t rag-etl .
-docker run --rm --network=host \
-  -v $(pwd)/wal:/wal \
-  -v $(pwd)/chunks:/chunks \
-  rag-etl --config /app/etl/config/etl_config.yaml
-```
-
-## Production Checklist
-
-### Redis Streams for Streaming ETL
-
-When `STREAMING_ETL_ENABLED=true`, configure Redis Streams for real-time event processing:
-
-```bash
-# In proxy/.env:
-STREAMING_ETL_ENABLED=true
-REDIS_STREAMS_URL=redis://redis:6379
-
-# Redis docker-compose configuration for streams:
-redis:
-  image: redis:7-alpine
-  command: redis-server --appendonly yes \
-    --maxmemory 2gb \
-    --maxmemory-policy allkeys-lru \
-    --stream-node-max-bytes 4096 \
-    --stream-node-max-entries 100
-```
-
-**Stream structure:**
-- Stream key: `etl:events`
-- Consumer groups: `etl-extract`, `etl-chunk`, `etl-embed`, `etl-index`
-- Dead letter stream: `etl:events:dlq`
-- Max pending messages per consumer: 1000
-
-**Initialize consumer groups** (one-time):
-```bash
-docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-extract $ MKSTREAM
-docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-chunk $
-docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-embed $
-docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-index $
-```
-
-### Webhook Configuration
-
-#### Confluence Webhook
-
-1. In Confluence Admin → Webhooks, register:
-   - URL: `https://<proxy-host>/webhook/confluence`
-   - Events: `page_created`, `page_updated`, `page_removed`
-   - Secret: same as `WEBHOOK_SECRET` in `.env`
-
-2. Configure in `proxy/.env`:
-```bash
-WEBHOOK_SECRET=your-shared-secret  # Must match Confluence webhook secret
-```
-
-#### GitLab Webhook
-
-1. In GitLab Project → Settings → Webhooks, register:
-   - URL: `https://<proxy-host>/webhook/gitlab`
-   - Triggers: `Push events`, `Merge request events`
-   - Secret Token: same as `WEBHOOK_SECRET`
-
-2. Verify connectivity:
-```bash
-curl -X POST https://<proxy-host>/webhook/confluence \
-  -H "Content-Type: application/json" \
-  -H "X-Confluence-Webhook-Signature: sha256=$(echo -n '{"event":"test"}' | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | cut -d' ' -f2)" \
-  -d '{"event":"test"}'
-```
-
-### Model Warm-Up at Startup
-
-Add warm-up to the proxy's lifespan to eliminate cold-start latency:
+Docker Compose volume mounts:
 
 ```yaml
-# docker-compose.yml — post-start warm-up:
+vllm:
+  volumes:
+    - /opt/rag-system/offline_models:/models:ro
+
 rag-proxy:
-  healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health/ready"]
-    interval: 15s
-    retries: 5
-    start_period: 60s  # Allow time for warm-up + model loading
+  volumes:
+    - /opt/rag-system/offline_models:/app/cache:ro
 ```
 
-**Manual trigger:**
-```bash
-# Pre-warm all models (requires admin token if AUTH_ENABLED=true):
-curl -X POST http://localhost:8080/v1/admin/warmup \
-  -H "Authorization: Bearer <admin-token>"
+### 5.6 Offline Air-Gapped Values (Helm)
 
-# Warm-up including LLM:
-curl -X POST http://localhost:8080/v1/admin/warmup \
-  -H "Authorization: Bearer <admin-token>" \
-  -d '{"warmup_llm": true}'
-```
-
-**Kubernetes post-start hook:**
 ```yaml
-lifecycle:
-  postStart:
-    exec:
-      command:
-        - /bin/sh
-        - -c
-        - |
-          until curl -sf http://localhost:8080/v1/health/live; do sleep 1; done
-          curl -sf -X POST http://localhost:8080/v1/admin/warmup
+# values-airgap.yaml
+global:
+  imageRegistry: "registry.airgap.local"   # Local Docker registry
+
+proxy:
+  image:
+    repository: rag-system/proxy
+    tag: "v2.0.0"
+    pullPolicy: IfNotPresent
+
+  env:
+    EMBEDDER_MODEL: "/models/bge-m3"
+    RERANKER_MODEL: "/models/ms-marco-MiniLM-L-6-v2"
+    SLM_LOCAL_ENABLED: "true"
+    SLM_LOCAL_MODEL_PATH: "/models/slm-model.gguf"
 ```
 
-### Response Compression
+---
 
-Enable gzip/brotli compression for all responses:
+## 6. LLM Backend Setup
+
+The RAG proxy communicates with ANY OpenAI-compatible `/v1/chat/completions` endpoint. Configure via:
 
 ```bash
-# In proxy/.env:
-COMPRESSION_ENABLED=true       # Enable compression (default: true)
-COMPRESSION_MIN_SIZE=1000      # Compress responses > 1KB (default: 1000)
-COMPRESSION_LEVEL=6            # gzip level 1-9 (default: 6)
+LLM_ENDPOINT=http://<host>:<port>/v1
+LLM_MODEL_NAME=<model-id>
+LLM_API_KEY=<optional-api-key>
+LLM_PROVIDER_TYPE=openai    # "openai", "anthropic", or "generic"
 ```
 
-**Nginx reverse proxy** — ensure compression headers are forwarded:
-```nginx
-location /v1/ {
-    proxy_pass http://127.0.0.1:8080;
-    proxy_set_header Accept-Encoding $http_accept_encoding;  # Forward compression preference
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_read_timeout 180s;
-    proxy_buffering off;  # Required for SSE streaming
-}
+### 6.1 vLLM Backend
+
+**Docker Compose:**
+
+```yaml
+vllm:
+  image: vllm/vllm-openai:v0.6.4
+  container_name: rag-vllm
+  volumes:
+    - /opt/models:/models:ro
+  ports:
+    - "8000:8000"
+  environment:
+    - HUGGINGFACE_HUB_CACHE=/models/cache
+  command: >
+    --model /models/Llama-3.1-70B-Instruct
+    --port 8000
+    --host 0.0.0.0
+    --max-model-len 65536
+    --gpu-memory-utilization 0.90
+    --tensor-parallel-size 2
+    --dtype auto
+    --enforce-eager
+    --enable-prefix-caching
+    --max-num-seqs 16
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 2
+            capabilities: [gpu]
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    interval: 60s
+    timeout: 30s
+    retries: 5
+    start_period: 180s
+  restart: unless-stopped
 ```
 
-**Benchmarks** (measured on JSON responses):
-- gzip level 6: 65-72% reduction, <5ms CPU overhead
-- brotli level 4: 68-75% reduction, <15ms CPU overhead
-- SSE streaming responses are NOT compressed (uses chunked transfer encoding)
+**Key vLLM flags:**
 
-### Security
-- [ ] Change ALL default passwords (Neo4j, Qdrant API key if set)
-- [ ] Set `LLM_API_KEY` and restrict LLM backend with `--api-key`
-- [ ] Use reverse proxy (nginx/Caddy) with TLS in front of port 8080
-- [ ] Enable firewall: only expose 8080 and 8501 externally
-- [ ] Set `LOG_REQUESTS=true` but mask `SENSITIVE_SECRETS` in config
-- [ ] Configure log rotation for feedback logs and proxy logs
+| Flag | Purpose | Suggested Value |
+|------|---------|----------------|
+| `--max-model-len` | Max context length | 65536 (trade VRAM vs context) |
+| `--gpu-memory-utilization` | VRAM fraction | 0.90 |
+| `--tensor-parallel-size` | GPUs for sharding | 1 per 24 GB VRAM |
+| `--enable-prefix-caching` | KV cache reuse | Enabled |
+| `--max-num-seqs` | Concurrent requests | 16 |
+| `--api-key` | Require API key | Same as `LLM_API_KEY` |
 
-### Nginx with TLS Termination
+### 6.2 llama.cpp Backend (CPU Inference)
+
+**Docker Compose:**
+
+```yaml
+vllm-cpu:
+  image: ghcr.io/ggerganov/llama.cpp:server
+  container_name: rag-vllm-cpu
+  volumes:
+    - /opt/models:/models:ro
+  ports:
+    - "8000:8000"
+  command: >
+    --model /models/llama-3.1-8b-instruct-Q4_K_M.gguf
+    --host 0.0.0.0
+    --port 8000
+    --ctx-size 65536
+    --n-gpu-layers 0
+    --threads 16
+    --batch-size 512
+    --api-key ""
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    interval: 60s
+    timeout: 30s
+    retries: 5
+    start_period: 240s
+  restart: unless-stopped
+```
+
+**Key llama.cpp flags:**
+
+| Flag | Purpose | Suggested Value |
+|------|---------|----------------|
+| `--ctx-size` | Max context length | 65536 |
+| `--threads` | CPU threads | Number of CPU cores |
+| `--n-gpu-layers` | Layers offloaded to GPU | 0 (CPU-only), -1 (all) |
+| `--batch-size` | Prompt processing batch | 512 |
+| `--api-key` | API key requirement | `""` for no key |
+
+### 6.3 OpenAI-Compatible Endpoint (any provider)
+
+For any third-party endpoint implementing the OpenAI API spec:
+
+```bash
+# proxy/.env
+LLM_ENDPOINT=https://api.openai.com/v1
+LLM_MODEL_NAME=gpt-4o
+LLM_API_KEY=sk-...
+LLM_PROVIDER_TYPE=openai
+
+# Or Ollama
+LLM_ENDPOINT=http://localhost:11434/v1
+LLM_MODEL_NAME=llama3.1:70b
+LLM_PROVIDER_TYPE=generic
+```
+
+### 6.4 Proxy Configuration for Backend
+
+```bash
+# proxy/.env
+LLM_ENDPOINT=http://vllm:8000/v1       # Docker Compose service name
+LLM_MODEL_NAME=Llama-3.1-70B-Instruct
+LLM_API_KEY=                            # Only if backend enforces it
+REQUEST_TIMEOUT=120
+MAX_RETRIES=3
+RETRY_DELAY=1.0
+PREFIX_CACHING_ENABLED=true             # vLLM KV-cache reuse
+```
+
+---
+
+## 7. Federation Setup
+
+Federation allows querying multiple RAG silos (e.g., different departments or geographic regions) through a single endpoint.
+
+### 7.1 Architecture
+
+```
+Client
+  │
+  ▼
+┌──────────────────┐
+│  Federation Hub  │────► Silo A (Qdrant-A, Neo4j-A)
+│    Port 8081     │────► Silo B (Qdrant-B, Neo4j-B)
+│                  │────► Silo C (Qdrant-C, Neo4j-C)
+└──────────────────┘
+```
+
+- **Hub** — receives user queries, fans out to spokes, aggregates results, reranks globally
+- **Spoke** — independent RAG instance with its own Qdrant + Neo4j + LLM
+
+### 7.2 Hub Configuration
+
+```bash
+# proxy/.env — Federation Hub
+FEDERATION_MODE=hub
+FEDERATION_INSTANCES_JSON='[
+  {
+    "name": "engineering",
+    "url": "http://rag-eng.internal:8080/v1",
+    "api_key": "eng-api-key",
+    "weight": 1.0,
+    "timeout": 30
+  },
+  {
+    "name": "product",
+    "url": "http://rag-product.internal:8080/v1",
+    "api_key": "product-api-key",
+    "weight": 0.8,
+    "timeout": 30
+  },
+  {
+    "name": "support",
+    "url": "http://rag-support.internal:8080/v1",
+    "api_key": "support-api-key",
+    "weight": 0.5,
+    "timeout": 15
+  }
+]'
+
+# Federation-specific settings
+FEDERATION_STRATEGY=weighted            # "weighted", "round_robin", "latency_aware"
+FEDERATION_MERGE_LIMIT=30               # Max results across all silos before rerank
+FEDERATION_TIMEOUT=45                   # Per-silo timeout, seconds
+```
+
+### 7.3 Spoke Configuration
+
+```bash
+# proxy/.env — Federation Spoke (each instance)
+FEDERATION_MODE=spoke
+# No FEDERATION_INSTANCES_JSON needed for spokes
+```
+
+### 7.4 Multi-Silo Topology Examples
+
+**By Department:**
+
+```
+FEDERATION_INSTANCES_JSON='[
+  {"name":"engineering","url":"http://rag-eng:8080/v1","weight":1.0},
+  {"name":"legal","url":"http://rag-legal:8080/v1","weight":0.5},
+  {"name":"hr","url":"http://rag-hr:8080/v1","weight":0.3}
+]'
+```
+
+**By Region (geo-distributed):**
+
+```
+FEDERATION_INSTANCES_JSON='[
+  {"name":"us-east","url":"http://rag-use1:8080/v1","weight":1.0,"timeout":15},
+  {"name":"us-west","url":"http://rag-usw2:8080/v1","weight":1.0,"timeout":15},
+  {"name":"eu-west","url":"http://rag-euw1:8080/v1","weight":0.7,"timeout":20}
+]'
+```
+
+### 7.5 Federation in Docker Compose
+
+```yaml
+# docker-compose.yml — add federation service
+federation-proxy:
+  build:
+    context: ..
+    dockerfile: proxy/Dockerfile
+  container_name: rag-federation
+  ports:
+    - "8081:8081"
+  environment:
+    - PORT=8081
+    - FEDERATION_MODE=hub
+    - FEDERATION_INSTANCES_JSON=${FEDERATION_INSTANCES_JSON}
+  depends_on:
+    - rag-proxy
+  networks:
+    - rag-network
+```
+
+### 7.6 Federation in Kubernetes
+
+```yaml
+# Deployment for each spoke (separate namespace)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-proxy
+  namespace: rag-engineering
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: proxy
+        image: rag-system/proxy:v2.0.0
+        env:
+        - name: FEDERATION_MODE
+          value: "spoke"
+```
+
+---
+
+## 8. Model Evolution Setup
+
+The Model Evolution pipeline supports fine-tuning SLM, LLM, and Reranker models, with MLflow tracking, MinIO artifact storage, automated quality gates, and canary rollouts.
+
+### 8.1 Enable in Configuration
+
+```bash
+# proxy/.env
+MODEL_EVOLUTION_ENABLED=true
+
+# MLflow Tracking Server
+MLFLOW_TRACKING_URI=http://mlflow:5000
+MLFLOW_EXPERIMENT_NAME=rag-system
+MLFLOW_ARTIFACT_ROOT=s3://rag-artifacts
+
+# MinIO S3-compatible artifact storage
+MINIO_ENDPOINT=minio:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=change-this-key
+MINIO_BUCKET=rag-artifacts
+MINIO_SECURE=false
+
+# Training profile
+TRAINING_PROFILE=prod              # dev / staging / prod (affects batch size, epochs)
+
+# Hot-Reload (hot-swap models without restart)
+HOT_RELOAD_ENABLED=true
+HOT_RELOAD_WATCH_INTERVAL=5        # Check for new adapters every 5 seconds
+HOT_RELOAD_SIGNAL_ENABLED=true     # Accept SIGHUP for manual reload
+
+# Canary Deployments
+CANARY_ENABLED=true
+CANARY_PHASE_DURATION_5=300        # 5% traffic for 5 minutes
+CANARY_PHASE_DURATION_25=600       # 25% traffic for 10 minutes
+CANARY_PHASE_DURATION_50=900       # 50% traffic for 15 minutes
+CANARY_PHASE_DURATION_75=1200      # 75% traffic for 20 minutes
+CANARY_COOLDOWN_SECONDS=3600       # 1 hour between rollouts
+
+# Eval Gate Quality Thresholds
+EVAL_GATE_LLM_BERTSCORE_MIN=0.70
+EVAL_GATE_LLM_HALLUCINATION_MAX=0.05
+EVAL_GATE_LLM_ROUGE_L_MIN=0.35
+EVAL_GATE_SLM_F1_MIN=0.85
+EVAL_GATE_SLM_ACCURACY_MIN=0.90
+EVAL_GATE_RERANKER_MRR_MIN=0.75
+EVAL_GATE_RERANKER_NDCG_MIN=0.70
+```
+
+### 8.2 Docker Compose Services
+
+MinIO and MLflow are included in `docker-compose.yml`:
+
+```yaml
+# MinIO — S3-compatible artifact storage
+minio:
+  image: minio/minio:latest
+  volumes:
+    - minio_data:/data
+  ports:
+    - "9000:9000"
+    - "9001:9001"
+  environment:
+    - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+    - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+  command: server /data --console-address ":9001"
+
+# Auto-create bucket
+minio-create-bucket:
+  image: minio/mc:latest
+  depends_on:
+    minio:
+      condition: service_healthy
+  entrypoint: >
+    /bin/sh -c "
+    mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY} &&
+    mc mb --ignore-existing local/$${MINIO_BUCKET:-rag-artifacts}
+    "
+
+# MLflow Tracking Server
+mlflow:
+  image: ghcr.io/mlflow/mlflow:latest
+  ports:
+    - "5000:5000"
+  environment:
+    - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+    - AWS_ACCESS_KEY_ID=${MINIO_ACCESS_KEY:-minioadmin}
+    - AWS_SECRET_ACCESS_KEY=${MINIO_SECRET_KEY:-minioadmin}
+    - MLFLOW_S3_IGNORE_TLS=true
+  command: >
+    mlflow server
+    --host 0.0.0.0
+    --port 5000
+    --backend-store-uri sqlite:///mlflow/mlflow.db
+    --default-artifact-root s3://${MINIO_BUCKET:-rag-artifacts}
+  volumes:
+    - mlflow_data:/mlflow
+```
+
+### 8.3 Trigger Training
+
+```bash
+# Train SLM on feedback data
+curl -X POST http://localhost:8080/v1/admin/models/train \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_type": "slm",
+    "dataset": "feedback",
+    "training_profile": "prod",
+    "hyperparameters": {
+      "epochs": 3,
+      "learning_rate": 2e-4,
+      "lora_r": 16,
+      "lora_alpha": 32
+    }
+  }'
+
+# Poll training status
+curl http://localhost:8080/v1/admin/models/status/job-abc123 \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# List registered models
+curl http://localhost:8080/v1/admin/models \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+### 8.4 Training CronJob (Kubernetes)
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rag-training
+  namespace: rag-system
+spec:
+  schedule: "0 2 * * 0"               # Sunday 2am
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: trainer
+            image: rag-system/trainer:v2.0.0
+            env:
+            - name: TRAINING_PROFILE
+              value: "prod"
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: rag-secrets
+                  key: minio-access-key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rag-secrets
+                  key: minio-secret-key
+            command:
+              - python
+              - -m
+              - app.model_evolution.trainer
+              - --model-type
+              - slm
+              - --dataset
+              - feedback
+              - --profile
+              - prod
+          restartPolicy: OnFailure
+```
+
+### 8.5 Canary Rollout
+
+```bash
+# Register new model version
+MODEL_VERSION=$(curl -s -X POST http://localhost:8080/v1/admin/models/promote \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"model_id": "slm-router-v2", "stage": "staging"}' | jq -r '.version')
+
+# Evaluate against baseline
+curl -X POST http://localhost:8080/v1/admin/models/evaluate \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d "{\"model_id\": \"slm-router-v2\", \"version\": \"$MODEL_VERSION\"}"
+
+# If eval passes, start canary (5% traffic)
+curl -X POST http://localhost:8080/v1/admin/models/canary/split \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"model_id": "slm-router-v2", "traffic_percent": 5}'
+
+# Check canary status
+curl http://localhost:8080/v1/admin/models/canary/status \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Promote to 100% or rollback
+curl -X POST http://localhost:8080/v1/admin/models/canary/split \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"model_id": "slm-router-v2", "traffic_percent": 100}'
+```
+
+---
+
+## 9. Security Hardening
+
+### 9.1 Non-Root Users
+
+All custom images should run as non-root:
+
+```dockerfile
+# proxy/Dockerfile
+RUN useradd --system --uid 1000 --create-home raguser && \
+    chown -R raguser:raguser /app
+USER raguser
+```
+
+**Verify:**
+
+```bash
+docker inspect rag-proxy | jq '.[0].Config.User'
+# → "raguser" or "1000"
+```
+
+### 9.2 Read-Only Filesystems
+
+```yaml
+# docker-compose.yml
+rag-proxy:
+  read_only: true
+  tmpfs:
+    - /tmp:size=100M,mode=1777
+  volumes:
+    - ./logs:/app/logs          # Writable log directory
+    - ./cache:/app/cache:ro     # Model cache — read-only
+    - ./.env:/app/.env:ro       # Config — read-only
+```
+
+In Kubernetes:
+
+```yaml
+securityContext:
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+
+volumeMounts:
+  - name: logs
+    mountPath: /app/logs
+  - name: tmp
+    mountPath: /tmp
+```
+
+### 9.3 Capabilities Drop
+
+```yaml
+# Docker Compose
+rag-proxy:
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE    # Only if port < 1024
+
+# Kubernetes
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  allowPrivilegeEscalation: false
+```
+
+### 9.4 Secrets Rotation
+
+**Docker Compose secrets rotation:**
+
+```bash
+# 1. Update secrets in .env
+vim proxy/.env
+
+# 2. Restart only the dependent service
+docker compose restart rag-proxy
+
+# 3. Verify
+docker compose logs rag-proxy | tail -5
+```
+
+**K8s secrets rotation:**
+
+```bash
+# 1. Update the secret
+kubectl create secret generic rag-secrets -n rag-system \
+  --from-literal=jwt-secret=$(openssl rand -hex 32) \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. Trigger rolling restart to pick up new secret
+kubectl rollout restart deployment/rag-proxy -n rag-system
+
+# 3. Verify
+kubectl rollout status deployment/rag-proxy -n rag-system
+```
+
+**Automated rotation with External Secrets Operator:**
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: rag-secrets
+spec:
+  refreshInterval: "1h"             # Auto-refresh every hour
+  target:
+    name: rag-secrets
+    creationPolicy: Owner
+  dataFrom:
+    - extract:
+        key: "rag/production"       # All secrets from this path
+```
+
+When combined with `reloader.stakater.com/auto: "true"` annotation on the Deployment, pods restart automatically when secrets change.
+
+### 9.5 TLS Everywhere
+
+**Docker Compose (nginx + Let's Encrypt):**
+
+```yaml
+nginx:
+  image: nginx:1.27-alpine
+  volumes:
+    - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    - ./certs:/etc/nginx/certs:ro
+  ports:
+    - "80:80"
+    - "443:443"
+```
 
 ```nginx
-# /etc/nginx/sites-available/rag-proxy
+# nginx.conf
 server {
     listen 443 ssl http2;
-    server_name rag-proxy.internal.company.com;
+    server_name rag.example.com;
 
-    ssl_certificate     /etc/ssl/certs/rag-proxy.crt;
-    ssl_certificate_key /etc/ssl/private/rag-proxy.key;
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
     location /v1/ {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://rag-proxy:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 180s;
-        proxy_buffering off;  # Required for SSE streaming
-    }
-
-    location /metrics {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
+        proxy_buffering off;       # Required for SSE streaming
     }
 }
 ```
 
-### Log Rotation
+### 9.6 API Key Protection
 
 ```bash
-# /etc/logrotate.d/rag-system
-./logs/feedback/*.jsonl {
-    daily
-    rotate 7
-    maxsize 100M
-    compress
-    missingok
-    notifempty
-}
+# Enforce API key on LLM backend
+# vLLM:
+--api-key ${LLM_API_KEY}
 
-./logs/proxy/*.log {
-    daily
-    rotate 14
-    maxsize 50M
-    compress
-    missingok
-    notifempty
-    postrotate
-        docker exec rag-proxy kill -HUP 1 2>/dev/null || true
-    endscript
-}
+# llama.cpp:
+--api-key ${LLM_API_KEY}
+
+# Proxy:
+LLM_API_KEY=your-key
 ```
 
-### Monitoring
-- [ ] Configure Prometheus to scrape `/metrics` on all services
-- [ ] Set up alerts: disk >80%, RAM >85%, GPU utilization >95%, proxy 5xx rate
-- [ ] Enable Docker healthchecks for all containers
+### 9.7 Security Checklist
 
-### Backup
-- [ ] Schedule daily Qdrant snapshots: `POST /collections/knowledge_base/snapshots`
-- [ ] Schedule daily Neo4j dumps: `neo4j-admin database dump`
-- [ ] Back up `wal/etl_wal.json` and `wal/version_wal.json` after each ETL run
-- [ ] Keep 7 daily + 4 weekly + 3 monthly backups
+- [ ] Change ALL default passwords (Neo4j, Redis, MinIO)
+- [ ] Set `LLM_API_KEY` and enforce it on the LLM backend
+- [ ] Use nginx/Ingress with TLS in front of port 8080
+- [ ] Enable firewall: only expose ports 80/443 externally
+- [ ] Drop all Linux capabilities from containers
+- [ ] Use read-only root filesystems where possible
+- [ ] Run as non-root user (UID 1000) in all custom images
+- [ ] Set `LOG_FORMAT=json` and `AUDIT_ENABLED=true`
+- [ ] Mask all secrets in logs via `SENSITIVE_SECRETS`
+- [ ] Enable rate limiting (`RATE_LIMIT_ENABLED=true`)
+- [ ] Enable input sanitization (`SANITIZE_INPUT=true`)
+- [ ] Rotate container logs (max 100MB × 3 files)
+- [ ] Run dependency vulnerability scans in CI: `pip-audit`
 
-## Kubernetes Deployment (v1.0+)
+---
 
-### Helm Chart Structure
+## 10. Monitoring Setup
 
-```
-infra/helm/rag-system/
-├── Chart.yaml
-├── values.yaml
-├── templates/
-│   ├── proxy-deployment.yaml
-│   ├── proxy-hpa.yaml
-│   ├── qdrant-statefulset.yaml
-│   ├── neo4j-statefulset.yaml
-│   ├── redis-deployment.yaml
-│   ├── secrets.yaml
-│   ├── configmap.yaml
-│   └── ingress.yaml
-└── dashboards/
-    ├── grafana-overview.json
-    ├── grafana-retrieval.json
-    └── grafana-infrastructure.json
-```
-
-### Quick Deploy
-
-```bash
-# 1. Create namespace
-kubectl create namespace rag-system
-
-# 2. Create secrets
-kubectl create secret generic rag-secrets -n rag-system \
-  --from-literal=jwt-secret=$(openssl rand -hex 32) \
-  --from-literal=llm-api-key=your-api-key \
-  --from-literal=backup-s3-key=your-s3-key
-
-# 3. Install Helm chart
-cd infra/helm
-helm upgrade --install rag-system ./rag-system \
-  -n rag-system \
-  -f values.yaml \
-  --set proxy.replicas=3 \
-  --set qdrant.replicas=3 \
-  --set neo4j.replicas=3
-
-# 4. Verify deployment
-kubectl get pods -n rag-system
-kubectl get hpa -n rag-system
-kubectl get ingress -n rag-system
-
-# 5. Check health
-kubectl exec -it deploy/rag-proxy -n rag-system -- curl -s localhost:8080/v1/health
-```
-
-### HA Configuration
-
-| Component | Replicas | Strategy | Notes |
-|-----------|----------|----------|-------|
-| RAG Proxy | 3 | HPA (min 3, max 10, CPU 70%) | `WORKERS=1` per pod |
-| Qdrant | 3 | StatefulSet, Raft consensus | Requires odd number ≥ 3 |
-| Neo4j | 3 | Causal cluster | Core nodes for read/write |
-| Redis | 3 | Sentinel | 1 master + 2 replicas |
-
-### HPA Configuration
+### 10.1 Prometheus Scrape Configuration
 
 ```yaml
-# In values.yaml or override:
-proxy:
-  hpa:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-    targetMemoryUtilizationPercentage: 80
+# prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'rag-proxy'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+          - 'rag-proxy:8080'
+        labels:
+          service: 'rag-proxy'
+          environment: 'production'
+
+  - job_name: 'rag-proxy-k8s'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - rag-system
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: rag-proxy
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
 ```
 
-### Zero-Downtime Deployment
+**ServiceMonitor (Kubernetes):**
 
-```bash
-# K8s rolling update (default):
-kubectl set image deployment/rag-proxy rag-proxy=rag-proxy:v1.0.0 -n rag-system
-
-# Monitor rollout:
-kubectl rollout status deployment/rag-proxy -n rag-system
-
-# Rollback if needed:
-kubectl rollout undo deployment/rag-proxy -n rag-system
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rag-proxy
+  namespace: rag-system
+spec:
+  selector:
+    matchLabels:
+      app: rag-proxy
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
 ```
 
-## Troubleshooting Common Issues
+### 10.2 Key Metrics Exposed
 
-### OOM (Out of Memory)
-```bash
-# LLM backend OOM: reduce context, use quantized model
-# For vLLM, edit docker-compose.yml backend command:
---max-model-len 65536  # instead of 130000
---tensor-parallel-size 1
+| Metric | Type | Description |
+|--------|------|-------------|
+| `rag_requests_total` | Counter | Total API requests by endpoint |
+| `rag_request_duration_seconds` | Histogram | Request latency (p50/p95/p99) |
+| `rag_retrieval_chunks` | Histogram | Chunks retrieved per query |
+| `rag_rerank_duration_seconds` | Histogram | Reranker latency |
+| `rag_llm_duration_seconds` | Histogram | LLM generation latency |
+| `rag_llm_tokens_total` | Counter | Tokens used (prompt + completion) |
+| `rag_cache_hit_ratio` | Gauge | Redis cache hit ratio |
+| `rag_errors_total` | Counter | Error count by type |
+| `rag_etl_stream_lag` | Gauge | Pending messages per consumer group |
+| `rag_warmup_completed` | Gauge | 1 if warm-up finished |
 
-# Neo4j OOM: reduce heap
-NEO4J_dbms_memory_heap_max__size=1G  # instead of 2G
+### 10.3 Alert Rules
+
+```yaml
+# prometheus-alerts.yml
+groups:
+  - name: rag-system-critical
+    rules:
+      - alert: RAGProxyDown
+        expr: up{job="rag-proxy"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RAG Proxy is down"
+          runbook: "https://wiki.example.com/runbooks/rag-proxy-down"
+
+      - alert: HighErrorRate
+        expr: rate(rag_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RAG error rate > 5% in 5-minute window"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(rag_request_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "p95 latency > 10s"
+
+      - alert: LLMDown
+        expr: rag_llm_duration_seconds == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM not responding for 2 minutes"
+
+      - alert: QdrantUnhealthy
+        expr: up{job="qdrant"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Qdrant vector database is down"
+
+  - name: rag-system-warning
+    rules:
+      - alert: LowCacheHitRate
+        expr: rag_cache_hit_ratio < 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cache hit ratio below 20%"
+
+      - alert: DiskNearFull
+        expr: node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk < 15% free on /data"
+
+      - alert: StreamConsumerLag
+        expr: rag_etl_stream_lag > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Streaming ETL consumer lag > 100 messages"
+
+      - alert: Neo4jUnhealthy
+        expr: up{job="neo4j"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Neo4j graph database is down (graph expansion disabled)"
 ```
 
-### Port Conflicts
-```bash
-# Check what's using ports:
-ss -tlnp | grep -E '6333|6379|7687|8000|8080|8501'
+### 10.4 Grafana Dashboard Import
 
-# Override in docker-compose.yml or .env
+```bash
+# Import pre-built dashboards
+# Dashboards are at: infra/helm/rag-system/dashboards/
+
+# Option A: via Grafana API
+curl -X POST http://grafana:3000/api/dashboards/db \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GRAFANA_API_KEY" \
+  -d @infra/helm/rag-system/dashboards/grafana-overview.json
+
+# Option B: via ConfigMap (Kubernetes)
+kubectl create configmap grafana-dashboard-rag-overview \
+  --from-file=grafana-overview.json=infra/helm/rag-system/dashboards/grafana-overview.json \
+  -n monitoring
+
+kubectl label configmap grafana-dashboard-rag-overview \
+  grafana_dashboard="1" -n monitoring
 ```
 
-### Disk Space
+**Available dashboards:**
+
+| Dashboard | File | Key Panels |
+|-----------|------|-----------|
+| **RAG Overview** | `grafana-overview.json` | Request rate, latency, error rate, confidence distribution |
+| **Retrieval Quality** | `grafana-retrieval.json` | MRR, Recall@k, nDCG, cache hit ratio |
+| **Infrastructure** | `grafana-infrastructure.json` | CPU, memory, disk, GPU per component |
+
+### 10.5 SLI/SLO Reference
+
+| SLI | Target | Measurement Window |
+|-----|--------|--------------------|
+| Availability | 99.5% | 28 days |
+| p95 Latency | < 5s | 5 min window |
+| Error Rate | < 1% | 5 min window |
+| Cache Hit Ratio | > 30% | 1 hour window |
+
+---
+
+## 11. Backup Strategy
+
+### 11.1 Backup Schedule
+
+| Component | Frequency | Retention | Method |
+|-----------|-----------|-----------|--------|
+| Qdrant snapshots | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `POST /collections/.../snapshots` |
+| Neo4j dumps | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `neo4j-admin database dump` |
+| Redis RDB | Every 1 hour | 24 hourly, 7 daily | `redis-cli BGSAVE` |
+| ETL WAL state | Every 30 min | 7 daily | File copy |
+| Proxy config | On change (git) | Full history | `git push` |
+
+### 11.2 Qdrant Snapshots
+
 ```bash
-# Prune unused Docker data:
+# Create snapshot
+curl -X POST http://localhost:6333/collections/knowledge_base/snapshots
+
+# List snapshots
+curl http://localhost:6333/collections/knowledge_base/snapshots
+
+# Download snapshot
+SNAPSHOT_NAME=$(curl -s http://localhost:6333/collections/knowledge_base/snapshots | jq -r '.result[-1].name')
+curl "http://localhost:6333/collections/knowledge_base/snapshots/${SNAPSHOT_NAME}" \
+  -o qdrant_backup_$(date +%Y%m%d_%H%M).snapshot
+
+# Restore (on target Qdrant instance)
+curl -X PUT http://localhost:6333/collections/knowledge_base/snapshots/upload \
+  -F "snapshot=@qdrant_backup_20260706_1200.snapshot"
+
+# Cron schedule
+# 0 */6 * * * curl -X POST http://localhost:6333/collections/knowledge_base/snapshots
+```
+
+### 11.3 Neo4j Dumps
+
+```bash
+# Dump database
+docker exec rag-neo4j neo4j-admin database dump neo4j --to-path=/backups/
+docker cp rag-neo4j:/backups/neo4j.dump ./neo4j_backup_$(date +%Y%m%d).dump
+
+# Restore
+docker stop rag-neo4j
+docker exec rag-neo4j neo4j-admin database load neo4j \
+  --from-path=/backups/ --overwrite-destination=true
+docker start rag-neo4j
+
+# Verify
+docker exec rag-neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
+  "MATCH (n) RETURN count(n)"
+```
+
+### 11.4 Redis Persistence
+
+Redis in the standard docker-compose uses `--appendonly yes` (AOF persistence). This provides crash-safe recovery. For backups:
+
+```bash
+# Trigger a background save
+docker exec rag-redis redis-cli BGSAVE
+
+# Copy the RDB file
+docker cp rag-redis:/data/dump.rdb ./redis_backup_$(date +%Y%m%d_%H%M).rdb
+
+# Restore: stop Redis, copy dump.rdb in, start Redis
+docker compose stop redis
+cp redis_backup_20260706_1200.rdb /data/redis/dump.rdb
+docker compose start redis
+```
+
+### 11.5 S3/MinIO Backup Script
+
+```bash
+#!/bin/bash
+# scripts/backup.sh — Comprehensive backup to S3/MinIO
+set -euo pipefail
+
+BACKUP_DIR="/tmp/rag-backup-$(date +%Y-%m-%d-%H%M)"
+S3_BUCKET="s3://rag-backups"
+mkdir -p "$BACKUP_DIR"
+
+echo "=== Qdrant Snapshot ==="
+curl -s -X POST "localhost:6333/collections/knowledge_base/snapshots"
+sleep 10
+SNAPSHOT=$(curl -s localhost:6333/collections/knowledge_base/snapshots | jq -r '.result[-1].name')
+aws s3 cp "/data/qdrant/snapshots/$SNAPSHOT" \
+  "$S3_BUCKET/qdrant/$(date +%Y-%m-%d-%H%M)/"
+
+echo "=== Neo4j Dump ==="
+docker exec rag-neo4j neo4j-admin database dump neo4j --to-path=/backups/
+docker cp rag-neo4j:/backups/neo4j.dump "$BACKUP_DIR/neo4j.dump"
+aws s3 cp "$BACKUP_DIR/neo4j.dump" "$S3_BUCKET/neo4j/$(date +%Y-%m-%d-%H%M)/"
+
+echo "=== Redis RDB ==="
+docker exec rag-redis redis-cli BGSAVE
+sleep 5
+aws s3 cp /data/redis/dump.rdb "$S3_BUCKET/redis/$(date +%Y-%m-%d-%H%M)/"
+
+echo "=== ETL WAL ==="
+aws s3 cp /opt/rag-system/etl/wal/etl_wal.json "$S3_BUCKET/etl/$(date +%Y-%m-%d-%H%M)/"
+
+echo "=== Cleanup ==="
+rm -rf "$BACKUP_DIR"
+echo "Backup complete."
+```
+
+```bash
+# Cron entry (every 6 hours):
+# 0 */6 * * * /opt/rag-system/scripts/backup.sh >> /var/log/rag-backup.log 2>&1
+```
+
+### 11.6 Backup CronJob (Kubernetes)
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rag-backup
+  namespace: rag-system
+spec:
+  schedule: "0 */6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: amazon/aws-cli:latest
+            env:
+            - name: S3_BUCKET
+              value: "s3://rag-backups"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: rag-secrets
+                  key: backup-s3-access-key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: rag-secrets
+                  key: backup-s3-secret-key
+            command:
+              - /bin/sh
+              - -c
+              - |
+                TIMESTAMP=$(date +%Y-%m-%d-%H%M)
+                # Qdrant snapshot
+                curl -s -X POST qdrant:6333/collections/knowledge_base/snapshots
+                sleep 10
+                # Neo4j dump
+                cypher-shell -u neo4j -p $NEO4J_PASSWORD \
+                  "CALL apoc.export.cypher.all('/tmp/neo4j.cypher', {})"
+                aws s3 cp /tmp/neo4j.cypher "$S3_BUCKET/neo4j/$TIMESTAMP/"
+                echo "Backup complete: $TIMESTAMP"
+          restartPolicy: OnFailure
+```
+
+### 11.7 Restore Procedures
+
+**Full recovery (all components):**
+
+```bash
+# 1. Deploy clean infrastructure
+docker compose up -d qdrant neo4j redis
+
+# 2. Restore Qdrant from latest snapshot
+bash scripts/restore_all.sh qdrant --latest
+
+# 3. Restore Neo4j from latest dump
+bash scripts/restore_all.sh neo4j --latest
+
+# 4. Restore Redis
+bash scripts/restore_all.sh redis --latest
+
+# 5. Restore WAL and run incremental ETL
+cp backups/latest_etl_wal.json etl/wal/etl_wal.json
+python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --incremental
+
+# 6. Start proxy
+docker compose up -d rag-proxy
+
+# 7. Verify
+curl http://localhost:8080/v1/health
+```
+
+### 11.8 WAL Corruption Recovery
+
+If the ETL Write-Ahead Log is corrupted:
+
+```bash
+# Delete the corrupted WAL
+rm etl/wal/etl_wal.json
+
+# Run full reindex
+python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --full
+```
+
+---
+
+## 12. Troubleshooting Common Deployment Issues
+
+### 12.1 Port Conflicts
+
+**Symptom:** `Error starting userland proxy: listen tcp4 0.0.0.0:8080: bind: address already in use`
+
+```bash
+# Find what's using the port
+ss -tlnp | grep 8080
+
+# If another service is using it, stop it or change the port:
+# docker-compose.yml:
+ports:
+  - "8081:8080"     # Map host 8081 to container 8080
+```
+
+### 12.2 Model Not Found
+
+**Symptom:** vLLM fails with `ValueError: Model /models/model-name not found`
+
+```bash
+# Verify the model path
+ls -la /opt/models/model-name/
+
+# Verify the volume mount in the container
+docker exec rag-vllm ls -la /models/
+
+# Correct the path in docker-compose.yml:
+vllm:
+  volumes:
+    - /opt/models/Llama-3.1-70B-Instruct:/models/Llama-3.1-70B-Instruct:ro
+```
+
+### 12.3 OOM (Out of Memory)
+
+**Symptom:** Container killed with exit code 137, `dmesg` shows OOM killer
+
+**LLM backend OOM:**
+
+```bash
+# Reduce context length (vLLM)
+--max-model-len 32768   # instead of 65536
+
+# Use quantized model (llama.cpp)
+# Download Q4_K_M.gguf instead of Q8 or fp16
+
+# Reduce GPU memory utilization (vLLM)
+--gpu-memory-utilization 0.70   # instead of 0.90
+```
+
+**Neo4j OOM:**
+
+```bash
+# Reduce heap size
+NEO4J_dbms_memory_heap_max__size=1G   # instead of 2G
+NEO4J_dbms_memory_pagecache_size=512M # instead of 1G
+```
+
+**Proxy OOM:**
+
+```bash
+# Reduce chunk limits
+MAX_CHUNKS_RETRIEVAL=20    # instead of 50
+RERANKER_BATCH_SIZE=8      # instead of 32
+```
+
+### 12.4 Permission Denied
+
+**Symptom:** Container fails with `PermissionError: [Errno 13] Permission denied: '/app/logs'`
+
+```bash
+# Fix volume permissions
+sudo chown -R 1000:1000 /opt/rag-system/proxy/logs
+sudo chmod 755 /opt/rag-system/proxy/logs
+
+# Check if container runs as non-root
+docker inspect rag-proxy | jq '.[0].Config.User'
+# → "raguser" or "1000"
+
+# Ensure UID matches between host and container
+id raguser   # On host
+docker exec rag-proxy id   # In container
+```
+
+### 12.5 Qdrant Connection Refused
+
+**Symptom:** Proxy health check shows `"qdrant": "disconnected"`
+
+```bash
+# Check Qdrant is running
+docker ps | grep qdrant
+
+# Check Qdrant health
+curl http://localhost:6333/health
+
+# Check network connectivity from proxy
+docker exec rag-proxy curl -s http://qdrant:6333/health
+
+# If using localhost instead of service name:
+# Change QDRANT_HOST from "localhost" to "qdrant" in .env
+```
+
+### 12.6 vLLM Startup Takes Too Long
+
+**Symptom:** vLLM container healthy but proxy reports LLM unavailable
+
+```bash
+# vLLM model loading can take 3-10 minutes for large models
+# Increase start_period in healthcheck:
+vllm:
+  healthcheck:
+    start_period: 300s   # 5 minutes
+
+# Increase proxy readiness timeout
+rag-proxy:
+  healthcheck:
+    start_period: 90s
+    retries: 10
+
+# Check vLLM progress logs
+docker logs rag-vllm -f | grep -i "loading\|ready\|error"
+```
+
+### 12.7 Docker Compose "no space left on device"
+
+```bash
+# Prune unused Docker data
 docker system prune -a --volumes -f
 
-# Clean old ETL cold chunks:
+# Clean Docker build cache
+docker builder prune -a -f
+
+# Check disk usage
+df -h
+docker system df
+
+# Prune old ETL cold chunks
 find etl/cold_chunks/ -name "*.parquet" -mtime +30 -delete
 
-# Rotate logs:
+# Rotate logs
 find proxy/logs/ -name "*.log" -mtime +7 -delete
 ```
 
-### LLM Backend Won't Start
+### 12.8 Redis Streams Consumer Lag
+
+**Symptom:** ETL events backing up, Prometheus alert `StreamConsumerLag`
+
 ```bash
-# Check GPU access:
-docker run --rm --gpus all your-llm-backend-image nvidia-smi
+# Check consumer group status
+docker exec rag-redis redis-cli XINFO GROUPS etl:events
 
-# Verify model file exists:
-ls -la /opt/rag-system/offline_models/your-model.gguf
+# Check pending messages
+docker exec rag-redis redis-cli XPENDING etl:events etl-extract
 
-# Check backend logs:
-docker logs rag-llm-backend
+# If a consumer is stuck, delete and recreate the consumer group:
+docker exec rag-redis redis-cli XGROUP DESTROY etl:events etl-chunk
+docker exec rag-redis redis-cli XGROUP CREATE etl:events etl-chunk $ MKSTREAM
+
+# Check dead letter queue
+docker exec rag-redis redis-cli XLEN etl:events:dlq
+
+# Reprocess DLQ events
+python etl/scheduler/reprocess_dlq.py --stream etl:events:dlq
 ```
+
+### 12.9 Neo4j APOC Plugin Not Loaded
+
+**Symptom:** `There is no procedure with the name 'apoc.export.cypher.all'`
+
+```bash
+# Verify APOC is in Neo4j plugins directory
+docker exec rag-neo4j ls /plugins/
+
+# If missing, mount APOC jar:
+# docker-compose.yml:
+neo4j:
+  volumes:
+    - ./neo4j-plugins/apoc-5.25-core.jar:/plugins/apoc-core.jar:ro
+
+# Or set environment variable:
+NEO4J_PLUGINS='["apoc"]'
+```
+
+### 12.10 GPU Not Detected in Container
+
+```bash
+# Verify NVIDIA Container Toolkit is installed
+nvidia-container-cli info
+
+# Check Docker GPU access
+docker run --rm --gpus all nvidia/cuda:12.4-base nvidia-smi
+
+# In docker-compose, ensure:
+vllm:
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+  runtime: nvidia     # Only needed for older Docker versions
+```
+
+---
+
+## Related Documents
+
+| Document | Coverage |
+|----------|----------|
+| [Operations Guide](operations-guide.md) | Day-2 ops: monitoring details, scaling, upgrades, compression, cold storage |
+| [Disaster Recovery Runbook](disaster-recovery-runbook.md) | Step-by-step recovery procedures for all failure scenarios |
+| [Performance & Quality Best Practices](performance-quality.md) | HNSW tuning, quantization, inference optimization, benchmarking |
+| [Production Readiness Checklist](best-practices-checklist.md) | 8-dimension readiness tracker (94% complete) |
+| [SLI/SLO Definitions](../sli_slo.md) | Service level indicators, objectives, error budgets |
+| [Access Control & RBAC](access-control-rbac.md) | JWT auth, Keycloak OIDC, RBAC implementation |
+| [Troubleshooting](troubleshooting.md) | Additional common issues and resolutions |

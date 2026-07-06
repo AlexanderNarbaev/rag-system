@@ -543,6 +543,233 @@ networkPolicy:
   enabled: false
 
 # =============================================================================
+# Federated RAG Proxy (Beyond v2.0)
+# =============================================================================
+federation:
+  # -- Enable federation deployment
+  enabled: false
+
+  image:
+    repository: rag-system/federation
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  replicaCount: 1
+
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+
+  service:
+    type: ClusterIP
+    port: 8081
+    targetPort: 8081
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: "500m"
+      memory: 512Mi
+
+  livenessProbe:
+    httpGet:
+      path: /v1/health/live
+      port: 8081
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /v1/health/ready
+      port: 8081
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+
+  env:
+    federationMode: "auto"
+    federationMergeStrategy: "weighted_rrf"
+    federationMergeK: "60"
+    federationRrfK: "60"
+    federationPerInstanceTimeoutS: "10"
+    federationTotalTimeoutS: "30"
+    federationCircuitBreakerThreshold: "5"
+    federationCircuitBreakerRecoveryS: "30"
+    federationAuthEnabled: "false"
+    federationDefaultGroups: "admin"
+
+# =============================================================================
+# MCP Server (Beyond v2.0)
+# =============================================================================
+mcpServer:
+  # -- Enable MCP server deployment
+  enabled: false
+
+  image:
+    repository: rag-system/mcp-server
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  replicaCount: 1
+
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+
+  service:
+    type: ClusterIP
+    port: 8082
+    targetPort: 8082
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: "250m"
+      memory: 256Mi
+
+  env:
+    proxyUrl: "http://rag-proxy:8080/v1"
+    transportMode: "streamable-http"
+
+# =============================================================================
+# Model Evolution — Training Jobs (Beyond v2.0)
+# =============================================================================
+modelEvolution:
+  # -- Enable model evolution infrastructure
+  enabled: false
+
+  # Training CronJob for scheduled fine-tuning
+  training:
+    # -- Enable scheduled training
+    enabled: false
+    # -- Cron schedule (e.g., "0 2 * * 0" = Sundays at 2 AM)
+    schedule: "0 2 * * 0"
+    # -- Training type: slm, llm, reranker
+    type: "reranker"
+    # -- Max training epochs
+    maxEpochs: "3"
+    # -- Batch size
+    batchSize: "8"
+    # -- Learning rate
+    learningRate: "2e-5"
+    # -- LoRA rank
+    loraR: "16"
+    # -- LoRA alpha
+    loraAlpha: "32"
+    # -- Use QLoRA (4-bit quantization)
+    useQLoRA: "false"
+    # -- Use CPU only (no GPU)
+    cpuOnly: "false"
+
+    resources:
+      limits:
+        cpu: "4"
+        memory: 16Gi
+      requests:
+        cpu: "2"
+        memory: 8Gi
+
+  # Eval gate thresholds
+  evalGate:
+    rerankerMRR: "0.8"
+    rerankerNDCG: "0.75"
+    slmAccuracy: "0.85"
+    llmBLEU: "0.3"
+    llmROUGEL: "0.35"
+    nliEntailmentRate: "0.7"
+
+# =============================================================================
+# MLflow — Experiment Tracking (Beyond v2.0)
+# =============================================================================
+mlflow:
+  # -- Enable MLflow deployment
+  enabled: false
+
+  image:
+    repository: mlflow/mlflow
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  service:
+    type: ClusterIP
+    port: 5000
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: "250m"
+      memory: 512Mi
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 20Gi
+
+  env:
+    backendStoreUri: "sqlite:///mlflow/mlflow.db"
+    artifactRoot: "/mlflow/artifacts"
+
+# =============================================================================
+# MinIO — Artifact Storage (Beyond v2.0)
+# =============================================================================
+minio:
+  # -- Enable MinIO deployment (S3-compatible artifact storage)
+  enabled: false
+
+  image:
+    repository: minio/minio
+    pullPolicy: IfNotPresent
+    tag: "latest"
+
+  service:
+    type: ClusterIP
+    apiPort: 9000
+    consolePort: 9001
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: "250m"
+      memory: 512Mi
+
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 50Gi
+
+  env:
+    rootUser: "minioadmin"
+    rootPassword: ""
+    defaultBucket: "rag-models"
+
+# =============================================================================
 # Node selector, tolerations, affinity
 # =============================================================================
 # -- Node selector for all pods
