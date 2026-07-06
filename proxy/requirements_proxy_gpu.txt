@@ -1,5 +1,5 @@
 # proxy/requirements_proxy_gpu.txt
 # Опциональные GPU-зависимости для дообучения моделей.
 # Установка: pip install -r requirements_proxy_gpu.txt
-bitsandbytes>=0.43.0
+bitsandbytes>=0.49.2
 accelerate>=0.30.0
