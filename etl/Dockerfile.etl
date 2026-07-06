@@ -5,7 +5,7 @@
 #   python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 #   и скопировать кэш в /model_cache при сборке (см. ниже)
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Установка системных зависимостей (для компиляции некоторых пакетов)
 RUN apt-get update && apt-get install -y --no-install-recommends \
