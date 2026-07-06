@@ -28,7 +28,7 @@ pyarrow>=14.0.0
 neo4j>=5.14.0
 
 # Блокировки и утилиты
-filelock>=3.12.0
+filelock>=3.29.5
 
 # Для Delta Lake (опционально)
 # deltalake>=0.15.0
