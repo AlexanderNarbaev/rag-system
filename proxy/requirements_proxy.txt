@@ -15,7 +15,7 @@ sentence-transformers>=2.2.0
 
 # Кэш (Redis)
 redis>=4.5.0
-aiohttp>=3.9.0  # для асинхронных запросов к LLM (>=3.9 fixes CVE-2024-23829, CVE-2024-23334)
+aiohttp>=3.14.1  # для асинхронных запросов к LLM (>=3.9 fixes CVE-2024-23829, CVE-2024-23334)
 
 # Агентная оркестрация (LangGraph)
 langgraph>=1.2.8
