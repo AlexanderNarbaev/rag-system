@@ -14,7 +14,7 @@ qdrant-client>=1.10.0
 sentence-transformers>=2.2.0
 
 # NLP и извлечение сущностей
-spacy>=3.7.0
+spacy>=3.8.14
 # Для русского языка (предварительно установить модель):
 # python -m spacy download ru_core_news_sm
 # Или для английского:
