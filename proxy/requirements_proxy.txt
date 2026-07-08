@@ -19,7 +19,7 @@ aiohttp>=3.9.0  # для асинхронных запросов к LLM (>=3.9 f
 
 # Агентная оркестрация (LangGraph)
 langgraph>=1.2.8
-langchain-core>=0.2.0  # требуется для LangGraph
+langchain-core>=1.4.8  # требуется для LangGraph
 
 # Граф знаний (Neo4j, опционально)
 neo4j>=5.14.0
