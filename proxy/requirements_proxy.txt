@@ -18,7 +18,7 @@ redis>=4.5.0
 aiohttp>=3.9.0  # для асинхронных запросов к LLM (>=3.9 fixes CVE-2024-23829, CVE-2024-23334)
 
 # Агентная оркестрация (LangGraph)
-langgraph>=0.2.0
+langgraph>=1.2.8
 langchain-core>=0.2.0  # требуется для LangGraph
 
 # Граф знаний (Neo4j, опционально)
