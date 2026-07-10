@@ -3,11 +3,12 @@
 
 .PHONY: help install install-dev install-one-line setup wizard \
         test test-proxy test-etl test-integration \
-        test-performance test-e2e test-resilience \
+        test-performance test-e2e test-resilience benchmark \
         lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run docs all \
         etl etl-confluence etl-jira etl-gitlab \
-        backup restore dashboard tui
+        backup restore dashboard tui \
+        deploy deploy-prod verify-backups
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -68,6 +69,9 @@ test-e2e: ## Run end-to-end tests (requires running services)
 test-resilience: ## Run chaos and resilience tests
 	@cd $(ROOT) && python -m pytest tests/resilience/ -v -m chaos
 
+benchmark: ## Run performance benchmarks
+	@cd $(ROOT) && python -m pytest tests/performance/test_benchmarks.py -v --benchmark-only
+
 # ── Code quality ──────────────────────────────────────────────────────────────
 lint: ## Lint with ruff
 	@cd $(ROOT) && ruff check .
@@ -111,6 +115,16 @@ backup: ## Run all backups (Qdrant, Neo4j, Redis)
 
 restore: ## Run restore from latest backups
 	@bash $(ROOT)/scripts/ops/restore_all.sh
+
+verify-backups: ## Verify backup integrity
+	@bash $(ROOT)/scripts/ops/verify_restore.sh
+
+# ── Deployment ───────────────────────────────────────────────────────────────
+deploy: ## Deploy services (dev)
+	@bash $(ROOT)/scripts/deploy.sh dev
+
+deploy-prod: ## Deploy services (prod)
+	@bash $(ROOT)/scripts/deploy.sh prod
 
 # ── Documentation ─────────────────────────────────────────────────────────────
 docs: ## Show documentation locations

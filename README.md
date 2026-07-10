@@ -1,5 +1,12 @@
 # RAG System — Корпоративный ассистент знаний · Corporate Knowledge Assistant
 
+[![CI](https://github.com/AlexanderNarbaev/rag-system/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexanderNarbaev/rag-system/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-80%25+-brightgreen)](https://github.com/AlexanderNarbaev/rag-system/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/docker-24.0+-2496ED.svg)](https://www.docker.com/)
+[![Docs](https://img.shields.io/badge/docs-mkdocs--material-526CFE.svg)](https://alexandernarbaev.github.io/rag-system/)
+
 **EN:** OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab, documents, books, and chat history — indexed into Qdrant + Neo4j, served via any LLM. Features HyDE, CRAG, hallucination detection, NLI verification, agentic tools, federated search, and model fine-tuning.
 
 **RU:** OpenAI-совместимый RAG-прокси с ETL-конвейером для Confluence, Jira, GitLab, документов, книг и истории чатов. HyDE, CRAG, детекция галлюцинаций, NLI-верификация, агентные инструменты, федеративный поиск, дообучение моделей.
@@ -8,41 +15,17 @@
 
 ## Quick Start · Быстрый старт
 
-### One-line install
-
-```bash
-curl -sSL https://raw.githubusercontent.com/AlexanderNarbaev/rag-system/main/install.sh | bash
-```
-
-### Manual install
-
 ```bash
 git clone https://github.com/AlexanderNarbaev/rag-system.git
 cd rag-system
-make setup
-make run
+cp proxy/.env.example proxy/.env   # Configure LLM endpoint
+cd proxy && docker compose up -d   # Start all services
+curl http://localhost:8080/v1/health  # Verify
 ```
 
-### Configuration wizard
+**Prerequisites:** Docker 24.0+, Python 3.11+, 16 GB RAM, 20 GB disk.
 
-```bash
-make wizard
-```
-
-### Start services (Docker)
-
-```bash
-# Start services (Qdrant + Redis + Neo4j + Proxy)
-cd proxy && docker compose up -d
-
-# Test the API
-curl http://localhost:8080/v1/health
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"rag-proxy","messages":[{"role":"user","content":"What is RAG?"}]}'
-```
-
-**Prerequisites:** Docker, Python 3.11+, 16 GB RAM, 20 GB disk. See [Deployment Guide](docs/en/guides/deployment-guide.md) for production setup.
+[Full Quick Start Guide →](docs/en/guides/quickstart.md) | [Руководство на русском →](docs/ru/guides/quickstart.md)
 
 ---
 
@@ -50,42 +33,34 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 Six-layer architecture with multi-provider LLM support:
 
-```
-Client (OpenAI SDK / curl / OpenWebUI / n8n)
-       │
-       ▼
-┌──────────────────────────────────────────────┐
-│  RAG Proxy (FastAPI :8080)                    │
-│  ┌──────────────────────────────────────────┐ │
-│  │ Orchestrator (LangGraph, 10-node graph)   │ │
-│  │  rewrite→retrieve→check→rerank→graph_expand│ │
-│  │  →build→generate→call_tools→reflect→check │ │
-│  │                                           │ │
-│  │ Features:                                 │ │
-│  │  • HyDE query expansion                   │ │
-│  │  • CRAG evaluator + self-reflection       │ │
-│  │  • Hallucination detection & NLI grounding│ │
-│  │  • Agentic tool calling (live sources)    │ │
-│  │  • Multi-language support                 │ │
-│  │  • SSE streaming with TTFT optimization   │ │
-│  │  • RBAC (4 roles) + JWT + LDAP/AD         │ │
-│  │  • Circuit breakers + graceful degradation│ │
-│  └──────────────────────────────────────────┘ │
-│                                               │
-│  ┌─────────┐ ┌──────────┐ ┌───────┐          │
-│  │ Qdrant  │ │  Neo4j   │ │ Redis │          │
-│  │ Vector  │ │  Graph   │ │ Cache │          │
-│  └─────────┘ └──────────┘ └───────┘          │
-└──────────────────────────────────────────────┘
-       │                    │
-       ▼                    ▼
-┌─────────────┐   ┌────────────────┐
-│ ETL Pipeline │   │ LLM Backend    │
-│ (extraction, │   │ (vLLM, llama.  │
-│  chunking,   │   │  cpp, OpenAI-  │
-│  embedding,  │   │  compatible,   │
-│  indexing)   │   │  Anthropic)    │
-└─────────────┘   └────────────────┘
+```mermaid
+graph TB
+    Client["Client<br/>(OpenAI SDK / curl / OpenWebUI / n8n)"]
+
+    subgraph Proxy["RAG Proxy (FastAPI :8080)"]
+        Orch["Orchestrator<br/>(LangGraph, 10-node graph)"]
+        Features["HyDE · CRAG · NLI Grounding<br/>Agentic Tools · RBAC · Streaming"]
+        Qdrant[("Qdrant<br/>Vector DB")]
+        Neo4j[("Neo4j<br/>Graph DB")]
+        Redis[("Redis<br/>Cache")]
+    end
+
+    ETL["ETL Pipeline<br/>(Extract · Chunk · Embed · Index)"]
+    LLM["LLM Backend<br/>(vLLM / llama.cpp / OpenAI-compatible)"]
+    HITL["HITL Dashboard<br/>(Streamlit)"]
+    MCP["MCP Server<br/>(FastMCP)"]
+    Evo["Model Evolution<br/>(LoRA / MLflow / MinIO)"]
+
+    Client --> Proxy
+    Orch --> Qdrant
+    Orch --> Neo4j
+    Orch --> Redis
+    Orch --> LLM
+    ETL --> Qdrant
+    ETL --> Neo4j
+    Proxy --> HITL
+    Proxy --> MCP
+    Proxy --> Evo
 ```
 
 | Layer | Technology | Purpose |
@@ -104,43 +79,43 @@ Client (OpenAI SDK / curl / OpenWebUI / n8n)
 ## Key Features · Ключевые возможности
 
 ### RAG Pipeline
-- **HyDE query expansion** — Generate hypothetical documents to improve retrieval
-- **CRAG evaluator** — Assess retrieval quality and trigger corrective loops
-- **Self-reflection** — Critique and regenerate answers for quality
-- **Hallucination grounding** — NLI-based fact verification against retrieved context
-- **Hybrid search** — Dense (BGE-M3 1024-dim) + Sparse (BM25 lexical) + ColBERT multi-vectors
-- **Cross-encoder reranking** — MiniLM-L-6-v2 with fine-tuning support
-- **Graph expansion** — Neo4j knowledge graph with entity extraction and multi-hop traversal
+- [x] **HyDE query expansion** — Generate hypothetical documents to improve retrieval
+- [x] **CRAG evaluator** — Assess retrieval quality and trigger corrective loops
+- [x] **Self-reflection** — Critique and regenerate answers for quality
+- [x] **Hallucination grounding** — NLI-based fact verification against retrieved context
+- [x] **Hybrid search** — Dense (BGE-M3 1024-dim) + Sparse (BM25 lexical) + ColBERT multi-vectors
+- [x] **Cross-encoder reranking** — MiniLM-L-6-v2 with fine-tuning support
+- [x] **Graph expansion** — Neo4j knowledge graph with entity extraction and multi-hop traversal
 
 ### Agentic Tools
-- **Python SDK** — `@tool` decorator with automatic JSON Schema from type hints
-- **Declarative tools** — YAML/JSON definitions for HTTP and shell commands
-- **OpenAPI auto-discovery** — Convert REST APIs to tools automatically
-- **Parallel execution** — Dependency-aware tool orchestration
-- **RBAC visibility** — Per-tool access control (public/user/internal/admin)
+- [x] **Python SDK** — `@tool` decorator with automatic JSON Schema from type hints
+- [x] **Declarative tools** — YAML/JSON definitions for HTTP and shell commands
+- [x] **OpenAPI auto-discovery** — Convert REST APIs to tools automatically
+- [x] **Parallel execution** — Dependency-aware tool orchestration
+- [x] **RBAC visibility** — Per-tool access control (public/user/internal/admin)
 
 ### Federated RAG
-- **Multi-silo fan-out** — Query multiple independent RAG instances simultaneously
-- **Weighted RRF merge** — Cross-silo result fusion with configurable weights
-- **Auto-routing** — SLM-based query classification to target silos
-- **Circuit breakers** — Per-silo resilience with automatic recovery
-- **Generation delegation** — Route to primary silo or direct LLM
+- [x] **Multi-silo fan-out** — Query multiple independent RAG instances simultaneously
+- [x] **Weighted RRF merge** — Cross-silo result fusion with configurable weights
+- [x] **Auto-routing** — SLM-based query classification to target silos
+- [x] **Circuit breakers** — Per-silo resilience with automatic recovery
+- [x] **Generation delegation** — Route to primary silo or direct LLM
 
 ### Model Evolution
-- **LoRA/QLoRA fine-tuning** — SLM, LLM, and Reranker training pipelines
-- **MLflow + MinIO** — Experiment tracking and artifact storage
-- **Hot-reload adapters** — Zero-downtime model swapping
-- **Canary deployment** — Gradual rollout with automatic rollback
-- **EvalGate CI/CD** — Automated quality gating before promotion
+- [x] **LoRA/QLoRA fine-tuning** — SLM, LLM, and Reranker training pipelines
+- [x] **MLflow + MinIO** — Experiment tracking and artifact storage
+- [x] **Hot-reload adapters** — Zero-downtime model swapping
+- [x] **Canary deployment** — Gradual rollout with automatic rollback
+- [x] **EvalGate CI/CD** — Automated quality gating before promotion
 
 ### Production Features
-- **JWT auth + Keycloak OIDC** — Corporate SSO with token pairs
-- **RBAC** — 4 roles: admin, expert, user, read-only
-- **LDAP/AD integration** — Enterprise directory authentication
-- **Rate limiting** — Token bucket per IP
-- **Prometheus metrics** — 30+ counters, histograms, gauges
-- **Response compression** — gzip/brotli
-- **K8s Helm chart** — HPA, probes, secrets, network policies
+- [x] **JWT auth + Keycloak OIDC** — Corporate SSO with token pairs
+- [x] **RBAC** — 4 roles: admin, expert, user, read-only
+- [x] **LDAP/AD integration** — Enterprise directory authentication
+- [x] **Rate limiting** — Token bucket per IP
+- [x] **Prometheus metrics** — 30+ counters, histograms, gauges
+- [x] **Response compression** — gzip/brotli
+- [x] **K8s Helm chart** — HPA, probes, secrets, network policies
 
 ---
 
@@ -264,6 +239,9 @@ MODEL_CACHE_DIR=/data/models docker compose up -d
 
 | Document | Description |
 |----------|-------------|
+| [Quick Start Guide](docs/en/guides/quickstart.md) | 5-minute setup tutorial with troubleshooting |
+| [API Examples](docs/en/guides/api-examples.md) | curl, Python, JavaScript examples for all endpoints |
+| [Contributing Guide](CONTRIBUTING.md) | Development setup, code style, PR process |
 | [Architecture Decision Records](docs/en/adr/) | 10 ADRs covering all major design decisions |
 | [C4 Architecture Diagrams](docs/en/diagrams/) | L1 (System Context), L2 (Containers), L3 (Components) |
 | [API Reference](docs/en/api_reference.md) | Complete endpoint reference with request/response schemas |
