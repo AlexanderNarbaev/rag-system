@@ -1,6 +1,6 @@
 # ADR-009: Agentic Tools Expansion Architecture
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-07-05  
 **Author:** Architecture Design  
 **Scope:** Tool system redesign — SDK, declarative, OpenAPI, orchestration  

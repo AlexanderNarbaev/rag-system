@@ -1,6 +1,6 @@
 # ADR-010: Model Evolution — Fine-Tuning Pipeline & Canary Deployment
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-07-05  
 **Author:** Architecture Design  
 **Scope:** On-prem model fine-tuning (SLM, LLM, Reranker), MLflow tracking, model registry, CI/CD eval gates, artifact storage (MinIO), hot-reload adapters, canary deployment with automatic rollback.
