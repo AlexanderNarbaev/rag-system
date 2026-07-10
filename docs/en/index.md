@@ -264,15 +264,15 @@ curl -X POST http://localhost:8081/v1/search \
 
 | Dimension | Ready | Details |
 |-----------|-------|---------|
-| **Code Quality** | 90% | ruff, mypy, pre-commit hooks |
-| **Testing** | 90% | 2275 tests, 99%+ pass rate, E2E + chaos |
-| **Security** | 90% | JWT + RBAC + LDAP + input sanitization |
-| **Observability** | 90% | Prometheus + Grafana + structured logging |
-| **Reliability** | 100% | Circuit breakers, graceful degradation, HA |
-| **Performance** | 100% | HNSW, quantization, SSE TTFT, compression |
-| **Operations** | 90% | K8s Helm, backup automation, DR runbook |
-| **Documentation** | 100% | 10 ADRs, 4 C4 diagrams, 16 guides |
-| **Overall** | **94%** (75/80) | Production-ready |
+| **Code Quality** | 90% | ruff, mypy strict, pre-commit hooks, type hints |
+| **Testing** | 80% | 2196 tests, 0 failures, 80% coverage |
+| **Security** | 90% | JWT + RBAC + LDAP + input sanitization + pip-audit + CodeQL |
+| **Observability** | 90% | Prometheus + Grafana + OpenTelemetry + structured logging |
+| **Reliability** | 90% | Circuit breakers, exponential backoff, graceful degradation |
+| **Performance** | 80% | Benchmarks, caching, connection pooling |
+| **Operations** | 90% | K8s Helm, deploy scripts, backup/restore, runbook |
+| **Documentation** | 100% | 11 ADRs, 25+ EN guides, 25+ RU guides, API examples |
+| **Overall** | **89%** (71/80) | Production-ready |
 
 [Full assessment →](guides/best-practices-checklist.md)
 
