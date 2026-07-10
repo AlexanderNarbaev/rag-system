@@ -450,6 +450,7 @@ from proxy.app.api import (  # noqa: E402
     auth_router,
     chat_router,
     feedback_router,
+    files_router,
     health_router,
     metrics_router,
     tools_router,
@@ -460,6 +461,7 @@ app.include_router(metrics_router)
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(files_router)
 app.include_router(tools_router)
 app.include_router(feedback_router)
 app.include_router(widget_router)

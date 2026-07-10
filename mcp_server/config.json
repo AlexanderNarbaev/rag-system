@@ -1,0 +1,19 @@
+{
+  "name": "rag-system",
+  "description": "Corporate Knowledge Assistant MCP Server",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "rag_search",
+      "description": "Search corporate knowledge base"
+    },
+    {
+      "name": "rag_chat", 
+      "description": "Chat with RAG system"
+    },
+    {
+      "name": "rag_feedback",
+      "description": "Submit feedback on answers"
+    }
+  ]
+}

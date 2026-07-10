@@ -292,6 +292,7 @@ MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "rag-artifacts")
 MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
+MINIO_DOCS_BUCKET = os.getenv("MINIO_DOCS_BUCKET", "rag-documents")
 
 # Training
 TRAINING_PROFILE = os.getenv("TRAINING_PROFILE", "dev")

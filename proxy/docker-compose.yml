@@ -69,6 +69,28 @@ services:
     networks:
       - rag-network
 
+  # ── MinIO (S3-compatible object storage) ────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: rag-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - rag-network
+
   # ── LLM backend (OpenAI-compatible) ─────────────────────────────────────────
   # Set MODEL_PATH and MODEL_NAME in .env or override below
   vllm:
@@ -124,12 +146,17 @@ services:
       - USE_REDIS=true
       - USE_LANGGRAPH=true
       - GRAPH_ENABLED=true
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
     depends_on:
       qdrant:
         condition: service_healthy
       neo4j:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health/live"]
@@ -210,6 +237,7 @@ volumes:
   neo4j_data:
   neo4j_logs:
   redis_data:
+  minio_data:
   # prometheus_data:   # Uncomment with monitoring stack
   # grafana_data:      # Uncomment with monitoring stack
 

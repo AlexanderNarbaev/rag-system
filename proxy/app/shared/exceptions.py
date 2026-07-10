@@ -112,3 +112,10 @@ class SecurityError(RAGError):
 
     def __init__(self, message: str = "", component: str = "security"):
         super().__init__(message, component=component, recoverable=False)
+
+
+class StorageError(RAGError):
+    """Object storage errors (MinIO/S3 upload, download, delete failures)."""
+
+    def __init__(self, message: str = "", component: str = "storage"):
+        super().__init__(message, component=component, recoverable=True)

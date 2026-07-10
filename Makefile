@@ -7,7 +7,7 @@
         lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run docs all \
         etl etl-confluence etl-jira etl-gitlab \
-        backup restore dashboard tui \
+        backup restore dashboard tui mcp-server \
         deploy deploy-prod verify-backups
 
 SHELL := /bin/bash
@@ -139,6 +139,10 @@ dashboard: ## Start Streamlit dashboard
 
 tui: ## Start terminal UI
 	python tui/app.py
+
+# ── MCP Server ────────────────────────────────────────────────────────────────
+mcp-server: ## Start MCP server
+	python mcp_server/server.py
 
 # ── CI pipeline ───────────────────────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests
