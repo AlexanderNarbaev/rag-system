@@ -2,9 +2,11 @@
 # Primary entry point for development, testing, and deployment workflows.
 
 .PHONY: help install install-dev setup test test-proxy test-etl test-integration \
+        test-performance test-e2e test-resilience \
         lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run docs all \
-        etl etl-confluence etl-jira etl-gitlab
+        etl etl-confluence etl-jira etl-gitlab \
+        backup restore
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -50,6 +52,15 @@ test-etl: ## Run ETL unit tests
 test-integration: ## Run integration tests
 	@cd $(ROOT) && python -m pytest tests/integration/ -v
 
+test-performance: ## Run performance and benchmark tests
+	@cd $(ROOT) && python -m pytest tests/performance/ -v -m benchmark
+
+test-e2e: ## Run end-to-end tests (requires running services)
+	@cd $(ROOT) && python -m pytest tests/e2e/ -v -m e2e
+
+test-resilience: ## Run chaos and resilience tests
+	@cd $(ROOT) && python -m pytest tests/resilience/ -v -m chaos
+
 # ── Code quality ──────────────────────────────────────────────────────────────
 lint: ## Lint with ruff
 	@cd $(ROOT) && ruff check .
@@ -86,6 +97,13 @@ docker-down: ## Stop docker-compose services
 
 docker-logs: ## Tail docker-compose logs
 	@cd $(ROOT)/proxy && docker-compose logs -f
+
+# ── Backup & Restore ─────────────────────────────────────────────────────────
+backup: ## Run all backups (Qdrant, Neo4j, Redis)
+	@bash $(ROOT)/scripts/ops/backup_cron.sh
+
+restore: ## Run restore from latest backups
+	@bash $(ROOT)/scripts/ops/restore_all.sh
 
 # ── Documentation ─────────────────────────────────────────────────────────────
 docs: ## Show documentation locations

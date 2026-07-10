@@ -141,11 +141,77 @@ services:
     networks:
       - rag-network
 
+  # ── Monitoring stack (disabled by default) ───────────────────────────────────
+  # Uncomment the services below to enable Prometheus + Grafana monitoring.
+  # Alternatively, use the standalone monitoring compose:
+  #   docker compose -f ../config/monitoring/docker-compose.monitoring.yml up -d
+  #
+  # prometheus:
+  #   image: prom/prometheus:v2.53.0
+  #   container_name: rag-prometheus
+  #   volumes:
+  #     - ../config/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - ../config/monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+  #     - prometheus_data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   command:
+  #     - "--config.file=/etc/prometheus/prometheus.yml"
+  #     - "--storage.tsdb.retention.time=30d"
+  #     - "--web.enable-lifecycle"
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 3
+  #   restart: unless-stopped
+  #   networks:
+  #     - rag-network
+  #
+  # grafana:
+  #   image: grafana/grafana:11.1.0
+  #   container_name: rag-grafana
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ../config/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+  #     - ../config/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #     - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/rag-overview.json
+  #   depends_on:
+  #     prometheus:
+  #       condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 3
+  #   restart: unless-stopped
+  #   networks:
+  #     - rag-network
+  #
+  # redis-exporter:
+  #   image: oliver006/redis_exporter:v1.58.0
+  #   container_name: rag-redis-exporter
+  #   ports:
+  #     - "9121:9121"
+  #   environment:
+  #     - REDIS_ADDR=redis://redis:6379
+  #   restart: unless-stopped
+  #   networks:
+  #     - rag-network
+
 volumes:
   qdrant_data:
   neo4j_data:
   neo4j_logs:
   redis_data:
+  # prometheus_data:   # Uncomment with monitoring stack
+  # grafana_data:      # Uncomment with monitoring stack
 
 networks:
   rag-network:

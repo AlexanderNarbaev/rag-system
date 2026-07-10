@@ -1865,6 +1865,8 @@ fi
 
 ## Appendix C: Related Documents
 
+- [Operational Scripts (Backup/Restore)](../../scripts/ops/README.md)
+- [Kubernetes Deployment (Helm)](../../deploy/k8s/README.md)
 - [SLI/SLO Definitions](../sli_slo.md)
 - [Disaster Recovery Runbook](disaster-recovery-runbook.md)
 - [Deployment Guide](deployment-guide.md)
