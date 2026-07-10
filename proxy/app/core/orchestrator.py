@@ -1,5 +1,17 @@
 # proxy/app/orchestrator.py
 """
+Agentic RAG pipeline orchestration using LangGraph.
+
+Implements a state graph with the following nodes:
+1. Query rewrite (rewrite) — LLM-based query improvement
+2. Hybrid search (retrieve) — dense + sparse retrieval from Qdrant
+3. Sufficiency check (check_sufficiency) — triggers re-retrieval if needed
+4. Graph expansion (graph_expand) — optional Neo4j knowledge graph enrichment
+5. Reranking (rerank) — cross-encoder precision ranking
+6. Context building (build_context) — token-budgeted context assembly
+7. Generation (generate) — LLM answer generation
+8. Self-reflection and confidence scoring for quality assurance
+
 Агентная оркестрация RAG-пайплайна с использованием LangGraph.
 Реализует циклы:
 1. Переписывание запроса (rewrite)

@@ -1,5 +1,11 @@
 # proxy/app/retrieval.py
 """
+Retrieval module for the RAG proxy.
+
+Implements hybrid search (dense + sparse) with RRF fusion, embedding cache
+via Redis/In-Memory, optional graph expansion via Neo4j, and Qdrant integration
+for nearest-neighbor search with version filtering.
+
 Модуль поиска для RAG-прокси.
 Реализует:
 - Гибридный поиск (dense + sparse) с RRF-слиянием
@@ -62,7 +68,7 @@ except ImportError:
     CircuitBreakerOpenError = RuntimeError  # type: ignore[assignment,misc]
 
 
-def initialize_retrieval():
+def initialize_retrieval() -> None:
     """Инициализирует клиенты и кэш (вызывается при старте прокси)."""
     global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
     if not QDRANT_AVAILABLE:
@@ -279,7 +285,7 @@ if cache_manager is None:
     cache_manager = CacheManager(use_redis=False)
 
 
-def _parse_timestamp(value) -> float | None:
+def _parse_timestamp(value: str | int | float | None) -> float | None:
     """Parse a timestamp from a string or numeric value, returning Unix epoch seconds."""
     if value is None:
         return None

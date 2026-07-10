@@ -1,5 +1,10 @@
 # proxy/app/config.py
 """
+RAG proxy configuration.
+
+All parameters are loaded from environment variables or have default values.
+Supports .env file loading for local development.
+
 Конфигурация RAG-прокси.
 Все параметры загружаются из переменных окружения или имеют значения по умолчанию.
 """
@@ -109,6 +114,7 @@ SENSITIVE_SECRETS = os.getenv("SENSITIVE_SECRETS", "").split(",") if os.getenv("
 # ============ Observability ============
 METRICS_ENABLED = os.getenv("METRICS_ENABLED", "true").lower() == "true"
 LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" or "text"
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # ── OpenTelemetry Tracing ──
 OTEL_ENABLED = os.getenv("OTEL_ENABLED", "false").lower() == "true"
@@ -318,7 +324,7 @@ SHUTDOWN_TIMEOUT = int(os.getenv("SHUTDOWN_TIMEOUT", "30"))
 
 
 # ============ Вспомогательная функция для отладки ============
-def print_config():
+def print_config() -> None:
     """Выводит текущую конфигурацию (скрывая секреты)."""
     config_vars = {k: v for k, v in globals().items() if not k.startswith("_") and isinstance(v, (str, int, bool))}
     # Маскируем чувствительные переменные

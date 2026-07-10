@@ -76,11 +76,16 @@ jobs:
           pip install -r requirements-etl.txt
           pip install -r requirements-dev.txt
 
-      - name: Run unit and integration tests
+      - name: Run unit and integration tests with coverage
         run: |
           python -m pytest tests/proxy/ tests/etl/ tests/integration/ \
             -v --tb=short \
             --junitxml=test-results.xml \
+            --cov=proxy --cov=etl \
+            --cov-report=term-missing \
+            --cov-report=html:htmlcov \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=80 \
             -q \
             --ignore=tests/performance \
             --ignore=tests/e2e \
@@ -92,6 +97,15 @@ jobs:
         with:
           name: test-results-py${{ matrix.python-version }}
           path: test-results.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-py${{ matrix.python-version }}
+          path: |
+            htmlcov/
+            coverage.xml
 
   typecheck:
     name: Type Check

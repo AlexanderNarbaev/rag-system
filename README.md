@@ -8,12 +8,30 @@
 
 ## Quick Start · Быстрый старт
 
+### One-line install
+
 ```bash
-# Clone and install
+curl -sSL https://raw.githubusercontent.com/AlexanderNarbaev/rag-system/main/install.sh | bash
+```
+
+### Manual install
+
+```bash
 git clone https://github.com/AlexanderNarbaev/rag-system.git
 cd rag-system
-make install-dev
+make setup
+make run
+```
 
+### Configuration wizard
+
+```bash
+make wizard
+```
+
+### Start services (Docker)
+
+```bash
 # Start services (Qdrant + Redis + Neo4j + Proxy)
 cd proxy && docker compose up -d
 

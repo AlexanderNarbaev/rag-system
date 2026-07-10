@@ -1,0 +1,6 @@
+# tui/requirements.txt
+# Dependencies for RAG System Terminal UI
+
+textual>=0.50.0
+rich>=13.7.0
+requests>=2.31.0

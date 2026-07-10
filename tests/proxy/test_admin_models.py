@@ -31,7 +31,8 @@ _modules_to_mock = [
     "redis",
     "redis.asyncio",
     "tiktoken",
-    "bcrypt",
+    # bcrypt removed — it's a real dependency, mocking it in sys.modules
+    # poisons all subsequent test files that import bcrypt (e.g. test_user_db).
 ]
 
 for mod in _modules_to_mock:

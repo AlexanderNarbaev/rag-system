@@ -1,5 +1,15 @@
 # proxy/app/cache.py
 """
+Cache manager with Redis and in-memory fallback.
+
+Used for:
+- Embedding vectors (dense)
+- Reranking results
+- LLM responses (optional)
+- Search queries (optional)
+
+Provides both async and sync interfaces for backward compatibility.
+
 Кэш-менеджер с поддержкой Redis и fallback на in-memory.
 Используется для:
 - Эмбеддингов (dense векторы)
@@ -20,7 +30,7 @@ logger = logging.getLogger(__name__)
 class InMemoryCache:
     """Простой in-memory кэш с TTL."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, tuple[Any, float]] = {}  # key -> (value, expire_timestamp)
 
     def _is_expired(self, expire_ts: float) -> bool:
@@ -46,7 +56,7 @@ class InMemoryCache:
             return True
         return False
 
-    async def clear(self):
+    async def clear(self) -> None:
         self._store.clear()
 
     # Синхронные методы для совместимости
@@ -78,11 +88,11 @@ class InMemoryCache:
 class RedisCache:
     """Redis-кэш (асинхронный)."""
 
-    def __init__(self, redis_url: str):
+    def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
         self._client = None
 
-    async def _get_client(self):
+    async def _get_client(self) -> Any:
         if self._client is None:
             try:
                 import redis.asyncio as redis
@@ -121,7 +131,7 @@ class RedisCache:
         deleted = await client.delete(key)
         return deleted > 0
 
-    async def clear(self):
+    async def clear(self) -> None:
         client = await self._get_client()
         await client.flushdb()
 
@@ -148,7 +158,7 @@ class RedisCache:
         except RuntimeError:
             return asyncio.run(self.set(key, value, ttl))
 
-    async def close(self):
+    async def close(self) -> None:
         if self._client:
             await self._client.close()
             self._client = None
@@ -159,7 +169,7 @@ class CacheManager:
     Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory.
     """
 
-    def __init__(self, redis_url: str | None = None, use_redis: bool = True):
+    def __init__(self, redis_url: str | None = None, use_redis: bool = True) -> None:
         self.use_redis = use_redis and redis_url is not None
         if self.use_redis:
             self._cache = RedisCache(redis_url)
@@ -167,7 +177,7 @@ class CacheManager:
             self._cache = InMemoryCache()
         logger.info(f"CacheManager initialized with {type(self._cache).__name__}")
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Для Redis: проверка подключения при старте."""
         if self.use_redis:
             await self._cache._get_client()
@@ -181,10 +191,10 @@ class CacheManager:
     async def delete(self, key: str) -> bool:
         return await self._cache.delete(key)
 
-    async def clear(self):
+    async def clear(self) -> None:
         await self._cache.clear()
 
-    async def close(self):
+    async def close(self) -> None:
         if hasattr(self._cache, "close"):
             await self._cache.close()
 

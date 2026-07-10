@@ -1,12 +1,13 @@
 # RAG System Makefile
 # Primary entry point for development, testing, and deployment workflows.
 
-.PHONY: help install install-dev setup test test-proxy test-etl test-integration \
+.PHONY: help install install-dev install-one-line setup wizard \
+        test test-proxy test-etl test-integration \
         test-performance test-e2e test-resilience \
         lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run docs all \
         etl etl-confluence etl-jira etl-gitlab \
-        backup restore
+        backup restore dashboard tui
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -17,6 +18,12 @@ install: ## Run full setup (proxy + ETL)
 
 install-dev: ## Run setup with dev dependencies (lint, test, typecheck)
 	@bash $(ROOT)/setup.sh --dev
+
+install-one-line: ## One-line install (clone + setup + start)
+	@bash $(ROOT)/install.sh
+
+wizard: ## Run configuration wizard
+	@python $(ROOT)/scripts/setup_wizard.py
 
 setup: ## Create .env from .env.example if missing
 	@test -f $(ROOT)/proxy/.env || (cp $(ROOT)/.env.example $(ROOT)/proxy/.env && echo "Created proxy/.env from .env.example")
@@ -111,6 +118,13 @@ docs: ## Show documentation locations
 	@echo "  Architecture: docs/"
 	@echo "  AGENTS.md:    project structure and conventions"
 	@echo "  README.md:    project overview"
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+dashboard: ## Start Streamlit dashboard
+	streamlit run dashboard/app.py --server.port 8501
+
+tui: ## Start terminal UI
+	python tui/app.py
 
 # ── CI pipeline ───────────────────────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests

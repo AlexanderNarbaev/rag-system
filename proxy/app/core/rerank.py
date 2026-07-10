@@ -1,5 +1,11 @@
 # proxy/app/rerank.py
 """
+Reranking module for the RAG proxy.
+
+Uses a Cross-Encoder model for precise chunk ranking. Supports batch processing,
+result caching (Redis/in-memory), automatic text truncation to model max_length,
+and fine-tuning from HITL feedback data.
+
 Модуль реранкинга для RAG-прокси.
 Использует кросс-энкодер (Cross-Encoder) для точного ранжирования чанков.
 Поддерживает:
@@ -44,7 +50,7 @@ reranker = None
 cache_manager = None
 
 
-def initialize_reranker():
+def initialize_reranker() -> None:
     """Инициализирует реранкер и кэш (вызывается при старте прокси).
 
     Uses remote_services.create_reranker() to select between remote HTTP service
@@ -65,7 +71,7 @@ def initialize_reranker():
         cache_manager = CacheManager(use_redis=False)
 
 
-def _truncate_text(text: str, max_tokens: int = None) -> str:
+def _truncate_text(text: str, max_tokens: int | None = None) -> str:
     """Обрезает текст до указанного количества токенов (приближённо)."""
     if max_tokens is None:
         max_tokens = RERANKER_MAX_LENGTH

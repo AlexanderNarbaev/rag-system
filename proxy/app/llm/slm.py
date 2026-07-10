@@ -1,5 +1,16 @@
 # proxy/app/slm_router.py
 """
+Small Language Model (SLM) routing and auxiliary tasks.
+
+SLM is used for fast, low-cost operations:
+- Intent classification (greeting, factual, procedural, etc.)
+- Query decomposition (split complex queries into sub-queries)
+- Query rewrite (lightweight version for retrieval improvement)
+- Key entity extraction (technologies, projects, names)
+
+Supports any OpenAI-compatible API (vLLM, llama.cpp, Ollama, LiteLLM, etc.)
+and local llama.cpp subprocess for air-gapped deployments.
+
 Маршрутизация и вспомогательные задачи с использованием SLM (Small Language Model).
 SLM используется для быстрых, дешёвых операций:
 - Классификация интента

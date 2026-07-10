@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # ── Circuit breaker helpers ──────────────────────────────────────────────────
 
 
-def _record_llm_success():
+def _record_llm_success() -> None:
     """Record a successful LLM call to the circuit breaker."""
     try:
         from proxy.app.shared.circuit_breaker import get_breaker as _llm_cb
@@ -49,7 +49,7 @@ def _record_llm_success():
         pass
 
 
-def _record_llm_failure():
+def _record_llm_failure() -> None:
     """Record a failed LLM call to the circuit breaker."""
     try:
         from proxy.app.shared.circuit_breaker import get_breaker as _llm_cb
@@ -112,7 +112,14 @@ class OpenAIAdapter(ProviderAdapter):
             h["Authorization"] = f"Bearer {LLM_API_KEY}"
         return h
 
-    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
+    def translate_request(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.2,
+        max_tokens: int = 4096,
+        tools: list[ToolDefinition] | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
         payload = {
             "model": LLM_MODEL_NAME,
             "messages": messages,
@@ -155,7 +162,14 @@ class AnthropicAdapter(ProviderAdapter):
             "anthropic-version": "2023-06-01",
         }
 
-    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
+    def translate_request(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.2,
+        max_tokens: int = 4096,
+        tools: list[ToolDefinition] | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
         # Extract system message if present
         system = None
         anthropic_messages = []
@@ -336,7 +350,14 @@ class OllamaAdapter(OpenAIAdapter):
     def headers(self) -> dict[str, str]:
         return {"Content-Type": "application/json"}
 
-    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
+    def translate_request(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.2,
+        max_tokens: int = 4096,
+        tools: list[ToolDefinition] | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
         payload = super().translate_request(messages, temperature, max_tokens, tools, stream)
         # Ollama uses "options" for extra params
         payload["options"] = {
@@ -352,11 +373,22 @@ class GenericAdapter(OpenAIAdapter):
     Uses a configurable request/response transformation.
     """
 
-    def __init__(self, request_transform: Callable | None = None, response_transform: Callable | None = None):
+    def __init__(
+        self,
+        request_transform: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        response_transform: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ):
         self._request_transform = request_transform
         self._response_transform = response_transform
 
-    def translate_request(self, messages, temperature=0.2, max_tokens=4096, tools=None, stream=False) -> dict[str, Any]:
+    def translate_request(
+        self,
+        messages: list[dict[str, Any]],
+        temperature: float = 0.2,
+        max_tokens: int = 4096,
+        tools: list[ToolDefinition] | None = None,
+        stream: bool = False,
+    ) -> dict[str, Any]:
         payload = super().translate_request(messages, temperature, max_tokens, tools, stream)
         if self._request_transform:
             payload = self._request_transform(payload)
@@ -630,9 +662,9 @@ class MultiProviderRouter:
 
     def non_stream_completion_sync(
         self,
-        messages,
-        temperature=0.2,
-        max_tokens=4096,
+        messages: list[dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 4096,
         provider_type: str | None = None,
     ) -> str:
         """Synchronous wrapper for non-async contexts (e.g., LangGraph nodes)."""

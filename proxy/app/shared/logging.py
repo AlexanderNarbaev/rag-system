@@ -87,15 +87,33 @@ class ColoredConsoleFormatter(logging.Formatter):
         return base
 
 
+_LOG_LEVEL_MAP = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL,
+}
+
+
 def get_log_format() -> str:
     return os.getenv("LOG_FORMAT", "text").lower()
 
 
-def setup_logging(level: int = logging.INFO):
+def get_log_level() -> int:
+    """Return log level from LOG_LEVEL env var (default: INFO)."""
+    raw = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    return _LOG_LEVEL_MAP.get(raw, logging.INFO)
+
+
+def setup_logging(level: int | None = None):
     """
     Configures root logger and returns the configured handler.
     Uses LOG_FORMAT env var: 'json' for structured JSON, 'text' for console.
+    Uses LOG_LEVEL env var: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO).
     """
+    if level is None:
+        level = get_log_level()
     log_format = get_log_format()
     root_logger = logging.getLogger()
     root_logger.setLevel(level)

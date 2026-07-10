@@ -15,11 +15,16 @@ quote-style = "double"
 
 [tool.mypy]
 python_version = "3.11"
+strict = true
 ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "--cov=proxy --cov=etl --cov-report=term-missing --cov-report=html"
 markers = [
     "e2e: End-to-end tests requiring running services",
     "benchmark: Performance and load tests",
@@ -28,3 +33,26 @@ markers = [
     "slow: Tests that take longer than 5 seconds to complete",
     "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
 ]
+
+[tool.coverage.run]
+source = ["proxy", "etl"]
+omit = [
+    "proxy/app/static/*",
+    "proxy/app/model_evolution/*",
+    "*/__pycache__/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

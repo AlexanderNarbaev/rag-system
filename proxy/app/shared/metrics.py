@@ -55,6 +55,43 @@ rag_active_requests = Gauge(
     "Number of currently active requests",
 )
 
+# ── Retrieval quality metrics (used by rag-retrieval-quality dashboard) ──
+
+rag_retrieval_chunks_total = Gauge(
+    "rag_retrieval_chunks_total",
+    "Number of chunks retrieved in the last query",
+)
+
+rag_retrieval_chunks_after_rerank = Gauge(
+    "rag_retrieval_chunks_after_rerank",
+    "Number of chunks remaining after reranking",
+)
+
+rag_graph_expansion_rate = Gauge(
+    "rag_graph_expansion_rate",
+    "Fraction of queries that triggered graph expansion (0-1)",
+)
+
+rag_retrieval_mrr = Gauge(
+    "rag_retrieval_mrr",
+    "Mean Reciprocal Rank of retrieval results",
+)
+
+rag_confidence_score_high_ratio = Gauge(
+    "rag_confidence_score_high_ratio",
+    "Ratio of responses with confidence score above threshold",
+)
+
+rag_grounding_score_high_ratio = Gauge(
+    "rag_grounding_score_high_ratio",
+    "Ratio of responses with grounding score above threshold",
+)
+
+rag_compression_ratio = Gauge(
+    "rag_compression_ratio",
+    "Context compression ratio (compressed / original tokens)",
+)
+
 
 def init_metrics():
     global _initialized

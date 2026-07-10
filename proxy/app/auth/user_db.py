@@ -312,7 +312,7 @@ class UserDatabase:
             """SELECT rt.id, rt.user_id, rt.expires_at
                FROM refresh_tokens rt
                WHERE rt.token_hash = ? AND rt.revoked = 0 AND rt.expires_at > ?""",
-            (token_hash, now.isoformat()),
+            (token_hash, now),
         )
         row = await cursor.fetchone()
         if not row:
@@ -346,7 +346,7 @@ class UserDatabase:
 
         await self._conn.execute(
             "INSERT OR IGNORE INTO token_blacklist (jti, expires_at, blacklisted_at) VALUES (?, ?, ?)",
-            (jti, expires_at, now.isoformat()),
+            (jti, expires_at, now),
         )
         await self._conn.commit()
 

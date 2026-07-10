@@ -1,5 +1,11 @@
 # proxy/app/llm_router.py
 """
+LLM request routing via OpenAI-compatible API.
+
+Provides streaming and non-streaming completion functions with automatic
+retry on failure. This is the legacy router — prefer provider.py's
+MultiProviderRouter for new code.
+
 Маршрутизация запросов к LLM через OpenAI-совместимый API.
 Поддерживает потоковую и обычную генерацию, повторные попытки при сбоях.
 """
