@@ -2310,7 +2310,7 @@ vllm:
 
 | Document | Coverage |
 |----------|----------|
-| [Kubernetes Deployment (Helm)](../../deploy/k8s/README.md) | Helm chart, K8s deployment, secrets management, scaling |
+| [Kubernetes Deployment (Helm)](https://github.com/AlexanderNarbaev/rag-system/blob/main/deploy/k8s/README.md) | Helm chart, K8s deployment, secrets management, scaling |
 | [Operations Guide](operations-guide.md) | Day-2 ops: monitoring details, scaling, upgrades, compression, cold storage |
 | [Disaster Recovery Runbook](disaster-recovery-runbook.md) | Step-by-step recovery procedures for all failure scenarios |
 | [Performance & Quality Best Practices](performance-quality.md) | HNSW tuning, quantization, inference optimization, benchmarking |

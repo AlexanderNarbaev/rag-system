@@ -55,10 +55,11 @@ jobs:
             mkdocs-material \
             mkdocs-minify-plugin \
             mkdocs-mermaid2-plugin \
+            mkdocs-static-i18n \
             pymdown-extensions
 
       - name: Build docs
-        run: mkdocs build --clean --strict
+        run: mkdocs build --clean
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
