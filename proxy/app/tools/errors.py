@@ -7,9 +7,7 @@ error handling, retry decisions, and structured logging.
 
 from __future__ import annotations
 
-from typing import Any
-
-from proxy.app.exceptions import RAGError
+from proxy.app.shared.exceptions import RAGError
 
 
 class ToolError(RAGError):
@@ -98,7 +96,8 @@ class ToolPermissionError(ToolError):
             tool_name=tool_name,
             tool_call_id=tool_call_id,
             retryable=False,
-            message=message or f"Permission denied for tool '{tool_name}' (requires {required_visibility}, user has {user_role})",
+            message=message
+            or f"Permission denied for tool '{tool_name}' (requires {required_visibility}, user has {user_role})",  # noqa: E501
         )
         self.required_visibility = required_visibility
         self.user_role = user_role

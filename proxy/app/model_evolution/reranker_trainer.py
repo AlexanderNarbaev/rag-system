@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch
+
     _TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore[assignment]
@@ -43,6 +44,7 @@ try:
         Trainer,
         TrainingArguments,
     )
+
     _TRANSFORMERS_AVAILABLE = True
 except ImportError:
     AutoTokenizer = None  # type: ignore[assignment,misc]
@@ -57,6 +59,7 @@ try:
         TaskType,
         get_peft_model,
     )
+
     _PEFT_AVAILABLE = True
 except ImportError:
     LoraConfig = None  # type: ignore[assignment,misc]
@@ -66,6 +69,7 @@ except ImportError:
 
 try:
     from sentence_transformers import CrossEncoder
+
     CROSS_ENCODER_AVAILABLE = True
 except ImportError:
     CrossEncoder = None  # type: ignore[assignment,misc]
@@ -123,9 +127,7 @@ class RerankerTrainer(TrainerBase):
         seed: int = 42,
     ) -> dict[str, list[tuple[str, str, float]]]:
         filtered = [
-            (q, c, s)
-            for q, c, s in dataset
-            if isinstance(q, str) and isinstance(c, str) and len(q) > 0 and len(c) > 0
+            (q, c, s) for q, c, s in dataset if isinstance(q, str) and isinstance(c, str) and len(q) > 0 and len(c) > 0
         ]
         if not filtered:
             return {"train": [], "eval": []}
@@ -160,8 +162,7 @@ class RerankerTrainer(TrainerBase):
     def _train_lora(self, config: TrainingConfig, job: TrainingJob, job_id: str) -> TrainingJob:
         if not _TRANSFORMERS_AVAILABLE or not _PEFT_AVAILABLE:
             raise RuntimeError(
-                "transformers and peft are required for LoRA. "
-                "Install: pip install transformers peft accelerate"
+                "transformers and peft are required for LoRA. Install: pip install transformers peft accelerate"
             )
 
         base_model = config.base_model or "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -210,8 +211,7 @@ class RerankerTrainer(TrainerBase):
     def _train_full(self, config: TrainingConfig, job: TrainingJob, job_id: str) -> TrainingJob:
         if not CROSS_ENCODER_AVAILABLE:
             raise RuntimeError(
-                "sentence-transformers required for full fine-tune. "
-                "Install: pip install sentence-transformers"
+                "sentence-transformers required for full fine-tune. Install: pip install sentence-transformers"
             )
 
         base_model = config.base_model or "cross-encoder/ms-marco-MiniLM-L-6-v2"

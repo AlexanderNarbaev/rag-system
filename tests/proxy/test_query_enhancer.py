@@ -1,7 +1,6 @@
 """Tests for proxy/app/query_enhancer.py - query enhancement module."""
-import pytest
 
-from proxy.app.query_enhancer import QueryEnhancer
+from proxy.app.core.query_enhancer import QueryEnhancer
 
 
 class TestQueryEnhancer:
@@ -50,15 +49,11 @@ class TestQueryEnhancer:
         assert len(variants) <= 2
 
     def test_decompose_complex_query_with_and(self):
-        parts = self.enhancer.decompose_complex_query(
-            "How to set up CI/CD and configure monitoring"
-        )
+        parts = self.enhancer.decompose_complex_query("How to set up CI/CD and configure monitoring")
         assert len(parts) > 1
 
     def test_decompose_complex_query_semicolon(self):
-        parts = self.enhancer.decompose_complex_query(
-            "How to deploy service; configure database; set up alerts"
-        )
+        parts = self.enhancer.decompose_complex_query("How to deploy service; configure database; set up alerts")
         assert len(parts) > 1
 
     def test_decompose_simple_query_returns_original(self):
@@ -82,9 +77,7 @@ class TestQueryEnhancer:
         assert "John Doe" in filters["author"]
 
     def test_extract_metadata_filters_multiple(self):
-        filters = self.enhancer.extract_metadata_filters(
-            "Show me the specification for version 3.0 from 2024-06-01"
-        )
+        filters = self.enhancer.extract_metadata_filters("Show me the specification for version 3.0 from 2024-06-01")
         assert "version" in filters
         assert "date" in filters
         assert "type" in filters

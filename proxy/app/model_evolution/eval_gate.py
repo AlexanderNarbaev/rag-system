@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class GateStatus(Enum):
     """Outcome of an evaluation gate run."""
+
     PASS = "pass"
     FAIL = "fail"
     WARN = "warn"
@@ -27,11 +28,12 @@ class GateStatus(Enum):
 @dataclass
 class MetricThreshold:
     """A single metric threshold with comparison operator and severity."""
+
     metric_name: str
     threshold: float
-    comparison: str          # "gt", "gte", "lt", "lte"
-    severity: str = "fail"   # "fail" or "warn"
-    tolerance: float = 0.0   # Relative tolerance for "warn" status
+    comparison: str  # "gt", "gte", "lt", "lte"
+    severity: str = "fail"  # "fail" or "warn"
+    tolerance: float = 0.0  # Relative tolerance for "warn" status
 
     _COMPARATORS = {
         "gt": lambda a, b: a > b,
@@ -51,6 +53,7 @@ class MetricThreshold:
 @dataclass
 class GateResult:
     """Result of an evaluation gate run."""
+
     status: GateStatus = GateStatus.PASS
     model_name: str = ""
     version: str = ""
@@ -67,6 +70,7 @@ class GateResult:
 @dataclass
 class EvalGateConfig:
     """Configuration for an evaluation gate."""
+
     model_name: str
     thresholds: list[MetricThreshold] = field(default_factory=list)
     require_baseline_comparison: bool = True
@@ -176,7 +180,10 @@ class EvalGate:
             GateResult with pass/fail/warn status.
         """
         result = EvalGate.evaluate(
-            metrics, config, baseline_metrics=baseline_metrics, version=run_id,
+            metrics,
+            config,
+            baseline_metrics=baseline_metrics,
+            version=run_id,
         )
         result.mlflow_run_id = run_id
         return result
@@ -224,8 +231,7 @@ class EvalGate:
                 value = result.metrics.get(t.metric_name)
                 passed = t.evaluate(value) if value is not None else None
                 status_mark = "PASS" if passed else ("FAIL" if passed is False else "N/A")
-                lines.append(f"  {t.metric_name} {t.comparison} {t.threshold} "
-                             f"[{status_mark}] ({t.severity})")
+                lines.append(f"  {t.metric_name} {t.comparison} {t.threshold} [{status_mark}] ({t.severity})")
 
         if result.failures:
             lines.append("")
@@ -293,5 +299,8 @@ class EvalGate:
             metrics = {**metrics, **nli_metrics}
 
         return EvalGate.evaluate(
-            metrics, config, baseline_metrics=baseline_metrics, version=version,
+            metrics,
+            config,
+            baseline_metrics=baseline_metrics,
+            version=version,
         )

@@ -56,7 +56,7 @@ class LiveVectorLake:
 
         if use_delta:
             try:
-                import deltalake
+                import deltalake  # noqa: F401  # availability check
 
                 self.delta_available = True
             except ImportError:
@@ -124,13 +124,13 @@ class LiveVectorLake:
         added_chunks, deleted_hashes = self.version_store.update_document_chunks(doc_id, new_chunks, force)
 
         # Обновляем Qdrant
-        if added_chunks:
+        if added_chunks:  # noqa: SIM108
             # Индексация новых/изменённых чанков
             added_count = self.qdrant.index_chunks(added_chunks)
         else:
             added_count = 0
 
-        if deleted_hashes:
+        if deleted_hashes:  # noqa: SIM108
             # Удаляем устаревшие чанки из Qdrant
             deleted_count = self.qdrant.delete_chunks(deleted_hashes)
         else:
@@ -158,8 +158,12 @@ class LiveVectorLake:
             results[doc_id] = self.sync_document(doc_id, chunks, force)
         return results
 
-    def get_document_history(self, doc_id: str, limit: int = 100) -> pd.DataFrame:
+    def get_document_history(self, doc_id: str, limit: int = 100):
         """Возвращает историю изменений документа из холодного хранилища."""
+        if not PANDAS_AVAILABLE:
+            logger.warning("pandas not available — cannot read cold storage history")
+            return []
+
         cold_file = self.cold_storage_dir / f"{doc_id}_history"
         if self.use_delta and self.delta_available:
             from deltalake import DeltaTable
@@ -181,7 +185,8 @@ class LiveVectorLake:
         Восстанавливает состояние чанков из холодного хранилища и переиндексирует в Qdrant.
         """
         history = self.get_document_history(doc_id)
-        if history.empty:
+        is_empty = history.empty if PANDAS_AVAILABLE and hasattr(history, "empty") else not history
+        if is_empty:
             logger.warning(f"No history for document {doc_id}")
             return 0
 

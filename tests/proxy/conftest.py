@@ -1,9 +1,10 @@
-
 """Shared fixtures and configuration for proxy tests."""
+
 import os
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Ensure proxy/app is importable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))

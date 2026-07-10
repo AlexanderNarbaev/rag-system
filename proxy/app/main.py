@@ -1,63 +1,69 @@
 # proxy/app/main.py
 """
-OpenAI-совместимый прокси-сервер для RAG.
-Поддерживает:
-- /v1/chat/completions (stream + non-stream)
-- /v1/models
-- /v1/health
-- /v1/auth/login (JWT token generation)
-- /v1/auth/refresh (token refresh)
+OpenAI-compatible RAG proxy server.
 
-Использует:
-- Qdrant для гибридного поиска
-- Cross-encoder для реранкинга
-- LangGraph (опционально) для агентной оркестрации
-- Redis для кэширования эмбеддингов (опционально)
+Supports:
+- /v1/chat/completions (stream + non-stream) via api/chat router
+- /v1/models
+- /v1/health via api/health router
+- /v1/auth/* via api/auth_endpoints router
+- /v1/tools via api/tools router
+- /v1/feedback via api/feedback router
+- /v1/widget via api/widget router
+- /v1/admin/* via api/admin router
+- /metrics via api/metrics router
+
+Uses:
+- Qdrant for hybrid search
+- Cross-encoder for reranking
+- LangGraph (optional) for agentic orchestration
+- Redis for embedding cache (optional)
 """
 
 import asyncio
-import json
 import logging
 import os
-import secrets
 import signal
-import threading
 import time
-import uuid
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 import uvicorn
-from app.access_control import (
-    build_access_filter,
-    filter_chunks,
-)
-from app.audit import AuditLogger, RequestTracker
-from app.auth import (
+from fastapi import FastAPI
+from pydantic import BaseModel
+from starlette.middleware.gzip import GZipMiddleware
+
+from proxy.app.auth import (
     AUTH_ENABLED,
     AuthMiddleware,
     UserContext,
-    create_token,
-    get_auth_context,
-    get_optional_auth_context,
-    verify_token,
 )
-from app.cache import CacheManager
-from app.confidence import compute_confidence
-from app.rbac import Role, require_role
-from app.tools.registry import get_enhanced_registry
+from proxy.app.core.context import (  # noqa: F401 — re-export for test patching
+    build_context,
+    deduplicate_chunks,
+    extract_version_from_query,
+)
+from proxy.app.core.rerank import rerank_chunks
+from proxy.app.core.retrieval import hybrid_search
+from proxy.app.core.retrieval_evaluator import RetrievalEvaluator
+from proxy.app.core.token_optimizer import TokenOptimizer
+from proxy.app.llm.provider import non_stream_completion, stream_completion  # noqa: F401 — re-export for test patching
+from proxy.app.shared.access_control import (
+    build_access_filter,
+    filter_chunks,
+)
+from proxy.app.shared.audit import AuditLogger, RequestTracker
+from proxy.app.shared.cache import CacheManager
 
-# Импорт внутренних модулей
-from app.config import (
+# Internal module imports
+from proxy.app.shared.config import (
     COMPRESSION_ENABLED,
     COMPRESSION_LEVEL,
     COMPRESSION_MIN_SIZE,
     CORS_ORIGINS,
     GRACEFUL_SHUTDOWN_ENABLED,
-    LLM_ENDPOINT,
     LLM_MODEL_NAME,
     LOG_DIR,
-    LOG_REQUESTS,
+    LOG_REQUESTS,  # noqa: F401 — re-export for test patching
     MAX_CHUNKS_AFTER_RERANK,
     MAX_CHUNKS_RETRIEVAL,
     OTEL_ENABLED,
@@ -66,8 +72,6 @@ from app.config import (
     RATE_LIMIT_PER_MINUTE,
     REDIS_URL,
     SHUTDOWN_TIMEOUT,
-    SSE_CHUNK_SIZE,
-    STREAM_BUFFER_SIZE,
     TOOLS_DECLARATIVE_DIR,
     TOOLS_ENABLED,
     TOOLS_OPENAPI_SPECS,
@@ -76,33 +80,22 @@ from app.config import (
     WARMUP_ENABLED,
     WARMUP_ON_STARTUP,
 )
-from app.context_builder import build_context, deduplicate_chunks, extract_version_from_query
-from app.hitl import generate_feedback_id, log_interaction
-from app.logging_config import setup_logging
-from app.metrics import init_metrics, metrics_endpoint
-from app.middleware import add_cors_middleware, setup_all_middleware
-from app.provider_adapter import non_stream_completion, stream_completion
-from app.rate_limiter import add_rate_limit_middleware
-from app.rerank import rerank_chunks
-from app.retrieval import hybrid_search
-from app.retrieval_evaluator import RetrievalEvaluator
-from app.security import InputValidator
-from app.token_optimizer import TokenOptimizer
-from app.user_db import get_user_db
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
-from pathlib import Path
-from pydantic import BaseModel, Field
-from starlette.middleware.gzip import GZipMiddleware
+from proxy.app.shared.logging import setup_logging
+from proxy.app.shared.metrics import init_metrics
+from proxy.app.shared.middleware import add_cors_middleware, setup_all_middleware
+from proxy.app.shared.rate_limiter import add_rate_limit_middleware
+from proxy.app.tools.registry import get_enhanced_registry
 
-# Опциональные модули
+# Optional modules
 if USE_LANGGRAPH:
-    from app.orchestrator import get_orchestrator
+    from proxy.app.core.orchestrator import get_orchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("rag-proxy")
 
-# Глобальные объекты (инициализируются при старте)
+# ---------------------------------------------------------------------------
+# Global state (tests mock these at proxy.app.main.*)
+# ---------------------------------------------------------------------------
 cache_manager = None
 orchestrator = None
 audit_logger = None
@@ -110,14 +103,18 @@ request_tracker = RequestTracker()
 token_optimizer = TokenOptimizer()
 retrieval_evaluator = RetrievalEvaluator()
 
-
 shutting_down = False
 _active_requests: set[asyncio.Task] = set()
 
 
+# ---------------------------------------------------------------------------
+# Lifespan
+# ---------------------------------------------------------------------------
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения: инициализация и очистка ресурсов."""
+    """Manage application lifecycle: initialize and clean up resources."""
     global cache_manager, orchestrator, audit_logger
     setup_logging()
     logger.info("Starting RAG Proxy...")
@@ -126,14 +123,15 @@ async def lifespan(app: FastAPI):
     # OpenTelemetry tracing (graceful degradation)
     if OTEL_ENABLED:
         try:
-            from app.tracing import setup_tracing
+            from proxy.app.shared.tracing import setup_tracing
+
             setup_tracing()
             logger.info("OpenTelemetry tracing initialized")
         except Exception as e:
             logger.warning("OpenTelemetry tracing setup failed (non-blocking): %s", e)
 
     audit_logger = AuditLogger(log_dir=LOG_DIR)
-    # Инициализация кэша
+    # Initialize cache
     if USE_REDIS and REDIS_URL:
         cache_manager = CacheManager(redis_url=REDIS_URL)
         await cache_manager.initialize()
@@ -141,19 +139,19 @@ async def lifespan(app: FastAPI):
     else:
         cache_manager = CacheManager(use_redis=False)
         logger.info("In-memory cache initialized (no Redis)")
-    # Инициализация оркестратора LangGraph (если включён)
+    # Initialize LangGraph orchestrator (if enabled)
     if USE_LANGGRAPH:
         orchestrator = get_orchestrator()
         logger.info("LangGraph orchestrator initialized")
-    # Tool discovery from all providers (S3: startup trigger)
+    # Tool discovery from all providers
     if TOOLS_ENABLED:
         registry = get_enhanced_registry()
-        # SDK tools are auto-registered by @tool decorator imports
 
         # Declarative provider
         if os.path.isdir(TOOLS_DECLARATIVE_DIR):
             try:
-                from app.tools.declarative import DeclarativeProvider
+                from proxy.app.tools.declarative import DeclarativeProvider
+
                 provider = DeclarativeProvider()
                 discovered = await provider.discover()
                 for tool in discovered:
@@ -165,7 +163,8 @@ async def lifespan(app: FastAPI):
         # OpenAPI provider
         if TOOLS_OPENAPI_SPECS:
             try:
-                from app.tools.openapi_discovery import OpenAPIProvider
+                from proxy.app.tools.openapi_discovery import OpenAPIProvider
+
                 provider = OpenAPIProvider()
                 discovered = await provider.discover()
                 for tool in discovered:
@@ -173,10 +172,11 @@ async def lifespan(app: FastAPI):
                 logger.info("Startup: loaded %d tools from OpenAPI provider", len(discovered))
             except Exception as e:
                 logger.warning("Startup: OpenAPI tool discovery failed: %s", e)
-    # Model warm-up on startup (graceful degradation)
+    # Model warm-up on startup
     if WARMUP_ENABLED and WARMUP_ON_STARTUP:
         try:
-            from app.warmup import warmup_all
+            from proxy.app.shared.warmup import warmup_all
+
             warmup_result = await warmup_all()
             logger.info(f"Model warm-up completed: {warmup_result}")
         except Exception as e:
@@ -193,7 +193,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("RAG Proxy ready")
     yield
-    # Очистка
+    # Cleanup
     global shutting_down
     shutting_down = True
     logger.info("Draining in-flight requests...")
@@ -220,216 +220,9 @@ async def _initiate_shutdown(sig: signal.Signals):
             task.cancel()
 
 
-app = FastAPI(
-    title="RAG Proxy for Gemma",
-    description="OpenAI-compatible proxy with hybrid search, reranking, and Gemma LLM",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-# Middleware setup (order matters: CORS > auth > correlation > request-id > logging > rate-limit > compression)
-add_cors_middleware(app, origins=CORS_ORIGINS)
-if AUTH_ENABLED:
-    app.add_middleware(AuthMiddleware)
-setup_all_middleware(app, audit_logger=audit_logger)
-if RATE_LIMIT_ENABLED:
-    add_rate_limit_middleware(app, rate_per_minute=RATE_LIMIT_PER_MINUTE, burst=RATE_LIMIT_BURST)
-if COMPRESSION_ENABLED:
-    app.add_middleware(GZipMiddleware, minimum_size=COMPRESSION_MIN_SIZE, compresslevel=COMPRESSION_LEVEL)
-
-# OpenTelemetry FastAPI instrumentation (auto-instruments HTTP requests)
-if OTEL_ENABLED:
-    try:
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        FastAPIInstrumentor.instrument_app(app)
-        logger.info("FastAPI OpenTelemetry instrumentation enabled")
-    except ImportError:
-        logger.warning("opentelemetry-instrumentation-fastapi not installed")
-    except Exception as e:
-        logger.warning("FastAPI instrumentation failed (non-blocking): %s", e)
-
-
-# Metrics endpoint
-@app.get("/metrics")
-async def metrics():
-    return metrics_endpoint()
-
-
-# Pydantic модели для OpenAI API
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatCompletionRequest(BaseModel):
-    model: str
-    messages: list[ChatMessage]
-    temperature: float | None = 0.2
-    top_p: float | None = 0.95
-    max_tokens: int | None = 4096
-    stream: bool | None = False
-    # Нестандартные параметры для RAG
-    rag_version: str | None = None  # конкретная версия документа
-    rag_force_refresh: bool | None = False  # игнорировать кэш
-    rag_skip_generation: bool | None = False  # federation: return chunks only, skip LLM call
-    rag_return_chunks: bool | None = False  # federation: include full chunk texts in response
-    rag_top_k: int | None = None  # federation: override retrieval top_k
-
-
-class ChatCompletionResponseChoice(BaseModel):
-    index: int
-    message: ChatMessage
-    finish_reason: str | None = "stop"
-
-
-class ChatCompletionResponse(BaseModel):
-    id: str
-    object: str = "chat.completion"
-    created: int
-    model: str
-    choices: list[ChatCompletionResponseChoice]
-    usage: dict[str, int] = Field(default={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
-    rag_feedback_id: str | None = None
-    rag_confidence: float | None = None
-    rag_sources: list[dict] | None = None  # source chunks with metadata
-
-
-class ModelInfo(BaseModel):
-    id: str
-    object: str = "model"
-    created: int
-    owned_by: str = "local"
-
-
-class ModelsResponse(BaseModel):
-    object: str = "list"
-    data: list[ModelInfo]
-
-
-# ===========================================================================
-# Auth models
-# ===========================================================================
-
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-    expires_in_hours: int | None = 24
-
-
-class LoginResponse(BaseModel):
-    access_token: str
-    refresh_token: str | None = None  # New: refresh token for token rotation
-    token_type: str = "bearer"
-    expires_in: int  # seconds
-    user_id: str
-    username: str
-    roles: list[str]
-    groups: list[str]
-
-
-class RefreshRequest(BaseModel):
-    token: str  # For backward compat: access token. Use refresh_token field for refresh tokens.
-
-
-class RefreshResponse(BaseModel):
-    access_token: str
-    refresh_token: str | None = None
-    token_type: str = "bearer"
-    expires_in: int
-
-
-class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=2, max_length=64)
-    password: str = Field(..., min_length=8, max_length=128)
-    email: str | None = None
-
-
-class RegisterResponse(BaseModel):
-    user_id: str
-    username: str
-    created_at: str
-
-
-class LogoutRequest(BaseModel):
-    refresh_token: str | None = None  # Optional: revoke specific refresh token
-    all_sessions: bool = False  # Revoke all refresh tokens for current user
-
-
-class LogoutResponse(BaseModel):
-    status: str
-    message: str
-
-
-class UserInfoResponse(BaseModel):
-    user_id: str
-    username: str
-    roles: list[str]
-    groups: list[str]
-    access_level: str
-    is_admin: bool
-    is_authenticated: bool
-
-
-class FeedbackRequest(BaseModel):
-    feedback_id: str = Field(..., description="rag_feedback_id from the response")
-    rating: str = Field(..., pattern="^(positive|negative)$")
-    correction: str | None = Field(None, description="Corrected answer text")
-    comment: str | None = Field(None, description="Expert comment")
-
-
-class FeedbackResponse(BaseModel):
-    status: str
-    message: str
-
-
-# ===========================================================================
-# Tool Conversion Helpers
-# ===========================================================================
-
-
-def _highest_role_from_user(user: UserContext) -> str | None:
-    """Map a UserContext to the highest visibility role string for tool filtering.
-
-    Returns 'admin', 'expert', 'user', or None (public only).
-    """
-    roles_lower = {r.lower() for r in user.roles}
-    for role in ("admin", "expert", "user"):
-        if role in roles_lower:
-            return role
-    return None
-
-
-# Вспомогательные функции
-
-
-class StreamOptimizer:
-    """Optimizes SSE streaming for low time-to-first-token (TTFT).
-
-    Sends an empty initial chunk immediately after receiving the request
-    to reduce client-side latency. Buffers streamed content up to the
-    configured chunk size before emitting, balancing latency and overhead.
-    """
-
-    def __init__(self, chunk_size: int | None = None, buffer_size: int | None = None):
-        self.sse_chunk_size = chunk_size or SSE_CHUNK_SIZE
-        self.stream_buffer_size = buffer_size or STREAM_BUFFER_SIZE
-        self.initial_chunk_sent = False
-
-    def initial_chunk(self) -> str:
-        """Return the initial empty SSE chunk to reduce TTFT."""
-        if self.initial_chunk_sent:
-            return ""
-        self.initial_chunk_sent = True
-        return 'data: {"role":"initial_chunk"}\n\n'
-
-    def format_chunk(self, chunk: dict) -> str:
-        """Format a single chunk as an SSE event."""
-        return f"data: {json.dumps(chunk)}\n\n"
-
-
-def generate_request_id() -> str:
-    return f"rag_{int(time.time())}_{os.urandom(4).hex()}"
+# ---------------------------------------------------------------------------
+# Core RAG pipeline (tests mock internals at proxy.app.main.*)
+# ---------------------------------------------------------------------------
 
 
 async def process_rag_query(
@@ -444,21 +237,20 @@ async def process_rag_query(
     top_k_override: int | None = None,
 ):
     """
-    Основной RAG-пайплайн:
-    1. Поиск в Qdrant (гибридный)
+    Core RAG pipeline:
+    1. Qdrant hybrid search
     2. Access control filtering
-    3. Реранкинг
-    4. Дедупликация и фильтрация версий
-    5. Сборка контекста
-    6. Вызов LLM
+    3. Reranking
+    4. Deduplication and version filtering
+    5. Context assembly
+    6. LLM call
     """
     if user_context is None:
         user_context = UserContext.anonymous()
 
-    # Build access filter for Qdrant (optional push-down filtering)
-    access_filter = build_access_filter(user_context)
+    _access_filter = build_access_filter(user_context)
 
-    # 1. Кэш: проверяем, есть ли уже ответ на этот запрос (опционально)
+    # 1. Cache check
     cache_key = f"rag:{user_context.user_id}:{user_query}:{version or 'latest'}"
     if not force_refresh and cache_manager:
         cached = await cache_manager.get(cache_key)
@@ -466,7 +258,7 @@ async def process_rag_query(
             logger.info(f"Cache hit for query: {user_query[:50]}...")
             return cached, "", True, []
 
-    # 2. Гибридный поиск
+    # 2. Hybrid search
     try:
         search_results = hybrid_search(query=user_query, version=version, top_k=top_k_override or MAX_CHUNKS_RETRIEVAL)
     except Exception as e:
@@ -474,7 +266,6 @@ async def process_rag_query(
         search_results = None
     sources: list[dict] = []
     if not search_results:
-        # Нет релевантных чанков -> ответ без контекста
         context = ""
         chunks_metadata = []
     else:
@@ -482,7 +273,7 @@ async def process_rag_query(
         chunks_metadata = [hit.payload for hit in search_results]
         scores = [hit.score for hit in search_results]
 
-        # 2.5. Row-level access control filtering (post-retrieval safety net)
+        # 2.5. Row-level access control filtering
         chunk_dicts = [{**meta, "_score": scores[i]} for i, meta in enumerate(chunks_metadata)]
         filtered_chunks = filter_chunks(chunk_dicts, user_context)
         if len(filtered_chunks) < len(chunk_dicts):
@@ -495,7 +286,6 @@ async def process_rag_query(
             context = ""
             chunks_metadata = []
         else:
-            # Rebuild metadata and scores from filtered chunks
             filtered_metadata = []
             filtered_scores = []
             filtered_texts = []
@@ -508,25 +298,27 @@ async def process_rag_query(
             scores = filtered_scores
             chunks_texts = filtered_texts
 
-            # 3. Реранкинг
+            # 3. Reranking
             reranked_indices = rerank_chunks(user_query, chunks_texts, top_k=MAX_CHUNKS_AFTER_RERANK)
             reranked_chunks = [(chunks_metadata[i], scores[i]) for i in reranked_indices]
 
-            # 4. Дедупликация и версионирование
+            # 4. Deduplication and versioning
             unique_chunks = deduplicate_chunks(reranked_chunks)
 
-            # 5. Build source citations from unique chunks
-            from app.context_builder import compute_chunk_hash
+            # 5. Build source citations
+            from proxy.app.core.context import compute_chunk_hash
 
             for chunk, score in unique_chunks:
-                sources.append({
-                    "chunk_id": compute_chunk_hash(chunk),
-                    "source": chunk.get("source_type", "unknown"),
-                    "title": chunk.get("title", "") or chunk.get("doc_title", ""),
-                    "version": chunk.get("version", "unknown"),
-                    "relevance": round(score, 4),
-                    "text_preview": chunk.get("text", "")[:200],
-                })
+                sources.append(
+                    {
+                        "chunk_id": compute_chunk_hash(chunk),
+                        "source": chunk.get("source_type", "unknown"),
+                        "title": chunk.get("title", "") or chunk.get("doc_title", ""),
+                        "version": chunk.get("version", "unknown"),
+                        "relevance": round(score, 4),
+                        "text_preview": chunk.get("text", "")[:200],
+                    }
+                )
 
             # 6. Retrieval quality evaluation (CRAG-style)
             chunks_for_eval = []
@@ -566,1235 +358,147 @@ async def process_rag_query(
                     f"context={budget['context_total']}, response={budget['response']}"
                 )
 
-    # 9. Формируем системный промпт
+    # 9. Build system prompt
     system_prompt = (
         "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
         "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
         f"Контекст:\n{context}"
     )
     messages_for_llm = [{"role": "system", "content": system_prompt}]
-    # Добавляем историю диалога (кроме system сообщений, которые мы заменили)
     if other_messages:
         for msg in other_messages:
             if msg.get("role") != "system":
                 messages_for_llm.append(msg)
 
-    # 10. Вызов LLM
+    # 10. LLM call
     if stream:
-        return context, messages_for_llm, False, sources  # streaming handled separately
+        return context, messages_for_llm, False, sources
     else:
         response_text = await non_stream_completion(messages_for_llm, temperature=temperature, max_tokens=max_tokens)
-        # Сохраняем в кэш
         if cache_manager and not force_refresh:
-            await cache_manager.set(cache_key, response_text, ttl=3600)  # 1 час
+            await cache_manager.set(cache_key, response_text, ttl=3600)
         return response_text, context, False, sources
 
 
-@app.get("/v1/health")
-async def health():
-    """Check proxy and dependency health."""
-    status = {"status": "ok", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
-    try:
-        from app.retrieval import qdrant_client
+# ---------------------------------------------------------------------------
+# App creation
+# ---------------------------------------------------------------------------
 
-        qdrant_client.get_collections()
-        status["components"]["qdrant"] = "ok"
+app = FastAPI(
+    title="RAG Proxy for Gemma",
+    description="OpenAI-compatible proxy with hybrid search, reranking, and Gemma LLM",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Middleware setup (order matters: CORS > auth > correlation > request-id > logging > rate-limit > compression)
+add_cors_middleware(app, origins=CORS_ORIGINS)
+if AUTH_ENABLED:
+    app.add_middleware(AuthMiddleware)
+setup_all_middleware(app, audit_logger=audit_logger)
+if RATE_LIMIT_ENABLED:
+    add_rate_limit_middleware(app, rate_per_minute=RATE_LIMIT_PER_MINUTE, burst=RATE_LIMIT_BURST)
+if COMPRESSION_ENABLED:
+    app.add_middleware(GZipMiddleware, minimum_size=COMPRESSION_MIN_SIZE, compresslevel=COMPRESSION_LEVEL)
+
+# OpenTelemetry FastAPI instrumentation
+if OTEL_ENABLED:
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
+        logger.info("FastAPI OpenTelemetry instrumentation enabled")
+    except ImportError:
+        logger.warning("opentelemetry-instrumentation-fastapi not installed")
     except Exception as e:
-        status["components"]["qdrant"] = f"error: {str(e)}"
-        status["status"] = "degraded"
-    try:
-        import requests
-
-        resp = requests.get(f"{LLM_ENDPOINT}/health", timeout=2)
-        if resp.status_code == 200:
-            status["components"]["llm"] = "ok"
-        else:
-            status["components"]["llm"] = "unhealthy"
-    except Exception as e:
-        status["components"]["llm"] = f"error: {str(e)}"
-        status["status"] = "degraded"
-    return JSONResponse(status_code=200 if status["status"] == "ok" else 503, content=status)
+        logger.warning("FastAPI instrumentation failed (non-blocking): %s", e)
 
 
-@app.get("/v1/health/live")
-async def health_live():
-    """Liveness probe — returns 200 if the process is alive."""
-    return JSONResponse(status_code=200, content={"status": "alive", "timestamp": datetime.now(UTC).isoformat()})
+# ---------------------------------------------------------------------------
+# /v1/models endpoint (kept here — not part of router task)
+# ---------------------------------------------------------------------------
 
 
-@app.get("/v1/health/ready")
-async def health_ready():
-    """Readiness probe — checks Qdrant and LLM connectivity."""
-    status = {"status": "ready", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
-    try:
-        from app.retrieval import qdrant_client
+class ModelInfo(BaseModel):
+    id: str
+    object: str = "model"
+    created: int
+    owned_by: str = "local"
 
-        qdrant_client.get_collections()
-        status["components"]["qdrant"] = "ok"
-    except Exception:
-        status["components"]["qdrant"] = "unavailable"
-        status["status"] = "not_ready"
-    try:
-        import requests
 
-        resp = requests.get(f"{LLM_ENDPOINT}/health", timeout=2)
-        if resp.status_code == 200:
-            status["components"]["llm"] = "ok"
-        else:
-            status["components"]["llm"] = "unavailable"
-            status["status"] = "not_ready"
-    except Exception:
-        status["components"]["llm"] = "unavailable"
-        status["status"] = "not_ready"
-    http_code = 200 if status["status"] == "ready" else 503
-    return JSONResponse(status_code=http_code, content=status)
+class ModelsResponse(BaseModel):
+    object: str = "list"
+    data: list[ModelInfo]
 
 
 @app.get("/v1/models")
 async def list_models():
-    """Возвращает список доступных моделей."""
+    """Return list of available models."""
     models = [
         ModelInfo(id=LLM_MODEL_NAME, created=int(time.time())),
-        ModelInfo(id="rag-proxy", created=int(time.time())),  # виртуальная модель для RAG
+        ModelInfo(id="rag-proxy", created=int(time.time())),
     ]
     return ModelsResponse(data=models)
 
 
-# ===========================================================================
-# Auth endpoints
-# ===========================================================================
-
-# Brute-force protection: in-memory rate limiter for login attempts
-# In production, use Redis-backed rate limiter instead
-_LOGIN_ATTEMPTS: dict[str, tuple[int, float]] = {}
-_LOGIN_MAX_ATTEMPTS = 5
-_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
-_LOGIN_COOLDOWN_SECONDS = 900  # 15 minutes after max attempts
-
-
-def _check_login_rate_limit(identifier: str) -> None:
-    """Check and update login rate limit for an identifier (username or IP).
-    Raises HTTPException if rate limit exceeded."""
-    now = time.time()
-    if identifier in _LOGIN_ATTEMPTS:
-        count, first_attempt = _LOGIN_ATTEMPTS[identifier]
-        if now - first_attempt > _LOGIN_WINDOW_SECONDS:
-            _LOGIN_ATTEMPTS[identifier] = (1, now)
-            return
-        if count >= _LOGIN_MAX_ATTEMPTS:
-            if now - first_attempt < _LOGIN_COOLDOWN_SECONDS:
-                wait = int(_LOGIN_COOLDOWN_SECONDS - (now - first_attempt))
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Too many login attempts. Try again in {wait} seconds.",
-                )
-            else:
-                _LOGIN_ATTEMPTS[identifier] = (1, now)
-                return
-        _LOGIN_ATTEMPTS[identifier] = (count + 1, first_attempt)
-    else:
-        _LOGIN_ATTEMPTS[identifier] = (1, now)
-
-
-@app.post("/v1/auth/register", response_model=RegisterResponse, status_code=201)
-async def auth_register(request: RegisterRequest, raw_request: Request):
-    """Register a new user account.
-
-    Stores user with bcrypt-hashed password in SQLite.
-    Rate-limited to prevent abuse: 3 registrations per IP per minute.
-    """
-    from app.auth import AUTH_ENABLED
-
-    client_ip = raw_request.client.host if raw_request.client else "unknown"
-    _check_login_rate_limit(f"register:{client_ip}")
-
-    if not AUTH_ENABLED:
-        raise HTTPException(status_code=400, detail="Registration is not enabled. Set AUTH_ENABLED=true.")
-
-    db = get_user_db()
-    try:
-        user = await db.create_user(
-            username=request.username,
-            password=request.password,
-            email=request.email or "",
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-
-    logger.info("User registered: %s from %s", request.username, client_ip)
-    return RegisterResponse(
-        user_id=user["user_id"],
-        username=user["username"],
-        created_at=user["created_at"],
-    )
-
-
-@app.post("/v1/auth/login", response_model=LoginResponse)
-async def auth_login(request: LoginRequest, raw_request: Request):
-    """Authenticate user and return a token pair (access + refresh).
-
-    Checks against SQLite user database (with bcrypt password verification).
-    Legacy AUTH_VALID_USERS env var is auto-migrated on first startup.
-    When AD_ENABLED=true, also attempts LDAP bind before falling back to local.
-    """
-    client_ip = raw_request.client.host if raw_request.client else "unknown"
-    rate_limit_key = f"login:{client_ip}:{request.username}"
-
-    _check_login_rate_limit(rate_limit_key)
-
-    db = get_user_db()
-
-    # Check local database
-    user = await db.verify_password(request.username, request.password)
-
-    # LDAP fallback (if enabled)
-    if user is None:
-        from app.config import AD_ENABLED
-        if AD_ENABLED:
-            try:
-                from app.ldap_auth import authenticate_ldap
-                user = await authenticate_ldap(request.username, request.password)
-                if user:
-                    logger.info("LDAP authentication successful for %s", request.username)
-            except Exception as e:
-                logger.warning("LDAP authentication failed for %s: %s", request.username, e)
-
-    if user is None:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if not user.get("is_active", 1):
-        raise HTTPException(status_code=403, detail="Account is deactivated")
-
-    # Create token pair
-    from app.auth import create_token_pair
-    token_pair = await create_token_pair(user)
-
-    return LoginResponse(
-        access_token=token_pair["access_token"],
-        refresh_token=token_pair["refresh_token"],
-        token_type="bearer",
-        expires_in=token_pair["expires_in"],
-        user_id=user["id"],
-        username=user["username"],
-        roles=user.get("roles", ["user"]),
-        groups=user.get("groups", []),
-    )
-
-
-@app.post("/v1/auth/refresh", response_model=RefreshResponse)
-async def auth_refresh(request: RefreshRequest):
-    """Exchange a refresh token (or valid access token) for a new token pair.
-
-    Backward-compatible: tries refresh token first. Falls back to validating
-    as an access token for old clients that don't have refresh tokens yet.
-    On access token validation, issues a full token pair (upgrade path).
-    """
-    from app.auth import AUTH_ENABLED, create_token_pair, verify_refresh_token, verify_token
-
-    if not AUTH_ENABLED:
-        raise HTTPException(status_code=400, detail="Authentication is not enabled")
-
-    # Try refresh token first (preferred path)
-    user = await verify_refresh_token(request.token)
-
-    if user is None:
-        # Fallback: try as access token (backward compat for old clients)
-        try:
-            user_ctx = verify_token(request.token)
-            user = {
-                "id": user_ctx.user_id,
-                "username": user_ctx.username,
-                "roles": user_ctx.roles,
-                "groups": user_ctx.groups,
-                "access_level": user_ctx.access_level,
-                "namespace": user_ctx.namespace,
-            }
-        except Exception:
-            raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-
-    # Issue new token pair
-    token_pair = await create_token_pair(user)
-
-    return RefreshResponse(
-        access_token=token_pair["access_token"],
-        refresh_token=token_pair["refresh_token"],
-        token_type="bearer",
-        expires_in=token_pair["expires_in"],
-    )
-
-
-@app.post("/v1/auth/logout", response_model=LogoutResponse)
-async def auth_logout(
-    request: LogoutRequest,
-    user: UserContext = Depends(get_optional_auth_context),
-):
-    """Logout: revoke refresh tokens and optionally blacklist the current access token.
-
-    When all_sessions=true, revokes all refresh tokens for the authenticated user.
-    When refresh_token is provided, revokes only that specific token.
-    """
-    db = get_user_db()
-
-    if request.refresh_token:
-        # Consume (revoke) a specific refresh token
-        await db.consume_refresh_token(request.refresh_token)
-        logger.info("Refresh token revoked for user %s", user.username)
-
-    if request.all_sessions and user.is_authenticated:
-        count = await db.revoke_user_tokens(user.user_id)
-        logger.info("All sessions revoked for user %s (%d tokens)", user.username, count)
-
-    return LogoutResponse(status="ok", message="Logged out successfully")
-
-
-@app.get("/v1/auth/me", response_model=UserInfoResponse)
-async def auth_me(user: UserContext = Depends(get_auth_context)):
-    """Return the current authenticated user's context."""
-    return UserInfoResponse(
-        user_id=user.user_id,
-        username=user.username,
-        roles=user.roles,
-        groups=user.groups,
-        access_level=user.access_level,
-        is_admin=user.is_admin,
-        is_authenticated=user.is_authenticated,
-    )
-
-
-# ===========================================================================
-# Chat completions
-# ===========================================================================
-
-
-@app.post("/v1/chat/completions")
-async def chat_completions(
-    request: ChatCompletionRequest,
-    raw_request: Request,
-    user: UserContext = Depends(get_auth_context),
-):
-    """Основной эндпоинт для чата (OpenAI совместимый)."""
-    request_id = generate_request_id()
-    start_time = time.time()
-
-    # Store user context in request state for downstream components
-    raw_request.state.user_context = user
-
-    # Input validation
-    validated_model = InputValidator.validate_non_empty(request.model, max_len=256)
-    if not validated_model:
-        raise HTTPException(status_code=400, detail="Invalid model name")
-
-    # Извлекаем последний пользовательский запрос
-    user_query = None
-    other_messages = []
-    for msg in request.messages:
-        sanitized_content = InputValidator.validate_query(msg.content)
-        if msg.role == "user" and user_query is None:
-            user_query = sanitized_content
-        else:
-            sanitized_msg = msg.model_dump()
-            sanitized_msg["content"] = sanitized_content
-            other_messages.append(sanitized_msg)
-
-    if not user_query:
-        raise HTTPException(status_code=400, detail="No user message found")
-
-    # Извлекаем версию из запроса
-    version = request.rag_version or extract_version_from_query(user_query)
-
-    # Логирование входящего запроса (опционально)
-    client_ip = raw_request.client.host if raw_request.client else "unknown"
-    if LOG_REQUESTS:
-        role_info = ",".join(user.roles) if user.is_authenticated else "anonymous"
-        safe_query = InputValidator.sanitize_for_log(user_query[:100])
-        logger.info(
-            f"Request {request_id}: user={client_ip}, roles={role_info}, "
-            f"query={safe_query}, version={version}, stream={request.stream}"
-        )
-
-    # Track request lifecycle
-    request_tracker.start(request_id, metadata={"model": request.model, "client_ip": client_ip})
-
-    # Federation: skip LLM generation, return chunks only
-    if request.rag_skip_generation:
-        rag_context, _, _, sources = await process_rag_query(
-            user_query=user_query,
-            version=version,
-            force_refresh=request.rag_force_refresh,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=True,  # retrieval only, no LLM call
-            other_messages=other_messages,
-            user_context=user,
-            top_k_override=request.rag_top_k,
-        )
-        skip_response = ChatCompletionResponse(
-            id=request_id,
-            created=int(time.time()),
-            model=request.model,
-            choices=[
-                ChatCompletionResponseChoice(
-                    index=0, message=ChatMessage(role="assistant", content=""), finish_reason="stop"
-                )
-            ],
-            rag_sources=sources,
-        )
-        duration_ms = (time.time() - start_time) * 1000
-        request_tracker.complete(request_id, status="success", tokens=0)
-        if audit_logger:
-            audit_logger.log_query(
-                user_id=client_ip,
-                query=user_query,
-                response_preview="[skip_generation]",
-                chunks=len(sources),
-                duration_ms=duration_ms,
-                tokens=0,
-                client_ip=client_ip,
-                result_status="success",
-                metadata={"version": version, "model": request.model, "skip_generation": True},
-            )
-        return skip_response
-
-    # Используем оркестратор LangGraph, если включён
-    if USE_LANGGRAPH and orchestrator:
-        # Агентный пайплайн
-        final_response = await orchestrator.ainvoke(
-            {
-                "query": user_query,
-                "version": version,
-                "temperature": request.temperature,
-                "max_tokens": request.max_tokens,
-                "stream": request.stream,
-            }
-        )
-        if request.stream:
-            # Для стриминга нужно возвращать StreamingResponse из оркестратора
-            return StreamingResponse(final_response, media_type="text/event-stream")
-        else:
-            response_text = final_response["answer"]
-            context = final_response.get("context", "")
-            # Build sources from orchestrator state
-            orchestrator_sources: list[dict] = []
-            from app.context_builder import compute_chunk_hash
-
-            for chunk, score in final_response.get("reranked_chunks", []):
-                orchestrator_sources.append({
-                    "chunk_id": compute_chunk_hash(chunk),
-                    "source": chunk.get("source_type", "unknown"),
-                    "title": chunk.get("title", "") or chunk.get("doc_title", ""),
-                    "version": chunk.get("version", "unknown"),
-                    "relevance": round(score, 4),
-                    "text_preview": chunk.get("text", "")[:200],
-                })
-            feedback_id = generate_feedback_id()
-            confidence = compute_confidence(query=user_query, context=context, answer=response_text)
-            # Формируем ответ в OpenAI формате
-            completion = ChatCompletionResponse(
-                id=request_id,
-                created=int(time.time()),
-                model=request.model,
-                choices=[
-                    ChatCompletionResponseChoice(
-                        index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
-                    )
-                ],
-                rag_feedback_id=feedback_id,
-                rag_confidence=confidence.score,
-                rag_sources=orchestrator_sources,
-            )
-            duration_ms = (time.time() - start_time) * 1000
-            request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
-            # Audit log query
-            if audit_logger:
-                audit_logger.log_query(
-                    user_id=client_ip,
-                    query=user_query,
-                    response_preview=response_text[:200],
-                    chunks=len(orchestrator_sources),
-                    duration_ms=duration_ms,
-                    tokens=len(response_text) // 4,
-                    client_ip=client_ip,
-                    result_status="success",
-                    metadata={"version": version, "model": request.model, "source": "langgraph"},
-                )
-                # Trace-level audit log
-                audit_logger.log_trace(
-                    request_id=request_id,
-                    user_id=client_ip,
-                    query=user_query,
-                    chunks_count=len(orchestrator_sources),
-                    rerank_scores=[s["relevance"] for s in orchestrator_sources],
-                    duration_ms=duration_ms,
-                    tokens=len(response_text) // 4,
-                    confidence=confidence.score,
-                    feedback_id=feedback_id,
-                    client_ip=client_ip,
-                )
-            # Асинхронно логируем в HITL
-            if LOG_REQUESTS:
-                await log_interaction(
-                    request_id=request_id,
-                    user_query=user_query,
-                    context="[agentic]",
-                    response=response_text,
-                    metadata={"version": version, "model": request.model, "client_ip": client_ip},
-                )
-            return completion
-
-    # Стандартный RAG пайплайн
-    if request.stream:
-        # Потоковый режим
-        async def event_generator():
-            accumulated_answer = []
-            optimizer = StreamOptimizer()
-            try:
-                # Send initial empty chunk to reduce TTFT
-                initial = optimizer.initial_chunk()
-                if initial:
-                    yield initial
-                # Выполняем поиск и подготовку контекста (синхронно, но в потоке)
-                rag_context, messages_for_llm, _, _ = await process_rag_query(
-                    user_query=user_query,
-                    version=version,
-                    force_refresh=request.rag_force_refresh,
-                    temperature=request.temperature,
-                    max_tokens=request.max_tokens,
-                    stream=True,
-                    other_messages=other_messages,
-                    user_context=user,
-                    top_k_override=request.rag_top_k,
-                )
-                # Передаём сообщения в LLM с потоковой генерацией
-                async for chunk in stream_completion(messages_for_llm, request.temperature, request.max_tokens):
-                    delta_content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
-                    if delta_content:
-                        accumulated_answer.append(delta_content)
-                    yield optimizer.format_chunk(chunk)
-                # Yield final metadata chunk with confidence + feedback_id
-                full_answer = "".join(accumulated_answer)
-                feedback_id = generate_feedback_id()
-                confidence = compute_confidence(query=user_query, context=rag_context, answer=full_answer)
-                yield f"data: {json.dumps({'rag_feedback_id': feedback_id, 'rag_confidence': confidence.score})}\n\n"
-                yield "data: [DONE]\n\n"
-                duration_ms = (time.time() - start_time) * 1000
-                request_tracker.complete(request_id, status="success")
-                if audit_logger:
-                    audit_logger.log_query(
-                        user_id=client_ip,
-                        query=user_query,
-                        response_preview="[streaming]",
-                        chunks=0,
-                        duration_ms=duration_ms,
-                        tokens=0,
-                        client_ip=client_ip,
-                        result_status="success",
-                        metadata={"version": version, "model": request.model},
-                    )
-            except Exception as e:
-                logger.error(f"Streaming error: {e}", exc_info=True)
-                if audit_logger:
-                    audit_logger.log_error(
-                        error_type="StreamingError",
-                        error_msg=str(e),
-                        stack_trace=None,
-                        client_ip=client_ip,
-                        endpoint="/v1/chat/completions",
-                    )
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
-    else:
-        # Non-streaming
-        response_text, rag_context, from_cache, sources = await process_rag_query(
-            user_query=user_query,
-            version=version,
-            force_refresh=request.rag_force_refresh,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stream=False,
-            other_messages=other_messages,
-            user_context=user,
-            top_k_override=request.rag_top_k,
-        )
-        feedback_id = generate_feedback_id()
-        confidence = compute_confidence(query=user_query, context=rag_context, answer=response_text)
-        completion = ChatCompletionResponse(
-            id=request_id,
-            created=int(time.time()),
-            model=request.model,
-            choices=[
-                ChatCompletionResponseChoice(
-                    index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
-                )
-            ],
-            rag_feedback_id=feedback_id,
-            rag_confidence=confidence.score,
-            rag_sources=sources,
-        )
-        duration_ms = (time.time() - start_time) * 1000
-        request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
-        # Audit log query
-        if audit_logger:
-            audit_logger.log_query(
-                user_id=client_ip,
-                query=user_query,
-                response_preview=response_text[:200],
-                chunks=len(sources),
-                duration_ms=duration_ms,
-                tokens=len(response_text) // 4,
-                client_ip=client_ip,
-                result_status="success",
-                metadata={"version": version, "model": request.model, "from_cache": from_cache},
-            )
-            # Trace-level audit log
-            audit_logger.log_trace(
-                request_id=request_id,
-                user_id=client_ip,
-                query=user_query,
-                chunks_count=len(sources),
-                rerank_scores=[s["relevance"] for s in sources],
-                duration_ms=duration_ms,
-                tokens=len(response_text) // 4,
-                confidence=confidence.score,
-                feedback_id=feedback_id,
-                client_ip=client_ip,
-            )
-        # Логирование взаимодействия
-        if LOG_REQUESTS:
-            await log_interaction(
-                request_id=request_id,
-                user_query=user_query,
-                context="[rag_context_omitted_for_logging]",
-                response=response_text,
-                metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
-            )
-        return completion
-
-
-# ===========================================================================
-# Tool discovery endpoints
-# ===========================================================================
-
-
-@app.get("/v1/tools")
-async def list_tools(
-    category: str | None = None,
-    tag: str | None = None,
-    provider: str | None = None,
-    user: UserContext = Depends(get_optional_auth_context),
-):
-    """List available tools with optional filters. RBAC: visibility-filtered by user role."""
-    registry = get_enhanced_registry()
-    user_role = _highest_role_from_user(user)
-    tags = [tag] if tag else None
-    tools = registry.list_tools(
-        category=category, tags=tags, provider=provider,
-        visibility_filter=user_role or "read_only",
-    )
-    return {
-        "count": len(tools),
-        "tools": [
-            {
-                "name": t.name,
-                "description": t.description,
-                "category": t.category,
-                "tags": t.tags,
-                "version": t.version,
-                "parameters": t.to_json_schema(),
-                "provider": t.provider,
-            }
-            for t in tools
-        ],
-    }
-
-
-@app.get("/v1/tools/{name}")
-async def get_tool(
-    name: str,
-    user: UserContext = Depends(get_optional_auth_context),
-):
-    """Get a single tool's details by name. Never exposes handler code."""
-    registry = get_enhanced_registry()
-    tool = registry.get_tool(name)
-    if tool is None:
-        raise HTTPException(status_code=404, detail=f"Tool '{name}' not found")
-    user_role = _highest_role_from_user(user)
-    visible = registry.list_tools(visibility_filter=user_role or "read_only")
-    if tool not in visible:
-        raise HTTPException(status_code=403, detail="Tool not visible to your role")
-    return {
-        "name": tool.name,
-        "description": tool.description,
-        "category": tool.category,
-        "tags": tool.tags,
-        "version": tool.version,
-        "visibility": tool.visibility.value,
-        "timeout_seconds": tool.timeout_seconds,
-        "parameters": tool.to_json_schema(),
-        "provider": tool.provider,
-        "depends_on": tool.depends_on,
-    }
-
-
-# ===========================================================================
-# Feedback endpoint
-# ===========================================================================
-
-
-@app.post("/v1/feedback", response_model=FeedbackResponse)
-async def submit_feedback(
-    request: FeedbackRequest,
-    raw_request: Request,
-    user: UserContext = Depends(require_role(Role.EXPERT)),
-):
-    """Submit feedback on a RAG response."""
-    from app.hitl import FeedbackType, get_logger
-
-    hlog = get_logger()
-
-    feedback_type = FeedbackType.POSITIVE if request.rating == "positive" else FeedbackType.NEGATIVE
-
-    try:
-        hlog.log_feedback(
-            request_id=request.feedback_id,
-            feedback_type=feedback_type,
-            comment=request.comment or "",
-            corrected_response=request.correction,
-        )
-
-        from app.config import ENRICHMENT_ENABLED
-
-        if ENRICHMENT_ENABLED and (request.rating == "positive" or request.correction):
-            try:
-                from app.enricher import enrich_from_feedback
-
-                await enrich_from_feedback(request)
-            except Exception as e:
-                logger.error(f"Enrichment failed (non-blocking): {e}")
-
-        return FeedbackResponse(status="ok", message="Feedback recorded")
-    except Exception as e:
-        logger.error(f"Failed to record feedback: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to record feedback: {e}") from e
-
-
-# ===========================================================================
-# Admin warm-up endpoint
-# ===========================================================================
-
-
-@app.post("/v1/admin/warmup")
-async def admin_warmup(
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Trigger model warm-up (admin only).
-
-    Runs embedder, reranker, and LLM warmup to pre-load models into memory.
-    Uses graceful degradation: each component failure is logged, not fatal.
-    The require_role(Role.ADMIN) dependency enforces admin-level access.
-    """
-    if not WARMUP_ENABLED:
-        return JSONResponse(status_code=200, content={"status": "disabled", "message": "Warm-up is disabled"})
-    try:
-        from app.warmup import warmup_all
-        result = await warmup_all()
-        return JSONResponse(status_code=200, content={"status": "ok", "results": result})
-    except Exception as e:
-        logger.error(f"Warm-up failed: {e}")
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
-
-# ===========================================================================
-# Chat Widget endpoints
-# ===========================================================================
-
-
-@app.get("/v1/widget")
-async def serve_widget():
-    """Serve the embeddable RAG chat widget HTML page.
-
-    The widget connects to /v1/chat/completions via SSE streaming.
-    Access control: WIDGET_ENABLED config flag; RBAC: Role.USER when AUTH_ENABLED.
-    """
-    from app.config import AUTH_ENABLED
-
-    widget_path = Path(__file__).parent / "static" / "widget.html"
-    if not widget_path.exists():
-        raise HTTPException(status_code=404, detail="Widget not found")
-    return HTMLResponse(content=widget_path.read_text(encoding="utf-8"))
-
-
-@app.get("/v1/widget.js")
-async def serve_widget_js():
-    """Serve the standalone RAG chat widget JavaScript.
-
-    Can be embedded in any page:
-      <script src="/v1/widget.js"></script>
-      <div id="rag-chat"></div>
-      <script>RAGChatWidget.init({container:'rag-chat'});</script>
-    """
-    widget_path = Path(__file__).parent / "static" / "widget.js"
-    if not widget_path.exists():
-        raise HTTPException(status_code=404, detail="Widget JS not found")
-    return Response(
-        content=widget_path.read_text(encoding="utf-8"),
-        media_type="application/javascript",
-    )
-
-
-# ===========================================================================
-# Model Evolution Admin API — training, registry, eval gates, canary
-# ===========================================================================
-
-from enum import Enum as _Enum
-
-
-class TrainerType(str, _Enum):
-    SLM = "slm"
-    LLM = "llm"
-    RERANKER = "reranker"
-
-
-class TrainRequest(BaseModel):
-    trainer_type: TrainerType
-    base_model: str = ""
-    profile: str = "dev"
-    data_dir: str = "./data/training/"
-    epochs: int = 3
-    batch_size: int = 8
-    learning_rate: float = 2e-4
-    use_lora: bool = True
-
-
-class TrainResponse(BaseModel):
-    job_id: str
-    trainer_type: str
-    status: str
-    message: str
-
-
-class PromoteRequest(BaseModel):
-    model_name: str
-    version: str
-
-
-class PromoteResponse(BaseModel):
-    model_name: str
-    version: str
-    previous_status: str
-    new_status: str
-
-
-class RollbackRequest(BaseModel):
-    model_name: str
-
-
-class RollbackResponse(BaseModel):
-    model_name: str
-    version: str
-    previous_version: str
-    status: str
-
-
-class EvaluateRequest(BaseModel):
-    model_name: str
-    version: str = "unknown"
-    metrics: dict[str, float]
-
-
-class EvaluateResponse(BaseModel):
-    model_name: str
-    version: str
-    status: str
-    failures: list[str]
-    warnings: list[str]
-    metrics: dict[str, float]
-
-
-class CanarySplitRequest(BaseModel):
-    model_name: str
-    traffic_split: float = Field(..., ge=0.0, le=1.0, description="Fraction of traffic to canary (0.0-1.0)")
-
-
-class CanarySplitResponse(BaseModel):
-    model_name: str
-    traffic_split: float
-    status: str
-
-
-# ── In-memory stores (backed by ModelRegistry on disk) ─────────────────────
-
-class _CanaryState:
-    """Thread-safe in-memory canary deployment state manager."""
-
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self._models: dict[str, dict] = {}
-
-    def set_split(self, model_name: str, traffic_split: float) -> dict:
-        with self._lock:
-            if model_name not in self._models:
-                self._models[model_name] = {
-                    "traffic_split": 0.0,
-                    "stable_traffic": 1.0,
-                    "phase": "idle",
-                    "stable_version": None,
-                    "canary_version": None,
-                }
-            entry = self._models[model_name]
-            entry["traffic_split"] = traffic_split
-            entry["stable_traffic"] = 1.0 - traffic_split
-            if traffic_split > 0:
-                entry["phase"] = "ramp"
-            else:
-                entry["phase"] = "idle"
-            return dict(entry)
-
-    def get_status(self) -> dict:
-        with self._lock:
-            result: dict[str, dict[str, float | str | None]] = {}
-            for name, entry in self._models.items():
-                result[name] = dict(entry)
-            return {"canary_models": result}
-
-
-_canary_state = _CanaryState()
-
-
-class _TrainingJobStore:
-    """Thread-safe in-memory training job store."""
-
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self._jobs: dict[str, dict] = {}
-
-    def create(self, trainer_type: str, config: dict) -> str:
-        job_id = f"train-{uuid.uuid4().hex[:12]}"
-        with self._lock:
-            self._jobs[job_id] = {
-                "job_id": job_id,
-                "trainer_type": trainer_type,
-                "status": "queued",
-                "config": config,
-                "metrics": {},
-                "started_at": datetime.now(UTC).isoformat(),
-                "completed_at": None,
-                "error_message": None,
-            }
-        return job_id
-
-    def get(self, job_id: str) -> dict | None:
-        with self._lock:
-            return self._jobs.get(job_id)
-
-    def update(self, job_id: str, **kwargs) -> None:
-        with self._lock:
-            if job_id in self._jobs:
-                self._jobs[job_id].update(kwargs)
-
-
-_training_jobs = _TrainingJobStore()
-
-
-def _get_model_registry():
-    from app.model_evolution.model_registry import ModelRegistry
-
-    return ModelRegistry()
-
-
-# ── Endpoints ──────────────────────────────────────────────────────────────
-
-@app.post("/v1/admin/models/train", response_model=TrainResponse)
-async def admin_models_train(
-    request: TrainRequest,
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Trigger a model training job (admin only).
-
-    Launches an async training job and returns immediately with a job_id.
-    Use GET /v1/admin/models/status/{job_id} to poll for completion.
-    """
-    from app.model_evolution.trainer import TrainerType as ME_TrainerType, TrainingConfig
-    from app.model_evolution.env_profile import EnvProfile, get_preset
-
-    profile = EnvProfile.DEV
-    try:
-        profile = EnvProfile(request.profile)
-    except ValueError:
-        pass
-
-    job_id = _training_jobs.create(
-        trainer_type=request.trainer_type.value,
-        config={
-            "base_model": request.base_model,
-            "profile": profile.value,
-            "data_dir": request.data_dir,
-            "epochs": request.epochs,
-            "batch_size": request.batch_size,
-            "learning_rate": request.learning_rate,
-            "use_lora": request.use_lora,
-        },
-    )
-
-    _training_jobs.update(job_id, status="running")
-
-    # Run training in background task
-    async def _run_training() -> None:
-        try:
-            trainer_type = ME_TrainerType(request.trainer_type.value)
-            preset = get_preset(profile)
-            config = TrainingConfig(
-                trainer_type=trainer_type,
-                env_profile=profile,
-                base_model=request.base_model or "",
-                epochs=request.epochs or preset.get("epochs", 1),
-                batch_size=request.batch_size or preset.get("batch_size", 2),
-                learning_rate=request.learning_rate,
-                use_lora=request.use_lora,
-                lora_r=preset.get("lora_r", 4),
-                lora_alpha=preset.get("lora_alpha", 8),
-                max_seq_length=preset.get("max_seq_length", 256),
-            )
-            if trainer_type == ME_TrainerType.SLM:
-                from app.model_evolution.slm_trainer import SLMTrainer
-                trainer = SLMTrainer()
-                result = trainer.train(config)
-            elif trainer_type == ME_TrainerType.RERANKER:
-                from app.model_evolution.trainer import TrainerBase, TrainingJob as ME_TrainingJob
-                result = ME_TrainingJob(
-                    job_id=job_id,
-                    trainer_type=ME_TrainerType.RERANKER,
-                    config=config,
-                    status="completed",
-                    metrics={"mrr": 0.85, "recall_at_10": 0.78},
-                    artifact_uri="./models/reranker_v1",
-                    completed_at=datetime.now(UTC).isoformat(),
-                )
-            else:
-                from app.model_evolution.trainer import TrainingJob as ME_TrainingJob
-                result = ME_TrainingJob(
-                    job_id=job_id,
-                    trainer_type=ME_TrainerType.LLM,
-                    config=config,
-                    status="completed",
-                    metrics={"eval_loss": 0.52, "rouge_l_f1": 0.38},
-                    artifact_uri="./models/llm_v1",
-                    completed_at=datetime.now(UTC).isoformat(),
-                )
-            _training_jobs.update(
-                job_id,
-                status=result.status if hasattr(result, "status") else "completed",
-                metrics=result.metrics if hasattr(result, "metrics") else {},
-                artifact_uri=result.artifact_uri if hasattr(result, "artifact_uri") else None,
-                completed_at=datetime.now(UTC).isoformat(),
-            )
-            # Auto-register in model registry on success
-            if hasattr(result, "status") and result.status == "completed":
-                registry = _get_model_registry()
-                try:
-                    registry.register(
-                        name=request.trainer_type.value,
-                        artifact_path=result.artifact_uri or f"./models/{request.trainer_type.value}_{job_id}",
-                        metrics=result.metrics if hasattr(result, "metrics") else {},
-                    )
-                except Exception as reg_err:
-                    logger.warning("Auto-register failed for job %s: %s", job_id, reg_err)
-        except Exception as e:
-            logger.exception("Training job %s failed: %s", job_id, e)
-            _training_jobs.update(
-                job_id, status="failed", error_message=str(e),
-                completed_at=datetime.now(UTC).isoformat(),
-            )
-
-    asyncio.create_task(_run_training())
-
-    return TrainResponse(
-        job_id=job_id,
-        trainer_type=request.trainer_type.value,
-        status="running",
-        message=f"Training job {job_id} started",
-    )
-
-
-@app.get("/v1/admin/models/status/{job_id}")
-async def admin_models_status(
-    job_id: str,
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Check training job status (admin only)."""
-    job = _training_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Training job '{job_id}' not found")
-    return JSONResponse(status_code=200, content=job)
-
-
-@app.get("/v1/admin/models")
-async def admin_models_list(
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """List all registered models with versions and stages (admin only)."""
-    registry = _get_model_registry()
-    models_data = {}
-    for model_name in registry.list_models():
-        versions = registry.list_versions(model_name)
-        # Also get current production version info
-        production = registry.get_latest_production(model_name)
-        models_data[model_name] = {
-            "versions": [
-                {
-                    "version": v.version,
-                    "status": v.status,
-                    "artifact_path": v.artifact_path,
-                    "metrics": v.metrics,
-                    "created_at": v.created_at,
-                }
-                for v in versions
-            ],
-            "production_version": production.version if production else None,
-        }
-    return JSONResponse(status_code=200, content={"models": models_data})
-
-
-@app.post("/v1/admin/models/promote", response_model=PromoteResponse)
-async def admin_models_promote(
-    request: PromoteRequest,
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Promote a model version through staging → canary → production (admin only)."""
-    registry = _get_model_registry()
-    try:
-        mv = registry.get(request.model_name, request.version)
-    except KeyError:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Model '{request.model_name}' version '{request.version}' not found",
-        )
-    previous_status = mv.status
-    mv = registry.promote(request.model_name, request.version)
-    return PromoteResponse(
-        model_name=request.model_name,
-        version=request.version,
-        previous_status=previous_status,
-        new_status=mv.status,
-    )
-
-
-@app.post("/v1/admin/models/rollback", response_model=RollbackResponse)
-async def admin_models_rollback(
-    request: RollbackRequest,
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Rollback to previous production version (admin only)."""
-    registry = _get_model_registry()
-    try:
-        current = registry.get_latest_production(request.model_name)
-    except KeyError:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Model '{request.model_name}' not found",
-        )
-    if current is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No production version for model '{request.model_name}'",
-        )
-    try:
-        previous = registry.rollback(request.model_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return RollbackResponse(
-        model_name=request.model_name,
-        version=previous.version,
-        previous_version=current.version,
-        status=previous.status,
-    )
-
-
-@app.post("/v1/admin/models/evaluate", response_model=EvaluateResponse)
-async def admin_models_evaluate(
-    request: EvaluateRequest,
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Run eval gate on model metrics (admin only).
-
-    Default thresholds: accuracy >= 0.90, weighted_f1 >= 0.85, mrr >= 0.70.
-    """
-    from app.model_evolution.eval_gate import EvalGate, EvalGateConfig, MetricThreshold
-
-    thresholds = [
-        MetricThreshold("accuracy", 0.90, "gte"),
-        MetricThreshold("weighted_f1", 0.85, "gte"),
-        MetricThreshold("mrr", 0.70, "gte"),
-        MetricThreshold("recall_at_10", 0.65, "gte"),
-        MetricThreshold("rouge_l_f1", 0.35, "gte"),
-        MetricThreshold("eval_loss", 1.0, "lte", severity="warn"),
-    ]
-    config = EvalGateConfig(
-        model_name=request.model_name,
-        thresholds=thresholds,
-        require_baseline_comparison=False,
-    )
-
-    # Try to get baseline metrics from current production version
-    baseline_metrics = None
-    try:
-        registry = _get_model_registry()
-        production = registry.get_latest_production(request.model_name)
-        if production:
-            baseline_metrics = production.metrics
-    except Exception:
-        pass
-
-    result = EvalGate.evaluate(
-        metrics=request.metrics,
-        config=config,
-        baseline_metrics=baseline_metrics,
-        version=request.version,
-    )
-
-    # Update metrics in registry if the model exists there
-    try:
-        registry = _get_model_registry()
-        registry.update_metrics(request.model_name, request.version, request.metrics)
-    except KeyError:
-        pass
-
-    return EvaluateResponse(
-        model_name=request.model_name,
-        version=request.version,
-        status=result.status.value.upper(),
-        failures=result.failures,
-        warnings=result.warnings,
-        metrics=result.metrics,
-    )
-
-
-@app.post("/v1/admin/models/canary/split", response_model=CanarySplitResponse)
-async def admin_models_canary_split(
-    request: CanarySplitRequest,
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Set canary traffic split for a model (admin only).
-
-    Sets the fraction of traffic routed to the canary version.
-    0.0 = all traffic to stable, 1.0 = all traffic to canary.
-    """
-    state = _canary_state.set_split(request.model_name, request.traffic_split)
-    return CanarySplitResponse(
-        model_name=request.model_name,
-        traffic_split=state["traffic_split"],
-        status=state["phase"],
-    )
-
-
-@app.get("/v1/admin/models/canary/status")
-async def admin_models_canary_status(
-    user: UserContext = Depends(require_role(Role.ADMIN)),
-):
-    """Get current canary deployment status and metrics (admin only)."""
-    status = _canary_state.get_status()
-    return JSONResponse(status_code=200, content=status)
-
+# ---------------------------------------------------------------------------
+# Include all routers
+# ---------------------------------------------------------------------------
+
+from proxy.app.api import (  # noqa: E402
+    admin_router,
+    auth_router,
+    chat_router,
+    feedback_router,
+    health_router,
+    metrics_router,
+    tools_router,
+    widget_router,
+)
+
+app.include_router(metrics_router)
+app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(chat_router)
+app.include_router(tools_router)
+app.include_router(feedback_router)
+app.include_router(widget_router)
+app.include_router(admin_router)
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible re-exports for tests (proxy.app.main.*)
+# ---------------------------------------------------------------------------
+
+# Re-export chat models and helpers so tests that do
+# ``from proxy.app.main import ChatMessage`` still work.
+# Re-export admin helpers so tests that patch
+# ``proxy.app.main._get_model_registry`` still work.
+from proxy.app.api.admin import (  # noqa: E402, F401
+    _canary_state,
+    _get_model_registry,
+    _training_jobs,
+)
+from proxy.app.api.chat import (  # noqa: E402, F401
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatCompletionResponseChoice,
+    ChatMessage,
+    StreamOptimizer,
+    generate_request_id,
+)
+
+# Re-export tools helpers so tests that patch
+# ``proxy.app.main._highest_role_from_user`` still work.
+from proxy.app.api.tools import _highest_role_from_user  # noqa: E402, F401
+
+# Re-export hitl helpers so tests that patch
+# ``proxy.app.main.log_interaction`` still work (chat.py uses _main.log_interaction).
+from proxy.app.core.hitl import log_interaction  # noqa: E402, F401
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -1802,5 +506,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8080,
         reload=False,
-        workers=1,  # Для стриминга и кэша лучше 1 воркер, или использовать Redis
+        workers=1,
     )

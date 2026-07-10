@@ -1,12 +1,11 @@
 """Tests for etl/extractors/image_extractor.py."""
-import pytest
 
 from etl.extractors.image_extractor import (
+    IMAGE_EXTRACTION_ENABLED,
     ImageInfo,
-    extract_images_from_html,
     caption_image,
     embed_image,
-    IMAGE_EXTRACTION_ENABLED,
+    extract_images_from_html,
 )
 
 

@@ -1,23 +1,43 @@
 # RAG System Makefile
 # Primary entry point for development, testing, and deployment workflows.
 
-.PHONY: help install install-dev test test-proxy test-etl test-integration \
-        test-model-evolution lint format typecheck clean docker-build docker-up docker-down docs all \
-        train-slm train-llm train-reranker eval-model promote-model \
-        model-evolution-up model-evolution-down \
-        federation-build federation-run federation-test
+.PHONY: help install install-dev setup test test-proxy test-etl test-integration \
+        lint format format-check typecheck clean \
+        docker-build docker-up docker-down docker-logs run docs all \
+        etl etl-confluence etl-jira etl-gitlab
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
-# ── Setup ──────────────────────────────────────────────────────────────────
+# ── Setup ─────────────────────────────────────────────────────────────────────
 install: ## Run full setup (proxy + ETL)
 	@bash $(ROOT)/setup.sh --full
 
 install-dev: ## Run setup with dev dependencies (lint, test, typecheck)
 	@bash $(ROOT)/setup.sh --dev
 
-# ── Testing ────────────────────────────────────────────────────────────────
+setup: ## Create .env from .env.example if missing
+	@test -f $(ROOT)/proxy/.env || (cp $(ROOT)/.env.example $(ROOT)/proxy/.env && echo "Created proxy/.env from .env.example")
+	@test -f $(ROOT)/etl/.env || (cp $(ROOT)/etl/.env.example $(ROOT)/etl/.env 2>/dev/null && echo "Created etl/.env" || true)
+
+# ── Run ───────────────────────────────────────────────────────────────────────
+run: ## Start proxy locally (requires .env and venv)
+	@cd $(ROOT) && uvicorn proxy.app.main:app --host 0.0.0.0 --port 8080 --workers 1
+
+# ── ETL ───────────────────────────────────────────────────────────────────────
+etl: ## Run full ETL pipeline
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml
+
+etl-confluence: ## Run Confluence extractor only
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
+
+etl-jira: ## Run Jira extractor only
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
+
+etl-gitlab: ## Run GitLab extractor only
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
+
+# ── Testing ───────────────────────────────────────────────────────────────────
 test: ## Run all tests
 	@cd $(ROOT) && python -m pytest tests/ -v
 
@@ -30,7 +50,7 @@ test-etl: ## Run ETL unit tests
 test-integration: ## Run integration tests
 	@cd $(ROOT) && python -m pytest tests/integration/ -v
 
-# ── Code quality ───────────────────────────────────────────────────────────
+# ── Code quality ──────────────────────────────────────────────────────────────
 lint: ## Lint with ruff
 	@cd $(ROOT) && ruff check .
 
@@ -43,7 +63,7 @@ format-check: ## Check formatting without changes
 typecheck: ## Run mypy static type checker
 	@cd $(ROOT) && mypy proxy/ etl/ --exclude '.venv|__pycache__'
 
-# ── Cleanup ────────────────────────────────────────────────────────────────
+# ── Cleanup ───────────────────────────────────────────────────────────────────
 clean: ## Remove build artifacts and caches
 	@find $(ROOT) -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 	@find $(ROOT) -type d -name '.pytest_cache' -exec rm -rf {} + 2>/dev/null || true
@@ -54,7 +74,7 @@ clean: ## Remove build artifacts and caches
 	@find $(ROOT) -type f -name '.DS_Store' -delete
 	@echo "Cleaned build artifacts and caches"
 
-# ── Docker ─────────────────────────────────────────────────────────────────
+# ── Docker ────────────────────────────────────────────────────────────────────
 docker-build: ## Build Docker images
 	@cd $(ROOT)/proxy && docker-compose build
 
@@ -67,64 +87,17 @@ docker-down: ## Stop docker-compose services
 docker-logs: ## Tail docker-compose logs
 	@cd $(ROOT)/proxy && docker-compose logs -f
 
-# ── Documentation ──────────────────────────────────────────────────────────
+# ── Documentation ─────────────────────────────────────────────────────────────
 docs: ## Show documentation locations
 	@echo "Documentation:"
 	@echo "  Architecture: docs/"
 	@echo "  AGENTS.md:    project structure and conventions"
 	@echo "  README.md:    project overview"
 
-# ── CI pipeline (all-in-one) ───────────────────────────────────────────────
+# ── CI pipeline ───────────────────────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests
 
-# ── Model Evolution ──────────────────────────────────────────────────────────
-train-slm: ## Train SLM intent classifier (LoRA fine-tuning)
-	@cd $(ROOT) && python scripts/model_evolution/train_slm.py --profile prod --data-dir ./data/training
-
-train-llm: ## Train LLM domain generator (QLoRA fine-tuning)
-	@cd $(ROOT) && python scripts/model_evolution/train_llm.py --profile prod --data-dir ./data/training
-
-train-reranker: ## Train reranker from HITL feedback data
-	@cd $(ROOT) && python scripts/model_evolution/train_reranker.py --profile prod --data-dir ./data/training
-
-eval-model: ## Run evaluation gate (usage: make eval-model MODEL=slm METRICS_FILE=./results.json)
-	@cd $(ROOT) && python scripts/model_evolution/evaluate_model.py \
-		--model $(MODEL) \
-		$(if $(METRICS),--metrics '$(METRICS)') \
-		$(if $(METRICS_FILE),--metrics-file $(METRICS_FILE)) \
-		$(if $(FROM_REGISTRY),--from-registry) \
-		$(if $(VERSION),--version $(VERSION)) \
-		$(if $(BASELINE_FILE),--baseline-file $(BASELINE_FILE))
-
-promote-model: ## Promote model version (usage: make promote-model MODEL=slm-intent-classifier VERSION=3)
-	@cd $(ROOT) && python scripts/model_evolution/promote_model.py \
-		--model $(MODEL) \
-		$(if $(VERSION),--version $(VERSION)) \
-		$(if $(LATEST),--latest) \
-		$(if $(TO),--to $(TO)) \
-		$(if $(FORCE),--force)
-
-model-evolution-up: ## Start MLflow + MinIO services
-	@cd $(ROOT)/proxy && docker-compose up -d mlflow minio
-
-model-evolution-down: ## Stop MLflow + MinIO services
-	@cd $(ROOT)/proxy && docker-compose down mlflow minio
-
-test-model-evolution: ## Run model evolution tests
-	@cd $(ROOT) && python -m pytest tests/model_evolution/ -v
-
-# ── Federation ──────────────────────────────────────────────────────────────
-federation-build: ## Build federation Docker image
-	docker build -t rag-federation -f federation/Dockerfile .
-
-federation-run: ## Run federation container
-	cp -n federation/.env.example federation/.env 2>/dev/null || true
-	docker run -p 8001:8001 --env-file federation/.env rag-federation
-
-federation-test: ## Run federation unit tests
-	python -m pytest federation/tests/ -v
-
-# ── Help ───────────────────────────────────────────────────────────────────
+# ── Help ──────────────────────────────────────────────────────────────────────
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| sort \

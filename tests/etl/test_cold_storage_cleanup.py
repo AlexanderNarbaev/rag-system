@@ -1,15 +1,14 @@
 """Tests for etl/scheduler/cold_storage_cleanup.py."""
+
 import os
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from etl.scheduler.cold_storage_cleanup import (
-    COLD_STORAGE_MAX_VERSIONS,
     COLD_STORAGE_ENABLED,
-    cleanup_cold_storage,
+    COLD_STORAGE_MAX_VERSIONS,
     _list_parquet_versions,
     _prune_old_versions,
+    cleanup_cold_storage,
 )
 
 

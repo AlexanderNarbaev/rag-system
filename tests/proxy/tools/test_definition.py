@@ -1,4 +1,5 @@
 """Tests for proxy/app/tools/definition.py — Unified Data Models."""
+
 import sys
 from pathlib import Path
 
@@ -72,9 +73,7 @@ class TestToolParam:
     def test_to_json_schema_property_optional_with_default(self):
         from tools.definition import ToolParam
 
-        param = ToolParam(
-            name="top_k", type=int, description="Max results", required=False, default=5
-        )
+        param = ToolParam(name="top_k", type=int, description="Max results", required=False, default=5)
         schema = param.to_json_schema_property()
         assert schema == {"type": "integer", "description": "Max results", "default": 5}
 

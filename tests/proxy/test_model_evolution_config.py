@@ -1,9 +1,10 @@
 """Tests for model evolution configuration and package foundation."""
+
 import importlib
 
 import pytest
 
-import proxy.app.config as config_module
+import proxy.app.shared.config as config_module
 
 
 class TestModelEvolutionConfigDefaults:
@@ -93,22 +94,26 @@ class TestModelEvolutionPackage:
 
     def test_model_evolution_error(self):
         from proxy.app.model_evolution.exceptions import ModelEvolutionError
+
         err = ModelEvolutionError("test message")
         assert str(err) == "test message"
         assert isinstance(err, Exception)
 
     def test_training_error(self):
         from proxy.app.model_evolution.exceptions import TrainingError
+
         err = TrainingError("training failed")
         assert "training failed" in str(err)
 
     def test_eval_gate_error(self):
         from proxy.app.model_evolution.exceptions import EvalGateError
+
         err = EvalGateError("gate not passed")
         assert isinstance(err, Exception)
 
     def test_adapter_error(self):
         from proxy.app.model_evolution.exceptions import AdapterError
+
         err = AdapterError("adapter load failed")
         assert "adapter load failed" in str(err)
 
@@ -117,12 +122,14 @@ class TestModelEvolutionPackage:
 
     def test_env_profile_enum(self):
         from proxy.app.model_evolution.env_profile import EnvProfile
+
         assert EnvProfile.DEV.value == "dev"
         assert EnvProfile.PROD.value == "prod"
         assert EnvProfile.CI.value == "ci"
 
     def test_env_profile_presets(self):
         from proxy.app.model_evolution.env_profile import EnvProfile, get_preset
+
         dev = get_preset(EnvProfile.DEV)
         assert dev["gpu_enabled"] is False
         assert dev["batch_size"] == 2
@@ -137,16 +144,19 @@ class TestModelEvolutionPackage:
 
     def test_env_profile_from_name(self):
         from proxy.app.model_evolution.env_profile import EnvProfile, get_profile
+
         assert get_profile("dev") == EnvProfile.DEV
         assert get_profile("prod") == EnvProfile.PROD
         assert get_profile("ci") == EnvProfile.CI
 
     def test_env_profile_invalid_name(self):
         from proxy.app.model_evolution.env_profile import EnvProfile, get_profile
+
         assert get_profile("unknown") == EnvProfile.DEV
 
     def test_package_init_exports(self):
         import proxy.app.model_evolution as me
+
         assert hasattr(me, "ModelEvolutionError")
         assert hasattr(me, "TrainingError")
         assert hasattr(me, "EvalGateError")

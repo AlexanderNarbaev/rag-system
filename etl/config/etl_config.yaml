@@ -92,6 +92,15 @@ streaming:
   redis_stream_key: "etl:events"
   redis_consumer_group: "etl-workers"
 
+# Schedule settings (for cron-based or periodic ETL runs)
+schedule:
+  enabled: false                            # Enable scheduled ETL runs
+  cron_expression: "0 2 * * *"              # Default: daily at 02:00
+  timezone: "UTC"                           # Schedule timezone
+  retry_on_failure: true                    # Retry failed extraction stages
+  max_retries: 3                            # Maximum retries per stage
+  notify_on_failure: true                   # Log/notify on pipeline failure
+
 # Граф знаний (Neo4j) – опционально
 graph:
   enabled: false                         # включить построение графа

@@ -1,12 +1,13 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for hallucination detection and benchmarking."""
-import pytest
-from proxy.app.hallucination import (
+
+from proxy.app.core.hallucination import (
     HallucinationReport,
-    detect_hallucinations,
-    compute_hallucination_rate,
-    run_hallucination_benchmark,
-    extract_factual_claims,
     check_claim_against_context,
+    compute_hallucination_rate,
+    detect_hallucinations,
+    extract_factual_claims,
+    run_hallucination_benchmark,
 )
 
 
@@ -40,9 +41,7 @@ class TestExtractFactualClaims:
         assert len(claims) >= 2
 
     def test_extract_with_version_numbers(self):
-        claims = extract_factual_claims(
-            "Python 3.12 was released in 2023. It adds improved error messages."
-        )
+        claims = extract_factual_claims("Python 3.12 was released in 2023. It adds improved error messages.")
         assert len(claims) >= 1
 
 
@@ -52,14 +51,14 @@ class TestCheckClaimAgainstContext:
     def test_direct_match(self):
         result = check_claim_against_context(
             "Python was created by Guido van Rossum",
-            "Python is a programming language created by Guido van Rossum in 1991."
+            "Python is a programming language created by Guido van Rossum in 1991.",
         )
         assert result is True
 
     def test_no_match(self):
         result = check_claim_against_context(
             "The moon landing was faked by NASA in a Hollywood studio",
-            "Python is a programming language created by Guido van Rossum in 1991."
+            "Python is a programming language created by Guido van Rossum in 1991.",
         )
         assert result is False
 
@@ -74,7 +73,7 @@ class TestCheckClaimAgainstContext:
     def test_partial_match(self):
         result = check_claim_against_context(
             "Docker uses OS-level virtualization for containers",
-            "Docker is a containerization platform that uses OS-level virtualization to deliver software in packages called containers."
+            "Docker is a containerization platform that uses OS-level virtualization to deliver software in packages called containers.",
         )
         assert result is True
 
@@ -85,7 +84,7 @@ class TestDetectHallucinations:
     def test_no_hallucinations_when_all_supported(self):
         report = detect_hallucinations(
             answer="Python was created by Guido van Rossum. It is used for web development.",
-            context="Python is a programming language created by Guido van Rossum in 1991. It is widely used for web development, data science, and automation."
+            context="Python is a programming language created by Guido van Rossum in 1991. It is widely used for web development, data science, and automation.",
         )
         assert isinstance(report, HallucinationReport)
         assert report.hallucination_rate <= 0.6
@@ -94,7 +93,7 @@ class TestDetectHallucinations:
     def test_detect_hallucinations_when_unsupported(self):
         report = detect_hallucinations(
             answer="Python was invented by Dennis Ritchie in 1970. It runs on the JVM natively.",
-            context="Python is a programming language created by Guido van Rossum in 1991. It uses CPython as its primary implementation."
+            context="Python is a programming language created by Guido van Rossum in 1991. It uses CPython as its primary implementation.",
         )
         assert isinstance(report, HallucinationReport)
         assert report.hallucination_rate > 0.0
@@ -105,16 +104,13 @@ class TestDetectHallucinations:
         assert report.total_claims == 0
 
     def test_empty_context_all_hallucinated(self):
-        report = detect_hallucinations(
-            "Python is a language. It was created in 1991.",
-            ""
-        )
+        report = detect_hallucinations("Python is a language. It was created in 1991.", "")
         assert report.hallucination_rate == 1.0
 
     def test_report_fields_populated(self):
         report = detect_hallucinations(
             answer="Docker is a container platform. It was created by Solomon Hykes.",
-            context="Docker is a containerization platform. Solomon Hykes founded Docker Inc."
+            context="Docker is a containerization platform. Solomon Hykes founded Docker Inc.",
         )
         assert isinstance(report.hallucination_rate, float)
         assert isinstance(report.hallucinated_claims, list)
@@ -124,7 +120,7 @@ class TestDetectHallucinations:
     def test_supported_claims_in_evidence_links(self):
         report = detect_hallucinations(
             answer="Python is a programming language.",
-            context="Python is a high-level programming language created by Guido van Rossum."
+            context="Python is a high-level programming language created by Guido van Rossum.",
         )
         assert len(report.evidence_links) > 0
 

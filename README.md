@@ -1,8 +1,8 @@
 # RAG System — Корпоративный ассистент знаний · Corporate Knowledge Assistant
 
-**EN:** OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab, documents, books, and chat history — indexed into Qdrant + Neo4j, served via any LLM. Self-correcting RAG (Level 5): HyDE, CRAG, hallucination detection, NLI verification, agentic tools, federated search, model fine-tuning.
+**EN:** OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab, documents, books, and chat history — indexed into Qdrant + Neo4j, served via any LLM. Features HyDE, CRAG, hallucination detection, NLI verification, agentic tools, federated search, and model fine-tuning.
 
-**RU:** OpenAI-совместимый RAG-прокси с ETL-конвейером для Confluence, Jira, GitLab, документов, книг и истории чатов. Самокорректирующийся RAG (Уровень 5): HyDE, CRAG, детекция галлюцинаций, NLI-верификация, агентные инструменты, федеративный поиск, дообучение моделей.
+**RU:** OpenAI-совместимый RAG-прокси с ETL-конвейером для Confluence, Jira, GitLab, документов, книг и истории чатов. HyDE, CRAG, детекция галлюцинаций, NLI-верификация, агентные инструменты, федеративный поиск, дообучение моделей.
 
 ---
 
@@ -25,20 +25,6 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```
 
 **Prerequisites:** Docker, Python 3.11+, 16 GB RAM, 20 GB disk. See [Deployment Guide](docs/en/guides/deployment-guide.md) for production setup.
-
----
-
-## Status · Статус
-
-| Metric | Value |
-|--------|-------|
-| **Version** | v2.0.0 (June 2026) |
-| **RAG Maturity** | Level 5 — Self-Correcting |
-| **Production Readiness** | 94% (75/80 across 8 dimensions) |
-| **Tests** | ~2275 passing (99%+) |
-| **Endpoints** | 25 REST + Prometheus metrics |
-| **Languages** | RU, EN, DE, FR, ZH |
-| **License** | MIT |
 
 ---
 
@@ -115,14 +101,14 @@ Client (OpenAI SDK / curl / OpenWebUI / n8n)
 - **Parallel execution** — Dependency-aware tool orchestration
 - **RBAC visibility** — Per-tool access control (public/user/internal/admin)
 
-### Federated RAG (New in v2.0)
+### Federated RAG
 - **Multi-silo fan-out** — Query multiple independent RAG instances simultaneously
 - **Weighted RRF merge** — Cross-silo result fusion with configurable weights
 - **Auto-routing** — SLM-based query classification to target silos
 - **Circuit breakers** — Per-silo resilience with automatic recovery
 - **Generation delegation** — Route to primary silo or direct LLM
 
-### Model Evolution (New in v2.0)
+### Model Evolution
 - **LoRA/QLoRA fine-tuning** — SLM, LLM, and Reranker training pipelines
 - **MLflow + MinIO** — Experiment tracking and artifact storage
 - **Hot-reload adapters** — Zero-downtime model swapping
@@ -276,7 +262,7 @@ MODEL_CACHE_DIR=/data/models docker compose up -d
 | [SLI/SLO Definitions](docs/en/sli_slo.md) | Service level indicators and error budgets |
 | [RAG Maturity Assessment](docs/en/guides/rag-maturity-assessment.md) | Capability scoring across 5 levels |
 | [Production Checklist](docs/en/guides/best-practices-checklist.md) | 8-dimension readiness tracker |
-| [Roadmap](docs/en/guides/roadmap.md) | Version history and future milestones |
+| [Roadmap](docs/en/guides/roadmap.md) | Development roadmap and phased approach |
 | [Troubleshooting](docs/en/guides/troubleshooting.md) | Common issues and resolutions |
 
 ---
@@ -286,7 +272,7 @@ MODEL_CACHE_DIR=/data/models docker compose up -d
 ```bash
 make install        # Full setup
 make install-dev    # With dev deps (lint, test, typecheck)
-make test           # All tests (~2275)
+make test           # All tests
 make test-proxy     # Proxy only
 make test-etl       # ETL only
 make lint           # ruff
@@ -316,13 +302,13 @@ rag-system/
 ├── mcp_server/            # MCP server (STDIO + HTTP)
 ├── hitl_dashboard/        # Streamlit expert dashboard
 ├── k8s/helm/rag-system/   # K8s Helm chart
-├── tests/                 # 2275+ tests
-│   ├── proxy/             # 1417 unit tests
-│   ├── etl/               # 361 unit tests
-│   ├── model_evolution/   # 358 tests
-│   ├── integration/       # 59 tests
-│   ├── e2e/               # 18 tests
-│   └── mcp_server/        # 46 tests
+├── tests/                 # Test suite
+│   ├── proxy/             # Proxy unit tests
+│   ├── etl/               # ETL unit tests
+│   ├── model_evolution/   # Model evolution tests
+│   ├── integration/       # Integration tests
+│   ├── e2e/               # End-to-end tests
+│   └── mcp_server/        # MCP server tests
 ├── docs/                  # Documentation (EN + RU)
 ├── scripts/               # Utility scripts
 ├── Makefile               # Primary dev entry point

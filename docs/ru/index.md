@@ -290,9 +290,11 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 | Мне нужно... | Перейти... |
 |-------------|---------|
+| Понять архитектуру | [Архитектура](architecture.md) |
 | Развернуть прокси | [Развёртывание прокси](deploy_proxy.md) |
 | Развернуть ETL-пайплайн | [Развёртывание ETL](deploy_etl.md) |
 | Настроить автономное окружение | [Руководство по развёртыванию](guides/deployment-guide.md) |
+| Настроить среду разработки | [Руководство разработчика](guides/development-guide.md) |
 | Вызвать API | [API Справка](api_reference.md) |
 | Интегрировать с OpenCode IDE | [Интеграция с OpenCode](guides/integration-opencode.md) |
 

@@ -8,9 +8,7 @@ flowing through reranking, and the orchestrator flow.
 
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))
 
@@ -85,8 +83,10 @@ class _MockStateGraph:
 
     def compile(self, checkpointer=None):
         return _MockCompiledGraph(
-            self._nodes, self._edges,
-            self._conditional_edges, self._entry,
+            self._nodes,
+            self._edges,
+            self._conditional_edges,
+            self._entry,
         )
 
 
@@ -109,13 +109,32 @@ sys.modules["langgraph"] = _langgraph
 sys.modules["langgraph.graph"] = _langgraph_graph
 sys.modules["langgraph.checkpoint"] = _langgraph_checkpoint
 
+# ---------------------------------------------------------------------------
+# Evict cached orchestrator so it re-imports with our _MockStateGraph.
+# ---------------------------------------------------------------------------
+
+# NOTE: We do NOT evict the orchestrator module at module-level because that
+# would break other test files (e.g. test_orchestrator_dynamic_topk.py) that
+# rely on the MagicMock-based StateGraph injected by proxy tests.
+# Instead, each TestOrchestratorFlow test method patches StateGraph directly.
+
+
+def _reset_orchestrator_singleton():
+    """Reset the orchestrator module-level singleton so each test starts fresh."""
+    try:
+        import proxy.app.core.orchestrator as _orch_mod
+
+        _orch_mod._orchestrator = None
+    except (ImportError, AttributeError):
+        pass
+
 
 class TestVersionExtractionInQueryProcessing:
     """Tests for extract_version_from_query integrated into the query pipeline."""
 
     def test_version_extracted_before_search(self):
         """Version from query is extracted and passed to hybrid_search."""
-        from proxy.app.context_builder import extract_version_from_query
+        from proxy.app.core.context import extract_version_from_query
 
         queries_and_versions = [
             ("Покажи документацию v2.0 по архитектуре", "2.0"),
@@ -130,7 +149,7 @@ class TestVersionExtractionInQueryProcessing:
 
     def test_rag_version_overrides_query_version(self):
         """Explicit rag_version parameter takes precedence over query-extracted version."""
-        from proxy.app.context_builder import extract_version_from_query
+        from proxy.app.core.context import extract_version_from_query
 
         query = "Расскажи про RAG v1.0"
         extracted = extract_version_from_query(query)
@@ -147,9 +166,12 @@ class TestHybridSearchResultsThroughReranking:
 
     def test_rerank_filters_top_k(self):
         """Rerank returns only top_k most relevant indices."""
-        from proxy.app.rerank import rerank_chunks
+        from proxy.app.core.rerank import rerank_chunks
 
-        with patch("proxy.app.rerank.reranker") as mock_reranker:
+        with (
+            patch("proxy.app.core.rerank.reranker") as mock_reranker,
+            patch("proxy.app.core.rerank.cache_manager", None),
+        ):
             # Mock cross-encoder: higher score = more relevant
             mock_reranker.predict.return_value = [0.1, 0.9, 0.5, 0.2, 0.8, 0.3]
 
@@ -170,15 +192,15 @@ class TestHybridSearchResultsThroughReranking:
 
     def test_rerank_handles_empty_chunks(self):
         """Rerank returns empty list when given no chunks."""
-        from proxy.app.rerank import rerank_chunks
+        from proxy.app.core.rerank import rerank_chunks
 
-        with patch("proxy.app.rerank.reranker"):
+        with patch("proxy.app.core.rerank.reranker"), patch("proxy.app.core.rerank.cache_manager", None):
             result = rerank_chunks("query", [], top_k=5)
             assert result == []
 
     def test_rerank_truncates_long_text(self):
         """Rerank truncates chunk text to model's max length before scoring."""
-        from proxy.app.rerank import _truncate_text
+        from proxy.app.core.rerank import _truncate_text
 
         short = "Short text"
         assert len(_truncate_text(short)) == len(short)
@@ -189,7 +211,7 @@ class TestHybridSearchResultsThroughReranking:
 
     def test_hybrid_search_fusion_combines_scores(self):
         """RRF fusion properly combines dense and sparse search results."""
-        from proxy.app.retrieval import reciprocal_rank_fusion
+        from proxy.app.core.retrieval import reciprocal_rank_fusion
 
         class FakeHit:
             def __init__(self, id, score):
@@ -215,28 +237,28 @@ class TestSLMRoutingDecisions:
 
     def test_intent_classification_returns_correct_types(self):
         """SLM classify_intent returns valid IntentType and confidence."""
-        from proxy.app.slm_router import classify_intent, IntentType
+        from proxy.app.llm.slm import IntentType, classify_intent
 
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="factual"):
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value="factual"):
             intent, confidence = classify_intent("Что такое RAG?")
             assert intent == IntentType.FACTUAL
             assert 0 <= confidence <= 1
 
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="procedural"):
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value="procedural"):
             intent, confidence = classify_intent("Как настроить CI/CD?")
             assert intent == IntentType.PROCEDURAL
 
     def test_intent_classification_unknown_fallback(self):
         """Unknown SLM response falls back to UNKNOWN intent."""
-        from proxy.app.slm_router import classify_intent, IntentType
+        from proxy.app.llm.slm import IntentType, classify_intent
 
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="garbage"):
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value="garbage"):
             intent, confidence = classify_intent("Some query")
             assert intent == IntentType.UNKNOWN
 
     def test_needs_retrieval_false_for_greetings(self):
         """Greeting intents do not require retrieval."""
-        from proxy.app.slm_router import needs_retrieval, IntentType
+        from proxy.app.llm.slm import IntentType, needs_retrieval
 
         assert needs_retrieval(IntentType.GREETING) is False
         assert needs_retrieval(IntentType.FACTUAL) is True
@@ -244,26 +266,25 @@ class TestSLMRoutingDecisions:
 
     def test_slm_rewrite_preserves_key_terms(self):
         """SLM query rewrite preserves key technical terms."""
-        from proxy.app.slm_router import rewrite_query_slm
+        from proxy.app.llm.slm import rewrite_query_slm
 
-        with patch("proxy.app.slm_router._call_slm_sync",
-                   return_value="CI/CD pipeline GitLab configuration setup"):
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value="CI/CD pipeline GitLab configuration setup"):
             rewritten = rewrite_query_slm("Как настроить CI/CD пайплайн в GitLab?")
             assert "CI/CD" in rewritten
             assert "GitLab" in rewritten
 
     def test_slm_rewrite_falls_back_to_original(self):
         """When SLM fails, rewrite returns the original query."""
-        from proxy.app.slm_router import rewrite_query_slm
+        from proxy.app.llm.slm import rewrite_query_slm
 
-        with patch("proxy.app.slm_router._call_slm_sync", return_value=""):
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value=""):
             original = "Как настроить CI/CD?"
             result = rewrite_query_slm(original)
             assert result == original
 
     def test_should_use_graph_for_comparison(self):
         """Graph usage is recommended for comparison intents and relation queries."""
-        from proxy.app.slm_router import should_use_graph, IntentType
+        from proxy.app.llm.slm import IntentType, should_use_graph
 
         assert should_use_graph(IntentType.COMPARISON, "Сравни GitLab и GitHub") is True
         assert should_use_graph(IntentType.FACTUAL, "Что такое RAG?") is False
@@ -271,18 +292,20 @@ class TestSLMRoutingDecisions:
 
     def test_query_decomposition_splits_complex_queries(self):
         """Decompose splits complex queries into subqueries."""
-        from proxy.app.slm_router import decompose_query
+        from proxy.app.llm.slm import decompose_query
 
-        with patch("proxy.app.slm_router._call_slm_sync",
-                   return_value='["Настройка CI/CD в GitLab","Отличия GitHub Actions от GitLab CI"]'):
+        with patch(
+            "proxy.app.llm.slm._call_slm_sync",
+            return_value='["Настройка CI/CD в GitLab","Отличия GitHub Actions от GitLab CI"]',
+        ):
             subs = decompose_query("Как настроить CI/CD в GitLab и чем он отличается от GitHub Actions?")
             assert len(subs) >= 1
 
     def test_decompose_falls_back_to_original(self):
         """Decompose returns original query in list when SLM fails."""
-        from proxy.app.slm_router import decompose_query
+        from proxy.app.llm.slm import decompose_query
 
-        with patch("proxy.app.slm_router._call_slm_sync", return_value="not valid json {"):
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value="not valid json {"):
             original = "Complex query that cannot be decomposed"
             subs = decompose_query(original)
             assert subs == [original]
@@ -291,13 +314,21 @@ class TestSLMRoutingDecisions:
 class TestOrchestratorFlow:
     """Tests for LangGraph orchestrator flow (mocked appropriately)."""
 
+    def setup_method(self, _method=None):
+        """Reset orchestrator singleton before each test to avoid stale state."""
+        _reset_orchestrator_singleton()
+
     def test_orchestrator_state_flows_through_nodes(self):
         """Orchestrator invokes the graph and produces final answer in state."""
-        with patch("proxy.app.config.USE_LANGGRAPH", True), \
-             patch("proxy.app.orchestrator.hybrid_search") as mock_search, \
-             patch("proxy.app.orchestrator.rerank_chunks", return_value=[0, 1]), \
-             patch("proxy.app.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm:
-
+        with (
+            patch("proxy.app.shared.config.USE_LANGGRAPH", True),
+            patch("proxy.app.core.orchestrator.StateGraph", _MockStateGraph),
+            patch("proxy.app.core.orchestrator.END", _END_SENTINEL),
+            patch("proxy.app.core.orchestrator.MemorySaver", _MockMemorySaver),
+            patch("proxy.app.core.orchestrator.hybrid_search") as mock_search,
+            patch("proxy.app.core.orchestrator.rerank_chunks", return_value=[0, 1]),
+            patch("proxy.app.core.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm,
+        ):
             mock_llm.return_value = "RAG — это техника объединения LLM с базой знаний."
 
             class FakeScoredPoint:
@@ -311,36 +342,42 @@ class TestOrchestratorFlow:
                 FakeScoredPoint("h2", 0.90, {"text": "LLM generates answers from context.", "version": "1.0"}),
             ]
 
-            from proxy.app.orchestrator import RAGOrchestrator
+            from proxy.app.core.orchestrator import RAGOrchestrator
 
             orchestrator = RAGOrchestrator()
-            result = orchestrator.invoke({
-                "query": "Что такое RAG?",
-                "version": None,
-                "temperature": 0.2,
-                "max_tokens": 4096,
-                "stream": False,
-                "rewritten_query": None,
-                "rewrite_count": 0,
-                "retrieved_chunks": [],
-                "reranked_chunks": [],
-                "graph_context": "",
-                "context": "",
-                "answer": "",
-                "sufficient": False,
-            })
+            result = orchestrator.invoke(
+                {
+                    "query": "Что такое RAG?",
+                    "version": None,
+                    "temperature": 0.2,
+                    "max_tokens": 4096,
+                    "stream": False,
+                    "rewritten_query": None,
+                    "rewrite_count": 0,
+                    "retrieved_chunks": [],
+                    "reranked_chunks": [],
+                    "graph_context": "",
+                    "context": "",
+                    "answer": "",
+                    "sufficient": False,
+                }
+            )
             assert "answer" in result
             assert "RAG" in result["answer"]
             assert len(result["context"]) > 0
 
     def test_orchestrator_rewrite_loop_limit(self):
         """Orchestrator respects max rewrite loops and produces answer."""
-        with patch("proxy.app.config.USE_LANGGRAPH", True), \
-             patch("proxy.app.config.MAX_RETRIEVAL_LOOPS", 1), \
-             patch("proxy.app.orchestrator.hybrid_search") as mock_search, \
-             patch("proxy.app.orchestrator.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm:
-
+        with (
+            patch("proxy.app.shared.config.USE_LANGGRAPH", True),
+            patch("proxy.app.shared.config.MAX_RETRIEVAL_LOOPS", 1),
+            patch("proxy.app.core.orchestrator.StateGraph", _MockStateGraph),
+            patch("proxy.app.core.orchestrator.END", _END_SENTINEL),
+            patch("proxy.app.core.orchestrator.MemorySaver", _MockMemorySaver),
+            patch("proxy.app.core.orchestrator.hybrid_search") as mock_search,
+            patch("proxy.app.core.orchestrator.rerank_chunks", return_value=[0]),
+            patch("proxy.app.core.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm,
+        ):
             mock_llm.return_value = "Ответ после ограничения циклов."
 
             class FakeScoredPoint:
@@ -353,29 +390,31 @@ class TestOrchestratorFlow:
                 FakeScoredPoint("h1", 0.55, {"text": "Some marginally relevant text.", "version": "1.0"}),
             ]
 
-            from proxy.app.orchestrator import RAGOrchestrator
+            from proxy.app.core.orchestrator import RAGOrchestrator
 
             orchestrator = RAGOrchestrator()
-            result = orchestrator.invoke({
-                "query": "Сложный запрос с низкой релевантностью",
-                "version": None,
-                "temperature": 0.2,
-                "max_tokens": 4096,
-                "stream": False,
-                "rewritten_query": None,
-                "rewrite_count": 2,
-                "retrieved_chunks": [],
-                "reranked_chunks": [],
-                "graph_context": "",
-                "context": "",
-                "answer": "",
-                "sufficient": False,
-            })
+            result = orchestrator.invoke(
+                {
+                    "query": "Сложный запрос с низкой релевантностью",
+                    "version": None,
+                    "temperature": 0.2,
+                    "max_tokens": 4096,
+                    "stream": False,
+                    "rewritten_query": None,
+                    "rewrite_count": 2,
+                    "retrieved_chunks": [],
+                    "reranked_chunks": [],
+                    "graph_context": "",
+                    "context": "",
+                    "answer": "",
+                    "sufficient": False,
+                }
+            )
             assert "answer" in result
 
     def test_orchestrator_graph_has_expected_nodes(self):
         """Graph builder creates all expected nodes (rewrite, retrieve, rerank, etc.)."""
-        from proxy.app.orchestrator import build_rag_graph
+        from proxy.app.core.orchestrator import build_rag_graph
 
         builder = build_rag_graph()
         # Graph builder should be a StateGraph with nodes configured

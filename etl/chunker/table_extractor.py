@@ -2,11 +2,11 @@
 """Extract and parse HTML tables from Confluence/Jira documents."""
 
 import logging
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 try:
-    from bs4 import BeautifulSoup as _BS4  # noqa: F401
+    from bs4 import BeautifulSoup as _BS4  # noqa: F401, N814
+
     BS4_AVAILABLE = True
 except ImportError:
     _BS4 = None  # type: ignore

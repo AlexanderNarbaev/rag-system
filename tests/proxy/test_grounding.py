@@ -1,4 +1,5 @@
 """Tests for proxy/app/grounding.py — context grounding score."""
+
 from unittest.mock import patch
 
 import pytest
@@ -8,25 +9,25 @@ class TestComputeGrounding:
     """Tests for compute_grounding function."""
 
     def test_empty_answer_returns_zero(self):
-        from proxy.app.grounding import compute_grounding
+        from proxy.app.core.grounding import compute_grounding
 
         score = compute_grounding("", "some context")
         assert score == 0.0
 
     def test_empty_context_returns_zero(self):
-        from proxy.app.grounding import compute_grounding
+        from proxy.app.core.grounding import compute_grounding
 
         score = compute_grounding("some answer", "")
         assert score == 0.0
 
     def test_both_empty_returns_zero(self):
-        from proxy.app.grounding import compute_grounding
+        from proxy.app.core.grounding import compute_grounding
 
         score = compute_grounding("", "")
         assert score == 0.0
 
     def test_no_embedder_returns_zero(self):
-        from proxy.app import grounding
+        from proxy.app.core import grounding
 
         grounding._embedder = None
         with patch.object(grounding, "_get_embedder", return_value=None):
@@ -34,7 +35,7 @@ class TestComputeGrounding:
             assert score == 0.0
 
     def test_similar_texts_high_score(self):
-        from proxy.app.grounding import _get_embedder, compute_grounding
+        from proxy.app.core.grounding import _get_embedder, compute_grounding
 
         embedder = _get_embedder()
         if embedder is None:
@@ -46,7 +47,7 @@ class TestComputeGrounding:
         assert 0.5 <= score <= 1.0
 
     def test_different_texts_lower_score(self):
-        from proxy.app.grounding import _get_embedder, compute_grounding
+        from proxy.app.core.grounding import _get_embedder, compute_grounding
 
         embedder = _get_embedder()
         if embedder is None:
@@ -62,7 +63,7 @@ class TestComputeGrounding:
         assert score_diff < score_similar
 
     def test_returns_float(self):
-        from proxy.app.grounding import _get_embedder, compute_grounding
+        from proxy.app.core.grounding import _get_embedder, compute_grounding
 
         embedder = _get_embedder()
         if embedder is None:
@@ -71,7 +72,7 @@ class TestComputeGrounding:
         assert isinstance(score, float)
 
     def test_score_in_valid_range(self):
-        from proxy.app.grounding import _get_embedder, compute_grounding
+        from proxy.app.core.grounding import _get_embedder, compute_grounding
 
         embedder = _get_embedder()
         if embedder is None:
@@ -80,7 +81,7 @@ class TestComputeGrounding:
         assert 0.0 <= score <= 1.0
 
     def test_embedding_error_handled_gracefully(self):
-        from proxy.app import grounding
+        from proxy.app.core import grounding
 
         grounding._embedder = None
 
@@ -97,19 +98,19 @@ class TestGetEmbedder:
     """Tests for _get_embedder helper."""
 
     def test_returns_none_when_st_unavailable(self):
-        from proxy.app import grounding
+        from proxy.app.core import grounding
 
         grounding._embedder = None
-        with patch("app.remote_services.create_embedder", side_effect=ImportError("no st")):
+        with patch("proxy.app.llm.remote_services.create_embedder", side_effect=ImportError("no st")):
             embedder = grounding._get_embedder()
             assert embedder is None
 
     def test_caches_embedder(self):
-        from proxy.app import grounding
+        from proxy.app.core import grounding
 
         grounding._embedder = None
         mock_embedder = object()
-        with patch("app.remote_services.create_embedder", return_value=mock_embedder):
+        with patch("proxy.app.llm.remote_services.create_embedder", return_value=mock_embedder):
             e1 = grounding._get_embedder()
             e2 = grounding._get_embedder()
             assert e1 is e2

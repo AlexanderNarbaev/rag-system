@@ -30,4 +30,4 @@ Ten architecture decisions documented using the ADR format. Each record captures
 | 009 (Tools) | Implemented | 2026-07 |
 | 010 (Model Evolution) | Implemented | 2026-07 |
 
-All seven accepted ADRs (001-007) have been implemented in v2.0.0. ADR-008 (Java/Quarkus) is proposed and deferred. ADR-009 (Agentic Tools) and ADR-010 (Model Evolution) have been implemented in the Beyond v2.0 milestone.
+All ADRs 001-007 have been implemented. ADR-008 (Java/Quarkus) is proposed and deferred. ADR-009 (Agentic Tools) and ADR-010 (Model Evolution) have been implemented.

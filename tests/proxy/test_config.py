@@ -1,13 +1,11 @@
 """Tests for proxy/app/config.py configuration module."""
-import os
-import sys
+
 import importlib
-from unittest.mock import patch, MagicMock
 
 import pytest
 
 # Import config once (it's already loaded by other test modules)
-import proxy.app.config as config_module
+import proxy.app.shared.config as config_module
 
 
 class TestConfigDefaults:

@@ -1,34 +1,32 @@
 """Tests for proxy/app/auth.py — JWT token creation, validation, and auth dependencies."""
 
-import os
 import time
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
 from fastapi import HTTPException
 
 from proxy.app.auth import (
-    JWT_SECRET,
-    JWT_ALGORITHM,
-    TOKEN_EXPIRE_HOURS,
-    AUTH_ENABLED,
     UserContext,
     create_token,
-    verify_token,
-    get_user_from_token,
     get_auth_context,
     get_optional_auth_context,
+    verify_token,
 )
+from proxy.app.auth.jwt import get_user_from_token
 
 
 # Override JWT_SECRET for reproducible tests
 @pytest.fixture(autouse=True)
 def _set_jwt_secret(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.JWT_ALGORITHM", "HS256")
-    monkeypatch.setattr("proxy.app.auth.AUTH_ENABLED", False)
+    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
+    monkeypatch.setattr("proxy.app.shared.config.AUTH_ENABLED", False)
+    monkeypatch.setattr("proxy.app.auth.jwt.AUTH_ENABLED", False)
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +137,8 @@ class TestCreateToken:
         assert decoded["sub"] == "u1"
 
     def test_raises_without_secret(self, monkeypatch):
-        monkeypatch.setattr("proxy.app.auth.JWT_SECRET", "")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "")
         with pytest.raises(ValueError, match="JWT_SECRET is not configured"):
             create_token(user_id="u1", username="alice")
 
@@ -193,7 +192,8 @@ class TestVerifyToken:
 
     def test_wrong_secret_raises_401(self, monkeypatch):
         token = create_token(user_id="u1", username="alice")
-        monkeypatch.setattr("proxy.app.auth.JWT_SECRET", "different-key")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "different-key")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "different-key")
         with pytest.raises(HTTPException) as exc_info:
             verify_token(token)
         assert exc_info.value.status_code == 401
@@ -252,7 +252,7 @@ class TestGetUserFromToken:
 class TestGetAuthContext:
     @pytest.mark.asyncio
     async def test_returns_anonymous_when_auth_disabled(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", False):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", False):
             mock_request = MagicMock()
             ctx = await get_auth_context(mock_request, credentials=None)
             assert ctx.user_id == "anonymous"
@@ -260,7 +260,7 @@ class TestGetAuthContext:
 
     @pytest.mark.asyncio
     async def test_raises_401_when_auth_enabled_and_no_token(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             mock_request = MagicMock()
             mock_request.headers = {}
             with pytest.raises(HTTPException) as exc_info:
@@ -269,7 +269,7 @@ class TestGetAuthContext:
 
     @pytest.mark.asyncio
     async def test_uses_bearer_token(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             mock_request = MagicMock()
             mock_request.headers = {}
             token = create_token(user_id="u1", username="alice")
@@ -280,7 +280,7 @@ class TestGetAuthContext:
 
     @pytest.mark.asyncio
     async def test_uses_x_auth_token_header(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             mock_request = MagicMock()
             token = create_token(user_id="u1", username="alice")
             mock_request.headers = {"x-auth-token": token}
@@ -303,7 +303,7 @@ class TestGetOptionalAuthContext:
 
     @pytest.mark.asyncio
     async def test_returns_context_when_token_present(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             mock_request = MagicMock()
             mock_request.headers = {}
             token = create_token(user_id="u1", username="alice")

@@ -1,15 +1,15 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/audit.py audit logging module."""
+
+import datetime
 import json
 import os
 import tempfile
 import time
-import datetime
-from datetime import timezone
-from unittest.mock import patch, MagicMock
 
 import pytest
 
-from proxy.app.audit import AuditEvent, AuditLogger, RequestTracker
+from proxy.app.shared.audit import AuditEvent, AuditLogger, RequestTracker
 
 
 class TestAuditEvent:
@@ -100,7 +100,7 @@ class TestAuditLogger:
             client_ip="10.0.0.1",
         )
         assert os.path.exists(audit_logger._audit_file)
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -114,7 +114,7 @@ class TestAuditLogger:
             reason="insufficient_permissions",
             client_ip="10.0.0.2",
         )
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -129,7 +129,7 @@ class TestAuditLogger:
             new_value="100",
             client_ip="10.0.0.1",
         )
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -146,7 +146,7 @@ class TestAuditLogger:
             client_ip="10.0.0.3",
             endpoint="/v1/chat/completions",
         )
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -161,7 +161,7 @@ class TestAuditLogger:
             details={"method": "api_key"},
             client_ip="10.0.0.4",
         )
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -176,7 +176,7 @@ class TestAuditLogger:
             details={"reason": "invalid_credentials"},
             client_ip="10.0.0.5",
         )
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 1
         event = json.loads(lines[0])
@@ -192,7 +192,7 @@ class TestAuditLogger:
                 duration_ms=i * 10.0,
                 tokens=i * 5,
             )
-        with open(audit_logger._audit_file, "r") as f:
+        with open(audit_logger._audit_file) as f:
             lines = f.readlines()
         assert len(lines) == 5
 
@@ -206,17 +206,21 @@ class TestAuditLogger:
 
     def test_query_history_limit(self, audit_logger):
         for i in range(10):
-            audit_logger.log_query(user_id="u1", query=f"q{i}", response_preview="r", chunks=1, duration_ms=10, tokens=1)
+            audit_logger.log_query(
+                user_id="u1", query=f"q{i}", response_preview="r", chunks=1, duration_ms=10, tokens=1
+            )
         results = audit_logger.query_history(limit=3)
         assert len(results) == 3
 
     def test_query_history_start_time_filter(self, audit_logger):
-        t1 = datetime.datetime.now(timezone.utc).isoformat()
+        datetime.datetime.now(datetime.UTC).isoformat()
         time.sleep(0.01)
         audit_logger.log_query(user_id="u1", query="after", response_preview="r", chunks=1, duration_ms=10, tokens=1)
         time.sleep(0.01)
-        t2 = datetime.datetime.now(timezone.utc).isoformat()
-        audit_logger.log_query(user_id="u1", query="even_later", response_preview="r", chunks=1, duration_ms=10, tokens=1)
+        t2 = datetime.datetime.now(datetime.UTC).isoformat()
+        audit_logger.log_query(
+            user_id="u1", query="even_later", response_preview="r", chunks=1, duration_ms=10, tokens=1
+        )
         results = audit_logger.query_history(user_id="u1", limit=10, start_time=t2)
         assert len(results) == 1
 

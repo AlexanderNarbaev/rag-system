@@ -1,15 +1,12 @@
 # tests/etl/test_semantic_chunker.py
 import json
-import hashlib
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 from etl.chunker.semantic_chunker import (
     Chunk,
-    SemanticChunker,
-    MetadataEnricher,
     MDKeyChunker,
+    MetadataEnricher,
+    SemanticChunker,
     save_chunks_to_json,
 )
 

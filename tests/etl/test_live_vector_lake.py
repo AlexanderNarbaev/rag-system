@@ -1,13 +1,11 @@
 # tests/etl/test_live_vector_lake.py
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
+from etl.chunker.hash_versioning import ChunkVersionStore
 from etl.indexer.live_vector_lake import (
     LiveVectorLake,
     incremental_index_pipeline,
 )
-from etl.chunker.hash_versioning import ChunkVersionStore
 
 
 class TestLiveVectorLakeInit:
@@ -18,7 +16,7 @@ class TestLiveVectorLakeInit:
             cold_dir=tmp_path / "cold",
             wal_path=tmp_path / "wal" / "wal.json",
         )
-        lake = LiveVectorLake(
+        LiveVectorLake(
             qdrant_indexer=mock_qdrant,
             version_store=version_store,
             cold_storage_dir=tmp_path / "cold_storage",

@@ -1,4 +1,5 @@
 """Tests for proxy/app/tools/audit.py — ToolAuditLogger and ToolAuditRecord."""
+
 import io
 import json
 import os

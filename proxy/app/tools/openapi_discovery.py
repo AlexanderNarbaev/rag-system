@@ -13,18 +13,17 @@ from __future__ import annotations
 import json
 import logging
 import re
-from copy import deepcopy
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode
 
-from .definition import ToolDefinition, ToolParam, ToolVisibility, _UNSET
+from .definition import _UNSET, ToolDefinition, ToolParam, ToolVisibility
 
 logger = logging.getLogger(__name__)
 
 
-class DiscoveryMode(str, Enum):
+class DiscoveryMode(StrEnum):
     AUTO = "auto"
     LLM_DRIVEN = "llm_driven"
 
@@ -112,7 +111,7 @@ def _extract_parameters(
 
         # Resolve $ref if needed
         if "$ref" in param_schema:
-            try:
+            try:  # noqa: SIM105
                 param_schema = _resolve_ref(spec, param_schema["$ref"])
             except ValueError:
                 pass
@@ -121,14 +120,16 @@ def _extract_parameters(
         enum_values = param_schema.get("enum")
         default_val = param_schema.get("default", _UNSET)
 
-        params.append(ToolParam(
-            name=name,
-            type=param_type,
-            description=description or f"{location} parameter: {name}",
-            required=required and location == "path",
-            default=default_val if default_val is not _UNSET else _UNSET,
-            enum=enum_values,
-        ))
+        params.append(
+            ToolParam(
+                name=name,
+                type=param_type,
+                description=description or f"{location} parameter: {name}",
+                required=required and location == "path",
+                default=default_val if default_val is not _UNSET else _UNSET,
+                enum=enum_values,
+            )
+        )
 
     # Request body (JSON only for now)
     request_body = operation.get("requestBody")
@@ -145,7 +146,7 @@ def _extract_parameters(
             body_schema = json_content.get("schema", {})
 
             if "$ref" in body_schema:
-                try:
+                try:  # noqa: SIM105
                     body_schema = _resolve_ref(spec, body_schema["$ref"])
                 except ValueError:
                     pass
@@ -153,19 +154,21 @@ def _extract_parameters(
             if body_schema.get("type") == "object" and "properties" in body_schema:
                 for prop_name, prop_schema in body_schema["properties"].items():
                     if "$ref" in prop_schema:
-                        try:
+                        try:  # noqa: SIM105
                             prop_schema = _resolve_ref(spec, prop_schema["$ref"])
                         except ValueError:
                             pass
                     required_list = body_schema.get("required", [])
                     prop_type = _type_from_schema(prop_schema)
-                    params.append(ToolParam(
-                        name=prop_name,
-                        type=prop_type,
-                        description=prop_schema.get("description", ""),
-                        required=prop_name in required_list,
-                        enum=prop_schema.get("enum"),
-                    ))
+                    params.append(
+                        ToolParam(
+                            name=prop_name,
+                            type=prop_type,
+                            description=prop_schema.get("description", ""),
+                            required=prop_name in required_list,
+                            enum=prop_schema.get("enum"),
+                        )
+                    )
 
     return params
 
@@ -183,7 +186,7 @@ def _make_openapi_handler(
     """
     import aiohttp
 
-    path_param_names = {p.name for p in tool_params}
+    _path_param_names = {p.name for p in tool_params}
     # Identify path params from the template
     template_params = set(re.findall(r"\{(\w+)}", path_template))
 
@@ -255,7 +258,7 @@ class OpenAPIToolGenerator:
         category = "search" if method_lower == "get" else "action"
 
         operation_id = operation.get("operationId", "")
-        if operation_id:
+        if operation_id:  # noqa: SIM108
             tool_name = operation_id
         else:
             tool_name = f"{method_lower}_{_slugify_path(path)}"
@@ -356,28 +359,29 @@ class OpenAPIDiscovery:
         timeout: float = 30.0,
     ) -> list[ToolDefinition]:
         """Fetch an OpenAPI spec from a URL and parse it into tools."""
-        import aiohttp
         import asyncio
+
+        import aiohttp
 
         async def _fetch() -> dict[str, Any]:
             timeout_obj = aiohttp.ClientTimeout(total=timeout)
-            async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-                async with session.get(url) as resp:
-                    text = await resp.text()
-                    content_type = resp.content_type or ""
-                    if "yaml" in content_type or url.endswith((".yaml", ".yml")):
-                        return _parse_yaml(text)
-                    return _parse_json(text)
+            async with aiohttp.ClientSession(timeout=timeout_obj) as session, session.get(url) as resp:
+                text = await resp.text()
+                content_type = resp.content_type or ""
+                if "yaml" in content_type or url.endswith((".yaml", ".yml")):
+                    return _parse_yaml(text)
+                return _parse_json(text)
 
         try:
             # Try to use existing event loop if available
             try:
-                loop = asyncio.get_running_loop()
+                _loop = asyncio.get_running_loop()
                 # Running in event loop — use synchronous HTTP fallback
                 import urllib.request
+
                 with urllib.request.urlopen(url, timeout=timeout) as resp:
                     text = resp.read().decode("utf-8")
-                    if url.endswith((".yaml", ".yml")):
+                    if url.endswith((".yaml", ".yml")):  # noqa: SIM108
                         spec = _parse_yaml(text)
                     else:
                         spec = _parse_json(text)
@@ -409,7 +413,7 @@ class OpenAPIDiscovery:
         path = Path(file_path)
         content = path.read_text(encoding="utf-8")
 
-        if path.suffix in (".yaml", ".yml"):
+        if path.suffix in (".yaml", ".yml"):  # noqa: SIM108
             spec = _parse_yaml(content)
         else:
             spec = _parse_json(content)
@@ -510,16 +514,17 @@ def _parse_yaml(text: str) -> dict[str, Any]:
     """Parse a YAML string into a spec dict."""
     try:
         import yaml
+
         result = yaml.safe_load(text)
     except ImportError:
         try:
-            import tomllib  # Python 3.11+ only
+            import tomllib  # noqa: F401  # Python 3.11+ only
+
             raise ImportError("yaml not available")
         except ImportError:
             raise ImportError(
-                "PyYAML is required for YAML OpenAPI specs. "
-                "Install it with: pip install pyyaml"
-            )
+                "PyYAML is required for YAML OpenAPI specs. Install it with: pip install pyyaml"
+            ) from None
 
     if not isinstance(result, dict):
         raise ValueError(f"Expected YAML mapping, got {type(result)}")
@@ -584,7 +589,8 @@ class OpenAPIProvider:
                 all_tools.extend(tools)
                 logger.info(
                     "Discovered %d tools from OpenAPI spec '%s'",
-                    len(tools), spec_config.get("name", spec_url or spec_file),
+                    len(tools),
+                    spec_config.get("name", spec_url or spec_file),
                 )
             except Exception as exc:
                 spec_name = spec_config.get("name", spec_config.get("url", "unknown"))
@@ -616,7 +622,8 @@ class OpenAPIProvider:
     def _get_spec_configs() -> list[dict[str, Any]]:
         """Load OpenAPI spec configs from app config."""
         try:
-            from app.config import TOOLS_OPENAPI_SPECS
+            from proxy.app.shared.config import TOOLS_OPENAPI_SPECS
+
             return list(TOOLS_OPENAPI_SPECS) if TOOLS_OPENAPI_SPECS else []
         except ImportError:
             return []

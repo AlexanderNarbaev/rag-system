@@ -19,6 +19,7 @@ from prometheus_client import Counter, Gauge, Histogram
 
 class CanaryPhase(Enum):
     """Progressive rollout phases from idle to full promotion."""
+
     IDLE = "idle"
     RAMP_5 = "ramp_5"
     RAMP_25 = "ramp_25"
@@ -41,15 +42,18 @@ class CanaryConfig:
         rollback_thresholds: Metric thresholds dict {name: (threshold, comparison)}.
         cooldown_seconds: Cooldown period after rollback before retry.
     """
+
     model_name: str = ""
     stable_version: str = "baseline"
     canary_version: str = ""
     canary_percent: float = 0.0
     min_samples: int = 100
-    rollback_thresholds: dict[str, tuple[float, str]] = field(default_factory=lambda: {
-        "error_rate": (0.05, "gt"),
-        "p95_latency_ms": (10000, "gt"),
-    })
+    rollback_thresholds: dict[str, tuple[float, str]] = field(
+        default_factory=lambda: {
+            "error_rate": (0.05, "gt"),
+            "p95_latency_ms": (10000, "gt"),
+        }
+    )
     cooldown_seconds: int = 3600
 
 
@@ -139,9 +143,7 @@ class CanaryController:
             ValueError: If canary_percent is outside [0.0, 1.0].
         """
         if not 0.0 <= canary_percent <= 1.0:
-            raise ValueError(
-                f"canary_percent must be between 0.0 and 1.0, got {canary_percent}"
-            )
+            raise ValueError(f"canary_percent must be between 0.0 and 1.0, got {canary_percent}")
 
         with self._lock:
             if model_name not in self._configs:
@@ -203,9 +205,7 @@ class CanaryController:
                 self._phase[model_name] = self._infer_phase(canary_percent)
             self._phase_started_at[model_name] = time.time()
             canary_split_ratio.labels(model=model_name).set(canary_percent)
-            canary_phase_gauge.labels(model=model_name).set(
-                self._phase_to_int(self._phase[model_name])
-            )
+            canary_phase_gauge.labels(model=model_name).set(self._phase_to_int(self._phase[model_name]))
 
     # ── Routing ───────────────────────────────────────────────────
 
@@ -231,11 +231,7 @@ class CanaryController:
             if self._rollback_cooldown_until.get(model_name, 0) > time.time():
                 canary_percent = 0.0
 
-        target = (
-            "canary"
-            if self._rng.random() < canary_percent
-            else "stable"
-        )
+        target = "canary" if self._rng.random() < canary_percent else "stable"
         canary_traffic_total.labels(model=model_name, target=target).inc()
         return target
 
@@ -260,13 +256,9 @@ class CanaryController:
             latency_ms: Request duration in milliseconds.
         """
         outcome = "success" if success else "error"
-        canary_result_total.labels(
-            model=model_name, target=target, outcome=outcome
-        ).inc()
+        canary_result_total.labels(model=model_name, target=target, outcome=outcome).inc()
         if latency_ms > 0:
-            canary_latency_seconds.labels(model=model_name, target=target).observe(
-                latency_ms / 1000.0
-            )
+            canary_latency_seconds.labels(model=model_name, target=target).observe(latency_ms / 1000.0)
 
         with self._lock:
             if model_name not in self._stats:
@@ -306,12 +298,8 @@ class CanaryController:
             errors_stable = stable_stats["error"]
             errors_canary = canary_stats["error"]
 
-        stable_error_rate = (
-            errors_stable / total_stable if total_stable > 0 else 0.0
-        )
-        canary_error_rate = (
-            errors_canary / total_canary if total_canary > 0 else 0.0
-        )
+        stable_error_rate = errors_stable / total_stable if total_stable > 0 else 0.0
+        canary_error_rate = errors_canary / total_canary if total_canary > 0 else 0.0
 
         return {
             "total_stable": total_stable,
@@ -387,14 +375,10 @@ class CanaryController:
             config = self._configs[model_name]
             config.canary_percent = 0.0
             self._phase[model_name] = CanaryPhase.ROLLBACK
-            self._rollback_cooldown_until[model_name] = (
-                time.time() + config.cooldown_seconds
-            )
+            self._rollback_cooldown_until[model_name] = time.time() + config.cooldown_seconds
 
             canary_split_ratio.labels(model=model_name).set(0.0)
-            canary_phase_gauge.labels(model=model_name).set(
-                self._phase_to_int(CanaryPhase.ROLLBACK)
-            )
+            canary_phase_gauge.labels(model=model_name).set(self._phase_to_int(CanaryPhase.ROLLBACK))
             canary_rollback_total.labels(model=model_name).inc()
 
     def promote(self, model_name: str) -> None:
@@ -414,9 +398,7 @@ class CanaryController:
             config.canary_version = ""
             self._phase[model_name] = CanaryPhase.FULL
             canary_split_ratio.labels(model=model_name).set(1.0)
-            canary_phase_gauge.labels(model=model_name).set(
-                self._phase_to_int(CanaryPhase.FULL)
-            )
+            canary_phase_gauge.labels(model=model_name).set(self._phase_to_int(CanaryPhase.FULL))
 
     # ── Status ────────────────────────────────────────────────────
 

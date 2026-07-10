@@ -1,9 +1,7 @@
 """Tests for the BaseExtractor abstract class and data structures."""
 
 import hashlib
-import pytest
-from datetime import datetime, timezone
-from typing import AsyncIterator, Dict, List
+from collections.abc import AsyncIterator
 
 from etl.extractors.base_extractor import BaseExtractor, ExtractedDocument, ExtractorConfig
 
@@ -82,9 +80,7 @@ class TestExtractedDocument:
         assert len(doc.links) == 1
 
     def test_auto_extracted_at(self):
-        doc = ExtractedDocument(
-            source_id="d1", source_type="book", title="T", content="C", content_type="text"
-        )
+        doc = ExtractedDocument(source_id="d1", source_type="book", title="T", content="C", content_type="text")
         assert doc.extracted_at != ""
         assert "T" in doc.extracted_at or "+" in doc.extracted_at or "Z" in doc.extracted_at
 

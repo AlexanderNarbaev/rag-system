@@ -21,27 +21,23 @@ def compute_bleu(
     hypotheses: list[str],
     max_n: int = 4,
 ) -> dict:
-    from collections import Counter
     import math
+    from collections import Counter
 
     matches = [0] * max_n
     total = [0] * max_n
     ref_len_total = 0
     hyp_len_total = 0
 
-    for ref, hyp in zip(references, hypotheses):
+    for ref, hyp in zip(references, hypotheses, strict=False):
         ref_tokens = ref.lower().split()
         hyp_tokens = hyp.lower().split()
         ref_len_total += len(ref_tokens)
         hyp_len_total += len(hyp_tokens)
 
         for n in range(1, max_n + 1):
-            ref_ngrams = Counter(
-                tuple(ref_tokens[i : i + n]) for i in range(len(ref_tokens) - n + 1)
-            )
-            hyp_ngrams = Counter(
-                tuple(hyp_tokens[i : i + n]) for i in range(len(hyp_tokens) - n + 1)
-            )
+            ref_ngrams = Counter(tuple(ref_tokens[i : i + n]) for i in range(len(ref_tokens) - n + 1))
+            hyp_ngrams = Counter(tuple(hyp_tokens[i : i + n]) for i in range(len(hyp_tokens) - n + 1))
             matches[n - 1] += sum((ref_ngrams & hyp_ngrams).values())
             total[n - 1] += max(1, sum(hyp_ngrams.values()))
 
@@ -77,7 +73,7 @@ def compute_rouge_l(
 ) -> dict:
     precisions = []
     recalls = []
-    for ref, hyp in zip(references, hypotheses):
+    for ref, hyp in zip(references, hypotheses, strict=False):
         ref_tokens = ref.lower().split()
         hyp_tokens = hyp.lower().split()
         lcs = _lcs_len(ref_tokens, hyp_tokens)
@@ -98,8 +94,13 @@ def compute_bertscore(
 ) -> dict:
     try:
         from bert_score import score
-        P, R, F1 = score(hypotheses, references, model_type=model, verbose=False)
-        return {"bertscore_precision": float(P.mean()), "bertscore_recall": float(R.mean()), "bertscore_f1": float(F1.mean())}
+
+        P, R, F1 = score(hypotheses, references, model_type=model, verbose=False)  # noqa: N806
+        return {
+            "bertscore_precision": float(P.mean()),
+            "bertscore_recall": float(R.mean()),
+            "bertscore_f1": float(F1.mean()),
+        }  # noqa: E501
     except ImportError:
         return {"bertscore_precision": 0.0, "bertscore_recall": 0.0, "bertscore_f1": 0.0}
 
@@ -135,10 +136,9 @@ def compute_hallucination_rate(
     references: list[str],
     hypotheses: list[str],
 ) -> float:
-    from collections import Counter
     total_words = 0
     novel_words = 0
-    for ref, hyp in zip(references, hypotheses):
+    for ref, hyp in zip(references, hypotheses, strict=False):
         ref_words = set(ref.lower().split())
         hyp_words = hyp.lower().split()
         if not hyp_words:
@@ -152,6 +152,7 @@ def compute_perplexity(
     log_likelihoods: list[float],
 ) -> float:
     import math
+
     if not log_likelihoods:
         return float("inf")
     avg_ll = sum(log_likelihoods) / len(log_likelihoods)

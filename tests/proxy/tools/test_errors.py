@@ -1,10 +1,6 @@
 # tests/proxy/tools/test_errors.py
 """Tests for tool error taxonomy — Task 2 TDD."""
 
-import asyncio
-
-import pytest
-
 from proxy.app.tools.errors import (
     ToolDependencyError,
     ToolError,
@@ -20,7 +16,7 @@ from proxy.app.tools.errors import (
 
 class TestToolErrorBase:
     def test_tool_error_inherits_from_ragerror(self):
-        from proxy.app.exceptions import RAGError
+        from proxy.app.shared.exceptions import RAGError
 
         err = ToolError(
             tool_name="test_tool",
@@ -134,7 +130,7 @@ class TestClassifyError:
     def test_asyncio_timeout_maps_to_timeout(self):
         err = classify_error(
             tool_name="test",
-            error=asyncio.TimeoutError("timed out"),
+            error=TimeoutError("timed out"),
             tool_call_id="call_8",
         )
         assert isinstance(err, ToolTimeoutError)

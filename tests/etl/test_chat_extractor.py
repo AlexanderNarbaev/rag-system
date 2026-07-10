@@ -1,9 +1,9 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for the ChatExtractor with sample JSON data."""
 
 import json
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 from etl.extractors.base_extractor import ExtractedDocument, ExtractorConfig
 from etl.extractors.chat_extractor import ChatExtractor
@@ -37,7 +37,10 @@ def sample_chatgpt_conversation():
         "title": "TypeScript tips",
         "messages": [
             {"role": "user", "content": "What are generics?"},
-            {"role": "assistant", "content": "Generics allow type parameters: ```ts\nfunction identity<T>(arg: T): T { return arg; }\n```"},
+            {
+                "role": "assistant",
+                "content": "Generics allow type parameters: ```ts\nfunction identity<T>(arg: T): T { return arg; }\n```",
+            },
         ],
     }
 
@@ -67,6 +70,7 @@ class TestChatExtractorValidateConnection:
     def test_empty_directory(self, chat_config, tmp_path):
         ext = ChatExtractor(chat_config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is False
 
@@ -74,6 +78,7 @@ class TestChatExtractorValidateConnection:
         (tmp_path / "chat.json").write_text('{"test": true}')
         ext = ChatExtractor(chat_config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is True
         assert len(ext._source_files) == 1
@@ -90,6 +95,7 @@ class TestChatExtractorValidateConnection:
         (tmp_path / "archive" / "old.json").write_text("{}")
         ext = ChatExtractor(config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is True
         assert len(ext._source_files) == 1

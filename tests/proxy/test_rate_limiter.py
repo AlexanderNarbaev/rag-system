@@ -1,7 +1,6 @@
 """Tests for proxy/app/rate_limiter.py - token bucket rate limiter."""
+
 import time
-import sys
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -10,19 +9,22 @@ class TestTokenBucket:
     """Tests for TokenBucket class."""
 
     def test_initial_tokens_equal_burst(self):
-        from app.rate_limiter import TokenBucket
+        from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=1.0, burst=5)
         assert bucket.tokens == 5.0
 
     def test_allow_requests_within_burst(self):
-        from app.rate_limiter import TokenBucket
+        from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=1.0, burst=3)
         for _ in range(3):
             allowed, _ = bucket.consume()
             assert allowed is True
 
     def test_block_requests_exceeding_burst(self):
-        from app.rate_limiter import TokenBucket
+        from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=1.0, burst=2)
         for _ in range(2):
             bucket.consume()
@@ -31,7 +33,8 @@ class TestTokenBucket:
         assert retry_after > 0
 
     def test_token_refill_over_time(self):
-        from app.rate_limiter import TokenBucket
+        from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=5.0, burst=2)
         # Exhaust all tokens
         for _ in range(2):
@@ -42,7 +45,8 @@ class TestTokenBucket:
         assert allowed is True
 
     def test_refill_capped_at_burst(self):
-        from app.rate_limiter import TokenBucket
+        from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=100.0, burst=2)
         bucket.last_refill = time.monotonic() - 100.0  # enough time for 10000 tokens
         bucket._refill()
@@ -53,18 +57,23 @@ class TestRateLimiter:
     """Tests for RateLimiter with in-memory storage."""
 
     def test_allows_requests_within_rate(self):
-        from app.rate_limiter import RateLimiter
         import asyncio
+
+        from proxy.app.shared.rate_limiter import RateLimiter
+
         async def run():
             limiter = RateLimiter(rate_per_minute=600, burst=5)
             for _ in range(5):
                 allowed, _ = await limiter.is_allowed("test_key")
                 assert allowed is True
+
         asyncio.run(run())
 
     def test_blocks_after_exhaustion(self):
-        from app.rate_limiter import RateLimiter
         import asyncio
+
+        from proxy.app.shared.rate_limiter import RateLimiter
+
         async def run():
             limiter = RateLimiter(rate_per_minute=1, burst=2)
             for _ in range(2):
@@ -72,11 +81,14 @@ class TestRateLimiter:
             allowed, retry_after = await limiter.is_allowed("test_key")
             assert allowed is False
             assert retry_after > 0
+
         asyncio.run(run())
 
     def test_per_key_isolation(self):
-        from app.rate_limiter import RateLimiter
         import asyncio
+
+        from proxy.app.shared.rate_limiter import RateLimiter
+
         async def run():
             limiter = RateLimiter(rate_per_minute=1, burst=3)
             # Exhaust key1
@@ -85,11 +97,14 @@ class TestRateLimiter:
             # key2 should still be allowed
             allowed, _ = await limiter.is_allowed("key2")
             assert allowed is True
+
         asyncio.run(run())
 
     def test_cleanup_expired_buckets(self):
-        from app.rate_limiter import RateLimiter
         import asyncio
+
+        from proxy.app.shared.rate_limiter import RateLimiter
+
         async def run():
             limiter = RateLimiter(rate_per_minute=60, burst=5)
             await limiter.is_allowed("temp_key")
@@ -99,6 +114,7 @@ class TestRateLimiter:
             bucket.last_refill = time.monotonic() - 1000.0
             await limiter.cleanup_expired(max_age=10.0)
             assert "temp_key" not in limiter._buckets
+
         asyncio.run(run())
 
 
@@ -109,7 +125,8 @@ class TestRateLimitMiddleware:
     def async_client(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.rate_limiter import RateLimitMiddleware, RateLimiter
+
+        from proxy.app.shared.rate_limiter import RateLimiter, RateLimitMiddleware
 
         app = FastAPI()
 
@@ -157,16 +174,18 @@ class TestRateLimiterIntegration:
 
     def test_add_rate_limit_middleware(self):
         from fastapi import FastAPI
-        from app.rate_limiter import add_rate_limit_middleware, get_rate_limiter
+
+        from proxy.app.shared.rate_limiter import add_rate_limit_middleware, get_rate_limiter
 
         app = FastAPI()
         limiter = add_rate_limit_middleware(app, rate_per_minute=30, burst=5)
         assert get_rate_limiter() is limiter
 
     def test_extract_key_ip(self):
-        from fastapi import FastAPI, Request
+        from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.rate_limiter import RateLimitMiddleware, RateLimiter
+
+        from proxy.app.shared.rate_limiter import RateLimiter, RateLimitMiddleware
 
         app = FastAPI()
 
@@ -184,7 +203,8 @@ class TestRateLimiterIntegration:
     def test_extract_key_api_key(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        from app.rate_limiter import RateLimitMiddleware, RateLimiter
+
+        from proxy.app.shared.rate_limiter import RateLimiter, RateLimitMiddleware
 
         app = FastAPI()
 

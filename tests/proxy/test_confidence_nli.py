@@ -1,14 +1,15 @@
 """Tests for NLI grounding checker and confidence calibration in confidence.py."""
+
 import pytest
 
-from proxy.app.confidence import (
+from proxy.app.core.confidence import (
     ConfidenceReport,
     GroundingReport,
+    _check_claim_supported,
     calibrate_threshold,
     compute_confidence,
     compute_nli_grounding,
     decompose_into_claims,
-    _check_claim_supported,
 )
 
 
@@ -16,9 +17,7 @@ class TestDecomposeIntoClaims:
     """Tests for atomic claim decomposition from answer text."""
 
     def test_decompose_simple_sentences(self):
-        claims = decompose_into_claims(
-            "Python is a programming language. It was created in 1991."
-        )
+        claims = decompose_into_claims("Python is a programming language. It was created in 1991.")
         assert len(claims) >= 2
         assert any("Python" in c for c in claims)
         assert any("1991" in c for c in claims)
@@ -109,10 +108,7 @@ class TestComputeNliGrounding:
         assert "Answer text here" in report.unsupported or "Answer text here." in report.unsupported
 
     def test_report_has_all_fields(self):
-        report = GroundingReport(
-            score=0.8, supported_claims=3, total_claims=5,
-            unsupported=["claim A", "claim B"]
-        )
+        report = GroundingReport(score=0.8, supported_claims=3, total_claims=5, unsupported=["claim A", "claim B"])
         assert report.score == 0.8
         assert report.supported_claims == 3
         assert report.total_claims == 5
@@ -163,15 +159,20 @@ class TestCalibrateThreshold:
 
     def test_calibrate_perfect_separation(self):
         cases = [
-            (0.9, True), (0.8, True), (0.7, True),
-            (0.3, False), (0.2, False), (0.1, False),
+            (0.9, True),
+            (0.8, True),
+            (0.7, True),
+            (0.3, False),
+            (0.2, False),
+            (0.1, False),
         ]
         threshold = calibrate_threshold(cases)
         assert 0.3 <= threshold <= 0.7
 
     def test_calibrate_no_cases(self):
         threshold = calibrate_threshold([])
-        from proxy.app.config import CONFIDENCE_THRESHOLD
+        from proxy.app.shared.config import CONFIDENCE_THRESHOLD
+
         assert threshold == pytest.approx(CONFIDENCE_THRESHOLD)
 
     def test_calibrate_all_correct(self):
@@ -186,9 +187,13 @@ class TestCalibrateThreshold:
 
     def test_calibrate_mixed(self):
         cases = [
-            (0.95, True), (0.85, True), (0.75, True),
-            (0.65, False), (0.55, False),
-            (0.45, False), (0.35, False),
+            (0.95, True),
+            (0.85, True),
+            (0.75, True),
+            (0.65, False),
+            (0.55, False),
+            (0.45, False),
+            (0.35, False),
         ]
         threshold = calibrate_threshold(cases)
         assert 0.55 < threshold < 0.85

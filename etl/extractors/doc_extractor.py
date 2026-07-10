@@ -249,7 +249,7 @@ class DocExtractor(BaseExtractor):
         pattern = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
         matches = list(pattern.finditer(text))
         results = []
-        for i, m in enumerate(matches):
+        for _i, m in enumerate(matches):
             level = len(m.group(1))
             heading_text = m.group(2).strip()
             results.append((heading_text, level, ""))

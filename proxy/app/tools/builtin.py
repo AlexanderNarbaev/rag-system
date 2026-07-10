@@ -1,7 +1,7 @@
 # proxy/app/tools/builtin.py
 """Built-in RAG tools: search_documents, search_by_version, get_document_metadata.
 
-Defines handler functions that wrap hybrid_search() from app.retrieval
+Defines handler functions that wrap hybrid_search() from proxy.app.core.retrieval
 and new-style ToolDefinition wrappers using ToolParam schemas.
 
 Compatible with both the old execute_tool() path (via handler callable)
@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 
-from app.retrieval import hybrid_search
+from proxy.app.core.retrieval import hybrid_search
 
 from .definition import ToolDefinition, ToolParam
 
@@ -31,9 +31,7 @@ def search_documents(query: str, top_k: int = 5, namespace: str | None = None, v
             title = hit.payload.get("title", "") or hit.payload.get("doc_title", "")
             text = hit.payload.get("text", "")
             source = hit.payload.get("source_type", "unknown")
-            formatted.append(
-                f"[{i + 1}] {title} (source: {source}, score: {hit.score:.3f})\n{text[:300]}"
-            )
+            formatted.append(f"[{i + 1}] {title} (source: {source}, score: {hit.score:.3f})\n{text[:300]}")
         return "\n\n".join(formatted)
     except Exception as e:
         return f"Search failed: {e}"
@@ -58,8 +56,9 @@ def search_by_version(version: str, query: str | None = None, top_k: int = 10) -
 def get_document_metadata(doc_id: str) -> str:
     """Get metadata for a specific document by its ID."""
     try:
-        from app.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
         from qdrant_client import QdrantClient
+
+        from proxy.app.shared.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
 
         client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
         points = client.retrieve(collection_name=COLLECTION_NAME, ids=[doc_id])

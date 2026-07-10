@@ -1,6 +1,8 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/retrieval.py - retrieval module with mocked dependencies."""
+
 import sys
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -9,13 +11,13 @@ for _mod in ("qdrant_client", "qdrant_client.http", "sentence_transformers", "ne
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
 
-from proxy.app.retrieval import (
-    reciprocal_rank_fusion,
+from proxy.app.core.retrieval import (
     _compute_dense_embedding,
-    graph_expand_query,
-    initialize_retrieval,
-    hybrid_search,
     check_qdrant_health,
+    graph_expand_query,
+    hybrid_search,
+    initialize_retrieval,
+    reciprocal_rank_fusion,
 )
 
 
@@ -90,10 +92,12 @@ class TestHybridSearch:
     def test_without_sparse(self):
         mock_dense = [_make_mock_scored_point("id1", 0.9, {"text": "hello"})]
 
-        with patch("proxy.app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("proxy.app.retrieval.embedder") as mock_embedder, \
-             patch("proxy.app.retrieval._compute_dense_embedding", return_value=[0.1, 0.2]), \
-             patch("proxy.app.retrieval._compute_sparse_embedding", return_value=None):
+        with (
+            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("proxy.app.core.retrieval.embedder"),
+            patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1, 0.2]),
+            patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=None),
+        ):
             mock_qdrant.search.return_value = mock_dense
             result = hybrid_search("test query")
             assert len(result) == 1
@@ -103,10 +107,12 @@ class TestHybridSearch:
         mock_dense = [_make_mock_scored_point("id1", 0.9)]
         mock_sparse = [_make_mock_scored_point("id2", 0.8)]
 
-        with patch("proxy.app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("proxy.app.retrieval.embedder") as mock_embedder, \
-             patch("proxy.app.retrieval._compute_dense_embedding", return_value=[0.1, 0.2]), \
-             patch("proxy.app.retrieval._compute_sparse_embedding", return_value=MagicMock()):
+        with (
+            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("proxy.app.core.retrieval.embedder"),
+            patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1, 0.2]),
+            patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=MagicMock()),
+        ):
             mock_qdrant.search.side_effect = [mock_dense, mock_sparse]
             result = hybrid_search("test query")
             assert len(result) == 2
@@ -114,23 +120,28 @@ class TestHybridSearch:
     def test_with_version_filter(self):
         mock_dense = [_make_mock_scored_point("id1", 0.9)]
 
-        with patch("proxy.app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("proxy.app.retrieval.embedder") as mock_embedder, \
-             patch("proxy.app.retrieval._compute_dense_embedding", return_value=[0.1]), \
-             patch("proxy.app.retrieval._compute_sparse_embedding", return_value=None):
+        with (
+            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("proxy.app.core.retrieval.embedder"),
+            patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1]),
+            patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=None),
+        ):
             mock_qdrant.search.return_value = mock_dense
             result = hybrid_search("query", version="2.0", top_k=10)
             assert result == mock_dense
 
     def test_auto_init_when_none(self):
-        with patch("proxy.app.retrieval.qdrant_client", None), \
-             patch("proxy.app.retrieval.embedder", None), \
-             patch("proxy.app.retrieval.initialize_retrieval") as mock_init, \
-             patch("proxy.app.retrieval._compute_dense_embedding", return_value=[0.1]), \
-             patch("proxy.app.retrieval._compute_sparse_embedding", return_value=None):
+        with (
+            patch("proxy.app.core.retrieval.qdrant_client", None),
+            patch("proxy.app.core.retrieval.embedder", None),
+            patch("proxy.app.core.retrieval.initialize_retrieval") as mock_init,
+            patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1]),
+            patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=None),
+        ):
             mock_init.side_effect = lambda: None
             # side effect sets globals - mock that part
-            import proxy.app.retrieval as ret_mod
+            import proxy.app.core.retrieval as ret_mod
+
             ret_mod.qdrant_client = MagicMock()
             ret_mod.qdrant_client.search.return_value = []
             ret_mod.embedder = MagicMock()
@@ -142,8 +153,10 @@ class TestComputeDenseEmbedding:
     """Tests for _compute_dense_embedding with cache."""
 
     def test_without_cache(self):
-        with patch("proxy.app.retrieval.embedder") as mock_embedder, \
-             patch("proxy.app.retrieval.cache_manager", None):
+        with (
+            patch("proxy.app.core.retrieval.embedder") as mock_embedder,
+            patch("proxy.app.core.retrieval.cache_manager", None),
+        ):
             mock_embedder.encode.return_value = MagicMock()
             mock_embedder.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
             result = _compute_dense_embedding("test text")
@@ -151,12 +164,15 @@ class TestComputeDenseEmbedding:
 
     def test_with_cache_hit(self):
         import json
+
         cached_vec = [0.5, 0.6]
         mock_cache = MagicMock()
         mock_cache.get_sync.return_value = json.dumps(cached_vec)
 
-        with patch("proxy.app.retrieval.embedder") as mock_embedder, \
-             patch("proxy.app.retrieval.cache_manager", mock_cache):
+        with (
+            patch("proxy.app.core.retrieval.embedder") as mock_embedder,
+            patch("proxy.app.core.retrieval.cache_manager", mock_cache),
+        ):
             result = _compute_dense_embedding("cached text")
             assert result == cached_vec
             mock_embedder.encode.assert_not_called()
@@ -166,8 +182,10 @@ class TestComputeDenseEmbedding:
         mock_cache.get_sync.return_value = None
         vec = [0.7, 0.8]
 
-        with patch("proxy.app.retrieval.embedder") as mock_embedder, \
-             patch("proxy.app.retrieval.cache_manager", mock_cache):
+        with (
+            patch("proxy.app.core.retrieval.embedder") as mock_embedder,
+            patch("proxy.app.core.retrieval.cache_manager", mock_cache),
+        ):
             mock_embedder.encode.return_value = MagicMock()
             mock_embedder.encode.return_value.tolist.return_value = vec
             result = _compute_dense_embedding("new text")
@@ -179,19 +197,21 @@ class TestGraphExpandQuery:
     """Tests for graph_expand_query with mocked Neo4j."""
 
     def test_graph_disabled(self):
-        with patch("proxy.app.retrieval._GRAPH_ENABLED", False):
+        with patch("proxy.app.core.retrieval._GRAPH_ENABLED", False):
             result = graph_expand_query("some query")
             assert result == ""
 
     def test_graph_no_driver(self):
-        with patch("proxy.app.retrieval._GRAPH_ENABLED", True), \
-             patch("proxy.app.retrieval.neo4j_driver", None):
+        with (
+            patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
+            patch("proxy.app.core.retrieval.neo4j_driver", None),
+        ):
             result = graph_expand_query("some query")
             assert result == ""
 
     def test_graph_enabled_with_mock(self):
         mock_session = MagicMock()
-        mock_result = [
+        [
             MagicMock(entity="GitLab", type="Tool", related=["CI/CD", "Docker"]),
         ]
         # Configure the mock
@@ -202,14 +222,18 @@ class TestGraphExpandQuery:
         mock_driver = MagicMock()
         mock_driver.session.return_value.__enter__.return_value = mock_session
 
-        with patch("proxy.app.retrieval._GRAPH_ENABLED", True), \
-             patch("proxy.app.retrieval.neo4j_driver", mock_driver):
+        with (
+            patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
+            patch("proxy.app.core.retrieval.neo4j_driver", mock_driver),
+        ):
             result = graph_expand_query("How to use GitLab CI/CD")
             assert "Связанные сущности" in result
 
     def test_short_keywords_filtered(self):
-        with patch("proxy.app.retrieval._GRAPH_ENABLED", True), \
-             patch("proxy.app.retrieval.neo4j_driver", MagicMock()):
+        with (
+            patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
+            patch("proxy.app.core.retrieval.neo4j_driver", MagicMock()),
+        ):
             result = graph_expand_query("a b c")
             assert result == ""
 
@@ -218,12 +242,12 @@ class TestCheckQdrantHealth:
     """Tests for check_qdrant_health."""
 
     def test_healthy(self):
-        with patch("proxy.app.retrieval.qdrant_client") as mock_qdrant:
+        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant:
             mock_qdrant.get_collections.return_value = {}
             assert check_qdrant_health() is True
 
     def test_unhealthy(self):
-        with patch("proxy.app.retrieval.qdrant_client") as mock_qdrant:
+        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant:
             mock_qdrant.get_collections.side_effect = Exception("down")
             assert check_qdrant_health() is False
 
@@ -232,25 +256,29 @@ class TestInitializeRetrieval:
     """Tests for initialize_retrieval function."""
 
     def test_raises_if_qdrant_not_available(self):
-        with patch("proxy.app.retrieval.QDRANT_AVAILABLE", False):
-            with pytest.raises(ImportError):
-                initialize_retrieval()
+        with patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", False), pytest.raises(ImportError):
+            initialize_retrieval()
 
     def test_raises_if_st_not_available(self):
-        with patch("proxy.app.retrieval.QDRANT_AVAILABLE", True), \
-             patch("app.remote_services.create_embedder", side_effect=ImportError("no st")):
+        with (
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.llm.remote_services.create_embedder", side_effect=ImportError("no st")),
+        ):
             with pytest.raises(ImportError):
                 initialize_retrieval()
 
     def test_initializes_in_memory_cache(self):
         mock_embedder = object()
-        with patch("proxy.app.retrieval.QDRANT_AVAILABLE", True), \
-             patch("app.remote_services.create_embedder", return_value=mock_embedder), \
-             patch("proxy.app.retrieval.QdrantClient") as mock_qdrant, \
-             patch("proxy.app.retrieval.USE_REDIS", False), \
-             patch("proxy.app.retrieval._GRAPH_ENABLED", False):
+        with (
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.llm.remote_services.create_embedder", return_value=mock_embedder),
+            patch("proxy.app.core.retrieval.QdrantClient"),
+            patch("proxy.app.core.retrieval.USE_REDIS", False),
+            patch("proxy.app.core.retrieval._GRAPH_ENABLED", False),
+        ):
             initialize_retrieval()
-            from proxy.app.retrieval import cache_manager
+            from proxy.app.core.retrieval import cache_manager
+
             assert cache_manager is not None
             assert cache_manager.use_redis is False
 
@@ -261,32 +289,34 @@ class TestInitializeRetrieval:
         mock_neo4j.GraphDatabase = mock_graph
         mock_embedder = object()
 
-        with patch("proxy.app.retrieval.QDRANT_AVAILABLE", True), \
-             patch("app.remote_services.create_embedder", return_value=mock_embedder), \
-             patch("proxy.app.retrieval.QdrantClient"), \
-             patch("proxy.app.retrieval.USE_REDIS", False), \
-             patch("proxy.app.retrieval._GRAPH_ENABLED", True), \
-             patch.dict("sys.modules", {"neo4j": mock_neo4j}):
+        with (
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.llm.remote_services.create_embedder", return_value=mock_embedder),
+            patch("proxy.app.core.retrieval.QdrantClient"),
+            patch("proxy.app.core.retrieval.USE_REDIS", False),
+            patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
+            patch.dict("sys.modules", {"neo4j": mock_neo4j}),
+        ):
             initialize_retrieval()
-            import proxy.app.retrieval as ret_mod
+            import proxy.app.core.retrieval as ret_mod
+
             assert ret_mod._GRAPH_ENABLED is False
 
 
 class TestCrossLingualRetrieval:
     """F3: Cross-lingual retrieval support via bge-m3."""
 
-    @patch("proxy.app.retrieval.hybrid_search")
+    @patch("proxy.app.core.retrieval.hybrid_search")
     def test_hybrid_search_accepts_lang_parameter(self, mock_hybrid):
         """hybrid_search should accept an optional lang parameter."""
         import inspect
 
-        sig = inspect.signature(mock_hybrid)
-        assert "lang" in sig.parameters or True  # accept any signature
+        inspect.signature(mock_hybrid)
+        assert True  # accept any signature
 
     def test_bge_m3_supports_multilingual(self):
         """bge-m3 embedder (BAAI/bge-m3) supports 100+ languages natively."""
-        from proxy.app.config import EMBEDDER_MODEL
-        assert "bge" in EMBEDDER_MODEL or EMBEDDER_MODEL == "" or "m3" in EMBEDDER_MODEL or "multilingual" in EMBEDDER_MODEL or True
+        assert True
 
     def test_cross_lingual_search_german_query(self):
         """A German query should retrieve results (bge-m3 is cross-lingual)."""

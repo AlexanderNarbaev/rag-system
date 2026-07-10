@@ -2,10 +2,30 @@
 """Tests for live Qdrant upsert/delete operations (atomic chunk-level updates)."""
 
 import hashlib
-import pytest
 from unittest.mock import MagicMock, patch
 
-from qdrant_client.http import models
+import pytest
+
+# ---------------------------------------------------------------------------
+# PointStruct stub
+# ---------------------------------------------------------------------------
+# When the full suite runs, proxy tests inject MagicMock into sys.modules for
+# qdrant_client.http.models *before* this file is collected.  That causes
+# etl.indexer.qdrant_hybrid.PointStruct to resolve to a MagicMock instead of
+# the real class, breaking assertions on point.id / point.payload.
+#
+# We define a lightweight stand-in that the indexer fixture patches in so
+# _chunk_to_point() produces objects with real .id / .vector / .payload.
+# ---------------------------------------------------------------------------
+
+
+class _StubPointStruct:
+    """Minimal PointStruct replacement used when the real class is unavailable."""
+
+    def __init__(self, id=None, vector=None, payload=None, **kwargs):
+        self.id = id
+        self.vector = vector
+        self.payload = payload or {}
 
 
 @pytest.fixture
@@ -36,17 +56,26 @@ def mock_embedder():
 
 @pytest.fixture
 def indexer(mock_qdrant_client, mock_embedder):
-    from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+    """Build a QdrantHybridIndexer with mocked internals.
 
-    idx = QdrantHybridIndexer.__new__(QdrantHybridIndexer)
-    idx.client = mock_qdrant_client
-    idx.collection_name = "knowledge_base"
-    idx.embedder = mock_embedder.return_value
-    idx.dense_vector_size = 1024
-    idx.batch_size = 100
-    idx.sparse_index_on_disk = True
-    idx.supports_sparse = True
-    return idx
+    Patches ``etl.indexer.qdrant_hybrid.PointStruct`` with ``_StubPointStruct``
+    to avoid the MagicMock contamination from proxy test sys.modules injection.
+    """
+    from etl.indexer import qdrant_hybrid
+
+    # Ensure PointStruct produces real objects (not MagicMock from sys.modules)
+    with patch.object(qdrant_hybrid, "PointStruct", _StubPointStruct):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        idx = QdrantHybridIndexer.__new__(QdrantHybridIndexer)
+        idx.client = mock_qdrant_client
+        idx.collection_name = "knowledge_base"
+        idx.embedder = mock_embedder.return_value
+        idx.dense_vector_size = 1024
+        idx.batch_size = 100
+        idx.sparse_index_on_disk = True
+        idx.supports_sparse = True
+        yield idx
 
 
 def _make_chunk_hash(text: str) -> str:

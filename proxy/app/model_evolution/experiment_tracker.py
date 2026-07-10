@@ -1,10 +1,10 @@
 """Experiment tracker: wraps MLflow API with local mode fallback."""
 
-from dataclasses import dataclass, field
-from pathlib import Path
 import json
 import time
 import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -31,6 +31,7 @@ class ExperimentTracker:
         if tracking_uri:
             try:
                 import mlflow
+
                 mlflow.set_tracking_uri(tracking_uri)
                 self._mlflow = mlflow
                 ExperimentTracker.MLFLOW_AVAILABLE = True
@@ -90,13 +91,17 @@ class ExperimentTracker:
     def _save_run(self, run: RunInfo) -> None:
         path = self._data_dir / f"{run.run_id}.json"
         with open(path, "w") as f:
-            json.dump({
-                "run_id": run.run_id,
-                "experiment_name": run.experiment_name,
-                "params": run.params,
-                "metrics": run.metrics,
-                "artifacts": run.artifacts,
-                "status": run.status,
-                "start_time": run.start_time,
-                "end_time": run.end_time,
-            }, f, indent=2)
+            json.dump(
+                {
+                    "run_id": run.run_id,
+                    "experiment_name": run.experiment_name,
+                    "params": run.params,
+                    "metrics": run.metrics,
+                    "artifacts": run.artifacts,
+                    "status": run.status,
+                    "start_time": run.start_time,
+                    "end_time": run.end_time,
+                },
+                f,
+                indent=2,
+            )

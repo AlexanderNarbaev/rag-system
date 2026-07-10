@@ -44,7 +44,7 @@ def _list_parquet_versions(cold_dir: Path) -> dict[str, list[tuple[Path, int]]]:
 def _prune_old_versions(version_map: dict[str, list[tuple[Path, int]]], max_versions: int) -> int:
     """Delete oldest version files, keeping at most max_versions per document."""
     deleted = 0
-    for doc_name, files in version_map.items():
+    for _doc_name, files in version_map.items():
         if len(files) <= max_versions:
             continue
         to_delete = files[max_versions:]
@@ -89,6 +89,8 @@ def cleanup_cold_storage(cold_dir: str, max_versions: int | None = None) -> int:
     deleted = _prune_old_versions(version_map, max_versions)
     logger.info(
         "Cold storage cleanup: pruned %d files from %d total across %d documents",
-        deleted, total, len(version_map),
+        deleted,
+        total,
+        len(version_map),
     )
     return deleted

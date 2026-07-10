@@ -1,12 +1,11 @@
 # tests/etl/test_hash_versioning.py
 import json
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from etl.chunker.hash_versioning import (
-    compute_chunk_hash,
     ChunkVersionStore,
+    compute_chunk_hash,
     get_incremental_chunks,
 )
 
@@ -63,7 +62,7 @@ class TestChunkVersionStore:
         )
 
     def test_init_creates_dirs_and_wal(self, tmp_path):
-        store = self._make_store(tmp_path)
+        self._make_store(tmp_path)
         assert (tmp_path / "hot").is_dir()
         assert (tmp_path / "cold").is_dir()
         # WAL file is not created at init, only on _save_wal()

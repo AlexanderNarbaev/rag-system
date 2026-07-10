@@ -1,12 +1,11 @@
 """Tests for etl/chunker/table_extractor.py."""
-import pytest
 
 from etl.chunker.table_extractor import (
-    TableData,
     TABLE_EXTRACTION_ENABLED,
+    TableData,
     extract_tables_from_html,
-    table_to_markdown,
     table_to_json,
+    table_to_markdown,
 )
 
 

@@ -160,7 +160,7 @@ class BookExtractor(BaseExtractor):
         author = metadata.get("/Author", "")
 
         full_text_parts = []
-        for page_num, page in enumerate(reader.pages):
+        for _page_num, page in enumerate(reader.pages):
             text = page.extract_text() or ""
             full_text_parts.append(text)
 

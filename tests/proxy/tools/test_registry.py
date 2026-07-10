@@ -6,9 +6,8 @@ SDKProvider, DeclarativeProvider, OpenAPIProvider stubs.
 
 import asyncio
 import sys
-from abc import ABC, abstractmethod
+from abc import ABC
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -20,22 +19,31 @@ from tools.definition import (
     ToolResult,
     ToolVisibility,
 )
-from tools.errors import ToolNotFoundError, ToolValidationError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_tool(name, description="Test tool", category="general",
-               tags=None, visibility=ToolVisibility.PUBLIC,
-               handler=None, provider="sdk", depends_on=None,
-               parameters=None,
-               async_handler=None):
+
+def _make_tool(
+    name,
+    description="Test tool",
+    category="general",
+    tags=None,
+    visibility=ToolVisibility.PUBLIC,
+    handler=None,
+    provider="sdk",
+    depends_on=None,
+    parameters=None,
+    async_handler=None,
+):
     if parameters is None:
         parameters = [ToolParam(name="query", type=str, description="Query")]
     if handler is None:
-        handler = lambda **kw: f"Result: {kw}"
+
+        def handler(**kw):
+            return f"Result: {kw}"
+
     return ToolDefinition(
         name=name,
         description=description,
@@ -53,6 +61,7 @@ def _make_tool(name, description="Test tool", category="general",
 # ---------------------------------------------------------------------------
 # Test: ToolProvider ABC
 # ---------------------------------------------------------------------------
+
 
 class TestToolProviderABC:
     def test_toolprovider_is_abc(self):
@@ -116,6 +125,7 @@ class TestToolProviderABC:
 # Test: SDKProvider
 # ---------------------------------------------------------------------------
 
+
 class TestSDKProvider:
     def test_provider_name_is_sdk(self):
         from tools.registry import SDKProvider
@@ -148,6 +158,7 @@ class TestSDKProvider:
 # ---------------------------------------------------------------------------
 # Test: EnhancedToolRegistry — register / get / unregister
 # ---------------------------------------------------------------------------
+
 
 class TestRegistryBasicOps:
     def test_register_and_get(self):
@@ -221,24 +232,40 @@ class TestRegistryBasicOps:
 # Test: list_tools with filters
 # ---------------------------------------------------------------------------
 
+
 class TestRegistryListTools:
     @pytest.fixture(autouse=True)
     def setup_registry(self):
         from tools.registry import EnhancedToolRegistry
 
         self.registry = EnhancedToolRegistry()
-        self.registry.register(_make_tool(
-            name="public_tool", visibility=ToolVisibility.PUBLIC, category="search",
-            tags=["fast"], provider="sdk",
-        ))
-        self.registry.register(_make_tool(
-            name="admin_tool", visibility=ToolVisibility.ADMIN, category="admin",
-            tags=["slow"], provider="declarative",
-        ))
-        self.registry.register(_make_tool(
-            name="user_tool", visibility=ToolVisibility.USER, category="search",
-            tags=["fast", "beta"], provider="openapi",
-        ))
+        self.registry.register(
+            _make_tool(
+                name="public_tool",
+                visibility=ToolVisibility.PUBLIC,
+                category="search",
+                tags=["fast"],
+                provider="sdk",
+            )
+        )
+        self.registry.register(
+            _make_tool(
+                name="admin_tool",
+                visibility=ToolVisibility.ADMIN,
+                category="admin",
+                tags=["slow"],
+                provider="declarative",
+            )
+        )
+        self.registry.register(
+            _make_tool(
+                name="user_tool",
+                visibility=ToolVisibility.USER,
+                category="search",
+                tags=["fast", "beta"],
+                provider="openapi",
+            )
+        )
 
     def test_list_tools_all(self):
         assert len(self.registry.list_tools()) == 3
@@ -274,7 +301,9 @@ class TestRegistryListTools:
 
     def test_list_tools_combined_filters(self):
         result = self.registry.list_tools(
-            category="search", tags=["fast"], provider="sdk",
+            category="search",
+            tags=["fast"],
+            provider="sdk",
         )
         assert len(result) == 1
         assert result[0].name == "public_tool"
@@ -284,14 +313,19 @@ class TestRegistryListTools:
 # Test: execute (sync)
 # ---------------------------------------------------------------------------
 
+
 class TestRegistryExecute:
     def test_execute_success(self):
         from tools.registry import EnhancedToolRegistry
 
         registry = EnhancedToolRegistry()
-        tool = _make_tool(name="greet", parameters=[
-            ToolParam(name="name", type=str, description="Name"),
-        ], handler=lambda name: f"Hello, {name}!")
+        tool = _make_tool(
+            name="greet",
+            parameters=[
+                ToolParam(name="name", type=str, description="Name"),
+            ],
+            handler=lambda name: f"Hello, {name}!",
+        )
         registry.register(tool)
 
         result = registry.execute("greet", {"name": "World"})
@@ -311,9 +345,13 @@ class TestRegistryExecute:
         from tools.registry import EnhancedToolRegistry
 
         registry = EnhancedToolRegistry()
-        tool = _make_tool(name="search", parameters=[
-            ToolParam(name="query", type=str, description="Query", required=True),
-        ], handler=lambda query: f"Results for {query}")
+        tool = _make_tool(
+            name="search",
+            parameters=[
+                ToolParam(name="query", type=str, description="Query", required=True),
+            ],
+            handler=lambda query: f"Results for {query}",
+        )
         registry.register(tool)
 
         result = registry.execute("search", {})
@@ -328,11 +366,13 @@ class TestRegistryExecute:
         def bad_handler(**kw):
             raise RuntimeError("boom")
 
-        registry.register(_make_tool(
-            name="bad",
-            parameters=[],  # no required params
-            handler=bad_handler,
-        ))
+        registry.register(
+            _make_tool(
+                name="bad",
+                parameters=[],  # no required params
+                handler=bad_handler,
+            )
+        )
 
         result = registry.execute("bad", {})
         assert result.status == "error"
@@ -342,6 +382,7 @@ class TestRegistryExecute:
 # ---------------------------------------------------------------------------
 # Test: execute_async
 # ---------------------------------------------------------------------------
+
 
 class TestRegistryExecuteAsync:
     @pytest.mark.asyncio
@@ -353,7 +394,8 @@ class TestRegistryExecuteAsync:
 
         registry = EnhancedToolRegistry()
         tool = _make_tool(
-            name="greet_async", parameters=[
+            name="greet_async",
+            parameters=[
                 ToolParam(name="name", type=str, description="Name"),
             ],
             handler=lambda name: "sync fallback",
@@ -370,9 +412,13 @@ class TestRegistryExecuteAsync:
         from tools.registry import EnhancedToolRegistry
 
         registry = EnhancedToolRegistry()
-        tool = _make_tool(name="sync_only", parameters=[
-            ToolParam(name="x", type=int, description="X"),
-        ], handler=lambda x: f"Got {x}")
+        tool = _make_tool(
+            name="sync_only",
+            parameters=[
+                ToolParam(name="x", type=int, description="X"),
+            ],
+            handler=lambda x: f"Got {x}",
+        )
         registry.register(tool)
 
         result = await registry.execute_async("sync_only", {"x": 42})
@@ -392,14 +438,20 @@ class TestRegistryExecuteAsync:
 # Test: get_tools_for_llm
 # ---------------------------------------------------------------------------
 
+
 class TestGetToolsForLLM:
     def test_returns_openai_format(self):
         from tools.registry import EnhancedToolRegistry
 
         registry = EnhancedToolRegistry()
-        registry.register(_make_tool(name="search", parameters=[
-            ToolParam(name="query", type=str, description="Search query"),
-        ]))
+        registry.register(
+            _make_tool(
+                name="search",
+                parameters=[
+                    ToolParam(name="query", type=str, description="Search query"),
+                ],
+            )
+        )
 
         tools = registry.get_tools_for_llm(provider_type="openai")
         assert len(tools) == 1
@@ -433,14 +485,19 @@ class TestGetToolsForLLM:
 # Test: validate_tool
 # ---------------------------------------------------------------------------
 
+
 class TestValidateTool:
     def test_valid_tool_passes(self):
         from tools.registry import EnhancedToolRegistry
 
         registry = EnhancedToolRegistry()
-        tool = _make_tool(name="valid", parameters=[
-            ToolParam(name="q", type=str, description="Query"),
-        ], handler=lambda q: q)
+        tool = _make_tool(
+            name="valid",
+            parameters=[
+                ToolParam(name="q", type=str, description="Query"),
+            ],
+            handler=lambda q: q,
+        )
         issues = registry.validate_tool(tool)
         assert issues == []
 
@@ -473,7 +530,9 @@ class TestValidateTool:
 
         registry = EnhancedToolRegistry()
         tool = ToolDefinition(
-            name="t", description="desc", handler=lambda: None,
+            name="t",
+            description="desc",
+            handler=lambda: None,
             parameters=[
                 ToolParam(name="q", type=str),
                 ToolParam(name="q", type=int),
@@ -486,6 +545,7 @@ class TestValidateTool:
 # ---------------------------------------------------------------------------
 # Test: get_dependency_graph
 # ---------------------------------------------------------------------------
+
 
 class TestDependencyGraph:
     def test_returns_dag(self):
@@ -509,6 +569,7 @@ class TestDependencyGraph:
 # ---------------------------------------------------------------------------
 # Test: discover / reload_provider
 # ---------------------------------------------------------------------------
+
 
 class TestDiscoverFromProvider:
     def test_discover_registers_tools_from_provider(self):
@@ -559,6 +620,7 @@ class TestDiscoverFromProvider:
 # ---------------------------------------------------------------------------
 # Test: DeclarativeProvider and OpenAPIProvider stubs
 # ---------------------------------------------------------------------------
+
 
 class TestProviderStubs:
     def test_declarative_provider_provider_name(self):

@@ -21,39 +21,3 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-
-from proxy.app.tools import (  # noqa: E402
-    EnhancedToolRegistry,
-    ToolDefinition,
-    ToolRegistry,
-    ToolResult,
-    _get_document_metadata,
-    _search_by_version,
-    _search_documents,
-    _UNSET,
-    classify_error,
-    execute_tool,
-    format_tools_for_llm,
-    get_enhanced_registry,
-    get_tool_registry,
-    handle_function_call,
-)
-from proxy.app.tools.definition import (  # noqa: E402
-    RetryPolicy,
-    ToolCall,
-    ToolDefinition as _NewToolDefinition,
-    ToolErrorBase,
-    ToolParam,
-    ToolResult as _NewToolResult,
-    ToolVisibility,
-)
-from proxy.app.tools.errors import (  # noqa: E402,F811
-    ToolDependencyError,
-    ToolError,
-    ToolExecutionError,
-    ToolNotFoundError,
-    ToolPermissionError,
-    ToolRateLimitError,
-    ToolTimeoutError,
-    ToolValidationError,
-)

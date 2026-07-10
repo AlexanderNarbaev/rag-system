@@ -1,13 +1,13 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/i18n.py — language detection and prompt templates."""
-import pytest
 
-from proxy.app.i18n import (
-    SUPPORTED_LANGUAGES,
-    detect_language,
-    get_system_prompt,
-    get_fallback_message,
-    SYSTEM_PROMPTS,
+from proxy.app.shared.i18n import (
     FALLBACK_MESSAGES,
+    SUPPORTED_LANGUAGES,
+    SYSTEM_PROMPTS,
+    detect_language,
+    get_fallback_message,
+    get_system_prompt,
 )
 
 
@@ -69,7 +69,7 @@ class TestSupportedLanguages:
         assert len(SUPPORTED_LANGUAGES) == 5
 
     def test_contains_expected_languages(self):
-        assert SUPPORTED_LANGUAGES == {"en", "ru", "de", "fr", "zh"}
+        assert {"en", "ru", "de", "fr", "zh"} == SUPPORTED_LANGUAGES
 
 
 class TestGetSystemPrompt:
@@ -104,7 +104,7 @@ class TestGetSystemPrompt:
 
     def test_chinese_prompt_contains_chinese_text(self):
         prompt = SYSTEM_PROMPTS["zh"]
-        assert any(ord(c) > 0x4e00 for c in prompt)
+        assert any(ord(c) > 0x4E00 for c in prompt)
 
 
 class TestGetFallbackMessage:
@@ -136,4 +136,4 @@ class TestGetFallbackMessage:
         assert "pas" in FALLBACK_MESSAGES["fr"].lower() or "répondre" in FALLBACK_MESSAGES["fr"].lower()
 
     def test_chinese_fallback_contains_chinese(self):
-        assert any(ord(c) > 0x4e00 for c in FALLBACK_MESSAGES["zh"])
+        assert any(ord(c) > 0x4E00 for c in FALLBACK_MESSAGES["zh"])

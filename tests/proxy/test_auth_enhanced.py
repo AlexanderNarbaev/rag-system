@@ -9,25 +9,27 @@ from starlette.requests import Request as StarletteRequest
 from starlette.responses import JSONResponse
 
 from proxy.app.auth import (
-    AUTH_ENABLED,
-    JWT_ALGORITHM,
-    JWT_SECRET,
-    UserContext,
     AuthMiddleware,
-    create_mock_token,
+    UserContext,
     create_token,
+    verify_token,
+)
+from proxy.app.auth.jwt import (
+    create_mock_token,
     require_auth,
     validate_jwt,
-    verify_token,
 )
 
 
 @pytest.fixture(autouse=True)
 def _set_jwt_secret(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.JWT_ALGORITHM", "HS256")
-    monkeypatch.setattr("proxy.app.auth.AUTH_ENABLED", False)
+    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
+    monkeypatch.setattr("proxy.app.shared.config.AUTH_ENABLED", False)
+    monkeypatch.setattr("proxy.app.auth.jwt.AUTH_ENABLED", False)
 
 
 class TestValidateJwt:
@@ -56,14 +58,14 @@ class TestValidateJwt:
 class TestRequireAuth:
     @pytest.mark.asyncio
     async def test_returns_anonymous_when_auth_disabled(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", False):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", False):
             mock_request = MagicMock()
             ctx = await require_auth(mock_request, credentials=None)
             assert ctx.user_id == "anonymous"
 
     @pytest.mark.asyncio
     async def test_raises_401_when_no_token_and_auth_enabled(self):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             mock_request = MagicMock()
             mock_request.headers = {}
             with pytest.raises(HTTPException) as exc_info:
@@ -82,15 +84,11 @@ class TestUserContextNamespace:
         assert ctx.namespace == "engineering"
 
     def test_effective_namespace_uses_explicit(self):
-        ctx = UserContext(
-            user_id="u1", username="alice", namespace="explicit_ns", groups=["group1"]
-        )
+        ctx = UserContext(user_id="u1", username="alice", namespace="explicit_ns", groups=["group1"])
         assert ctx.effective_namespace == "explicit_ns"
 
     def test_effective_namespace_falls_back_to_group(self):
-        ctx = UserContext(
-            user_id="u1", username="alice", groups=["eng-group", "platform"]
-        )
+        ctx = UserContext(user_id="u1", username="alice", groups=["eng-group", "platform"])
         assert ctx.effective_namespace == "eng-group"
 
     def test_effective_namespace_empty(self):
@@ -140,11 +138,12 @@ class TestAuthMiddleware:
     def middleware(self):
         async def dummy_app(scope, receive, send):
             pass
+
         return AuthMiddleware(app=dummy_app)
 
     @pytest.mark.asyncio
     async def test_auth_disabled_passes_through(self, middleware):
-        with patch("proxy.app.auth.AUTH_ENABLED", False):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", False):
             request = MagicMock(spec=StarletteRequest)
             request.url.path = "/v1/chat/completions"
 
@@ -157,7 +156,7 @@ class TestAuthMiddleware:
 
     @pytest.mark.asyncio
     async def test_public_endpoints_bypass_auth(self, middleware):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             for path in ["/v1/auth/login", "/v1/auth/refresh", "/v1/health", "/metrics"]:
                 request = MagicMock(spec=StarletteRequest)
                 request.url.path = path
@@ -170,7 +169,7 @@ class TestAuthMiddleware:
 
     @pytest.mark.asyncio
     async def test_no_token_returns_401(self, middleware):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             request = MagicMock(spec=StarletteRequest)
             request.url.path = "/v1/chat/completions"
             request.headers = {}
@@ -183,7 +182,7 @@ class TestAuthMiddleware:
 
     @pytest.mark.asyncio
     async def test_valid_token_passes(self, middleware):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             request = MagicMock(spec=StarletteRequest)
             request.url.path = "/v1/chat/completions"
             token = create_token(user_id="u1", username="alice")
@@ -198,7 +197,7 @@ class TestAuthMiddleware:
 
     @pytest.mark.asyncio
     async def test_x_auth_token_header(self, middleware):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             request = MagicMock(spec=StarletteRequest)
             request.url.path = "/v1/chat/completions"
             token = create_token(user_id="u2", username="bob")
@@ -213,7 +212,7 @@ class TestAuthMiddleware:
 
     @pytest.mark.asyncio
     async def test_non_v1_routes_pass_through(self, middleware):
-        with patch("proxy.app.auth.AUTH_ENABLED", True):
+        with patch("proxy.app.auth.jwt.AUTH_ENABLED", True):
             request = MagicMock(spec=StarletteRequest)
             request.url.path = "/docs"
             request.headers = {}

@@ -16,25 +16,39 @@ from tools.definition import (
 from tools.registry import EnhancedToolRegistry
 
 
-def _make_tool(name, description="Test tool", visibility=ToolVisibility.PUBLIC,
-               parameters=None, category="general", tags=None, handler=None,
-               provider="sdk"):
+def _make_tool(
+    name,
+    description="Test tool",
+    visibility=ToolVisibility.PUBLIC,
+    parameters=None,
+    category="general",
+    tags=None,
+    handler=None,
+    provider="sdk",
+):
     if parameters is None:
         parameters = [ToolParam(name="query", type=str, description="Query")]
     if handler is None:
+
         def _default_handler(**kw):
             return f"Result: {kw}"
+
         handler = _default_handler
     return ToolDefinition(
-        name=name, description=description, parameters=parameters,
-        handler=handler, category=category, tags=tags or [],
-        visibility=visibility, provider=provider,
+        name=name,
+        description=description,
+        parameters=parameters,
+        handler=handler,
+        category=category,
+        tags=tags or [],
+        visibility=visibility,
+        provider=provider,
     )
 
 
 def _make_registry(tools=None):
     registry = EnhancedToolRegistry()
-    for t in (tools or []):
+    for t in tools or []:
         registry.register(t)
     return registry
 
@@ -42,6 +56,7 @@ def _make_registry(tools=None):
 # ---------------------------------------------------------------------------
 # ToolVisibilityFilter
 # ---------------------------------------------------------------------------
+
 
 class TestToolVisibilityFilter:
     def test_rbac_matrix_maps_role_to_visible_levels(self):
@@ -194,6 +209,7 @@ class TestToolVisibilityFilter:
 # ---------------------------------------------------------------------------
 # ToolInputSanitizer
 # ---------------------------------------------------------------------------
+
 
 class TestToolInputSanitizer:
     def test_strips_null_bytes_and_control_chars(self):

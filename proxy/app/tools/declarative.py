@@ -176,10 +176,7 @@ def _make_shell_handler(
         first_word = resolved_cmd.strip().split()[0] if resolved_cmd.strip() else ""
         first_cmd = os.path.basename(first_word)
         if first_cmd not in _allowed_commands:
-            return (
-                f"Blocked: command '{first_cmd}' is not in allowed_commands: "
-                f"{_allowed_commands}"
-            )
+            return f"Blocked: command '{first_cmd}' is not in allowed_commands: {_allowed_commands}"
         return None
 
     def _shell_handler(**params: Any) -> str:
@@ -187,9 +184,7 @@ def _make_shell_handler(
         if check is not None:
             return check
 
-        resolved_cmd = _interpolate_variables(
-            _command, params, dict(os.environ), {}
-        )
+        resolved_cmd = _interpolate_variables(_command, params, dict(os.environ), {})
 
         cmd_check = _check_command(resolved_cmd)
         if cmd_check is not None:
@@ -221,14 +216,16 @@ def _build_params(raw_params: dict[str, Any]) -> list[ToolParam]:
     params: list[ToolParam] = []
     for name, spec in (raw_params or {}).items():
         ptype = spec.get("type", "string")
-        params.append(ToolParam(
-            name=name,
-            type=ptype,
-            description=spec.get("description", ""),
-            required=spec.get("required", False),
-            default=spec.get("default", _UNSET),
-            enum=spec.get("enum"),
-        ))
+        params.append(
+            ToolParam(
+                name=name,
+                type=ptype,
+                description=spec.get("description", ""),
+                required=spec.get("required", False),
+                default=spec.get("default", _UNSET),
+                enum=spec.get("enum"),
+            )
+        )
     return params
 
 
@@ -392,6 +389,7 @@ class DeclarativeToolLoader:
         if filepath.endswith((".yaml", ".yml")):
             try:
                 import yaml
+
                 data = yaml.safe_load(content)
                 return data if isinstance(data, dict) else None
             except ImportError:

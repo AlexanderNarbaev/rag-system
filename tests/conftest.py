@@ -1,10 +1,11 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/conftest.py
 """Shared fixtures for RAG system integration tests."""
 
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from typing import Dict, Any, List
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -87,6 +88,7 @@ def sample_chunks():
 @pytest.fixture
 def sample_search_results(sample_chunks):
     """Mocked Qdrant ScoredPoint search results."""
+
     class ScoredPoint:
         def __init__(self, id, score, payload):
             self.id = id
@@ -95,11 +97,7 @@ def sample_search_results(sample_chunks):
 
     results = []
     for i, chunk in enumerate(sample_chunks):
-        results.append(ScoredPoint(
-            id=chunk["hash"],
-            score=0.95 - i * 0.05,
-            payload=chunk.copy()
-        ))
+        results.append(ScoredPoint(id=chunk["hash"], score=0.95 - i * 0.05, payload=chunk.copy()))
     return results
 
 
@@ -129,12 +127,14 @@ def mock_sentence_transformer():
 @pytest.fixture
 def mock_http_requests():
     """Mocked requests library for HTTP calls."""
-    with patch("requests.get") as mock_get, patch("requests.post") as mock_post, patch("requests.Session") as mock_session:
+    with (
+        patch("requests.get") as mock_get,
+        patch("requests.post") as mock_post,
+        patch("requests.Session") as mock_session,
+    ):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": "Mocked response"}}]
-        }
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "Mocked response"}}]}
         mock_resp.text = json.dumps({"choices": [{"message": {"content": "Mocked response"}}]})
         mock_get.return_value = mock_resp
         mock_post.return_value = mock_resp
@@ -162,9 +162,7 @@ def sample_documents():
             "status": "In Progress",
             "priority": "High",
             "assignee": "ivanov",
-            "comments": [
-                {"author": "petrov", "body": "Начал разработку."}
-            ],
+            "comments": [{"author": "petrov", "body": "Начал разработку."}],
         },
         "gitlab": {
             "id": "a1b2c3d4e5f6",
@@ -193,9 +191,11 @@ def mock_cache_manager():
 @pytest.fixture
 def mock_non_stream_completion():
     """Mock for non_stream_completion returning a pre-defined answer."""
-    with patch("proxy.app.llm_router.non_stream_completion") as mock:
+    with patch("proxy.app.llm.router.non_stream_completion") as mock:
+
         async def _mock_fn(*args, **kwargs):
             return "На основе предоставленного контекста: RAG — это техника объединения LLM с внешней базой знаний для повышения точности ответов."
+
         mock.side_effect = _mock_fn
         yield mock
 
@@ -203,14 +203,28 @@ def mock_non_stream_completion():
 @pytest.fixture
 def mock_stream_completion():
     """Mock for stream_completion returning SSE chunks."""
-    with patch("proxy.app.llm_router.stream_completion") as mock:
+    with patch("proxy.app.llm.router.stream_completion") as mock:
+
         async def _mock_stream(*args, **kwargs):
             chunks = [
-                {"id": "chatcmpl-1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "RAG "}, "index": 0}]},
-                {"id": "chatcmpl-1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "это "}, "index": 0}]},
-                {"id": "chatcmpl-1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "техника."}, "index": 0}]},
+                {
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": "RAG "}, "index": 0}],
+                },
+                {
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": "это "}, "index": 0}],
+                },
+                {
+                    "id": "chatcmpl-1",
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": "техника."}, "index": 0}],
+                },
             ]
             for chunk in chunks:
                 yield chunk
+
         mock.side_effect = _mock_stream
         yield mock

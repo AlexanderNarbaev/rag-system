@@ -1,14 +1,14 @@
 """Tests for proxy/app/rbac.py — role-based access control."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import HTTPException
 
 from proxy.app.auth import UserContext
-from proxy.app.rbac import Role, require_role, has_permission, get_user_role
+from proxy.app.auth.rbac import Role, get_user_role, has_permission, require_role
 
-_ENABLE_RBAC = patch("proxy.app.rbac.RBAC_ENABLED", True)
+_ENABLE_RBAC = patch("proxy.app.auth.rbac.RBAC_ENABLED", True)
 
 
 @pytest.fixture(autouse=True)

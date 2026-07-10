@@ -39,12 +39,14 @@ try:
         Trainer,
         TrainingArguments,
     )
+
     _QLORA_AVAILABLE = True
 except ImportError:
     pass
 
 
 # ── LLMTrainer ────────────────────────────────────────────────────────────────
+
 
 class LLMTrainer(TrainerBase):
     """QLoRA fine-tune for domain-specific generation using instruction-tuning pairs.
@@ -68,15 +70,14 @@ class LLMTrainer(TrainerBase):
     def _cuda_available(self) -> bool:
         try:
             import torch
+
             return torch.cuda.is_available()
         except ImportError:
             return False
 
     # ── Data preparation ───────────────────────────────────────────────────
 
-    def prepare_data(
-        self, training_data: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def prepare_data(self, training_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Pass through instruction-tuning pairs (pre-formatted by DataProcessor).
 
         Each item must have a ``messages`` key with system/user/assistant roles.
@@ -112,13 +113,9 @@ class LLMTrainer(TrainerBase):
             logger.exception("LLM training failed: %s", exc)
             raise TrainingError(f"LLM training failed: {exc}") from exc
 
-    def _train_mock(
-        self, job: TrainingJob, prepared: list[dict[str, Any]]
-    ) -> TrainingJob:
+    def _train_mock(self, job: TrainingJob, prepared: list[dict[str, Any]]) -> TrainingJob:
         """Simulate training on CPU — produce mock metrics and adapter."""
-        logger.info(
-            "Running LLM mock training (CPU profile) with %d samples", len(prepared)
-        )
+        logger.info("Running LLM mock training (CPU profile) with %d samples", len(prepared))
 
         job.metrics = {
             "train_loss": 0.5 + (len(prepared) % 10) * 0.01,
@@ -134,14 +131,10 @@ class LLMTrainer(TrainerBase):
         job.completed_at = datetime.now(UTC).isoformat()
         return job
 
-    def _train_gpu(
-        self, job: TrainingJob, prepared: list[dict[str, Any]]
-    ) -> TrainingJob:
+    def _train_gpu(self, job: TrainingJob, prepared: list[dict[str, Any]]) -> TrainingJob:
         """Full QLoRA fine-tuning on GPU with bitsandbytes 4-bit quantization + PEFT LoRA."""
         if not _QLORA_AVAILABLE:
-            logger.warning(
-                "GPU profile requested but QLoRA libs unavailable, falling back to mock"
-            )
+            logger.warning("GPU profile requested but QLoRA libs unavailable, falling back to mock")
             return self._train_mock(job, prepared)
 
         import torch
@@ -154,9 +147,7 @@ class LLMTrainer(TrainerBase):
 
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=self.config.load_in_4bit,
-            bnb_4bit_compute_dtype=getattr(
-                torch, self.config.bnb_4bit_compute_dtype, torch.float16
-            ),
+            bnb_4bit_compute_dtype=getattr(torch, self.config.bnb_4bit_compute_dtype, torch.float16),
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
@@ -169,9 +160,7 @@ class LLMTrainer(TrainerBase):
         )
         model.config.use_cache = False
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            self.config.base_model, trust_remote_code=True
-        )
+        tokenizer = AutoTokenizer.from_pretrained(self.config.base_model, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
@@ -242,9 +231,7 @@ class LLMTrainer(TrainerBase):
         for item in prepared:
             messages = item["messages"]
             try:
-                text = tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=False
-                )
+                text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
                 texts.append(text)
             except Exception:
                 fallback = ""
@@ -277,6 +264,7 @@ class LLMTrainer(TrainerBase):
     def _find_lora_target_modules(model: Any) -> list[str]:
         """Find linear layers suitable for LoRA adaptation."""
         import re
+
         modules = set()
         for name, _ in model.named_modules():
             if re.search(r"(q_proj|v_proj|k_proj|o_proj|gate_proj|up_proj|down_proj)", name):
@@ -344,6 +332,7 @@ class LLMTrainer(TrainerBase):
             try:
                 import torch
                 from safetensors.torch import save_file
+
                 save_file({"mock": torch.zeros(1)}, str(adapter_file))
             except ImportError:
                 adapter_file.write_text('{"__mock__": true}')

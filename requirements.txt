@@ -1,0 +1,11 @@
+# requirements.txt
+# All-in-one development requirements (proxy + ETL + dev tools)
+# Install: pip install -r requirements.txt
+#
+# For production, install only the component-specific file:
+#   pip install -r requirements-proxy.txt
+#   pip install -r requirements-etl.txt
+
+-r requirements-proxy.txt
+-r requirements-etl.txt
+-r requirements-dev.txt

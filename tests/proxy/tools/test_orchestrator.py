@@ -6,7 +6,6 @@ TDD for orchestrator: dependency-aware parallel execution, streaming, compositio
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -22,20 +21,32 @@ from tools.definition import (
 )
 from tools.registry import EnhancedToolRegistry
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_tool(name, description="Test tool", category="general",
-               tags=None, visibility=ToolVisibility.PUBLIC,
-               handler=None, provider="sdk", depends_on=None,
-               parameters=None, async_handler=None,
-               timeout_seconds=30.0, retry_policy=None):
+
+def _make_tool(
+    name,
+    description="Test tool",
+    category="general",
+    tags=None,
+    visibility=ToolVisibility.PUBLIC,
+    handler=None,
+    provider="sdk",
+    depends_on=None,
+    parameters=None,
+    async_handler=None,
+    timeout_seconds=30.0,
+    retry_policy=None,
+):
     if parameters is None:
         parameters = [ToolParam(name="query", type=str, description="Query")]
     if handler is None:
-        handler = lambda **kw: f"Result: {kw}"
+
+        def handler(**kw):
+            return f"Result: {kw}"
+
     return ToolDefinition(
         name=name,
         description=description,
@@ -54,7 +65,7 @@ def _make_tool(name, description="Test tool", category="general",
 
 def _make_registry(tools=None):
     registry = EnhancedToolRegistry()
-    for t in (tools or []):
+    for t in tools or []:
         registry.register(t)
     return registry
 
@@ -62,6 +73,7 @@ def _make_registry(tools=None):
 # ---------------------------------------------------------------------------
 # CompositionPattern enum
 # ---------------------------------------------------------------------------
+
 
 class TestCompositionPattern:
     def test_enum_values(self):
@@ -81,14 +93,15 @@ class TestCompositionPattern:
 # ToolComposer
 # ---------------------------------------------------------------------------
 
+
 class TestToolComposer:
     def test_chain_creates_chain_pattern(self):
         from tools.orchestrator import ChainPattern, ToolComposer
 
-        mapper = lambda prev: {"doc_id": prev.content}
-        pattern = ToolComposer.chain(
-            ["search_documents", "get_document_metadata"], mapper
-        )
+        def mapper(prev):
+            return {"doc_id": prev.content}
+
+        pattern = ToolComposer.chain(["search_documents", "get_document_metadata"], mapper)
 
         assert isinstance(pattern, ChainPattern)
         assert pattern.steps == ["search_documents", "get_document_metadata"]
@@ -107,7 +120,9 @@ class TestToolComposer:
     def test_conditional_creates_conditional_pattern(self):
         from tools.orchestrator import ConditionalPattern, ToolComposer
 
-        cond = lambda ctx: ctx.get_state("has_jira") is True
+        def cond(ctx):
+            return ctx.get_state("has_jira") is True
+
         pattern = ToolComposer.conditional(cond, "search_jira", "search_documents")
 
         assert isinstance(pattern, ConditionalPattern)
@@ -119,6 +134,7 @@ class TestToolComposer:
 # ---------------------------------------------------------------------------
 # ParallelExecutor — execute_single
 # ---------------------------------------------------------------------------
+
 
 class TestParallelExecutorExecuteSingle:
     @pytest.mark.asyncio
@@ -267,12 +283,14 @@ class TestParallelExecutorExecuteSingle:
 # ParallelExecutor — execute_all (parallel + dependencies)
 # ---------------------------------------------------------------------------
 
+
 class TestParallelExecutorExecuteAll:
     @pytest.mark.asyncio
     async def test_execute_all_parallel(self):
         from tools.orchestrator import ParallelExecutor
 
         calls = []
+
         async def tracked(**kw) -> str:
             msg = kw.get("message", "")
             calls.append(msg)
@@ -299,16 +317,13 @@ class TestParallelExecutorExecuteAll:
         from tools.orchestrator import ParallelExecutor
 
         tools = [
-            _make_tool(f"tool_{i}", handler=lambda **kw: f"result_{i}", parameters=[])
+            _make_tool(f"tool_{i}", handler=(lambda idx: lambda **kw: f"result_{idx}")(i), parameters=[])
             for i in range(5)
         ]
         registry = _make_registry(tools)
         executor = ParallelExecutor(max_concurrency=3)
 
-        tool_calls = [
-            ToolCall(id=f"c{i}", name=f"tool_{i}", arguments={})
-            for i in range(5)
-        ]
+        tool_calls = [ToolCall(id=f"c{i}", name=f"tool_{i}", arguments={}) for i in range(5)]
         results = await executor.execute_all(tool_calls, registry, None)
 
         assert len(results) == 5
@@ -396,17 +411,11 @@ class TestParallelExecutorExecuteAll:
             concurrent -= 1
             return kw.get("msg", "")
 
-        tools = [
-            _make_tool(f"sem_tool_{i}", async_handler=tracked_sem, parameters=[])
-            for i in range(10)
-        ]
+        tools = [_make_tool(f"sem_tool_{i}", async_handler=tracked_sem, parameters=[]) for i in range(10)]
         registry = _make_registry(tools)
         executor = ParallelExecutor(max_concurrency=3)
 
-        tool_calls = [
-            ToolCall(id=f"c{i}", name=f"sem_tool_{i}", arguments={"msg": f"m{i}"})
-            for i in range(10)
-        ]
+        tool_calls = [ToolCall(id=f"c{i}", name=f"sem_tool_{i}", arguments={"msg": f"m{i}"}) for i in range(10)]
         results = await executor.execute_all(tool_calls, registry, None)
 
         assert len(results) == 10
@@ -427,6 +436,7 @@ class TestParallelExecutorExecuteAll:
 # ---------------------------------------------------------------------------
 # StreamingExecutor
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingExecutor:
     @pytest.mark.asyncio
@@ -485,6 +495,7 @@ class TestStreamingExecutor:
 # ---------------------------------------------------------------------------
 # Dependency resolution
 # ---------------------------------------------------------------------------
+
 
 class TestDependencyResolution:
     def test_single_level_no_deps(self):

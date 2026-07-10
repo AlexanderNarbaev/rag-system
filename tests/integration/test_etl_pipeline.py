@@ -1,3 +1,4 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/integration/test_etl_pipeline.py
 """Integration tests for the ETL pipeline (extract -> chunk -> index).
 
@@ -5,11 +6,9 @@ Tests the full pipeline with mocks for Confluence, Jira extractors,
 SemanticChunker, QdrantHybridIndexer, and EntityRelationExtractor.
 """
 
-import json
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 import pytest
 
@@ -47,10 +46,10 @@ class TestFullExtractChunkIndexPipeline:
     @pytest.fixture
     def mock_chunker(self):
         """Mock SemanticChunker + MDKeyChunker producing sample chunks."""
-        with patch("etl.chunker.semantic_chunker.SemanticChunker") as mock_base, \
-             patch("etl.chunker.semantic_chunker.MetadataEnricher") as mock_enricher:
-            base_instance = mock_base.return_value
-            enricher_instance = mock_enricher.return_value
+        with (
+            patch("etl.chunker.semantic_chunker.SemanticChunker"),
+            patch("etl.chunker.semantic_chunker.MetadataEnricher"),
+        ):
 
             class FakeChunk:
                 def __init__(self, idx, source_metadata):
@@ -72,8 +71,10 @@ class TestFullExtractChunkIndexPipeline:
                     }
 
             with patch("etl.chunker.semantic_chunker.MDKeyChunker") as mock_md:
+
                 def process_doc(content, content_type, source_metadata):
                     return [FakeChunk(i, source_metadata) for i in range(3)]
+
                 mock_md.return_value.process_document.side_effect = process_doc
                 yield mock_md
 
@@ -110,8 +111,6 @@ class TestFullExtractChunkIndexPipeline:
 
     def test_full_extract_chunk_index_flow(self, mock_confluence_extractor, mock_chunker, mock_qdrant_indexer):
         """Full pipeline: extract Confluence -> chunk -> index in Qdrant."""
-        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-        from etl.chunker.semantic_chunker import MDKeyChunker
 
         # Simulate extraction
         extractor = mock_confluence_extractor.return_value
@@ -120,7 +119,12 @@ class TestFullExtractChunkIndexPipeline:
 
         # Simulate chunking
         chunker = mock_chunker.return_value
-        source_meta = {"source_type": "confluence", "source_id": "confluence_123", "version": "1.0", "doc_title": "Test Doc"}
+        source_meta = {
+            "source_type": "confluence",
+            "source_id": "confluence_123",
+            "version": "1.0",
+            "doc_title": "Test Doc",
+        }
         chunks = chunker.process_document("<p>Test content</p>", "html", source_meta)
         assert len(chunks) == 3
 
@@ -137,7 +141,6 @@ class TestFullExtractChunkIndexPipeline:
     def test_extract_then_chunk_with_metadata_preservation(self, mock_chunker):
         """Source metadata (source_type, version, doc_title) propagates to chunks."""
         chunker = mock_chunker.return_value
-        from etl.chunker.semantic_chunker import MDKeyChunker
 
         source_meta = {
             "source_type": "jira",
@@ -224,10 +227,7 @@ class TestWALCheckpointing:
 
     def test_wal_records_pipeline_checkpoints(self, tmp_path):
         """WAL correctly records and retrieves checkpoints for each pipeline stage."""
-        from etl.indexer.wal_manager import (
-            WALManager, PIPELINE_CONFLUENCE, PIPELINE_JIRA,
-            PIPELINE_INDEXING
-        )
+        from etl.indexer.wal_manager import PIPELINE_CONFLUENCE, PIPELINE_INDEXING, PIPELINE_JIRA, WALManager
 
         wal_path = tmp_path / "etl_wal.json"
         wal = WALManager(wal_path, use_lock=False)
@@ -242,7 +242,7 @@ class TestWALCheckpointing:
 
     def test_wal_persistence_across_instances(self, tmp_path):
         """WAL data persists across multiple WALManager instances sharing the same file."""
-        from etl.indexer.wal_manager import WALManager, PIPELINE_CONFLUENCE
+        from etl.indexer.wal_manager import PIPELINE_CONFLUENCE, WALManager
 
         wal_path = tmp_path / "etl_wal.json"
 
@@ -254,7 +254,7 @@ class TestWALCheckpointing:
 
     def test_wal_supports_hash_state_tracking(self, tmp_path):
         """WAL hash_map tracks per-document chunk hashes for indexing pipeline."""
-        from etl.indexer.wal_manager import WALManager, PIPELINE_INDEXING
+        from etl.indexer.wal_manager import PIPELINE_INDEXING, WALManager
 
         wal_path = tmp_path / "etl_wal.json"
         wal = WALManager(wal_path, use_lock=False)
@@ -273,7 +273,6 @@ class TestIncrementalUpdateFlow:
     def test_incremental_sync_adds_new_chunks(self, tmp_path):
         """LiveVectorLake.sync_document adds new chunks and removes stale ones."""
         from etl.chunker.hash_versioning import ChunkVersionStore
-        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
 
         hot_dir = tmp_path / "hot"
         cold_dir = tmp_path / "cold"
@@ -305,7 +304,6 @@ class TestIncrementalUpdateFlow:
     def test_incremental_sync_handles_empty_document(self, tmp_path):
         """LiveVectorLake handles documents with no chunks (deletion scenario)."""
         from etl.chunker.hash_versioning import ChunkVersionStore
-        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
 
         hot_dir = tmp_path / "hot"
         cold_dir = tmp_path / "cold"

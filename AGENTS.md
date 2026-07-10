@@ -6,13 +6,6 @@ Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline 
 ## Language
 English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language switcher. See `docs/en/` and `docs/ru/`.
 
-## Current State
-- **Version:** v2.0 (June 2026) — Self-Correcting RAG
-- **Tests:** 2275 collected, ~2269 passing (99%+ pass rate)
-- **Maturity:** RAG Level 5 (Self-Correcting) — HyDE query expansion, CRAG evaluator, self-reflection loops, hallucination detection & grounding, corrective re-generation, NLI answer verification, agentic tool calling (Confluence/Jira/GitLab live queries), multi-language support (RU/EN/DE/FR/ZH), cross-lingual retrieval benchmarks, LLMLingua compression, LongContextReorder, multi-modal RAG (images, code, tables), ColBERT, RBAC, JWT auth, eval pipeline, dynamic top-k, streaming ETL (Redis Streams), webhook-driven ingestion, model warm-up, SSE TTFT optimization, response compression (gzip/brotli), E2E test suite, chaos/resilience testing, K8s Helm chart, Grafana dashboards, Prometheus alert rules, SLI/SLO definitions, HA deployment, backup automation, DR runbook
-- **Production readiness:** 94% (75/80) across 8 dimensions — see `docs/en/guides/best-practices-checklist.md`
-- **Next milestone:** Beyond v2.0 — Federated RAG, Agentic Tools expansion, Model Evolution (see `docs/en/guides/roadmap.md`)
-
 ## Architecture
 Three-layer system plus supporting services, with multi-provider LLM backend support:
 
@@ -105,18 +98,18 @@ rag-system/
 │   ├── init_collections.py           # Initialize Qdrant collections
 │   └── download_models_offline.py    # Pre-download models for air-gapped env
 ├── tests/                            # Test suite
-│   ├── proxy/                        # 1417 proxy unit tests
-│   ├── etl/                          # 361 ETL unit tests
-│   ├── integration/                  # 59 integration tests
-│   ├── model_evolution/              # 358 model evolution tests
-│   ├── e2e/                          # 18 end-to-end tests
-│   ├── benchmark/                    # 4 load/benchmark tests
-│   ├── mcp_server/                   # 46 MCP server tests
+│   ├── proxy/                        # Proxy unit tests
+│   ├── etl/                          # ETL unit tests
+│   ├── integration/                  # Integration tests
+│   ├── model_evolution/              # Model evolution tests
+│   ├── e2e/                          # End-to-end tests
+│   ├── benchmark/                    # Load/benchmark tests
+│   ├── mcp_server/                   # MCP server tests
 │   └── conftest.py                   # Shared fixtures
 ├── docs/                             # Documentation
-│   ├── en/adr/                       # 7 Architecture Decision Records (English)
-│   ├── en/diagrams/                  # 4 C4 diagrams (SVG + Excalidraw)
-│   ├── en/guides/                    # 14 design & implementation guides (English)
+│   ├── en/adr/                       # Architecture Decision Records (English)
+│   ├── en/diagrams/                  # C4 diagrams (SVG + Excalidraw)
+│   ├── en/guides/                    # Design & implementation guides (English)
 │   ├── ru/adr/                       # Russian translations of ADRs
 │   ├── ru/guides/                    # Russian translations of guides
 ├── Makefile                          # Primary dev entry point
@@ -173,10 +166,10 @@ rag-system/
 # ── Quick commands (preferred) ──
 make install        # Full setup (proxy + ETL)
 make install-dev    # Setup with dev dependencies
-make test           # Run all tests (2275+ passing)
-make test-proxy     # Proxy unit tests only (1417)
-make test-etl       # ETL unit tests only (361)
-make test-integration  # Integration tests (59)
+make test           # Run all tests
+make test-proxy     # Proxy unit tests only
+make test-etl       # ETL unit tests only
+make test-integration  # Integration tests
 make lint           # Lint with ruff
 make format         # Format with ruff
 make format-check   # Check formatting without changes
@@ -276,7 +269,7 @@ See `proxy/app/config.py` for all available settings and defaults.
 | `docs/en/adr/ADR-001` through `ADR-010` | Architecture Decision Records (English) |
 | `docs/en/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
 | `docs/en/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
-| `docs/en/guides/roadmap.md` | Version history and development roadmap (v0.1 → v2.0) |
+| `docs/en/guides/roadmap.md` | Development roadmap and phased approach |
 | `docs/en/guides/disaster-recovery-runbook.md` | DR procedures for all failure scenarios |
 | `docs/en/sli_slo.md` | SLI/SLO definitions with error budgets |
 | `docs/en/guides/performance-quality.md` | HNSW tuning, quantization, monitoring, resilience |

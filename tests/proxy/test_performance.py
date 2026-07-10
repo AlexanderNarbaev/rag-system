@@ -1,7 +1,8 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy performance features (SSE streaming + compression)."""
-import json
+
 import sys
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -38,7 +39,8 @@ class TestCompressionConfig:
 
     def test_compression_config_defaults(self):
         """Verify default compression configuration values."""
-        from proxy.app.config import COMPRESSION_ENABLED, COMPRESSION_MIN_SIZE, COMPRESSION_LEVEL
+        from proxy.app.shared.config import COMPRESSION_ENABLED, COMPRESSION_LEVEL, COMPRESSION_MIN_SIZE
+
         assert isinstance(COMPRESSION_ENABLED, bool)
         assert isinstance(COMPRESSION_MIN_SIZE, int)
         assert isinstance(COMPRESSION_LEVEL, int)
@@ -52,16 +54,18 @@ class TestCompressionConfig:
         os.environ["COMPRESSION_MIN_SIZE"] = "1024"
         os.environ["COMPRESSION_LEVEL"] = "9"
 
-        import proxy.app.config
-        reload(proxy.app.config)
+        import proxy.app.shared.config
 
-        assert proxy.app.config.COMPRESSION_ENABLED is True
-        assert proxy.app.config.COMPRESSION_MIN_SIZE == 1024
-        assert proxy.app.config.COMPRESSION_LEVEL == 9
+        reload(proxy.app.shared.config)
+
+        assert proxy.app.shared.config.COMPRESSION_ENABLED is True
+        assert proxy.app.shared.config.COMPRESSION_MIN_SIZE == 1024
+        assert proxy.app.shared.config.COMPRESSION_LEVEL == 9
 
     def test_gzip_middleware_registered(self, client):
         """Verify GZipMiddleware is present when compression is enabled."""
         from proxy.app.main import app as main_app
+
         middleware_names = [str(m.cls) for m in main_app.user_middleware]
         assert "GZipMiddleware" in str(middleware_names)
 
@@ -70,7 +74,8 @@ class TestSSEStreamingConfig:
     """Tests for SSE streaming optimization configuration."""
 
     def test_sse_chunk_size_default(self):
-        from proxy.app.config import SSE_CHUNK_SIZE, STREAM_BUFFER_SIZE
+        from proxy.app.shared.config import SSE_CHUNK_SIZE, STREAM_BUFFER_SIZE
+
         assert isinstance(SSE_CHUNK_SIZE, int)
         assert SSE_CHUNK_SIZE > 0
         assert isinstance(STREAM_BUFFER_SIZE, int)
@@ -83,11 +88,12 @@ class TestSSEStreamingConfig:
         os.environ["SSE_CHUNK_SIZE"] = "8"
         os.environ["STREAM_BUFFER_SIZE"] = "2"
 
-        import proxy.app.config
-        reload(proxy.app.config)
+        import proxy.app.shared.config
 
-        assert proxy.app.config.SSE_CHUNK_SIZE == 8
-        assert proxy.app.config.STREAM_BUFFER_SIZE == 2
+        reload(proxy.app.shared.config)
+
+        assert proxy.app.shared.config.SSE_CHUNK_SIZE == 8
+        assert proxy.app.shared.config.STREAM_BUFFER_SIZE == 2
 
 
 class TestStreamingTTFT:
@@ -96,6 +102,7 @@ class TestStreamingTTFT:
     def test_initial_chunk_sent_only_once(self):
         """Verify initial_chunk returns data only on first call."""
         from proxy.app.main import StreamOptimizer
+
         optimizer = StreamOptimizer()
         first = optimizer.initial_chunk()
         second = optimizer.initial_chunk()
@@ -106,6 +113,7 @@ class TestStreamingTTFT:
     def test_stream_optimizer_initial_chunk(self):
         """Verify StreamOptimizer class sends initial empty chunk before content."""
         from proxy.app.main import StreamOptimizer
+
         optimizer = StreamOptimizer()
         assert optimizer.initial_chunk_sent is False
         assert optimizer.sse_chunk_size > 0
@@ -114,18 +122,21 @@ class TestStreamingTTFT:
     def test_stream_optimizer_config_chunk_size(self):
         """Verify StreamOptimizer respects configured SSE_CHUNK_SIZE."""
         from proxy.app.main import StreamOptimizer
+
         optimizer = StreamOptimizer(chunk_size=6)
         assert optimizer.sse_chunk_size == 6
 
     def test_stream_optimizer_config_buffer_size(self):
         """Verify StreamOptimizer respects configured STREAM_BUFFER_SIZE."""
         from proxy.app.main import StreamOptimizer
+
         optimizer = StreamOptimizer(buffer_size=2)
         assert optimizer.stream_buffer_size == 2
 
     def test_format_chunk_produces_valid_sse(self):
         """Verify format_chunk outputs valid SSE data format."""
         from proxy.app.main import StreamOptimizer
+
         optimizer = StreamOptimizer()
         chunk = {"choices": [{"delta": {"content": "hello"}}]}
         formatted = optimizer.format_chunk(chunk)

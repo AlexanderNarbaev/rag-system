@@ -6,7 +6,6 @@ Publishes webhook events to Redis Streams for asynchronous processing.
 
 import json
 import logging
-from typing import Optional
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,7 +20,7 @@ class StreamProducer:
     def __init__(self, redis_client=None):
         self.redis = redis_client
 
-    def produce_event(self, stream: str, event: dict) -> Optional[str]:
+    def produce_event(self, stream: str, event: dict) -> str | None:
         """
         Produce a single event to a Redis Stream.
         Returns the message ID on success, None on failure.

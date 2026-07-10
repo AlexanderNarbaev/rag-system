@@ -1,8 +1,8 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/tools/openapi_discovery.py — OpenAPI Auto-Discovery."""
+
 import sys
 from pathlib import Path
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "proxy" / "app"))
 
@@ -41,7 +41,10 @@ PETSORE_SPEC = {
                     "required": True,
                     "content": {
                         "application/json": {
-                            "schema": {"type": "object", "properties": {"name": {"type": "string"}, "status": {"type": "string"}}}
+                            "schema": {
+                                "type": "object",
+                                "properties": {"name": {"type": "string"}, "status": {"type": "string"}},
+                            }
                         }
                     },
                 },
@@ -137,7 +140,7 @@ class TestOpenAPIDiscoveryAuto:
 
         pet_id_param = next(p for p in get_by_id.parameters if p.name == "petId")
         assert pet_id_param.required is True
-        assert pet_id_param.type == int
+        assert pet_id_param.type is int  # noqa: E721
 
     def test_query_params_extracted_as_optional_tool_param(self):
         from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
@@ -152,11 +155,11 @@ class TestOpenAPIDiscoveryAuto:
 
         limit = next(p for p in list_pets.parameters if p.name == "limit")
         assert limit.required is False
-        assert limit.type == int
+        assert limit.type is int  # noqa: E721
 
         status = next(p for p in list_pets.parameters if p.name == "status")
         assert status.required is False
-        assert status.type == str
+        assert status.type is str  # noqa: E721
         assert status.enum == ["available", "pending", "sold"]
 
     def test_request_body_json_mapped_to_tool_param(self):

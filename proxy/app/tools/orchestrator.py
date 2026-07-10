@@ -14,10 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from .definition import ToolCall, ToolDefinition, ToolResult
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class CompositionPattern(str, Enum):
+class CompositionPattern(StrEnum):
     CHAIN = "chain"
     FAN_OUT = "fan_out"
     CONDITIONAL = "conditional"
@@ -44,6 +43,7 @@ class CompositionPattern(str, Enum):
 @dataclass
 class ChainPattern:
     """Sequential chain: A -> B -> C. Each step receives previous output."""
+
     steps: list[str]
     input_mapper: Callable[[ToolResult], dict[str, Any]] | None = None
 
@@ -51,6 +51,7 @@ class ChainPattern:
 @dataclass
 class FanOutPattern:
     """Fan-out: run same tool with N different inputs in parallel."""
+
     tool_name: str
     inputs: list[dict[str, Any]]
 
@@ -58,6 +59,7 @@ class FanOutPattern:
 @dataclass
 class ConditionalPattern:
     """Conditional branching: if condition then tool_a else tool_b."""
+
     condition: Callable[[Any], bool]
     true_tool: str
     false_tool: str
@@ -117,24 +119,16 @@ def _resolve_dependency_levels(
         dep_names = set(tool.depends_on)
         for d in dep_names:
             if d not in tool_names:
-                raise ValueError(
-                    f"Unresolved dependencies for '{tool.name}': "
-                    f"'{d}' is not in the tool call set"
-                )
+                raise ValueError(f"Unresolved dependencies for '{tool.name}': '{d}' is not in the tool call set")
         deps[tool.name] = dep_names
 
     levels: list[set[str]] = []
     remaining: set[str] = set(tool_names)
 
     while remaining:
-        level = {
-            name for name in remaining
-            if not (deps[name] & remaining)
-        }
+        level = {name for name in remaining if not (deps[name] & remaining)}
         if not level:
-            raise ValueError(
-                f"Circular dependency cycle detected among tools: {remaining}"
-            )
+            raise ValueError(f"Circular dependency cycle detected among tools: {remaining}")
         levels.append(level)
         remaining -= level
 
@@ -207,14 +201,20 @@ class ParallelExecutor:
                 continue
 
             level_results = await asyncio.gather(*coros)
-            for name, result in zip(level_order, level_results):
+            for name, result in zip(level_order, level_results, strict=False):
                 results_map[name] = result
 
-        return [results_map.get(tc.name, ToolResult(
-            tool_name=tc.name,
-            tool_call_id=tc.id,
-            error=f"No result for '{tc.name}'",
-        )) for tc in tool_calls]
+        return [
+            results_map.get(
+                tc.name,
+                ToolResult(
+                    tool_name=tc.name,
+                    tool_call_id=tc.id,
+                    error=f"No result for '{tc.name}'",
+                ),
+            )
+            for tc in tool_calls
+        ]
 
     async def _execute_with_semaphore(
         self,
@@ -261,10 +261,9 @@ class ParallelExecutor:
                     continue
 
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = (
-                    f"Tool '{tool_call.name}' timed out after "
-                    f"{tool_def.timeout_seconds if tool_def else 30.0}s"
+                    f"Tool '{tool_call.name}' timed out after {tool_def.timeout_seconds if tool_def else 30.0}s"
                 )
                 if attempt < total_attempts - 1:
                     retry_count += 1
@@ -299,6 +298,7 @@ def _compute_backoff(retry_policy: Any, attempt: int) -> float:
 
     if getattr(retry_policy, "jitter", False):
         import random
+
         delay = delay * (0.5 + random.random())
 
     return delay
@@ -349,7 +349,7 @@ class StreamingExecutor:
             for i in range(0, len(content), chunk_size):
                 yield content[i : i + chunk_size]
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             yield f"Error: Tool '{tool_call.name}' timed out"
         except Exception as exc:
             yield str(exc)

@@ -1,4 +1,5 @@
 """Tests for proxy/app/tools/sdk.py — @tool decorator, ToolBuilder, ToolContext, json_schema_from_func."""
+
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -286,6 +287,7 @@ class TestToolDecorator:
         from tools.sdk import _sdk_registered_tools, tool
 
         rp = RetryPolicy(max_retries=5)
+
         @tool(timeout=10.0, retry_policy=rp)
         def resilient_tool(x: str) -> str:
             return x

@@ -1,14 +1,13 @@
 """Tests for etl/chunker/code_chunker.py."""
-import pytest
 
 from etl.chunker.code_chunker import (
-    CodeChunk,
-    CODE_CHUNKING_ENABLED,
     AST_LANGUAGES,
-    chunk_python,
-    chunk_javascript,
-    chunk_java,
+    CODE_CHUNKING_ENABLED,
+    CodeChunk,
     chunk_code,
+    chunk_java,
+    chunk_javascript,
+    chunk_python,
 )
 
 
@@ -139,7 +138,7 @@ class TestChunkJavascript:
 
 class TestChunkJava:
     def test_simple_method(self):
-        source = "public class Hello {\n  public void greet() {\n    System.out.println(\"Hi\");\n  }\n}\n"
+        source = 'public class Hello {\n  public void greet() {\n    System.out.println("Hi");\n  }\n}\n'
         chunks = chunk_java(source)
         assert len(chunks) >= 2  # class + method
 

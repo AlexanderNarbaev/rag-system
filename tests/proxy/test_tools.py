@@ -1,7 +1,8 @@
 """Tests for proxy/app/tools.py — Tool registry and function calling handler."""
+
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -52,7 +53,7 @@ class TestToolDefinition:
 class TestToolRegistry:
     @pytest.fixture
     def registry(self):
-        from proxy.app.tools import ToolDefinition, ToolRegistry
+        from proxy.app.tools import ToolRegistry
 
         reg = ToolRegistry()
         return reg
@@ -110,7 +111,7 @@ class TestToolRegistry:
 class TestExecuteTool:
     @pytest.fixture
     def registry(self):
-        from proxy.app.tools import ToolDefinition, ToolRegistry
+        from proxy.app.tools import ToolRegistry
 
         reg = ToolRegistry()
         return reg
@@ -278,7 +279,7 @@ class TestBuiltinSearchDocuments:
     def test_search_documents_handler_returns_string(self):
         from proxy.app.tools import _search_documents
 
-        with patch("app.retrieval.hybrid_search") as mock_hs:
+        with patch("proxy.app.core.retrieval.hybrid_search") as mock_hs:
             mock_result = MagicMock()
             mock_result.id = "chunk_1"
             mock_result.score = 0.95
@@ -291,21 +292,21 @@ class TestBuiltinSearchDocuments:
     def test_search_documents_empty_results(self):
         from proxy.app.tools import _search_documents
 
-        with patch("app.retrieval.hybrid_search", return_value=[]):
+        with patch("proxy.app.core.retrieval.hybrid_search", return_value=[]):
             result = _search_documents("nonexistent")
             assert "No documents found" in result
 
     def test_search_documents_error_graceful(self):
         from proxy.app.tools import _search_documents
 
-        with patch("app.retrieval.hybrid_search", side_effect=Exception("Qdrant unavailable")):
+        with patch("proxy.app.core.retrieval.hybrid_search", side_effect=Exception("Qdrant unavailable")):
             result = _search_documents("query")
             assert "Search failed" in result
 
     def test_search_by_version_returns_string(self):
         from proxy.app.tools import _search_by_version
 
-        with patch("app.retrieval.hybrid_search") as mock_hs:
+        with patch("proxy.app.core.retrieval.hybrid_search") as mock_hs:
             mock_result = MagicMock()
             mock_result.id = "v1_chunk"
             mock_result.score = 0.9
@@ -330,7 +331,7 @@ class TestBuiltinSearchDocuments:
 
 class TestGlobalRegistry:
     def test_get_registry_singleton(self):
-        from proxy.app.tools import _global_registry, get_tool_registry, ToolRegistry
+        from proxy.app.tools import ToolRegistry, get_tool_registry
 
         r1 = get_tool_registry()
         r2 = get_tool_registry()
@@ -339,10 +340,10 @@ class TestGlobalRegistry:
 
     def test_global_registry_has_builtin_tools_when_enabled(self):
         with patch("proxy.app.tools.TOOLS_ENABLED", True):
-            from proxy.app.tools import _global_registry, get_tool_registry
-
             # Reset singleton to pick up patched config
             import proxy.app.tools as tmod
+            from proxy.app.tools import get_tool_registry
+
             tmod._global_registry = None
 
             reg = get_tool_registry()

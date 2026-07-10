@@ -185,9 +185,11 @@ curl -X POST http://localhost:8081/v1/search \
 
 | I want to... | Go to... |
 |-------------|---------|
+| Understand the architecture | [Architecture](architecture.md) |
 | Deploy the proxy | [Proxy Deployment](deploy_proxy.md) |
 | Deploy the ETL pipeline | [ETL Deployment](deploy_etl.md) |
 | Call the API | [API Reference](api_reference.md) |
+| Set up a dev environment | [Development Guide](guides/development-guide.md) |
 | Integrate with IDE | [OpenCode Integration](guides/integration-opencode.md) |
 | Set up air-gapped | [Deployment Guide](guides/deployment-guide.md) |
 
@@ -195,7 +197,7 @@ curl -X POST http://localhost:8081/v1/search \
 
 | I want to... | Go to... |
 |-------------|---------|
-| Understand architecture | [Architecture Decision Records](adr/index.md) |
+| Understand architecture decisions | [Architecture Decision Records](adr/index.md) |
 | See visual architecture | [C4 Diagrams](diagrams/index.md) |
 | Understand knowledge graph | [Knowledge Graph Strategy](guides/knowledge-graph-strategy.md) |
 | Understand access control | [Access Control & RBAC](guides/access-control-rbac.md) |

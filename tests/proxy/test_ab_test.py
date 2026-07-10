@@ -1,11 +1,12 @@
 """Tests for proxy/app/ab_test.py — A/B test harness for pipeline variants."""
 
 import pytest
-from proxy.app.ab_test import (
+
+from proxy.app.shared.ab_test import (
     ABTest,
     ABVariant,
-    get_statistical_significance,
     compute_effect_size,
+    get_statistical_significance,
 )
 
 
@@ -115,6 +116,7 @@ class TestABTest:
         va = ab.register("a", {})
         vb = ab.register("b", {})
         import random
+
         for _ in range(30):
             va.record("score", 0.9 + random.uniform(-0.05, 0.05))
             vb.record("score", 0.5 + random.uniform(-0.05, 0.05))
@@ -157,27 +159,18 @@ class TestStatisticalSignificance:
             get_statistical_significance([], [])
 
     def test_different_sizes(self):
-        p = get_statistical_significance(
-            [0.8, 0.85, 0.82, 0.87, 0.83, 0.86, 0.84, 0.88],
-            [0.6, 0.55, 0.58, 0.57]
-        )
+        p = get_statistical_significance([0.8, 0.85, 0.82, 0.87, 0.83, 0.86, 0.84, 0.88], [0.6, 0.55, 0.58, 0.57])
         assert isinstance(p, float)
         assert p < 0.05
 
 
 class TestEffectSize:
     def test_large_effect(self):
-        d = compute_effect_size(
-            [0.9, 0.88, 0.92, 0.87, 0.91],
-            [0.5, 0.48, 0.52, 0.47, 0.51]
-        )
+        d = compute_effect_size([0.9, 0.88, 0.92, 0.87, 0.91], [0.5, 0.48, 0.52, 0.47, 0.51])
         assert d > 1.0  # large effect
 
     def test_small_effect(self):
-        d = compute_effect_size(
-            [0.7, 0.71, 0.69, 0.72, 0.7],
-            [0.7, 0.71, 0.69, 0.72, 0.7]
-        )
+        d = compute_effect_size([0.7, 0.71, 0.69, 0.72, 0.7], [0.7, 0.71, 0.69, 0.72, 0.7])
         assert abs(d) < 0.5
 
     def test_empty_lists(self):

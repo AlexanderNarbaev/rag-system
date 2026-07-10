@@ -1,9 +1,8 @@
 """Tests for proxy/app/memory_manager.py - multi-tier memory architecture."""
+
 import time
 
-import pytest
-
-from proxy.app.memory_manager import (
+from proxy.app.shared.memory_manager import (
     ConversationMemory,
     MemoryManager,
     QueryCache,

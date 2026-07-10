@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 try:
     from bs4 import BeautifulSoup
+
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
@@ -67,7 +68,7 @@ def extract_images_from_html(html: str) -> list[ImageInfo]:
         if alt_pos < 0:
             alt_pos = html.find(f"src='{src}'")
         if alt_pos >= 0:
-            tag_section = html[max(0, alt_pos - 200):alt_pos + len(src) + 50]
+            tag_section = html[max(0, alt_pos - 200) : alt_pos + len(src) + 50]
             am = alt_pattern.search(tag_section)
             if am:
                 alt = am.group(1)

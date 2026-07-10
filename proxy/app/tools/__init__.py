@@ -11,39 +11,83 @@ use ``from proxy.app.tools.definition import ToolDefinition``.
 
 from __future__ import annotations
 
-from app.config import TOOLS_ENABLED
+from proxy.app.shared.config import TOOLS_ENABLED
 
-from .definition import (
-    RetryPolicy,
-    ToolCall,
-    ToolDefinition as NewToolDefinition,
-    ToolErrorBase,
-    ToolParam,
-    ToolResult as NewToolResult,
-    ToolVisibility,
-    _UNSET,
-)
-from .errors import (
-    ToolDependencyError,
-    ToolError,
-    ToolExecutionError,
-    ToolNotFoundError,
-    ToolPermissionError,
-    ToolRateLimitError,
-    ToolTimeoutError,
-    ToolValidationError,
-    classify_error,
-)
 from ._legacy import (
     ToolDefinition,
     ToolRegistry,
-    ToolResult,
-    _get_document_metadata,
-    _search_by_version,
-    _search_documents,
-    execute_tool,
-    get_tool_registry as _legacy_get_tool_registry,
-    handle_function_call,
+)
+from ._legacy import (
+    ToolResult as ToolResult,  # noqa: F401  # re-export
+)
+from ._legacy import (
+    _get_document_metadata as _get_document_metadata,  # noqa: F401  # re-export
+)
+from ._legacy import (
+    _search_by_version as _search_by_version,  # noqa: F401  # re-export
+)
+from ._legacy import (
+    _search_documents as _search_documents,  # noqa: F401  # re-export
+)
+from ._legacy import (
+    execute_tool as execute_tool,  # noqa: F401  # re-export
+)
+from ._legacy import (
+    get_tool_registry as _legacy_get_tool_registry,  # noqa: F401  # re-export (aliased to avoid conflict)
+)
+from ._legacy import (
+    handle_function_call as handle_function_call,  # noqa: F401  # re-export
+)
+from .definition import (
+    _UNSET as _UNSET,  # noqa: F401  # re-export
+)
+from .definition import (
+    RetryPolicy as RetryPolicy,  # noqa: F401  # re-export
+)
+from .definition import (
+    ToolCall as ToolCall,  # noqa: F401  # re-export
+)
+from .definition import (
+    ToolDefinition as NewToolDefinition,
+)
+from .definition import (
+    ToolErrorBase as ToolErrorBase,  # noqa: F401  # re-export
+)
+from .definition import (
+    ToolParam as ToolParam,  # noqa: F401  # re-export
+)
+from .definition import (
+    ToolResult as NewToolResult,  # noqa: F401  # aliased re-export
+)
+from .definition import (
+    ToolVisibility as ToolVisibility,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolDependencyError as ToolDependencyError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolError as ToolError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolExecutionError as ToolExecutionError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolNotFoundError as ToolNotFoundError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolPermissionError as ToolPermissionError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolRateLimitError as ToolRateLimitError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolTimeoutError as ToolTimeoutError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolValidationError as ToolValidationError,  # noqa: F401  # re-export
+)
+from .errors import (
+    classify_error as classify_error,  # noqa: F401  # re-export
 )
 
 _global_registry = None
@@ -100,9 +144,9 @@ def _register_builtin_tools(
     - new-style ToolDefinition (with ToolParam lists) into the enhanced registry
     """
     from .builtin import (
+        GET_DOCUMENT_METADATA_TOOL,
         SEARCH_BY_VERSION_TOOL,
         SEARCH_DOCUMENTS_TOOL,
-        GET_DOCUMENT_METADATA_TOOL,
         get_document_metadata,
         search_by_version,
         search_documents,
@@ -225,12 +269,14 @@ def format_tools_for_llm(tools: list) -> list[dict]:
         if isinstance(t, NewToolDefinition):
             formatted.append(t.to_openai_format())
         else:
-            formatted.append({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.parameters_schema,
-                },
-            })
+            formatted.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters_schema,
+                    },
+                }
+            )
     return formatted

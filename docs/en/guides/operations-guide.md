@@ -1870,4 +1870,5 @@ fi
 - [Deployment Guide](deployment-guide.md)
 - [Performance & Quality Best Practices](performance-quality.md)
 - [Troubleshooting Guide](troubleshooting.md)
-- [Operations Guide (Russian)](../../ru/guides/operations-guide.md)
+
+> **Note:** This guide is also available in Russian via the language switcher in the top navigation.

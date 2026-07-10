@@ -236,11 +236,13 @@ def evaluate_nli(
         else:
             label, confidence = _lightweight_check(claim, context)
 
-        per_claim.append({
-            "claim": claim,
-            "label": label,
-            "confidence": round(confidence, 3),
-        })
+        per_claim.append(
+            {
+                "claim": claim,
+                "label": label,
+                "confidence": round(confidence, 3),
+            }
+        )
 
         if label == "entailment":
             entailed += 1

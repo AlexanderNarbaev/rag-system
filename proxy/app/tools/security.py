@@ -85,11 +85,7 @@ class ToolVisibilityFilter:
         role: str | None = None,
     ) -> list[ToolDefinition]:
         """Return tools from *registry* that are visible to *role*."""
-        return [
-            tool
-            for tool in registry.get_all()
-            if self.check_visibility(tool.visibility, role=role)
-        ]
+        return [tool for tool in registry.get_all() if self.check_visibility(tool.visibility, role=role)]
 
     def filter_by_name(
         self,
@@ -189,66 +185,37 @@ class ToolInputSanitizer:
 
         if param_type is str:
             if not isinstance(value, str):
-                errors.append(
-                    f"Parameter '{param.name}' must be of type str, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be of type str, got {type(value).__name__}")
             elif param.enum is not None and value not in param.enum:
-                errors.append(
-                    f"Parameter '{param.name}' must be one of {param.enum}, "
-                    f"got '{value}'"
-                )
+                errors.append(f"Parameter '{param.name}' must be one of {param.enum}, got '{value}'")
 
         elif param_type is int:
             if isinstance(value, bool) or not isinstance(value, int):
-                errors.append(
-                    f"Parameter '{param.name}' must be of type int, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be of type int, got {type(value).__name__}")
 
         elif param_type is float:
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                errors.append(
-                    f"Parameter '{param.name}' must be of type float, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be of type float, got {type(value).__name__}")
 
         elif param_type is bool:
             if not isinstance(value, bool):
-                errors.append(
-                    f"Parameter '{param.name}' must be of type bool, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be of type bool, got {type(value).__name__}")
 
         elif param_type is list:
             if not isinstance(value, list):
-                errors.append(
-                    f"Parameter '{param.name}' must be of type list/array, "
-                    f"got {type(value).__name__}"
-                )
+                errors.append(f"Parameter '{param.name}' must be of type list/array, got {type(value).__name__}")
             elif param.items_type is not None:
                 items_type = param.items_type
                 if isinstance(items_type, str):
                     items_type = _resolve_string_type(items_type)
                 for i, item in enumerate(value):
                     if items_type is str and not isinstance(item, str):
-                        errors.append(
-                            f"Parameter '{param.name}' items must be str, "
-                            f"item[{i}] is {type(item).__name__}"
-                        )
-                    elif items_type is int and (
-                        isinstance(item, bool) or not isinstance(item, int)
-                    ):
-                        errors.append(
-                            f"Parameter '{param.name}' items must be int, "
-                            f"item[{i}] is {type(item).__name__}"
-                        )
+                        errors.append(f"Parameter '{param.name}' items must be str, item[{i}] is {type(item).__name__}")
+                    elif items_type is int and (isinstance(item, bool) or not isinstance(item, int)):
+                        errors.append(f"Parameter '{param.name}' items must be int, item[{i}] is {type(item).__name__}")
 
         elif param_type is dict and not isinstance(value, dict):
-            errors.append(
-                f"Parameter '{param.name}' must be of type dict/object, "
-                f"got {type(value).__name__}"
-            )
+            errors.append(f"Parameter '{param.name}' must be of type dict/object, got {type(value).__name__}")
 
         return errors
 

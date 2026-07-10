@@ -16,18 +16,12 @@ import asyncio
 import logging
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from typing import Any
 
 from .definition import (
     ToolDefinition,
     ToolResult,
     ToolVisibility,
-    _UNSET,
-)
-from .errors import (
-    ToolNotFoundError,
-    ToolValidationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -228,10 +222,7 @@ class EnhancedToolRegistry:
             results = [t for t in results if t.provider == provider]
 
         if visibility_filter is not None:
-            results = [
-                t for t in results
-                if _visible_for_role(t.visibility, visibility_filter)
-            ]
+            results = [t for t in results if _visible_for_role(t.visibility, visibility_filter)]
 
         return results
 
@@ -469,7 +460,7 @@ class EnhancedToolRegistry:
 
         Returns a dict mapping provider_name -> list of discovered tools.
         """
-        from app.config import TOOLS_DECLARATIVE_DIR, TOOLS_OPENAPI_SPECS
+        from proxy.app.shared.config import TOOLS_DECLARATIVE_DIR, TOOLS_OPENAPI_SPECS
 
         results: dict[str, list[ToolDefinition]] = {}
 
@@ -482,19 +473,22 @@ class EnhancedToolRegistry:
             results[sdk.provider_name] = discovered
             logger.info(
                 "Discovered %d tools from provider '%s'",
-                len(discovered), sdk.provider_name,
+                len(discovered),
+                sdk.provider_name,
             )
         except Exception as exc:
             logger.error(
                 "Provider '%s' discovery failed: %s",
-                sdk.provider_name, exc,
+                sdk.provider_name,
+                exc,
             )
             results[sdk.provider_name] = []
 
         # Declarative provider (only if directory exists)
         if os.path.isdir(TOOLS_DECLARATIVE_DIR):
             try:
-                from app.tools.declarative import DeclarativeProvider as RealDeclarativeProvider
+                from proxy.app.tools.declarative import DeclarativeProvider as RealDeclarativeProvider
+
                 declarative = RealDeclarativeProvider()
                 discovered = await declarative.discover()
                 for tool in discovered:
@@ -502,18 +496,21 @@ class EnhancedToolRegistry:
                 results[declarative.provider_name] = discovered
                 logger.info(
                     "Discovered %d tools from provider '%s'",
-                    len(discovered), declarative.provider_name,
+                    len(discovered),
+                    declarative.provider_name,
                 )
             except Exception as exc:
                 logger.error(
-                    "Declarative provider discovery failed: %s", exc,
+                    "Declarative provider discovery failed: %s",
+                    exc,
                 )
                 results["declarative"] = []
 
         # OpenAPI provider (only if specs configured)
         if TOOLS_OPENAPI_SPECS:
             try:
-                from app.tools.openapi_discovery import OpenAPIProvider as RealOpenAPIProvider
+                from proxy.app.tools.openapi_discovery import OpenAPIProvider as RealOpenAPIProvider
+
                 openapi = RealOpenAPIProvider()
                 discovered = await openapi.discover()
                 for tool in discovered:
@@ -521,11 +518,13 @@ class EnhancedToolRegistry:
                 results[openapi.provider_name] = discovered
                 logger.info(
                     "Discovered %d tools from provider '%s'",
-                    len(discovered), openapi.provider_name,
+                    len(discovered),
+                    openapi.provider_name,
                 )
             except Exception as exc:
                 logger.error(
-                    "OpenAPI provider discovery failed: %s", exc,
+                    "OpenAPI provider discovery failed: %s",
+                    exc,
                 )
                 results["openapi"] = []
 

@@ -1,4 +1,5 @@
 """Tests for proxy/app/tools/declarative.py — YAML/JSON Declarative Tools."""
+
 import json
 import os
 import sys
@@ -12,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "proxy" / "a
 
 YAML_AVAILABLE = True
 try:
-    import yaml
+    import yaml  # noqa: F401
 except ImportError:
     YAML_AVAILABLE = False
 
@@ -88,17 +89,18 @@ def tmp_yaml_dir(yaml_http_shell_content, yaml_malformed_tool, yaml_shell_no_whi
         (base / "malformed.yaml").write_text(yaml_malformed_tool)
         (base / "no_whitelist.yaml").write_text(yaml_shell_no_whitelist)
         (base / "tools.json").write_text(
-            json.dumps({"tools": [
+            json.dumps(
                 {
-                    "name": "json_tool",
-                    "type": "http",
-                    "description": "A JSON-defined tool",
-                    "http": {
-                        "method": "GET",
-                        "url_template": "https://api.example.com/data"
-                    }
+                    "tools": [
+                        {
+                            "name": "json_tool",
+                            "type": "http",
+                            "description": "A JSON-defined tool",
+                            "http": {"method": "GET", "url_template": "https://api.example.com/data"},
+                        }
+                    ]
                 }
-            ]})
+            )
         )
         yield str(tmpdir)
 

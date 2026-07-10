@@ -104,9 +104,7 @@ class ModelRegistry:
             if version is None:
                 version = str(len(versions) + 1)
             if version in versions:
-                raise ValueError(
-                    f"Version '{version}' of model '{name}' already exists"
-                )
+                raise ValueError(f"Version '{version}' of model '{name}' already exists")
             mv = ModelVersion(
                 name=name,
                 version=version,
@@ -124,9 +122,7 @@ class ModelRegistry:
             if name not in self._models:
                 raise KeyError(f"Model '{name}' not found in registry")
             if version not in self._models[name]:
-                raise KeyError(
-                    f"Version '{version}' not found for model '{name}'"
-                )
+                raise KeyError(f"Version '{version}' not found for model '{name}'")
             return self._models[name][version]
 
     def get_latest_production(self, name: str) -> ModelVersion | None:
@@ -204,15 +200,11 @@ class ModelRegistry:
 
             current = self.get_latest_production(name)
             if current is None:
-                raise ValueError(
-                    f"No current production version for model '{name}'"
-                )
+                raise ValueError(f"No current production version for model '{name}'")
 
             previous = self._find_previous_production(name, current.version)
             if previous is None:
-                raise ValueError(
-                    f"No previous production version to roll back to for model '{name}'"
-                )
+                raise ValueError(f"No previous production version to roll back to for model '{name}'")
 
             current.status = "archived"
             previous.status = "production"
@@ -232,9 +224,7 @@ class ModelRegistry:
             if name not in self._models:
                 raise KeyError(f"Model '{name}' not found in registry")
             if version not in self._models[name]:
-                raise KeyError(
-                    f"Version '{version}' not found for model '{name}'"
-                )
+                raise KeyError(f"Version '{version}' not found for model '{name}'")
             del self._models[name][version]
             if not self._models[name]:
                 del self._models[name]
@@ -244,9 +234,7 @@ class ModelRegistry:
         if name not in self._models:
             raise KeyError(f"Model '{name}' not found in registry")
         if version not in self._models[name]:
-            raise KeyError(
-                f"Version '{version}' not found for model '{name}'"
-            )
+            raise KeyError(f"Version '{version}' not found for model '{name}'")
         return self._models[name][version]
 
     def _archive_previous_production(self, name: str, new_version: str) -> None:
@@ -258,9 +246,7 @@ class ModelRegistry:
     def _find_previous_production(self, name: str, current_version: str) -> ModelVersion | None:
         """Find the most recent archived version (previous production)."""
         candidates = [
-            mv
-            for mv in self._models[name].values()
-            if mv.status == "archived" and mv.version != current_version
+            mv for mv in self._models[name].values() if mv.status == "archived" and mv.version != current_version
         ]
         if not candidates:
             return None
@@ -288,8 +274,7 @@ class ModelRegistry:
         self._store_path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "models": {
-                name: {ver: mv.to_dict() for ver, mv in versions.items()}
-                for name, versions in self._models.items()
+                name: {ver: mv.to_dict() for ver, mv in versions.items()} for name, versions in self._models.items()
             }
         }
         tmp_path = self._store_path.with_suffix(self._store_path.suffix + ".tmp")

@@ -1,7 +1,8 @@
 """Tests for proxy/app/token_optimizer.py — TokenOptimizer class."""
+
 import pytest
 
-from proxy.app.token_optimizer import TokenOptimizer, count_bpe_tokens
+from proxy.app.core.token_optimizer import TokenOptimizer, count_bpe_tokens
 
 
 class TestCountBpeTokens:

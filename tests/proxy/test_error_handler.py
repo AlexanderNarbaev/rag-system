@@ -1,10 +1,11 @@
 """Tests for proxy/app/error_handler.py - circuit breaker, retry, fallback."""
-import time
+
 import asyncio
+import time
 
 import pytest
 
-from proxy.app.error_handler import (
+from proxy.app.shared.error_handler import (
     CircuitBreaker,
     CircuitBreakerError,
     CircuitState,

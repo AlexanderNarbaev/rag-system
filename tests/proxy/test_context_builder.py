@@ -1,16 +1,15 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/context_builder.py functions."""
-import pytest
-from unittest.mock import patch
 
-from proxy.app.context_builder import (
-    extract_version_from_query,
+from proxy.app.core.context import (
+    build_context,
     compute_chunk_hash,
     deduplicate_chunks,
-    resolve_versions,
-    group_by_semantic_key,
     estimate_tokens,
-    build_context,
+    extract_version_from_query,
+    group_by_semantic_key,
     prepare_context,
+    resolve_versions,
 )
 
 
@@ -49,7 +48,13 @@ class TestComputeChunkHash:
     """Tests for compute_chunk_hash function."""
 
     def test_same_content_same_hash(self):
-        chunk = {"text": "hello", "source_type": "confluence", "source_id": "X-1", "version": "1.0", "doc_title": "Test"}
+        chunk = {
+            "text": "hello",
+            "source_type": "confluence",
+            "source_id": "X-1",
+            "version": "1.0",
+            "doc_title": "Test",
+        }
         assert compute_chunk_hash(chunk) == compute_chunk_hash(dict(chunk))
 
     def test_different_text_different_hash(self):
@@ -256,9 +261,39 @@ class TestPrepareContext:
 
     def test_full_pipeline(self):
         chunks = [
-            ({"text": "A dup", "source_id": "doc1", "version": "1.0", "source_type": "w", "title": "T", "doc_title": "D"}, 0.9),
-            ({"text": "A dup", "source_id": "doc1", "version": "1.0", "source_type": "w", "title": "T", "doc_title": "D"}, 0.8),
-            ({"text": "B newer", "source_id": "doc1", "version": "2.0", "source_type": "w", "title": "T", "doc_title": "D"}, 0.85),
+            (
+                {
+                    "text": "A dup",
+                    "source_id": "doc1",
+                    "version": "1.0",
+                    "source_type": "w",
+                    "title": "T",
+                    "doc_title": "D",
+                },
+                0.9,
+            ),
+            (
+                {
+                    "text": "A dup",
+                    "source_id": "doc1",
+                    "version": "1.0",
+                    "source_type": "w",
+                    "title": "T",
+                    "doc_title": "D",
+                },
+                0.8,
+            ),
+            (
+                {
+                    "text": "B newer",
+                    "source_id": "doc1",
+                    "version": "2.0",
+                    "source_type": "w",
+                    "title": "T",
+                    "doc_title": "D",
+                },
+                0.85,
+            ),
         ]
         result = prepare_context(chunks)
         assert "B newer" in result
@@ -276,8 +311,30 @@ class TestPrepareContext:
 
     def test_with_semantic_grouping(self):
         chunks = [
-            ({"text": "P1", "semantic_key": "s1", "source_id": "d1", "version": "1", "source_type": "w", "title": "T", "doc_title": "D"}, 0.9),
-            ({"text": "P2", "semantic_key": "s1", "source_id": "d1", "version": "1", "source_type": "w", "title": "T", "doc_title": "D"}, 0.8),
+            (
+                {
+                    "text": "P1",
+                    "semantic_key": "s1",
+                    "source_id": "d1",
+                    "version": "1",
+                    "source_type": "w",
+                    "title": "T",
+                    "doc_title": "D",
+                },
+                0.9,
+            ),
+            (
+                {
+                    "text": "P2",
+                    "semantic_key": "s1",
+                    "source_id": "d1",
+                    "version": "1",
+                    "source_type": "w",
+                    "title": "T",
+                    "doc_title": "D",
+                },
+                0.8,
+            ),
         ]
         result = prepare_context(chunks, group_semantic=True, resolve_versions_flag=False)
         assert "P1" in result
@@ -289,27 +346,43 @@ class TestLanguageAwareContextAssembly:
 
     def test_build_context_accepts_lang(self):
         """build_context should accept an optional lang parameter."""
-        from proxy.app.context_builder import build_context
+        from proxy.app.core.context import build_context
 
         chunks = [
-            ({"text": "RAG combines retrieval with generation.", "source_type": "wiki", "title": "RAG", "doc_title": "RAG Overview"}, 0.95),
+            (
+                {
+                    "text": "RAG combines retrieval with generation.",
+                    "source_type": "wiki",
+                    "title": "RAG",
+                    "doc_title": "RAG Overview",
+                },
+                0.95,
+            ),
         ]
         context = build_context(chunks, lang="de")
         assert "RAG" in context
 
     def test_build_context_lang_none(self):
         """build_context should work with lang=None (default behavior)."""
-        from proxy.app.context_builder import build_context
+        from proxy.app.core.context import build_context
 
         chunks = [
-            ({"text": "RAG combines retrieval with generation.", "source_type": "wiki", "title": "RAG", "doc_title": "RAG Overview"}, 0.95),
+            (
+                {
+                    "text": "RAG combines retrieval with generation.",
+                    "source_type": "wiki",
+                    "title": "RAG",
+                    "doc_title": "RAG Overview",
+                },
+                0.95,
+            ),
         ]
         context = build_context(chunks, lang=None)
         assert "RAG" in context
 
     def test_prepare_context_accepts_lang(self):
         """prepare_context should accept and pass through lang parameter."""
-        from proxy.app.context_builder import prepare_context
+        from proxy.app.core.context import prepare_context
 
         chunks = [
             ({"text": "Test content", "source_id": "d1", "source_type": "wiki", "title": "T", "doc_title": "D"}, 0.9),
@@ -319,20 +392,36 @@ class TestLanguageAwareContextAssembly:
 
     def test_language_instruction_included_for_non_en(self):
         """When building context for non-EN, the response should include language awareness."""
-        from proxy.app.context_builder import build_context
+        from proxy.app.core.context import build_context
 
         chunks = [
-            ({"text": "Qdrant is a vector database for RAG systems.", "source_type": "wiki", "title": "Qdrant", "doc_title": "Vector DB Guide"}, 0.98),
+            (
+                {
+                    "text": "Qdrant is a vector database for RAG systems.",
+                    "source_type": "wiki",
+                    "title": "Qdrant",
+                    "doc_title": "Vector DB Guide",
+                },
+                0.98,
+            ),
         ]
         context = build_context(chunks, lang="de")
         assert isinstance(context, str)
         assert len(context) > 0
 
     def test_context_for_chinese_works(self):
-        from proxy.app.context_builder import build_context
+        from proxy.app.core.context import build_context
 
         chunks = [
-            ({"text": "Qdrant is a vector database for RAG systems.", "source_type": "wiki", "title": "Qdrant", "doc_title": "Vector DB Guide"}, 0.98),
+            (
+                {
+                    "text": "Qdrant is a vector database for RAG systems.",
+                    "source_type": "wiki",
+                    "title": "Qdrant",
+                    "doc_title": "Vector DB Guide",
+                },
+                0.98,
+            ),
         ]
         context = build_context(chunks, lang="zh")
         assert isinstance(context, str)
@@ -340,11 +429,22 @@ class TestLanguageAwareContextAssembly:
 
     def test_multilang_prioritization(self):
         """Chunks matching query language should be prioritized (de query, de chunks first)."""
-        from proxy.app.context_builder import build_context
+        from proxy.app.core.context import build_context
 
         chunks = [
-            ({"text": "German context here.", "source_type": "wiki", "title": "DE Doc", "doc_title": "German Guide"}, 0.70),
-            ({"text": "English context here.", "source_type": "wiki", "title": "EN Doc", "doc_title": "English Guide"}, 0.95),
+            (
+                {"text": "German context here.", "source_type": "wiki", "title": "DE Doc", "doc_title": "German Guide"},
+                0.70,
+            ),
+            (
+                {
+                    "text": "English context here.",
+                    "source_type": "wiki",
+                    "title": "EN Doc",
+                    "doc_title": "English Guide",
+                },
+                0.95,
+            ),
         ]
         context = build_context(chunks, lang="de")
         assert isinstance(context, str)

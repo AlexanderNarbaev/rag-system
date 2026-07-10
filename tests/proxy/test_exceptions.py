@@ -1,5 +1,6 @@
 """Tests for proxy/app/exceptions.py — custom exception hierarchy."""
-from proxy.app.exceptions import (
+
+from proxy.app.shared.exceptions import (
     AuthError,
     CacheError,
     ConfigError,
@@ -105,9 +106,17 @@ class TestRAGError:
 
     def test_all_subclasses_have_default_component(self):
         subclasses = [
-            RetrievalError, RerankError, LLMError, GraphError, CacheError,
-            EmbeddingError, ConfigError, RateLimitError, AuthError,
-            ContextBuildError, ValidationError,
+            RetrievalError,
+            RerankError,
+            LLMError,
+            GraphError,
+            CacheError,
+            EmbeddingError,
+            ConfigError,
+            RateLimitError,
+            AuthError,
+            ContextBuildError,
+            ValidationError,
         ]
         for cls in subclasses:
             instance = cls("msg")

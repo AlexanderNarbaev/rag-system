@@ -1,7 +1,8 @@
 """Tests for proxy/app/retrieval_evaluator.py — RetrievalEvaluator class."""
+
 import pytest
 
-from proxy.app.retrieval_evaluator import RetrievalEvaluator
+from proxy.app.core.retrieval_evaluator import RetrievalEvaluator
 
 
 class TestRetrievalEvaluator:

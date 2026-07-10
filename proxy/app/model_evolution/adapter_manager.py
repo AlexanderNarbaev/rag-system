@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ── State Machine ──────────────────────────────────────────────────────────────
 
+
 class AdapterState(Enum):
     """Lifecycle states for a model adapter.
 
@@ -37,6 +38,7 @@ class AdapterState(Enum):
         UNLOADED → LOADING → ACTIVE → DRAINING → RETIRING → UNLOADED
                                 ↘ ERROR → UNLOADED
     """
+
     UNLOADED = "unloaded"
     LOADING = "loading"
     ACTIVE = "active"
@@ -46,16 +48,17 @@ class AdapterState(Enum):
 
 
 _VALID_TRANSITIONS: dict[AdapterState, set[AdapterState]] = {
-    AdapterState.UNLOADED:  {AdapterState.LOADING, AdapterState.ERROR},
-    AdapterState.LOADING:   {AdapterState.ACTIVE, AdapterState.ERROR},
-    AdapterState.ACTIVE:    {AdapterState.DRAINING, AdapterState.ERROR},
-    AdapterState.DRAINING:  {AdapterState.RETIRING, AdapterState.ACTIVE, AdapterState.LOADING, AdapterState.ERROR},
-    AdapterState.RETIRING:  {AdapterState.UNLOADED, AdapterState.ERROR},
-    AdapterState.ERROR:     {AdapterState.UNLOADED, AdapterState.LOADING, AdapterState.ACTIVE},
+    AdapterState.UNLOADED: {AdapterState.LOADING, AdapterState.ERROR},
+    AdapterState.LOADING: {AdapterState.ACTIVE, AdapterState.ERROR},
+    AdapterState.ACTIVE: {AdapterState.DRAINING, AdapterState.ERROR},
+    AdapterState.DRAINING: {AdapterState.RETIRING, AdapterState.ACTIVE, AdapterState.LOADING, AdapterState.ERROR},
+    AdapterState.RETIRING: {AdapterState.UNLOADED, AdapterState.ERROR},
+    AdapterState.ERROR: {AdapterState.UNLOADED, AdapterState.LOADING, AdapterState.ACTIVE},
 }
 
 
 # ── Model Adapter ──────────────────────────────────────────────────────────────
+
 
 @dataclass
 class ModelAdapter:
@@ -75,19 +78,20 @@ class ModelAdapter:
     def transition_to(self, target: AdapterState) -> bool:
         """Attempt a state transition. Returns True if the transition is valid."""
         if target in _VALID_TRANSITIONS.get(self.state, set()):
-            logger.debug(
-                "Adapter %s: %s → %s", self.name, self.state.value, target.value
-            )
+            logger.debug("Adapter %s: %s → %s", self.name, self.state.value, target.value)
             self.state = target
             return True
         logger.warning(
             "Invalid transition for adapter %s: %s → %s",
-            self.name, self.state.value, target.value,
+            self.name,
+            self.state.value,
+            target.value,
         )
         return False
 
 
 # ── Hot-Reload Watcher ─────────────────────────────────────────────────────────
+
 
 class HotReloadWatcher:
     """Watches a directory for new adapter versions via polling.
@@ -137,13 +141,13 @@ class HotReloadWatcher:
             logger.warning("Watcher for %s is already running", self._watch_path)
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._poll, daemon=True, name=f"hot-reload-{self._adapter_name}"
-        )
+        self._thread = threading.Thread(target=self._poll, daemon=True, name=f"hot-reload-{self._adapter_name}")
         self._thread.start()
         logger.info(
             "Started HotReloadWatcher for %s at %s (interval=%.1fs)",
-            self._adapter_name, self._watch_path, self._poll_interval,
+            self._adapter_name,
+            self._watch_path,
+            self._poll_interval,
         )
 
     def stop(self) -> None:
@@ -173,13 +177,11 @@ class HotReloadWatcher:
             file_patterns: Optional list of fnmatch patterns for adapter
                 files. Defaults to common adapter file patterns if None.
         """
-        self._file_patterns = (
-            file_patterns if file_patterns is not None
-            else list(self._DEFAULT_FILE_PATTERNS)
-        )
+        self._file_patterns = file_patterns if file_patterns is not None else list(self._DEFAULT_FILE_PATTERNS)
         logger.debug(
             "File watching enabled for %s with patterns: %s",
-            self._adapter_name, self._file_patterns,
+            self._adapter_name,
+            self._file_patterns,
         )
 
     def force_rescan(self) -> None:
@@ -196,9 +198,7 @@ class HotReloadWatcher:
             try:
                 self._scan_directory()
             except Exception:
-                logger.exception(
-                    "Error scanning watch directory %s", self._watch_path
-                )
+                logger.exception("Error scanning watch directory %s", self._watch_path)
             self._stop_event.wait(timeout=self._poll_interval)
 
     def _scan_directory(self) -> None:
@@ -222,12 +222,11 @@ class HotReloadWatcher:
                     self._known_versions[version_path] = mtime
                     logger.info(
                         "New adapter version detected: %s at %s",
-                        self._adapter_name, version_path,
+                        self._adapter_name,
+                        version_path,
                     )
                     if self._callback:
-                        self._callback(
-                            self._adapter_name, version_path, entry.name
-                        )
+                        self._callback(self._adapter_name, version_path, entry.name)
                 continue
 
             # File-based adapter detection (watch_directory mode)
@@ -247,19 +246,19 @@ class HotReloadWatcher:
                 self._known_files[file_path] = mtime
                 logger.info(
                     "New adapter file detected: %s at %s",
-                    self._adapter_name, file_path,
+                    self._adapter_name,
+                    file_path,
                 )
                 if self._callback:
                     self._callback(self._adapter_name, file_path, file_name)
 
     def _matches_file_patterns(self, file_name: str) -> bool:
         """Return True if file_name matches any of the configured patterns."""
-        return any(
-            fnmatch.fnmatch(file_name, pattern) for pattern in self._file_patterns
-        )
+        return any(fnmatch.fnmatch(file_name, pattern) for pattern in self._file_patterns)
 
 
 # ── Adapter Manager ────────────────────────────────────────────────────────────
+
 
 class AdapterManager:
     """Centralized manager for all model adapters.
@@ -285,18 +284,16 @@ class AdapterManager:
         """Register an adapter for a model name."""
         with self._lock:
             if adapter.name in self._adapters:
-                raise AdapterError(
-                    f"Adapter '{adapter.name}' already registered"
-                )
+                raise AdapterError(f"Adapter '{adapter.name}' already registered")
             self._adapters[adapter.name] = adapter
             logger.info(
                 "Registered adapter %s (version=%s, type=%s)",
-                adapter.name, adapter.version, adapter.adapter_type,
+                adapter.name,
+                adapter.version,
+                adapter.adapter_type,
             )
 
-    def register_load_callback(
-        self, name: str, callback: Callable[[str, str], bool]
-    ) -> None:
+    def register_load_callback(self, name: str, callback: Callable[[str, str], bool]) -> None:
         """Register a callback that performs the actual model loading.
 
         The callback receives (adapter_name, model_path) and returns True
@@ -305,9 +302,7 @@ class AdapterManager:
         with self._lock:
             self._load_callbacks[name] = callback
 
-    def register_unload_callback(
-        self, name: str, callback: Callable[[str], bool]
-    ) -> None:
+    def register_unload_callback(self, name: str, callback: Callable[[str], bool]) -> None:
         """Register a callback that performs the actual model unloading.
 
         The callback receives (adapter_name) and returns True on success.
@@ -321,10 +316,7 @@ class AdapterManager:
         """Get an adapter by name. Raises KeyError if not registered."""
         with self._lock:
             if name not in self._adapters:
-                raise KeyError(
-                    f"Adapter '{name}' not registered. "
-                    f"Available: {list(self._adapters.keys())}"
-                )
+                raise KeyError(f"Adapter '{name}' not registered. Available: {list(self._adapters.keys())}")
             return self._adapters[name]
 
     def list_adapters(self) -> list[ModelAdapter]:
@@ -356,30 +348,21 @@ class AdapterManager:
         with self._lock:
             adapter = self._adapters.get(name)
             if adapter is None:
-                raise AdapterError(
-                    f"Cannot load adapter '{name}': not registered"
-                )
+                raise AdapterError(f"Cannot load adapter '{name}': not registered")
 
             if adapter.state == AdapterState.ACTIVE:
-                logger.info(
-                    "Adapter %s is already ACTIVE, skipping load", name
-                )
+                logger.info("Adapter %s is already ACTIVE, skipping load", name)
                 return adapter
 
             if not adapter.transition_to(AdapterState.LOADING):
-                raise AdapterError(
-                    f"Cannot load adapter '{name}': "
-                    f"invalid transition from {adapter.state.value}"
-                )
+                raise AdapterError(f"Cannot load adapter '{name}': invalid transition from {adapter.state.value}")
 
         try:
             load_cb = self._load_callbacks.get(name)
             if load_cb is not None:
                 success = load_cb(name, model_path)
                 if not success:
-                    raise AdapterError(
-                        f"Load callback returned failure for adapter '{name}'"
-                    )
+                    raise AdapterError(f"Load callback returned failure for adapter '{name}'")
 
             with self._lock:
                 adapter.version = version
@@ -390,7 +373,9 @@ class AdapterManager:
 
             logger.info(
                 "Loaded adapter %s version=%s from %s",
-                name, version, model_path,
+                name,
+                version,
+                model_path,
             )
             return adapter
 
@@ -400,9 +385,7 @@ class AdapterManager:
                 adapter.error_count += 1
 
             logger.exception("Failed to load adapter %s: %s", name, exc)
-            raise AdapterError(
-                f"Failed to load adapter '{name}': {exc}"
-            ) from exc
+            raise AdapterError(f"Failed to load adapter '{name}': {exc}") from exc
 
     def unload_adapter(self, name: str) -> ModelAdapter:
         """Unload adapter weights and free resources.
@@ -421,9 +404,7 @@ class AdapterManager:
         with self._lock:
             adapter = self._adapters.get(name)
             if adapter is None:
-                raise AdapterError(
-                    f"Cannot unload adapter '{name}': not registered"
-                )
+                raise AdapterError(f"Cannot unload adapter '{name}': not registered")
 
             if adapter.state == AdapterState.UNLOADED:
                 logger.info("Adapter %s already UNLOADED", name)
@@ -442,9 +423,7 @@ class AdapterManager:
             if unload_cb is not None:
                 success = unload_cb(name)
                 if not success:
-                    logger.warning(
-                        "Unload callback returned failure for adapter '%s'", name
-                    )
+                    logger.warning("Unload callback returned failure for adapter '%s'", name)
 
             with self._lock:
                 adapter.transition_to(AdapterState.RETIRING)
@@ -460,15 +439,11 @@ class AdapterManager:
                 adapter.transition_to(AdapterState.ERROR)
 
             logger.exception("Failed to unload adapter %s: %s", name, exc)
-            raise AdapterError(
-                f"Failed to unload adapter '{name}': {exc}"
-            ) from exc
+            raise AdapterError(f"Failed to unload adapter '{name}': {exc}") from exc
 
     # ── Hot-Reload ─────────────────────────────────────────────────────────
 
-    def hot_reload(
-        self, name: str, new_path: str, new_version: str
-    ) -> ModelAdapter:
+    def hot_reload(self, name: str, new_path: str, new_version: str) -> ModelAdapter:
         """Seamlessly swap adapters: load new, drain old, retire.
 
         Args:
@@ -485,9 +460,7 @@ class AdapterManager:
         with self._lock:
             old_adapter = self._adapters.get(name)
             if old_adapter is None:
-                raise AdapterError(
-                    f"Cannot hot-reload adapter '{name}': not registered"
-                )
+                raise AdapterError(f"Cannot hot-reload adapter '{name}': not registered")
 
             old_version = old_adapter.version
             old_path = old_adapter.model_path
@@ -504,7 +477,8 @@ class AdapterManager:
                 old_adapter.transition_to(AdapterState.ACTIVE)
             logger.error(
                 "Hot-reload failed for %s, restored old adapter %s",
-                name, old_version,
+                name,
+                old_version,
             )
             raise
 
@@ -514,12 +488,11 @@ class AdapterManager:
         except AdapterError:
             logger.warning(
                 "Failed to retire old adapter %s@%s, but new adapter is ACTIVE",
-                name, old_version,
+                name,
+                old_version,
             )
 
-        logger.info(
-            "Hot-reload complete for %s: %s → %s", name, old_version, new_version
-        )
+        logger.info("Hot-reload complete for %s: %s → %s", name, old_version, new_version)
         return new_adapter
 
     def _drain_and_retire(self, name: str, old_version: str) -> None:
@@ -543,7 +516,9 @@ class AdapterManager:
 
         logger.warning(
             "Adapter %s@%s: drain timeout after %d attempts, forcing retirement",
-            name, old_version, max_drain_attempts,
+            name,
+            old_version,
+            max_drain_attempts,
         )
         with self._lock:
             adapter = self._adapters.get(name)
@@ -610,7 +585,9 @@ class AdapterManager:
         """Callback invoked by HotReloadWatcher when a new version is detected."""
         logger.info(
             "Watcher triggered hot-reload for %s: %s (version=%s)",
-            name, path, version,
+            name,
+            path,
+            version,
         )
         try:
             self.hot_reload(name, path, version)
@@ -641,7 +618,8 @@ class AdapterManager:
                         except AdapterError as exc:
                             logger.warning(
                                 "Reload of %s failed during reload_all: %s",
-                                name, exc,
+                                name,
+                                exc,
                             )
                 logger.debug("Reload check for adapter %s", name)
 
@@ -658,9 +636,7 @@ class AdapterManager:
                     try:
                         self.unload_adapter(name)
                     except AdapterError:
-                        logger.warning(
-                            "Error unloading adapter %s during shutdown", name
-                        )
+                        logger.warning("Error unloading adapter %s during shutdown", name)
 
         logger.info("AdapterManager shutdown complete")
 

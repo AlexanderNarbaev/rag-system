@@ -5,7 +5,7 @@
 
 ## Context
 
-The RAG System proxy layer is currently implemented in Python with FastAPI (25 endpoints, 1806-line `main.py`), LangGraph orchestrator (10-node state graph), hybrid Qdrant retrieval, cross-encoder reranker, multi-provider LLM routing (vLLM, llama.cpp, OpenAI-compatible), JWT auth with RBAC (4 roles), SQLite user DB, LDAP/AD integration, Redis caching, Prometheus metrics, and SSE streaming. The test suite comprises 2275 tests with a 99%+ pass rate.
+The RAG System proxy layer is currently implemented in Python with FastAPI (25 endpoints, 1806-line `main.py`), LangGraph orchestrator (10-node state graph), hybrid Qdrant retrieval, cross-encoder reranker, multi-provider LLM routing (vLLM, llama.cpp, OpenAI-compatible), JWT auth with RBAC (4 roles), SQLite user DB, LDAP/AD integration, Redis caching, Prometheus metrics, and SSE streaming.
 
 The current Python stack imposes structural limitations:
 

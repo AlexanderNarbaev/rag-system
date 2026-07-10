@@ -1,7 +1,8 @@
 """Tests for self-enrichment pipeline."""
+
 from unittest.mock import MagicMock
 
-from proxy.app.enricher import chunk_qa_pair, extract_qa_pair
+from proxy.app.core.enricher import chunk_qa_pair, extract_qa_pair
 
 
 def test_extract_qa_pair_positive():

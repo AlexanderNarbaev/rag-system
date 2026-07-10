@@ -96,7 +96,7 @@ ensure_dir "$ROOT/data"
 if [ "$PROXY" = true ]; then
   step "Proxy environment"
   venv_create "$VENV_PROXY" "proxy"
-  venv_pip_install "$VENV_PROXY" "$ROOT/proxy/requirements_proxy.txt" "proxy"
+  venv_pip_install "$VENV_PROXY" "$ROOT/requirements-proxy.txt" "proxy"
   copy_if_missing "$ROOT/.env.example" "$ROOT/proxy/.env"
 fi
 
@@ -104,7 +104,7 @@ fi
 if [ "$ETL" = true ]; then
   step "ETL environment"
   venv_create "$VENV_ETL" "etl"
-  venv_pip_install "$VENV_ETL" "$ROOT/etl/requirements_etl.txt" "etl"
+  venv_pip_install "$VENV_ETL" "$ROOT/requirements-etl.txt" "etl"
   copy_if_missing "$ROOT/etl/.env.example" "$ROOT/etl/.env"
 
   info "SpaCy models may need manual download:"

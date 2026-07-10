@@ -10,7 +10,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -48,9 +47,7 @@ class StreamConsumer:
         if not self.redis:
             return False
         try:
-            self.redis.xgroup_create(
-                self.stream_key, self.consumer_group, id="0", mkstream=True
-            )
+            self.redis.xgroup_create(self.stream_key, self.consumer_group, id="0", mkstream=True)
             logger.info("Created consumer group %s on stream %s", self.consumer_group, self.stream_key)
             return True
         except Exception as e:
@@ -104,7 +101,9 @@ class StreamConsumer:
 
         logger.info(
             "Processing event: source=%s type=%s doc_id=%s",
-            source, event_type, doc_id,
+            source,
+            event_type,
+            doc_id,
         )
 
         if source == "confluence":
@@ -118,9 +117,7 @@ class StreamConsumer:
     def _process_confluence_event(self, event_type: str, doc_id: str, payload: dict) -> bool:
         page = payload.get("page", {})
         title = page.get("title", "")
-        body = (page.get("body", {}).get("storage", {}).get("value", "")
-                or page.get("body_storage_raw", "")
-                or "")
+        _body = page.get("body", {}).get("storage", {}).get("value", "") or page.get("body_storage_raw", "") or ""
         logger.info("Confluence %s: page=%s title='%s'", event_type, doc_id, title)
         return True
 
@@ -139,7 +136,7 @@ class StreamConsumer:
             logger.info("GitLab event: type=%s project=%s", event_type, doc_id)
         return True
 
-    def consume_batch(self, block_ms: Optional[int] = 5000) -> int:
+    def consume_batch(self, block_ms: int | None = 5000) -> int:
         """Consume a batch of messages from the stream."""
         if not self.redis:
             return 0
@@ -189,7 +186,9 @@ class StreamConsumer:
         """Run consumer loop: claim pending, then poll for new messages."""
         logger.info(
             "Stream consumer %s starting on stream %s group %s",
-            self.consumer_name, self.stream_key, self.consumer_group,
+            self.consumer_name,
+            self.stream_key,
+            self.consumer_group,
         )
 
         self.claim_pending()
@@ -211,6 +210,7 @@ class StreamConsumer:
 def main():
     import argparse
     import os
+
     import yaml
 
     parser = argparse.ArgumentParser(description="RAG Stream Consumer")
@@ -219,7 +219,7 @@ def main():
 
     config = {}
     if args.config.exists():
-        with open(args.config, "r", encoding="utf-8") as f:
+        with open(args.config, encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
     streaming_cfg = config.get("streaming", {})
@@ -227,7 +227,9 @@ def main():
     redis_host = os.environ.get("REDIS_HOST", streaming_cfg.get("redis_host", "localhost"))
     redis_port = int(os.environ.get("REDIS_PORT", streaming_cfg.get("redis_port", 6379)))
     stream_key = os.environ.get("REDIS_STREAM_KEY", streaming_cfg.get("redis_stream_key", DEFAULT_STREAM_KEY))
-    consumer_group = os.environ.get("REDIS_CONSUMER_GROUP", streaming_cfg.get("redis_consumer_group", DEFAULT_CONSUMER_GROUP))
+    consumer_group = os.environ.get(
+        "REDIS_CONSUMER_GROUP", streaming_cfg.get("redis_consumer_group", DEFAULT_CONSUMER_GROUP)
+    )  # noqa: E501
 
     try:
         import redis

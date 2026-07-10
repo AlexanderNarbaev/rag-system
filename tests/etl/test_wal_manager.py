@@ -1,24 +1,23 @@
 # tests/etl/test_wal_manager.py
 import json
-import pytest
-from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 from etl.indexer.wal_manager import (
-    WALManager,
     PIPELINE_CONFLUENCE,
-    PIPELINE_JIRA,
     PIPELINE_GITLAB,
-    PIPELINE_INDEXING,
     PIPELINE_GRAPH,
+    PIPELINE_INDEXING,
+    PIPELINE_JIRA,
+    WALManager,
 )
 
 
 class TestWALManagerInit:
     def test_init_creates_dirs_and_empty_wal(self, tmp_path):
         wal_path = tmp_path / "wal_test.json"
-        wm = WALManager(wal_path, use_lock=False)
+        WALManager(wal_path, use_lock=False)
         assert wal_path.exists()
         data = json.loads(wal_path.read_text())
         assert data == {}
@@ -40,7 +39,7 @@ class TestWALManagerInit:
     def test_init_with_lock_available(self, tmp_path, monkeypatch):
         # Only run if filelock is importable
         try:
-            import filelock
+            import filelock  # noqa: F401
         except ImportError:
             pytest.skip("filelock not installed")
         wal_path = tmp_path / "with_lock.json"

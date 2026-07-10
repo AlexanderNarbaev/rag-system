@@ -1,14 +1,9 @@
 # tests/etl/test_extractors.py
-import json
-import hashlib
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open, call
+from unittest.mock import patch
 
 from etl.extractors.confluence import ConfluenceExtractor
-from etl.extractors.jira import JiraExtractor
 from etl.extractors.gitlab import GitLabExtractor
-
+from etl.extractors.jira import JiraExtractor
 
 # ---------------------------------------------------------------------------
 # ConfluenceExtractor tests
@@ -203,9 +198,7 @@ class TestConfluenceRun:
     @patch.object(ConfluenceExtractor, "_get_all_pages")
     @patch.object(ConfluenceExtractor, "extract_page")
     @patch.object(ConfluenceExtractor, "_save_page_data")
-    def test_run_processes_pages(
-        self, mock_save, mock_extract, mock_get_pages, tmp_path
-    ):
+    def test_run_processes_pages(self, mock_save, mock_extract, mock_get_pages, tmp_path):
         ex = self._make_extractor(tmp_path)
         mock_get_pages.return_value = [
             {
@@ -559,9 +552,7 @@ class TestGitLabRun:
     @patch.object(GitLabExtractor, "_save_project_data")
     def test_run_processes_project(self, mock_save, mock_branches, mock_commits, mock_projects, tmp_path):
         ex = self._make_extractor(tmp_path)
-        mock_projects.return_value = [
-            {"id": 1, "path_with_namespace": "test/proj"}
-        ]
+        mock_projects.return_value = [{"id": 1, "path_with_namespace": "test/proj"}]
         mock_commits.return_value = [{"id": "sha1", "created_at": "2025-01-01T00:00:00Z"}]
         mock_branches.return_value = []
         ex.run()

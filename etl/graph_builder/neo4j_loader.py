@@ -12,7 +12,7 @@
 import logging
 
 try:
-    from neo4j import Driver, GraphDatabase, Session
+    from neo4j import Driver, GraphDatabase
 
     NEO4J_AVAILABLE = True
 except ImportError:
@@ -222,7 +222,7 @@ class Neo4jLoader:
         RETURN count(n) as deleted
         """
         params = {"valid_ids": valid_source_ids}
-        result = self._execute_with_retry(query, params)
+        _result = self._execute_with_retry(query, params)
         # Получаем количество удалённых узлов
         with self.driver.session(database=self.database) as session:
             record = session.run(query, params).single()

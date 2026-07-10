@@ -1,5 +1,6 @@
 """Tests for confidence scorer."""
-from proxy.app.confidence import ConfidenceReport, compute_confidence
+
+from proxy.app.core.confidence import ConfidenceReport, compute_confidence
 
 
 def test_compute_confidence_high():

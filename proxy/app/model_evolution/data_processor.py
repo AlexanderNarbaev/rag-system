@@ -1,7 +1,7 @@
 """Data processor: assemble training datasets from HITL feedback."""
 
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -46,19 +46,23 @@ class DataProcessor:
                 dataset.slm_data.append({"query": query, "intent": intent})
 
             if query and correction:
-                dataset.llm_data.append({
-                    "instruction": query,
-                    "input": answer or "",
-                    "output": correction,
-                })
+                dataset.llm_data.append(
+                    {
+                        "instruction": query,
+                        "input": answer or "",
+                        "output": correction,
+                    }
+                )
 
             if query and source_chunks:
                 for chunk in source_chunks:
-                    dataset.reranker_data.append({
-                        "query": query,
-                        "chunk": chunk.get("text", chunk) if isinstance(chunk, dict) else str(chunk),
-                        "relevance": relevance,
-                    })
+                    dataset.reranker_data.append(
+                        {
+                            "query": query,
+                            "chunk": chunk.get("text", chunk) if isinstance(chunk, dict) else str(chunk),
+                            "relevance": relevance,
+                        }
+                    )
 
         self._save_jsonl(output / "slm_intent.jsonl", dataset.slm_data)
         self._save_jsonl(output / "llm_instruction.jsonl", dataset.llm_data)
@@ -75,6 +79,7 @@ class DataProcessor:
         seed: int = 42,
     ) -> tuple[list[dict], list[dict], list[dict]]:
         import random
+
         rng = random.Random(seed)
         shuffled = list(data)
         rng.shuffle(shuffled)

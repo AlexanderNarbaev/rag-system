@@ -17,7 +17,7 @@ Comprehensive guides covering design decisions, implementation patterns, and ope
 | [Agentic Tools — Declarative Reference](agentic-tools-declarative.md) | YAML/JSON tool definitions with HTTP and shell handlers |
 | [Agentic Tools — OpenAPI Discovery](agentic-tools-openapi.md) | Auto-discover tools from OpenAPI/Swagger specs |
 | [Integration with OpenCode](integration-opencode.md) | OpenCode IDE setup, MCP server, caching behavior |
-| [Development Roadmap](roadmap.md) | Version history and future milestones (v0.1 → v2.0) |
+| [Development Roadmap](roadmap.md) | Phased development approach and feature planning |
 | [Deployment Guide](deployment-guide.md) | Step-by-step production deployment (Docker + K8s) |
 | [Operations Guide](operations-guide.md) | Monitoring, backup, scaling, maintenance |
 | [Model Evolution](model-evolution.md) | Fine-tuning pipeline: LoRA/QLoRA, EvalGate, canary deployment, hot-reload |

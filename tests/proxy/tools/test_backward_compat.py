@@ -1,3 +1,4 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/tools backward compatibility — Task 3 TDD.
 
 Verifies that:
@@ -8,10 +9,6 @@ Verifies that:
 5. tools package re-exports all public symbols from errors.py
 """
 
-import warnings
-
-import pytest
-
 from proxy.app.tools import (
     ToolDefinition,
     ToolRegistry,
@@ -20,6 +17,8 @@ from proxy.app.tools import (
 )
 from proxy.app.tools.definition import (
     ToolDefinition as NewToolDefinition,
+)
+from proxy.app.tools.definition import (
     ToolParam,
 )
 
@@ -61,13 +60,8 @@ class TestNewImportPath:
 
     def test_import_errors_from_package(self):
         from proxy.app.tools import (
-            ToolDependencyError,
             ToolError,
-            ToolExecutionError,
             ToolNotFoundError,
-            ToolPermissionError,
-            ToolRateLimitError,
-            ToolTimeoutError,
             ToolValidationError,
             classify_error,
         )
@@ -76,9 +70,7 @@ class TestNewImportPath:
         assert err.retryable is False
         assert isinstance(err, ToolError)
 
-        classified = classify_error(
-            tool_name="t", error=ValueError("bad"), tool_call_id="c1"
-        )
+        classified = classify_error(tool_name="t", error=ValueError("bad"), tool_call_id="c1")
         assert isinstance(classified, ToolValidationError)
 
 

@@ -1,25 +1,20 @@
 """Tests for proxy/app/utils.py utility functions."""
-import json
-import re
-import sys
-from unittest.mock import patch, MagicMock
 
-import pytest
+from unittest.mock import MagicMock, patch
 
-from proxy.app.utils import (
+from proxy.app.shared.utils import (
+    chunk_list,
     compute_hash,
     estimate_tokens,
-    truncate_by_tokens,
-    generate_request_id,
-    format_metadata,
-    now_iso,
-    safe_json_loads,
     extract_issue_keys,
     extract_urls,
+    format_metadata,
+    generate_request_id,
     mask_sensitive_data,
-    chunk_list,
+    now_iso,
     safe_divide,
-    TIKTOKEN_AVAILABLE,
+    safe_json_loads,
+    truncate_by_tokens,
 )
 
 
@@ -58,7 +53,7 @@ class TestEstimateTokens:
         assert estimate_tokens("") == 0
 
     def test_fallback_estimation(self):
-        with patch("proxy.app.utils.TIKTOKEN_AVAILABLE", False):
+        with patch("proxy.app.shared.utils.TIKTOKEN_AVAILABLE", False):
             assert estimate_tokens("abcd") == 1
             assert estimate_tokens("abcdefgh") == 2
             assert estimate_tokens("abc") == 0
@@ -66,16 +61,20 @@ class TestEstimateTokens:
     def test_tiktoken_available(self):
         mock_encoding = MagicMock()
         mock_encoding.encode.return_value = list(range(5))
-        with patch("proxy.app.utils.TIKTOKEN_AVAILABLE", True), \
-             patch("proxy.app.utils.tiktoken") as mock_tiktoken:
+        with (
+            patch("proxy.app.shared.utils.TIKTOKEN_AVAILABLE", True),
+            patch("proxy.app.shared.utils.tiktoken") as mock_tiktoken,
+        ):
             mock_tiktoken.encoding_for_model.return_value = mock_encoding
             result = estimate_tokens("some text", model="gpt-4")
             assert result == 5
             mock_tiktoken.encoding_for_model.assert_called_with("gpt-4")
 
     def test_tiktoken_falls_back_on_error(self):
-        with patch("proxy.app.utils.TIKTOKEN_AVAILABLE", True), \
-             patch("proxy.app.utils.tiktoken") as mock_tiktoken:
+        with (
+            patch("proxy.app.shared.utils.TIKTOKEN_AVAILABLE", True),
+            patch("proxy.app.shared.utils.tiktoken") as mock_tiktoken,
+        ):
             mock_tiktoken.encoding_for_model.side_effect = Exception("boom")
             result = estimate_tokens("12345678")
             assert result == 2  # fallback: 8 // 4
@@ -90,14 +89,14 @@ class TestTruncateByTokens:
 
     def test_exceeds_limit(self):
         text = "a" * 100
-        with patch("proxy.app.utils.TIKTOKEN_AVAILABLE", False):
+        with patch("proxy.app.shared.utils.TIKTOKEN_AVAILABLE", False):
             result = truncate_by_tokens(text, max_tokens=10)
             assert result.endswith("...")
             assert len(result) <= 10 * 4 + 3
 
     def test_very_small_max(self):
         text = "a" * 100
-        with patch("proxy.app.utils.TIKTOKEN_AVAILABLE", False):
+        with patch("proxy.app.shared.utils.TIKTOKEN_AVAILABLE", False):
             result = truncate_by_tokens(text, max_tokens=0)
             assert result == "..."
 
@@ -150,6 +149,7 @@ class TestNowIso:
 
     def test_iso_format_parsable(self):
         from datetime import datetime
+
         result = now_iso()
         parsed = datetime.fromisoformat(result)
         assert parsed is not None
@@ -162,7 +162,7 @@ class TestSafeJsonLoads:
         assert safe_json_loads('{"a": 1}') == {"a": 1}
 
     def test_valid_list(self):
-        assert safe_json_loads('[1, 2, 3]') == [1, 2, 3]
+        assert safe_json_loads("[1, 2, 3]") == [1, 2, 3]
 
     def test_invalid_json_returns_default(self):
         assert safe_json_loads("not json") is None
@@ -213,7 +213,7 @@ class TestExtractUrls:
         assert extract_urls("no urls here") == []
 
     def test_url_in_brackets(self):
-        result = extract_urls('see <https://example.com/path?q=1>')
+        result = extract_urls("see <https://example.com/path?q=1>")
         assert "https://example.com/path?q=1" in result
 
 

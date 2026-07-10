@@ -2,9 +2,10 @@
 """Tests for Redis Streams consumer: event processing, crash recovery, graceful degradation."""
 
 import json
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timezone
 
 
 @pytest.fixture
@@ -26,16 +27,18 @@ def sample_confluence_event():
         "source": "confluence",
         "event_type": "page_created",
         "doc_id": "123456",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "payload": json.dumps({
-            "event": "page_created",
-            "page": {
-                "id": "123456",
-                "title": "Test Page",
-                "space": {"key": "DEV"},
-                "body": {"storage": {"value": "<p>Test content</p>"}},
-            },
-        }),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "payload": json.dumps(
+            {
+                "event": "page_created",
+                "page": {
+                    "id": "123456",
+                    "title": "Test Page",
+                    "space": {"key": "DEV"},
+                    "body": {"storage": {"value": "<p>Test content</p>"}},
+                },
+            }
+        ),
     }
 
 
@@ -45,11 +48,13 @@ def sample_gitlab_event():
         "source": "gitlab",
         "event_type": "push",
         "doc_id": "42",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "payload": json.dumps({
-            "object_kind": "push",
-            "commits": [{"id": "abc123", "message": "Test commit"}],
-        }),
+        "timestamp": datetime.now(UTC).isoformat(),
+        "payload": json.dumps(
+            {
+                "object_kind": "push",
+                "commits": [{"id": "abc123", "message": "Test commit"}],
+            }
+        ),
     }
 
 
@@ -112,9 +117,7 @@ class TestStreamProcessing:
         from etl.scheduler.stream_consumer import StreamConsumer
 
         msg_id = "1719000000000-0"
-        mock_redis_client.xreadgroup.return_value = _make_stream_message(
-            msg_id, sample_confluence_event
-        )
+        mock_redis_client.xreadgroup.return_value = _make_stream_message(msg_id, sample_confluence_event)
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         processed = consumer.consume_batch(block_ms=100)
@@ -137,14 +140,14 @@ class TestStreamProcessing:
             "source": "confluence",
             "event_type": "page_created",
             "doc_id": "1",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "payload": "{}",
         }
         event2 = {
             "source": "gitlab",
             "event_type": "push",
             "doc_id": "2",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "payload": "{}",
         }
         mock_redis_client.xreadgroup.return_value = [
@@ -166,9 +169,7 @@ class TestStreamProcessing:
         from etl.scheduler.stream_consumer import StreamConsumer
 
         msg_id = b"1719000000000-0"
-        mock_redis_client.xreadgroup.return_value = [
-            ["etl:events", [(msg_id, sample_confluence_event)]]
-        ]
+        mock_redis_client.xreadgroup.return_value = [["etl:events", [(msg_id, sample_confluence_event)]]]
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         consumer.consume_batch(block_ms=100)
@@ -178,9 +179,7 @@ class TestStreamProcessing:
         from etl.scheduler.stream_consumer import StreamConsumer
 
         bad_event = {"invalid": True}
-        mock_redis_client.xreadgroup.return_value = [
-            ["etl:events", [(b"1719000000000-0", bad_event)]]
-        ]
+        mock_redis_client.xreadgroup.return_value = [["etl:events", [(b"1719000000000-0", bad_event)]]]
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         consumer.consume_batch(block_ms=100)

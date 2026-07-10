@@ -163,14 +163,19 @@ class EntityRelationExtractor:
         # Подготовка промпта
         entity_names = [e.name for e in entities]
         entities_str = ", ".join(entity_names)
-        prompt = f"""You are an expert knowledge extractor. Analyze the following text and extract relationships between the listed entities.
-Return ONLY valid JSON in the format: [{{"source": "entity1", "target": "entity2", "relation_type": "RELATES_TO", "description": "..."}}, ...]
-
-Text: {text[:3000]}
-
-Entities: {entities_str}
-
-Relations:"""
+        prompt = (
+            "You are an expert knowledge extractor. "
+            "Analyze the following text and extract relationships "
+            "between the listed entities."
+            "\n"
+            "Return ONLY valid JSON in the format: "
+            '[{{"source": "entity1", "target": "entity2", '
+            '"relation_type": "RELATES_TO", "description": "..."}}'
+            ", ...]"
+            f"\n\nText: {text[:3000]}"
+            f"\n\nEntities: {entities_str}"
+            "\n\nRelations:"
+        )
 
         try:
             # Вызов SLM (ожидаем OpenAI-совместимый endpoint)
@@ -240,7 +245,7 @@ Relations:"""
             entities = self.extract_entities_spacy(text)
 
         # 2. Дополнительное извлечение кастомных сущностей через SLM (если включено)
-        if self.use_slm and entities:
+        if self.use_slm and entities:  # noqa: SIM108
             relations = self.extract_relations_slm(text, entities)
         else:
             relations = []

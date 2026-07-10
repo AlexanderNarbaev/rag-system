@@ -1,10 +1,9 @@
 """Tests for the BookExtractor with mocked file parsing."""
 
-import json
 import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open, PropertyMock
 
 from etl.extractors.base_extractor import ExtractedDocument, ExtractorConfig
 from etl.extractors.book_extractor import BookExtractor
@@ -60,6 +59,7 @@ class TestBookExtractorValidateConnection:
     def test_empty_directory(self, book_config, tmp_path):
         ext = BookExtractor(book_config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is False
 
@@ -68,6 +68,7 @@ class TestBookExtractorValidateConnection:
         epub_file.write_text("mock epub content")
         ext = BookExtractor(book_config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is True
         assert len(ext._source_files) == 1
@@ -79,6 +80,7 @@ class TestBookExtractorValidateConnection:
         (tmp_path / "ignore.txt").write_text("not a book")
         ext = BookExtractor(book_config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is True
         assert len(ext._source_files) == 3
@@ -95,6 +97,7 @@ class TestBookExtractorValidateConnection:
         (tmp_path / "drafts" / "old.epub").write_text("bad")
         ext = BookExtractor(config)
         import asyncio
+
         result = asyncio.run(ext.validate_connection())
         assert result is True
         assert len(ext._source_files) == 1

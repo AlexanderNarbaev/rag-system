@@ -1,11 +1,11 @@
 """Tests for proxy/app/cache.py - InMemoryCache, RedisCache, CacheManager."""
-import time
+
 import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from proxy.app.cache import InMemoryCache, RedisCache, CacheManager
+from proxy.app.shared.cache import CacheManager, InMemoryCache, RedisCache
 
 
 class TestInMemoryCacheAsync:
@@ -127,11 +127,10 @@ class TestCacheManagerRedisMode:
     """Tests for CacheManager with Redis mode (mocked)."""
 
     def test_redis_mode_creates_redis_cache(self):
-        with patch("proxy.app.cache.RedisCache") as MockRedis:
-            mock_instance = MockRedis.return_value
+        with patch("proxy.app.shared.cache.RedisCache") as mock_redis:
             cm = CacheManager(redis_url="redis://localhost:6379", use_redis=True)
             assert cm.use_redis is True
-            MockRedis.assert_called_once_with("redis://localhost:6379")
+            mock_redis.assert_called_once_with("redis://localhost:6379")
 
     def test_redis_mode_off_without_url(self):
         cm = CacheManager(redis_url=None, use_redis=True)
@@ -143,7 +142,7 @@ class TestCacheManagerRedisMode:
         mock_cache.get = AsyncMock(return_value="cached_val")
         mock_cache.set = AsyncMock(return_value=True)
 
-        with patch("proxy.app.cache.RedisCache", return_value=mock_cache):
+        with patch("proxy.app.shared.cache.RedisCache", return_value=mock_cache):
             cm = CacheManager(redis_url="redis://localhost", use_redis=True)
             result = await cm.get("key")
             assert result == "cached_val"
@@ -155,7 +154,7 @@ class TestCacheManagerRedisMode:
         mock_cache = MagicMock()
         mock_cache._get_client = AsyncMock()
 
-        with patch("proxy.app.cache.RedisCache", return_value=mock_cache):
+        with patch("proxy.app.shared.cache.RedisCache", return_value=mock_cache):
             cm = CacheManager(redis_url="redis://localhost", use_redis=True)
             await cm.initialize()
             mock_cache._get_client.assert_called_once()
@@ -223,6 +222,7 @@ class TestRedisCacheMocked:
     @pytest.mark.asyncio
     async def test_get_parses_json(self):
         import json
+
         mock_client = MagicMock()
         mock_client.get = AsyncMock(return_value=json.dumps({"a": 1}))
 

@@ -1,7 +1,8 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/main.py - FastAPI application with mocked dependencies."""
-import json
+
 import sys
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,12 +31,8 @@ for mod in _modules_to_mock:
 # Now we can import the app
 from proxy.app.main import (
     app,
-    lifespan,
     generate_request_id,
     process_rag_query,
-    ChatMessage,
-    ChatCompletionRequest,
-    ChatCompletionResponse,
 )
 
 
@@ -49,15 +46,17 @@ def client():
 @pytest.fixture
 def mock_rag_pipeline():
     """Mock all RAG pipeline dependencies used in endpoints."""
-    with patch("proxy.app.main.hybrid_search") as mock_hybrid, \
-         patch("proxy.app.main.rerank_chunks") as mock_rerank, \
-         patch("proxy.app.main.deduplicate_chunks") as mock_dedup, \
-         patch("proxy.app.main.build_context") as mock_build, \
-         patch("proxy.app.main.non_stream_completion") as mock_nonstream, \
-         patch("proxy.app.main.stream_completion") as mock_stream, \
-         patch("proxy.app.main.extract_version_from_query", return_value=None), \
-         patch("proxy.app.main.cache_manager", None), \
-         patch("proxy.app.main.log_interaction") as mock_log:
+    with (
+        patch("proxy.app.main.hybrid_search") as mock_hybrid,
+        patch("proxy.app.main.rerank_chunks") as mock_rerank,
+        patch("proxy.app.main.deduplicate_chunks") as mock_dedup,
+        patch("proxy.app.main.build_context") as mock_build,
+        patch("proxy.app.main.non_stream_completion") as mock_nonstream,
+        patch("proxy.app.main.stream_completion") as mock_stream,
+        patch("proxy.app.main.extract_version_from_query", return_value=None),
+        patch("proxy.app.main.cache_manager", None),
+        patch("proxy.app.main.log_interaction") as mock_log,
+    ):
         mock_hybrid.return_value = []
         mock_rerank.return_value = []
         mock_dedup.return_value = []
@@ -95,18 +94,25 @@ class TestAppCreation:
         assert "RAG Proxy" in app.title
 
     def test_app_has_routes(self):
-        routes = [route.path for route in app.routes]
-        assert "/v1/health" in routes
-        assert "/v1/models" in routes
-        assert "/v1/chat/completions" in routes
+        # Collect all route paths, including those nested in included routers
+        all_paths = set()
+        for route in app.routes:
+            if hasattr(route, "path"):
+                all_paths.add(route.path)
+            elif hasattr(route, "original_router"):
+                for sub in route.original_router.routes:
+                    if hasattr(sub, "path"):
+                        all_paths.add(sub.path)
+        assert "/v1/health" in all_paths
+        assert "/v1/models" in all_paths
+        assert "/v1/chat/completions" in all_paths
 
 
 class TestHealthEndpoint:
     """Tests for /v1/health endpoint."""
 
     def test_health_mocked_components(self, client):
-        with patch("app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("requests.get") as mock_get:
+        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant, patch("requests.get") as mock_get:
             mock_qdrant.get_collections.return_value = {}
             mock_get.return_value.status_code = 200
             mock_get.return_value.json.return_value = {}
@@ -117,8 +123,7 @@ class TestHealthEndpoint:
             assert "components" in data
 
     def test_health_qdrant_error(self, client):
-        with patch("app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("requests.get") as mock_get:
+        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant, patch("requests.get") as mock_get:
             mock_qdrant.get_collections.side_effect = Exception("down")
             mock_get.return_value.status_code = 200
             mock_get.return_value.json.return_value = {}
@@ -128,8 +133,10 @@ class TestHealthEndpoint:
             assert "error" in data["components"]["qdrant"]
 
     def test_health_llm_error(self, client):
-        with patch("app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("requests.get", side_effect=Exception("refused")):
+        with (
+            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("requests.get", side_effect=Exception("refused")),
+        ):
             mock_qdrant.get_collections.return_value = {}
             response = client.get("/v1/health")
             data = response.json()
@@ -156,11 +163,14 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["non_stream_completion"].return_value = "This is a test answer."
         mock_rag_pipeline["hybrid_search"].return_value = []
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "Hello, how are you?"}],
-            "stream": False
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "Hello, how are you?"}],
+                "stream": False,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["object"] == "chat.completion"
@@ -172,39 +182,46 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["non_stream_completion"].return_value = "Versioned answer."
         mock_rag_pipeline["hybrid_search"].return_value = []
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "What changed in v2.0?"}],
-            "rag_version": "2.0",
-            "stream": False
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "What changed in v2.0?"}],
+                "rag_version": "2.0",
+                "stream": False,
+            },
+        )
         assert response.status_code == 200
 
     def test_missing_user_message(self, client, mock_rag_pipeline):
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "system", "content": "You are helpful."}],
-            "stream": False
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "system", "content": "You are helpful."}],
+                "stream": False,
+            },
+        )
         assert response.status_code == 400
         assert "No user message found" in response.text
 
     def test_chat_completion_with_context(self, client, mock_rag_pipeline):
         mock_rag_pipeline["non_stream_completion"].return_value = "Context-based answer"
-        mock_rag_pipeline["hybrid_search"].return_value = [
-            MagicMock(payload={"text": "Relevant chunk"}, score=0.95)
-        ]
+        mock_rag_pipeline["hybrid_search"].return_value = [MagicMock(payload={"text": "Relevant chunk"}, score=0.95)]
         mock_rag_pipeline["rerank_chunks"].return_value = [0]
         mock_rag_pipeline["deduplicate_chunks"].return_value = [
             ({"text": "Relevant chunk", "source_type": "wiki", "title": "T", "doc_title": "D", "version": "1"}, 0.95)
         ]
         mock_rag_pipeline["build_context"].return_value = "[wiki] D / T (v1)\nRelevant chunk"
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "What is Kubernetes?"}],
-            "stream": False
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "What is Kubernetes?"}],
+                "stream": False,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["choices"][0]["message"]["content"] == "Context-based answer"
@@ -213,13 +230,16 @@ class TestChatCompletionsNonStreaming:
         mock_rag_pipeline["non_stream_completion"].return_value = "Answer"
         mock_rag_pipeline["hybrid_search"].return_value = []
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "test"}],
-            "temperature": 0.5,
-            "max_tokens": 2000,
-            "stream": False
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "test"}],
+                "temperature": 0.5,
+                "max_tokens": 2000,
+                "stream": False,
+            },
+        )
         data = response.json()
         assert data["object"] == "chat.completion"
         assert data["model"] == "test-model"
@@ -242,14 +262,17 @@ class TestChatCompletionsNonStreaming:
         ]
         mock_rag_pipeline["build_context"].return_value = "Built context"
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "test query"}],
-            "rag_skip_generation": True,
-            "rag_return_chunks": True,
-            "rag_top_k": 30,
-            "stream": False,
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "test query"}],
+                "rag_skip_generation": True,
+                "rag_return_chunks": True,
+                "rag_top_k": 30,
+                "stream": False,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
         assert "rag_sources" in data
@@ -271,11 +294,10 @@ class TestChatCompletionsStreaming:
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
         mock_rag_pipeline["hybrid_search"].return_value = []
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "Hi"}],
-            "stream": True
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+        )
         assert response.status_code == 200
         body = response.text
         assert "data:" in body
@@ -287,22 +309,20 @@ class TestChatCompletionsStreaming:
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
         mock_rag_pipeline["hybrid_search"].return_value = []
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "hello"}],
-            "stream": True
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "test-model", "messages": [{"role": "user", "content": "hello"}], "stream": True},
+        )
         body = response.text
         assert "[DONE]" in body
 
     def test_streaming_error_handling(self, client, mock_rag_pipeline):
         mock_rag_pipeline["hybrid_search"].side_effect = Exception("Search failed")
 
-        response = client.post("/v1/chat/completions", json={
-            "model": "test-model",
-            "messages": [{"role": "user", "content": "query"}],
-            "stream": True
-        })
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "test-model", "messages": [{"role": "user", "content": "query"}], "stream": True},
+        )
         # Streaming errors return the error in the stream body
         body = response.text
         assert "error" in body
@@ -316,8 +336,7 @@ class TestProcessRagQuery:
         mock_cache = MagicMock()
         mock_cache.get = AsyncMock(return_value="Cached response")
 
-        with patch("proxy.app.main.cache_manager", mock_cache), \
-             patch("proxy.app.main.hybrid_search") as mock_search:
+        with patch("proxy.app.main.cache_manager", mock_cache), patch("proxy.app.main.hybrid_search") as mock_search:
             result, context, from_cache, sources = await process_rag_query(
                 user_query="test query",
                 version=None,
@@ -331,9 +350,11 @@ class TestProcessRagQuery:
 
     @pytest.mark.asyncio
     async def test_no_search_results(self):
-        with patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.hybrid_search", return_value=[]), \
-             patch("proxy.app.main.non_stream_completion", return_value="Answer from LLM"):
+        with (
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.hybrid_search", return_value=[]),
+            patch("proxy.app.main.non_stream_completion", return_value="Answer from LLM"),
+        ):
             result, context, from_cache, sources = await process_rag_query(
                 user_query="test",
                 stream=False,
@@ -350,11 +371,13 @@ class TestProcessRagQuery:
         mock_hit.score = 0.9
         mock_search.return_value = [mock_hit]
 
-        with patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.hybrid_search", mock_search), \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.deduplicate_chunks") as mock_dedup, \
-             patch("proxy.app.main.build_context", return_value="Built context"):
+        with (
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.hybrid_search", mock_search),
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.deduplicate_chunks") as mock_dedup,
+            patch("proxy.app.main.build_context", return_value="Built context"),
+        ):
             mock_dedup.return_value = [({"text": "chunk text"}, 0.95)]
             context, messages, _, sources = await process_rag_query(
                 user_query="test",
@@ -371,18 +394,17 @@ class TestLangGraphOrchestratorIntegration:
 
     def test_langgraph_path_taken_when_enabled(self, client):
         mock_orchestrator = MagicMock()
-        mock_orchestrator.ainvoke = AsyncMock(return_value={
-            "answer": "Agentic response",
-            "context": "some context"
-        })
+        mock_orchestrator.ainvoke = AsyncMock(return_value={"answer": "Agentic response", "context": "some context"})
 
-        with patch("proxy.app.main.USE_LANGGRAPH", True), \
-             patch("proxy.app.main.orchestrator", mock_orchestrator):
-            response = client.post("/v1/chat/completions", json={
-                "model": "test-model",
-                "messages": [{"role": "user", "content": "Complex question"}],
-                "stream": False
-            })
+        with patch("proxy.app.main.USE_LANGGRAPH", True), patch("proxy.app.main.orchestrator", mock_orchestrator):
+            response = client.post(
+                "/v1/chat/completions",
+                json={
+                    "model": "test-model",
+                    "messages": [{"role": "user", "content": "Complex question"}],
+                    "stream": False,
+                },
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["choices"][0]["message"]["content"] == "Agentic response"
@@ -392,13 +414,11 @@ class TestLangGraphOrchestratorIntegration:
         mock_orchestrator = MagicMock()
         mock_orchestrator.ainvoke = AsyncMock(return_value=mock_stream_response)
 
-        with patch("proxy.app.main.USE_LANGGRAPH", True), \
-             patch("proxy.app.main.orchestrator", mock_orchestrator):
-            response = client.post("/v1/chat/completions", json={
-                "model": "test-model",
-                "messages": [{"role": "user", "content": "stream this"}],
-                "stream": True
-            })
+        with patch("proxy.app.main.USE_LANGGRAPH", True), patch("proxy.app.main.orchestrator", mock_orchestrator):
+            response = client.post(
+                "/v1/chat/completions",
+                json={"model": "test-model", "messages": [{"role": "user", "content": "stream this"}], "stream": True},
+            )
             assert response.status_code == 200
 
 
@@ -517,8 +537,10 @@ class TestToolsEndpoint:
 
     def test_list_tools_filter_by_tag(self, client, mock_registry):
         """GET /v1/tools?tag=live filters by tag."""
-        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry), \
-             patch("proxy.app.main._highest_role_from_user", return_value="admin"):
+        with (
+            patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry),
+            patch("proxy.app.main._highest_role_from_user", return_value="admin"),
+        ):
             response = client.get("/v1/tools?tag=live")
             assert response.status_code == 200
             data = response.json()
@@ -529,8 +551,10 @@ class TestToolsEndpoint:
 
     def test_list_tools_filter_by_provider(self, client, mock_registry):
         """GET /v1/tools?provider=sdk filters by provider."""
-        with patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry), \
-             patch("proxy.app.main._highest_role_from_user", return_value="admin"):
+        with (
+            patch("proxy.app.main.get_enhanced_registry", return_value=mock_registry),
+            patch("proxy.app.main._highest_role_from_user", return_value="admin"),
+        ):
             response = client.get("/v1/tools?provider=sdk")
             assert response.status_code == 200
             data = response.json()
@@ -573,8 +597,10 @@ class TestToolsEndpoint:
         for t in sample_tools:
             registry.register(t)
 
-        with patch("proxy.app.main.get_enhanced_registry", return_value=registry), \
-             patch("proxy.app.main._highest_role_from_user", return_value=None):
+        with (
+            patch("proxy.app.main.get_enhanced_registry", return_value=registry),
+            patch("proxy.app.main._highest_role_from_user", return_value=None),
+        ):
             response = client.get("/v1/tools")
             assert response.status_code == 200
             data = response.json()
@@ -586,12 +612,12 @@ class TestToolsEndpoint:
 
     def test_tool_list_filtered_by_role(self, client, mock_registry):
         """Expert role sees public + expert + user tools."""
-        from proxy.app.tools.registry import EnhancedToolRegistry
         from proxy.app.tools.definition import (
             ToolDefinition,
             ToolParam,
             ToolVisibility,
         )
+        from proxy.app.tools.registry import EnhancedToolRegistry
 
         registry = EnhancedToolRegistry()
         search_tool = ToolDefinition(
@@ -633,8 +659,10 @@ class TestToolsEndpoint:
         for t in [search_tool, expert_tool, user_tool, admin_tool]:
             registry.register(t)
 
-        with patch("proxy.app.main.get_enhanced_registry", return_value=registry), \
-             patch("proxy.app.main._highest_role_from_user", return_value="expert"):
+        with (
+            patch("proxy.app.main.get_enhanced_registry", return_value=registry),
+            patch("proxy.app.main._highest_role_from_user", return_value="expert"),
+        ):
             response = client.get("/v1/tools")
             assert response.status_code == 200
             data = response.json()
@@ -690,7 +718,8 @@ class TestStartupToolDiscovery:
         )
 
     def test_startup_discovers_declarative_when_dir_exists(
-        self, sample_declarative_tool,
+        self,
+        sample_declarative_tool,
     ):
         """When TOOLS_DECLARATIVE_DIR exists, declarative provider loads tools on startup."""
         from proxy.app.tools.registry import EnhancedToolRegistry
@@ -709,6 +738,7 @@ class TestStartupToolDiscovery:
                 registry.register(tool)
 
         import asyncio
+
         asyncio.run(_run())
 
         tools = registry.list_tools()
@@ -717,7 +747,8 @@ class TestStartupToolDiscovery:
         assert tools[0].provider == "declarative"
 
     def test_startup_discovers_openapi_when_specs_configured(
-        self, sample_discovery_tool,
+        self,
+        sample_discovery_tool,
     ):
         """When TOOLS_OPENAPI_SPECS is non-empty, OpenAPI provider loads tools on startup."""
         from proxy.app.tools.registry import EnhancedToolRegistry
@@ -736,6 +767,7 @@ class TestStartupToolDiscovery:
                 registry.register(tool)
 
         import asyncio
+
         asyncio.run(_run())
 
         tools = registry.list_tools()
@@ -784,10 +816,11 @@ class TestStartupToolDiscovery:
         async def _run():
             try:
                 await provider.discover()
-            except Exception:
+            except Exception:  # noqa: SIM105
                 pass  # Non-blocking: log warning, continue
 
         import asyncio
+
         asyncio.run(_run())
 
         tools = registry.list_tools()

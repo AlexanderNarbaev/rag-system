@@ -10,9 +10,8 @@ The registry is a singleton with built-in tools pre-registered.
 
 import json
 import logging
-from base64 import b64decode
-from dataclasses import dataclass, field
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -76,14 +75,16 @@ def format_tools_for_llm(tools: list[ToolDefinition]) -> list[dict[str, Any]]:
     """Convert tool definitions to OpenAI function calling format."""
     formatted = []
     for t in tools:
-        formatted.append({
-            "type": "function",
-            "function": {
-                "name": t.name,
-                "description": t.description,
-                "parameters": t.parameters_schema,
-            },
-        })
+        formatted.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": t.name,
+                    "description": t.description,
+                    "parameters": t.parameters_schema,
+                },
+            }
+        )
     return formatted
 
 
@@ -118,9 +119,7 @@ def handle_function_call(call: dict[str, Any], registry: ToolRegistry) -> ToolRe
     try:
         arguments = json.loads(arguments_raw) if isinstance(arguments_raw, str) else arguments_raw
     except json.JSONDecodeError as e:
-        return ToolResult(
-            name=tool_name, content="", tool_call_id=call_id, error=f"Invalid JSON arguments: {e}"
-        )
+        return ToolResult(name=tool_name, content="", tool_call_id=call_id, error=f"Invalid JSON arguments: {e}")
 
     result = execute_tool(tool_name, arguments, registry)
     result.tool_call_id = call_id
@@ -132,7 +131,7 @@ def handle_function_call(call: dict[str, Any], registry: ToolRegistry) -> ToolRe
 
 def _search_documents(query: str, top_k: int = 5, version: str | None = None) -> str:
     """Search indexed documents using hybrid search."""
-    from app.retrieval import hybrid_search
+    from proxy.app.core.retrieval import hybrid_search
 
     try:
         results = hybrid_search(query=query, version=version, top_k=top_k)
@@ -143,9 +142,7 @@ def _search_documents(query: str, top_k: int = 5, version: str | None = None) ->
             title = hit.payload.get("title", "") or hit.payload.get("doc_title", "")
             text = hit.payload.get("text", "")
             source = hit.payload.get("source_type", "unknown")
-            formatted.append(
-                f"[{i + 1}] {title} (source: {source}, score: {hit.score:.3f})\n{text[:300]}"
-            )
+            formatted.append(f"[{i + 1}] {title} (source: {source}, score: {hit.score:.3f})\n{text[:300]}")
         return "\n\n".join(formatted)
     except Exception as e:
         return f"Search failed: {e}"
@@ -153,7 +150,7 @@ def _search_documents(query: str, top_k: int = 5, version: str | None = None) ->
 
 def _search_by_version(version: str, query: str | None = None, top_k: int = 10) -> str:
     """Search documents by a specific version string."""
-    from app.retrieval import hybrid_search
+    from proxy.app.core.retrieval import hybrid_search
 
     try:
         results = hybrid_search(query=query or version, version=version, top_k=top_k)
@@ -172,8 +169,9 @@ def _search_by_version(version: str, query: str | None = None, top_k: int = 10) 
 def _get_document_metadata(doc_id: str) -> str:
     """Get metadata for a specific document by its ID."""
     try:
-        from app.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
         from qdrant_client import QdrantClient
+
+        from proxy.app.shared.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
 
         client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
         points = client.retrieve(collection_name=COLLECTION_NAME, ids=[doc_id])

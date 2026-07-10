@@ -1,21 +1,20 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/rerank.py - fine-tuning from HITL feedback."""
+
 import json
 import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from proxy.app.rerank import (
+from proxy.app.core.rerank import (
+    RERANKER_FT_ENABLED,
     collect_training_pairs,
     fine_tune_reranker,
-    RERANKER_FT_ENABLED,
 )
 
 
 class TestCollectTrainingPairs:
     def test_returns_empty_list_when_disabled(self):
-        with patch("proxy.app.rerank.RERANKER_FT_ENABLED", False):
+        with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", False):
             pairs = collect_training_pairs()
             assert pairs == []
 
@@ -33,8 +32,8 @@ class TestCollectTrainingPairs:
         }
         (feedback_dir / "feedback_001.json").write_text(json.dumps(feedback_entry))
 
-        with patch("proxy.app.rerank.RERANKER_FT_ENABLED", True):
-            with patch("proxy.app.rerank.FEEDBACK_LOG_DIR", str(feedback_dir)):
+        with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True):
+            with patch("proxy.app.core.rerank.FEEDBACK_LOG_DIR", str(feedback_dir)):
                 pairs = collect_training_pairs()
                 assert isinstance(pairs, list)
                 if pairs:
@@ -46,8 +45,8 @@ class TestCollectTrainingPairs:
         feedback_dir.mkdir()
         (feedback_dir / "bad.json").write_text("not json")
 
-        with patch("proxy.app.rerank.RERANKER_FT_ENABLED", True):
-            with patch("proxy.app.rerank.FEEDBACK_LOG_DIR", str(feedback_dir)):
+        with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True):
+            with patch("proxy.app.core.rerank.FEEDBACK_LOG_DIR", str(feedback_dir)):
                 pairs = collect_training_pairs()
                 assert pairs == []
 
@@ -63,8 +62,8 @@ class TestCollectTrainingPairs:
             }
             (feedback_dir / f"f{i:03d}.json").write_text(json.dumps(entry))
 
-        with patch("proxy.app.rerank.RERANKER_FT_ENABLED", True):
-            with patch("proxy.app.rerank.FEEDBACK_LOG_DIR", str(feedback_dir)):
+        with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True):
+            with patch("proxy.app.core.rerank.FEEDBACK_LOG_DIR", str(feedback_dir)):
                 pairs = collect_training_pairs()
                 total_pairs = len(pairs)
                 assert total_pairs == 3
@@ -72,8 +71,8 @@ class TestCollectTrainingPairs:
     def test_empty_feedback_dir(self, tmp_path):
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
-        with patch("proxy.app.rerank.RERANKER_FT_ENABLED", True):
-            with patch("proxy.app.rerank.FEEDBACK_LOG_DIR", str(empty_dir)):
+        with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True):
+            with patch("proxy.app.core.rerank.FEEDBACK_LOG_DIR", str(empty_dir)):
                 pairs = collect_training_pairs()
                 assert pairs == []
 
@@ -84,42 +83,44 @@ class TestFineTuneReranker:
         assert result is None
 
     def test_returns_none_when_disabled(self):
-        with patch("proxy.app.rerank.RERANKER_FT_ENABLED", False):
+        with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", False):
             pairs = [("query", "relevant text", 1.0)]
             result = fine_tune_reranker(pairs)
             assert result is None
 
-    @patch("proxy.app.rerank.CROSS_ENCODER_AVAILABLE", True)
-    @patch("proxy.app.rerank.RERANKER_FT_ENABLED", True)
+    @patch("proxy.app.core.rerank.CROSS_ENCODER_AVAILABLE", True)
+    @patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True)
+    @patch("proxy.app.core.rerank.TORCH_AVAILABLE", False)
     def test_calls_cross_encoder_fit(self):
         mock_ce = MagicMock()
-        with patch("proxy.app.rerank.reranker", mock_ce):
+        with patch("proxy.app.core.rerank.reranker", mock_ce):
             pairs = [
                 ("what is RAG?", "RAG is retrieval augmented generation", 1.0),
                 ("what is RAG?", "Python is a programming language", 0.0),
                 ("how to cook pasta?", "Boil water and add pasta", 1.0),
             ]
-            result = fine_tune_reranker(pairs, epochs=1)
+            fine_tune_reranker(pairs, epochs=1)
             assert mock_ce.fit.called
 
-    @patch("proxy.app.rerank.CROSS_ENCODER_AVAILABLE", True)
-    @patch("proxy.app.rerank.RERANKER_FT_ENABLED", True)
+    @patch("proxy.app.core.rerank.CROSS_ENCODER_AVAILABLE", True)
+    @patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True)
+    @patch("proxy.app.core.rerank.TORCH_AVAILABLE", False)
     def test_exception_handled_gracefully(self):
         mock_ce = MagicMock()
         mock_ce.fit.side_effect = RuntimeError("CUDA out of memory")
-        with patch("proxy.app.rerank.reranker", mock_ce):
+        with patch("proxy.app.core.rerank.reranker", mock_ce):
             pairs = [("q", "c", 1.0)]
             result = fine_tune_reranker(pairs, epochs=1)
             assert result is None
 
-    @patch("proxy.app.rerank.CROSS_ENCODER_AVAILABLE", True)
-    @patch("proxy.app.rerank.RERANKER_FT_ENABLED", True)
+    @patch("proxy.app.core.rerank.CROSS_ENCODER_AVAILABLE", True)
+    @patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True)
     def test_saves_model_after_training(self):
         mock_ce = MagicMock()
-        with patch("proxy.app.rerank.reranker", mock_ce):
+        with patch("proxy.app.core.rerank.reranker", mock_ce):
             pairs = [("q", "c", 1.0), ("q2", "c2", 0.0)]
             with tempfile.TemporaryDirectory() as tmpdir:
-                with patch("proxy.app.rerank.RERANKER_MODEL", tmpdir):
+                with patch("proxy.app.core.rerank.RERANKER_MODEL", tmpdir):
                     fine_tune_reranker(pairs, epochs=1)
                     if mock_ce.save.called:
                         pass

@@ -69,7 +69,7 @@ nav:
       - RAG Maturity Assessment: guides/rag-maturity-assessment.md
       - Production Readiness Checklist: guides/best-practices-checklist.md
       - Disaster Recovery Runbook: guides/disaster-recovery-runbook.md
-      - SLI/SLO Definitions: ../sli_slo.md
+      - SLI/SLO Definitions: sli_slo.md
       - "Performance & Quality": guides/performance-quality.md
       - "Extensibility: Adding Data Sources": guides/extensibility-data-sources.md
       - "Access Control & RBAC": guides/access-control-rbac.md

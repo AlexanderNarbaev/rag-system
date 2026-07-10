@@ -293,7 +293,7 @@ class JiraExtractor:
                     logger.warning("Base JQL already has updated condition. Incremental may overlap.")
                     return f"({jql}) AND {updated_condition}"
             else:
-                if jql.strip():
+                if jql.strip():  # noqa: SIM108
                     jql = f"({jql}) AND {updated_condition}"
                 else:
                     jql = updated_condition

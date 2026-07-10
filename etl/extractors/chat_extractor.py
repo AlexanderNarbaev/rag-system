@@ -182,7 +182,7 @@ class ChatExtractor(BaseExtractor):
                 messages.append({"role": "assistant", "content": answer.strip()})
             return [{"title": "Chat Log", "messages": messages, "id": "generic_text_1"}]
 
-        lines = [l.strip() for l in content.splitlines() if l.strip()]
+        lines = [line.strip() for line in content.splitlines() if line.strip()]
         segments = []
         current_role = None
         current_text = []
@@ -235,7 +235,7 @@ class ChatExtractor(BaseExtractor):
                 timestamp = msg.get("create_time", msg.get("created_at", msg.get("timestamp", "")))
 
                 if not role:
-                    if msg.get("author", {}).get("role") in ("user", "human"):
+                    if msg.get("author", {}).get("role") in ("user", "human"):  # noqa: SIM108
                         role = "user"
                     else:
                         role = "assistant"
@@ -261,7 +261,7 @@ class ChatExtractor(BaseExtractor):
     def _extract_from_mapping(self, mapping: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract messages from ChatGPT conversation mapping format."""
         messages = []
-        for node_id, node in mapping.items():
+        for _node_id, node in mapping.items():
             if isinstance(node, dict):
                 msg = node.get("message")
                 if msg:

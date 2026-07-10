@@ -1,7 +1,6 @@
 """Tests for proxy/app/sanitizer.py — input sanitization for SQL injection, XSS, length limits."""
 
-import pytest
-from proxy.app.sanitizer import sanitize_query, sanitize_feedback, validate_length
+from proxy.app.shared.sanitizer import sanitize_feedback, sanitize_query, validate_length
 
 
 class TestSanitizeQuery:

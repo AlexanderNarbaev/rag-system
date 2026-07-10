@@ -1,19 +1,19 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for self-correction engine: CRAG, reorder, self-critique, LLMLingua compression."""
-import pytest
-from unittest.mock import MagicMock, patch
 
-from proxy.app.context_builder import (
+import pytest
+
+from proxy.app.core.context import (
+    KnowledgeStrip,
     decompose_to_strips,
     reorder_chunks,
-    KnowledgeStrip,
 )
-from proxy.app.token_optimizer import (
+from proxy.app.core.token_optimizer import (
     TokenOptimizer,
-    compress_with_perplexity,
-    _score_sentence_by_keyword_density,
     _compute_token_surprise,
+    _score_sentence_by_keyword_density,
+    compress_with_perplexity,
 )
-
 
 # ── F2: CRAG Knowledge Strip Decomposition ──
 
@@ -24,7 +24,10 @@ class TestDecomposeToStrips:
     def test_decompose_single_chunk(self):
         chunks_with_scores = [
             (
-                {"text": "Docker is a containerization platform. It uses OS-level virtualization.", "source_type": "docs"},
+                {
+                    "text": "Docker is a containerization platform. It uses OS-level virtualization.",
+                    "source_type": "docs",
+                },
                 0.95,
             )
         ]
@@ -126,9 +129,7 @@ class TestReorderChunks:
         assert result == []
 
     def test_reorder_preserves_all_items(self):
-        chunks = [
-            ({"text": f"chunk{i}", "score": 0.1 * i}, 0.1 * i) for i in range(1, 6)
-        ]
+        chunks = [({"text": f"chunk{i}", "score": 0.1 * i}, 0.1 * i) for i in range(1, 6)]
         result = reorder_chunks(chunks)
         assert len(result) == len(chunks)
         texts = {r[0]["text"] for r in result}
@@ -144,8 +145,14 @@ class TestTokenSurprise:
 
     def test_surprise_high_for_rare_words(self):
         text = "Quantum chromodynamics describes strong nuclear interactions."
-        vocab = {"quantum": 0.95, "chromodynamics": 0.99, "describes": 0.1,
-                  "strong": 0.2, "nuclear": 0.15, "interactions": 0.12}
+        vocab = {
+            "quantum": 0.95,
+            "chromodynamics": 0.99,
+            "describes": 0.1,
+            "strong": 0.2,
+            "nuclear": 0.15,
+            "interactions": 0.12,
+        }
         surprises = _compute_token_surprise(text, vocab)
         assert len(surprises) > 0
         assert max(surprises.values()) > 0.5  # rare words score high surprise
@@ -229,7 +236,7 @@ class TestSelfCritique:
     """Tests for the self_critique node in orchestrator."""
 
     def test_self_critique_node_returns_state(self):
-        from proxy.app.orchestrator import self_critique
+        from proxy.app.core.orchestrator import self_critique
 
         state = {
             "query": "What is Docker?",
@@ -243,7 +250,7 @@ class TestSelfCritique:
         assert "self_critique_score" in result or "answer" in result
 
     def test_self_critique_low_score_triggers_rewrite_flag(self):
-        from proxy.app.orchestrator import self_critique
+        from proxy.app.core.orchestrator import self_critique
 
         state = {
             "query": "Complex question?",
@@ -256,7 +263,7 @@ class TestSelfCritique:
         assert "needs_rewrite" in result
 
     def test_self_critique_max_rewrites_stops(self):
-        from proxy.app.orchestrator import self_critique
+        from proxy.app.core.orchestrator import self_critique
 
         state = {
             "query": "Question?",
@@ -269,7 +276,7 @@ class TestSelfCritique:
         assert result.get("needs_rewrite") is False
 
     def test_self_critique_no_answer(self):
-        from proxy.app.orchestrator import self_critique
+        from proxy.app.core.orchestrator import self_critique
 
         state = {
             "query": "Question?",
@@ -286,13 +293,13 @@ class TestSelfCritiqueRoute:
     """Tests for the self_critique routing decision."""
 
     def test_route_to_done_when_no_rewrite_needed(self):
-        from proxy.app.orchestrator import _self_critique_route
+        from proxy.app.core.orchestrator import _self_critique_route
 
         state = {"needs_rewrite": False}
         assert _self_critique_route(state) == "done"
 
     def test_route_to_rewrite_when_needed(self):
-        from proxy.app.orchestrator import _self_critique_route
+        from proxy.app.core.orchestrator import _self_critique_route
 
         state = {"needs_rewrite": True}
         assert _self_critique_route(state) == "rewrite"
@@ -305,36 +312,44 @@ class TestQueryComplexity:
     """Tests for query complexity scoring in slm_router."""
 
     def test_greeting_complexity_1(self):
-        from proxy.app.slm_router import IntentType, get_complexity_score
+        from proxy.app.llm.slm import IntentType, get_complexity_score
+
         assert get_complexity_score(IntentType.GREETING) == 1
 
     def test_simple_fact_complexity_3(self):
-        from proxy.app.slm_router import IntentType, get_complexity_score
+        from proxy.app.llm.slm import IntentType, get_complexity_score
+
         assert get_complexity_score(IntentType.SIMPLE_FACT) == 3
 
     def test_factual_complexity_5(self):
-        from proxy.app.slm_router import IntentType, get_complexity_score
+        from proxy.app.llm.slm import IntentType, get_complexity_score
+
         assert get_complexity_score(IntentType.FACTUAL) == 5
 
     def test_procedural_complexity_7(self):
-        from proxy.app.slm_router import IntentType, get_complexity_score
+        from proxy.app.llm.slm import IntentType, get_complexity_score
+
         assert get_complexity_score(IntentType.PROCEDURAL) == 7
 
     def test_comparison_complexity_8(self):
-        from proxy.app.slm_router import IntentType, get_complexity_score
+        from proxy.app.llm.slm import IntentType, get_complexity_score
+
         assert get_complexity_score(IntentType.COMPARISON) == 8
 
     def test_complex_complexity_10(self):
-        from proxy.app.slm_router import IntentType, get_complexity_score
+        from proxy.app.llm.slm import IntentType, get_complexity_score
+
         assert get_complexity_score(IntentType.COMPLEX) == 10
 
     def test_get_query_complexity(self):
-        from proxy.app.slm_router import get_query_complexity
+        from proxy.app.llm.slm import get_query_complexity
+
         result = get_query_complexity("Hello!")
         assert 1 <= result <= 10
 
     def test_intent_types_include_new_types(self):
-        from proxy.app.slm_router import IntentType
+        from proxy.app.llm.slm import IntentType
+
         intents = {e.value for e in IntentType}
         assert "simple_fact" in intents
         assert "complex" in intents

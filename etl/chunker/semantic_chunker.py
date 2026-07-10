@@ -199,7 +199,7 @@ class SemanticChunker:
             return chunks
         overlapped = []
         prev_text = ""
-        for i, chunk in enumerate(chunks):
+        for _i, chunk in enumerate(chunks):
             if prev_text:
                 # Берем последние self.overlap_tokens токенов из prev_text (приближённо)
                 overlap_chars = self.overlap_tokens * 4
@@ -226,10 +226,10 @@ class MetadataEnricher:
             try:
                 # Загружаем маленькую модель для русского/английского
                 self.nlp = spacy.load("ru_core_news_sm")  # или "en_core_web_sm"
-            except:
+            except Exception:
                 try:
                     self.nlp = spacy.load("en_core_web_sm")
-                except:
+                except Exception:
                     logger.warning("spaCy model not found. Install: python -m spacy download ru_core_news_sm")
                     self.nlp = None
 
@@ -250,7 +250,7 @@ class MetadataEnricher:
         if not self.nlp:
             return []
         doc = self.nlp(text[:500000])  # ограничиваем длину
-        entities = list(set([ent.text for ent in doc.ents if ent.label_ in ("PERSON", "ORG", "PRODUCT", "GPE")]))
+        entities = list({ent.text for ent in doc.ents if ent.label_ in ("PERSON", "ORG", "PRODUCT", "GPE")})
         return entities[:10]
 
     def generate_summary(self, text: str) -> str:
@@ -301,7 +301,7 @@ Output JSON:"""
                         "keywords": data.get("keywords", []),
                         "hypothetical_questions": data.get("questions", []),
                     }
-                except:
+                except Exception:
                     pass
         except Exception as e:
             logger.warning(f"SLM enrichment failed: {e}")
@@ -330,7 +330,7 @@ class MDKeyChunker:
             chunks = self.base.chunk_html(content, source_metadata)
 
         # Обогащение метаданными (NLP + SLM)
-        for idx, chunk in enumerate(chunks):
+        for _idx, chunk in enumerate(chunks):
             # Базовые метаданные от источника
             chunk.source_type = source_metadata.get("source_type", "")
             chunk.source_id = source_metadata.get("source_id", "")
@@ -386,8 +386,8 @@ class MDKeyChunker:
                 # Объединяем тексты и метаданные
                 combined_text = "\n\n---\n\n".join([ch.text for ch in group])
                 combined_hash = hashlib.sha256(combined_text.encode()).hexdigest()
-                combined_entities = list(set([e for ch in group for e in ch.entities]))
-                combined_keywords = list(set([k for ch in group for k in ch.keywords]))
+                combined_entities = list({e for ch in group for e in ch.entities})
+                combined_keywords = list({k for ch in group for k in ch.keywords})
                 combined_questions = []
                 for ch in group:
                     combined_questions.extend(ch.hypothetical_questions)

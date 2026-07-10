@@ -1,14 +1,10 @@
 # tests/etl/test_entity_extractor.py
-import json
-import hashlib
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock
 
 from etl.graph_builder.entity_extractor import (
     Entity,
-    Relation,
     EntityRelationExtractor,
+    Relation,
     entities_to_cypher,
 )
 
@@ -53,18 +49,14 @@ class TestRelationDataclass:
 
 class TestEntityRelationExtractorInit:
     def test_init_without_spacy(self, monkeypatch):
-        monkeypatch.setattr(
-            "etl.graph_builder.entity_extractor.SPACY_AVAILABLE", False
-        )
+        monkeypatch.setattr("etl.graph_builder.entity_extractor.SPACY_AVAILABLE", False)
         extractor = EntityRelationExtractor(use_spacy=True)
         assert extractor.use_spacy is False
         assert extractor.nlp is None
 
     def test_init_with_cache_dir(self, tmp_path):
         cache = tmp_path / "entity_cache"
-        extractor = EntityRelationExtractor(
-            use_spacy=False, use_slm=False, cache_dir=cache
-        )
+        EntityRelationExtractor(use_spacy=False, use_slm=False, cache_dir=cache)
         assert cache.is_dir()
 
     def test_init_with_slm_endpoint(self):
@@ -148,9 +140,7 @@ class TestExtractFromChunk:
         mock_nlp.return_value = mock_doc
         extractor.nlp = mock_nlp
         extractor.use_spacy = True
-        entities, relations = extractor.extract_from_chunk(
-            "Python is great", source_id="doc_42"
-        )
+        entities, relations = extractor.extract_from_chunk("Python is great", source_id="doc_42")
         assert len(entities) >= 1
         assert entities[0].source_id == "doc_42"
 
@@ -211,9 +201,7 @@ class TestExtractBatch:
         extractor = EntityRelationExtractor(use_spacy=False, use_slm=False)
         extractor.nlp = None
         chunks = [{"text": "some text"}]
-        entities, relations = extractor.extract_batch(
-            chunks, source_id_prefix="default_prefix"
-        )
+        entities, relations = extractor.extract_batch(chunks, source_id_prefix="default_prefix")
         assert entities == []
 
 
@@ -239,12 +227,8 @@ class TestEntitiesToCypher:
 class TestCacheOperations:
     def test_cache_save_and_load(self, tmp_path):
         cache = tmp_path / "cache"
-        extractor = EntityRelationExtractor(
-            use_spacy=False, use_slm=False, cache_dir=cache
-        )
-        entities = [
-            Entity(id="e1", name="Test", type="CONCEPT", source_id="doc_1")
-        ]
+        extractor = EntityRelationExtractor(use_spacy=False, use_slm=False, cache_dir=cache)
+        entities = [Entity(id="e1", name="Test", type="CONCEPT", source_id="doc_1")]
         relations = [Relation(source="e1", target="e2", type="RELATES_TO")]
         key = extractor._get_cache_key("test text")
         extractor._save_to_cache(key, entities, relations)
@@ -257,9 +241,7 @@ class TestCacheOperations:
 
     def test_cache_load_nonexistent(self, tmp_path):
         cache = tmp_path / "cache"
-        extractor = EntityRelationExtractor(
-            use_spacy=False, use_slm=False, cache_dir=cache
-        )
+        extractor = EntityRelationExtractor(use_spacy=False, use_slm=False, cache_dir=cache)
         result = extractor._load_from_cache("nonexistent_key")
         assert result is None
 

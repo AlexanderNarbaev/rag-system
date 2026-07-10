@@ -1,21 +1,17 @@
 """Tests for proxy/app/access_control.py — RBAC, access filtering, and role hierarchy."""
 
-import pytest
-from unittest.mock import patch, MagicMock
-
 from proxy.app.auth import UserContext
-from proxy.app.access_control import (
+from proxy.app.shared.access_control import (
+    ACCESS_LEVEL_RANK,
     ROLE_ACCESS,
     ROLE_MAX_LEVEL,
-    ACCESS_LEVEL_RANK,
     _role_allowed_levels,
     build_access_filter,
     build_access_filter_should,
-    filter_chunks,
-    can_access_source,
     can_access_document,
+    can_access_source,
+    filter_chunks,
 )
-
 
 # ---------------------------------------------------------------------------
 # Static data validation
@@ -107,7 +103,10 @@ class TestBuildAccessFilter:
 
     def test_developer_with_groups(self):
         ctx = UserContext(
-            user_id="2", username="alice", roles=["developer"], groups=["engineering"],
+            user_id="2",
+            username="alice",
+            roles=["developer"],
+            groups=["engineering"],
         )
         result = build_access_filter(ctx)
         assert result is not None
@@ -124,7 +123,9 @@ class TestBuildAccessFilter:
 
     def test_restricted_with_username(self):
         ctx = UserContext(
-            user_id="4", username="alice", roles=["admin"],
+            user_id="4",
+            username="alice",
+            roles=["admin"],
         )
         result = build_access_filter(ctx)
         assert result is None  # admin sees everything
@@ -149,7 +150,10 @@ class TestBuildAccessFilterShould:
 
     def test_developer_with_groups_includes_confidential_clause(self):
         ctx = UserContext(
-            user_id="2", username="alice", roles=["developer"], groups=["engineering"],
+            user_id="2",
+            username="alice",
+            roles=["developer"],
+            groups=["engineering"],
         )
         result = build_access_filter_should(ctx)
         assert result is not None
@@ -226,7 +230,10 @@ class TestFilterChunks:
 
     def test_developer_sees_confidential_if_in_group(self):
         ctx = UserContext(
-            user_id="4", username="eve", roles=["developer"], groups=["engineering"],
+            user_id="4",
+            username="eve",
+            roles=["developer"],
+            groups=["engineering"],
         )
         result = filter_chunks(SAMPLE_CHUNKS, ctx)
         texts = [c["text"] for c in result]
@@ -237,7 +244,10 @@ class TestFilterChunks:
 
     def test_developer_skips_confidential_if_not_in_group(self):
         ctx = UserContext(
-            user_id="5", username="frank", roles=["developer"], groups=["marketing"],
+            user_id="5",
+            username="frank",
+            roles=["developer"],
+            groups=["marketing"],
         )
         result = filter_chunks(SAMPLE_CHUNKS, ctx)
         texts = [c["text"] for c in result]
@@ -245,13 +255,18 @@ class TestFilterChunks:
 
     def test_restricted_only_visible_to_named_user(self):
         ctx = UserContext(
-            user_id="6", username="alice", roles=["admin"],
+            user_id="6",
+            username="alice",
+            roles=["admin"],
         )
         result = filter_chunks(SAMPLE_CHUNKS, ctx)
         assert len(result) == 5  # admin
 
         ctx_dev = UserContext(
-            user_id="7", username="bob", roles=["developer"], groups=["engineering"],
+            user_id="7",
+            username="bob",
+            roles=["developer"],
+            groups=["engineering"],
         )
         result_dev = filter_chunks(SAMPLE_CHUNKS, ctx_dev)
         assert "restricted info" not in [c["text"] for c in result_dev]
@@ -334,25 +349,46 @@ class TestCanAccessDocument:
 
     def test_group_member_can_access_confidential_doc(self):
         ctx = UserContext(
-            user_id="4", username="bob", roles=["developer"], groups=["engineering"],
+            user_id="4",
+            username="bob",
+            roles=["developer"],
+            groups=["engineering"],
         )
-        assert can_access_document(
-            ctx, "confidential", allowed_groups=["engineering", "security"],
-        ) is True
+        assert (
+            can_access_document(
+                ctx,
+                "confidential",
+                allowed_groups=["engineering", "security"],
+            )
+            is True
+        )
 
     def test_non_group_member_cannot_access_confidential_doc(self):
         ctx = UserContext(
-            user_id="5", username="bob", roles=["developer"], groups=["marketing"],
+            user_id="5",
+            username="bob",
+            roles=["developer"],
+            groups=["marketing"],
         )
-        assert can_access_document(
-            ctx, "confidential", allowed_groups=["engineering"],
-        ) is False
+        assert (
+            can_access_document(
+                ctx,
+                "confidential",
+                allowed_groups=["engineering"],
+            )
+            is False
+        )
 
     def test_no_groups_cannot_access_confidential(self):
         ctx = UserContext(user_id="6", username="bob", roles=["developer"], groups=[])
-        assert can_access_document(
-            ctx, "confidential", allowed_groups=["engineering"],
-        ) is False
+        assert (
+            can_access_document(
+                ctx,
+                "confidential",
+                allowed_groups=["engineering"],
+            )
+            is False
+        )
 
     def test_viewer_can_access_internal(self):
         ctx = UserContext(user_id="7", username="bob", roles=["viewer"])

@@ -1,9 +1,9 @@
 """Artifact store: upload/download model artifacts via MinIO/S3 with local fallback."""
 
+import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
-import shutil
-import os
 
 
 @dataclass
@@ -31,6 +31,7 @@ class ArtifactStore:
         if endpoint and access_key and secret_key:
             try:
                 import boto3
+
                 self._client = boto3.client(
                     "s3",
                     endpoint_url=f"{'https' if secure else 'http'}://{endpoint}",
@@ -72,7 +73,11 @@ class ArtifactStore:
             else:
                 shutil.copy2(local_path, dest / os.path.basename(local_path))
 
-        return ArtifactRef(bucket=self.bucket, key=key, uri=str(self._local_path / model_name / version) if self._local_mode else f"s3://{self.bucket}/{key}")
+        return ArtifactRef(
+            bucket=self.bucket,
+            key=key,
+            uri=str(self._local_path / model_name / version) if self._local_mode else f"s3://{self.bucket}/{key}",
+        )  # noqa: E501
 
     def download_model(self, model_name: str, version: str, local_dir: str) -> str:
         dest = Path(local_dir) / model_name / version
@@ -83,7 +88,7 @@ class ArtifactStore:
             paginator = self._client.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=self.bucket, Prefix=key):
                 for obj in page.get("Contents", []):
-                    rel = obj["Key"][len(key):]
+                    rel = obj["Key"][len(key) :]
                     if rel:
                         target = dest / rel
                         target.parent.mkdir(parents=True, exist_ok=True)
@@ -102,7 +107,7 @@ class ArtifactStore:
             paginator = self._client.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix, Delimiter="/"):
                 for cp in page.get("CommonPrefixes", []):
-                    v = cp["Prefix"][len(prefix):].rstrip("/")
+                    v = cp["Prefix"][len(prefix) :].rstrip("/")
                     if v:
                         versions.add(v)
         else:

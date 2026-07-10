@@ -8,9 +8,8 @@ methods for OpenAI, Anthropic, and JSON Schema.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
-
 
 _UNSET: Any = object()
 
@@ -31,7 +30,7 @@ _TYPE_MAP: dict[type | str, str] = {
 }
 
 
-class ToolVisibility(str, Enum):
+class ToolVisibility(StrEnum):
     PUBLIC = "public"
     ADMIN = "admin"
     EXPERT = "expert"
@@ -154,7 +153,7 @@ class ToolCall:
     arguments: dict[str, Any] = field(default_factory=dict)
 
 
-class ToolErrorBase(Exception):
+class ToolErrorBase(Exception):  # noqa: N818
     def __init__(
         self,
         tool_name: str,

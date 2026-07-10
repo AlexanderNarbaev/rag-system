@@ -21,12 +21,7 @@ try:
     from qdrant_client.http.models import (
         CollectionInfo,
         Distance,
-        MultiVectorConfig,
         PointStruct,
-        SparseIndexParams,
-        SparseVector,
-        SparseVectorParams,
-        VectorParams,
     )
 
     QDRANT_AVAILABLE = True
@@ -34,7 +29,6 @@ except ImportError:
     QDRANT_AVAILABLE = False
 
 try:
-    import numpy as np
     from sentence_transformers import SentenceTransformer
 
     ST_AVAILABLE = True
@@ -289,10 +283,8 @@ class QdrantHybridIndexer:
             return [self._compute_dense_vector(text)]
 
         try:
-            output = self.embedder.encode(
-                text, normalize_embeddings=False, output_value="token_embeddings"
-            )
-            if hasattr(output, "tolist"):
+            output = self.embedder.encode(text, normalize_embeddings=False, output_value="token_embeddings")
+            if hasattr(output, "tolist"):  # noqa: SIM108
                 token_vecs = output.tolist()
             else:
                 token_vecs = output
@@ -402,10 +394,7 @@ class QdrantHybridIndexer:
                 limit=limit,
                 with_payload=True,
             )
-            return [
-                {"id": r.id, "score": r.score, "payload": r.payload}
-                for r in results
-            ]
+            return [{"id": r.id, "score": r.score, "payload": r.payload} for r in results]
         except Exception as e:
             logger.error("ColBERT search failed: %s", e)
             return []

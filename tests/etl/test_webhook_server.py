@@ -4,9 +4,9 @@
 import hashlib
 import hmac
 import json
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 

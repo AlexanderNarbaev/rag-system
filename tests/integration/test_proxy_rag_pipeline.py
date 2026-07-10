@@ -1,3 +1,4 @@
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/integration/test_proxy_rag_pipeline.py
 """Integration tests for the RAG proxy query pipeline end-to-end.
 
@@ -5,10 +6,9 @@ Tests the full /v1/chat/completions flow with mocked external services
 (Qdrant, LLM, Redis). Uses FastAPI TestClient.
 """
 
-import json
 import sys
 from pathlib import Path
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,12 +19,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))
 @pytest.fixture
 def app_client():
     """Create a FastAPI TestClient with all external dependencies mocked."""
-    with patch("proxy.app.main.cache_manager", None), \
-         patch("proxy.app.main.USE_LANGGRAPH", False), \
-         patch("proxy.app.main.LOG_REQUESTS", False), \
-         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"):
-        from proxy.app.main import app
+    with (
+        patch("proxy.app.main.cache_manager", None),
+        patch("proxy.app.main.USE_LANGGRAPH", False),
+        patch("proxy.app.main.LOG_REQUESTS", False),
+        patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
+    ):
         from fastapi.testclient import TestClient
+
+        from proxy.app.main import app
+
         client = TestClient(app)
         return client
 
@@ -44,8 +48,7 @@ class TestHealthEndpoint:
 
     def test_health_returns_degraded_when_qdrant_unavailable(self, app_client):
         """Health endpoint returns 503 when Qdrant check raises an exception."""
-        with patch("proxy.app.retrieval.qdrant_client") as mock_qdrant, \
-             patch("requests.get") as mock_get:
+        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant, patch("requests.get") as mock_get:
             mock_qdrant.get_collections.side_effect = Exception("Connection refused")
             mock_resp = MagicMock()
             mock_resp.status_code = 200
@@ -85,10 +88,11 @@ class TestChatCompletionsNonStreaming:
 
     def test_chat_completion_returns_openai_format(self, app_client):
         """Chat completion response follows OpenAI format with expected fields."""
-        with patch("proxy.app.main.hybrid_search", return_value=self.search_results), \
-             patch("proxy.app.main.rerank_chunks", return_value=[0, 1, 3]), \
-             patch("proxy.app.main.non_stream_completion", self.mock_llm):
-
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=self.search_results),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1, 3]),
+            patch("proxy.app.main.non_stream_completion", self.mock_llm),
+        ):
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
@@ -110,10 +114,11 @@ class TestChatCompletionsNonStreaming:
 
     def test_chat_completion_builds_context_from_search_results(self, app_client):
         """Context is correctly built from hybrid_search results passed through reranking."""
-        with patch("proxy.app.main.hybrid_search") as mock_search, \
-             patch("proxy.app.main.rerank_chunks", return_value=[0, 2]), \
-             patch("proxy.app.main.non_stream_completion", self.mock_llm):
-
+        with (
+            patch("proxy.app.main.hybrid_search") as mock_search,
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 2]),
+            patch("proxy.app.main.non_stream_completion", self.mock_llm),
+        ):
             mock_search.return_value = self.search_results
 
             payload = {
@@ -128,10 +133,11 @@ class TestChatCompletionsNonStreaming:
 
     def test_chat_completion_with_version_filter(self, app_client):
         """Chat completion passes version filter to hybrid_search when rag_version is set."""
-        with patch("proxy.app.main.hybrid_search") as mock_search, \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.non_stream_completion", self.mock_llm):
-
+        with (
+            patch("proxy.app.main.hybrid_search") as mock_search,
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.non_stream_completion", self.mock_llm),
+        ):
             mock_search.return_value = self.search_results
 
             payload = {
@@ -146,9 +152,10 @@ class TestChatCompletionsNonStreaming:
 
     def test_chat_completion_handles_empty_search_results(self, app_client):
         """Chat completion returns a response even when no search results are found."""
-        with patch("proxy.app.main.hybrid_search", return_value=[]), \
-             patch("proxy.app.main.non_stream_completion", self.mock_llm):
-
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=[]),
+            patch("proxy.app.main.non_stream_completion", self.mock_llm),
+        ):
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Запрос без результатов"}],
@@ -160,10 +167,11 @@ class TestChatCompletionsNonStreaming:
 
     def test_chat_completion_uses_cache_on_second_request(self, app_client):
         """Second identical request retrieves cached response instead of calling LLM."""
-        with patch("proxy.app.main.hybrid_search", return_value=self.search_results), \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.non_stream_completion", self.mock_llm):
-
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=self.search_results),
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.non_stream_completion", self.mock_llm),
+        ):
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
@@ -175,8 +183,10 @@ class TestChatCompletionsNonStreaming:
             # Second request — should hit cache (in-memory cache lives in TestClient scope)
             response2 = app_client.post("/v1/chat/completions", json=payload)
             assert response2.status_code == 200
-            assert response1.json()["choices"][0]["message"]["content"] == \
-                   response2.json()["choices"][0]["message"]["content"]
+            assert (
+                response1.json()["choices"][0]["message"]["content"]
+                == response2.json()["choices"][0]["message"]["content"]
+            )
 
     def test_chat_completion_force_refresh_skips_cache(self, app_client):
         """Setting rag_force_refresh=True bypasses cache and calls LLM again."""
@@ -184,12 +194,13 @@ class TestChatCompletionsNonStreaming:
 
         async def tracking_llm(*args, **kwargs):
             call_count[0] += 1
-            return "Ответ LLM с номером вызова {}".format(call_count[0])
+            return f"Ответ LLM с номером вызова {call_count[0]}"
 
-        with patch("proxy.app.main.hybrid_search", return_value=self.search_results), \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.non_stream_completion", side_effect=tracking_llm):
-
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=self.search_results),
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.non_stream_completion", side_effect=tracking_llm),
+        ):
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Cache test query"}],
@@ -213,9 +224,11 @@ class TestChatCompletionsNonStreaming:
 
     def test_chat_completion_extracts_version_from_query_text(self, app_client):
         """Version is extracted from query text via extract_version_from_query."""
-        with patch("proxy.app.main.hybrid_search") as mock_search, \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.non_stream_completion", self.mock_llm):
+        with (
+            patch("proxy.app.main.hybrid_search") as mock_search,
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.non_stream_completion", self.mock_llm),
+        ):
             mock_search.return_value = self.search_results
 
             payload = {
@@ -233,17 +246,28 @@ class TestChatCompletionsStreaming:
 
     def test_streaming_response_returns_sse_format(self, app_client):
         """Streaming endpoint returns text/event-stream with SSE data chunks."""
+
         async def mock_stream_llm(*args, **kwargs):
             chunks = [
-                {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Ответ"}, "index": 0}]},
-                {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": " по RAG."}, "index": 0}]},
+                {
+                    "id": "1",
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": "Ответ"}, "index": 0}],
+                },
+                {
+                    "id": "1",
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": " по RAG."}, "index": 0}],
+                },
             ]
             for chunk in chunks:
                 yield chunk
 
-        with patch("proxy.app.main.hybrid_search") as mock_search, \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.stream_completion", side_effect=mock_stream_llm):
+        with (
+            patch("proxy.app.main.hybrid_search") as mock_search,
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.stream_completion", side_effect=mock_stream_llm),
+        ):
 
             class FakeScoredPoint:
                 def __init__(self, score, payload):
@@ -278,8 +302,10 @@ class TestErrorHandling:
         mock_hit.payload = {"text": "Some document text", "version": "1.0"}
         mock_hit.score = 0.95
 
-        with patch("proxy.app.main.hybrid_search", return_value=[mock_hit]), \
-             patch("proxy.app.main.rerank_chunks", side_effect=RuntimeError("Rerank failed")):
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=[mock_hit]),
+            patch("proxy.app.main.rerank_chunks", side_effect=RuntimeError("Rerank failed")),
+        ):
             payload = {
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Test"}],

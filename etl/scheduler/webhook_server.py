@@ -11,12 +11,12 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
 import yaml
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -33,11 +33,11 @@ DEFAULT_STREAM_KEY = "etl:events"
 
 
 def _load_config(config_path: Path) -> dict:
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def get_redis_client(host: str, port: int) -> Optional["redis.Redis"]:
+def get_redis_client(host: str, port: int) -> Optional["redis.Redis"]:  # noqa: F821
     try:
         import redis
     except ImportError:
@@ -79,7 +79,7 @@ def create_app(
             "source": source,
             "event_type": event_type,
             "doc_id": doc_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "payload": json.dumps(payload),
         }
         event_data = {k: v for k, v in event.items() if v is not None}
@@ -111,7 +111,7 @@ def create_app(
         try:
             payload = json.loads(body)
         except json.JSONDecodeError:
-            raise HTTPException(status_code=422, detail="Invalid JSON body")
+            raise HTTPException(status_code=422, detail="Invalid JSON body") from None
         event_type = payload.get("event", payload.get("event_type", "unknown"))
         await _process_event("confluence", event_type, payload)
         return JSONResponse(
@@ -127,7 +127,7 @@ def create_app(
         try:
             payload = json.loads(body)
         except json.JSONDecodeError:
-            raise HTTPException(status_code=422, detail="Invalid JSON body")
+            raise HTTPException(status_code=422, detail="Invalid JSON body") from None
         event_type = payload.get("object_kind", payload.get("event_name", "unknown"))
         await _process_event("gitlab", event_type, payload)
         return JSONResponse(
@@ -171,7 +171,13 @@ def main():
     import uvicorn
 
     logger.info("Starting webhook server on %s:%d", webhook_host, webhook_port)
-    logger.info("Redis: %s:%d  Stream: %s  Webhook: %s", redis_host, redis_port, stream_key, "enabled" if webhook_enabled else "disabled")
+    logger.info(
+        "Redis: %s:%d  Stream: %s  Webhook: %s",
+        redis_host,
+        redis_port,
+        stream_key,
+        "enabled" if webhook_enabled else "disabled",
+    )  # noqa: E501
     uvicorn.run(app, host=webhook_host, port=webhook_port)
 
 

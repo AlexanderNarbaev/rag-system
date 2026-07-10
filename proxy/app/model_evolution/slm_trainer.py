@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch
+
     _TORCH_AVAILABLE = True
 except ImportError:
     torch = None  # type: ignore[assignment]
@@ -40,6 +41,7 @@ try:
         Trainer,
         TrainingArguments,
     )
+
     _TRANSFORMERS_AVAILABLE = True
 except ImportError:
     AutoTokenizer = None  # type: ignore[assignment,misc]
@@ -54,6 +56,7 @@ try:
         TaskType,
         get_peft_model,
     )
+
     _PEFT_AVAILABLE = True
 except ImportError:
     LoraConfig = None  # type: ignore[assignment,misc]
@@ -140,8 +143,7 @@ class SLMTrainer(TrainerBase):
         try:
             if not _TRANSFORMERS_AVAILABLE or not _PEFT_AVAILABLE:
                 raise RuntimeError(
-                    "transformers and peft are required. "
-                    "Install: pip install transformers peft accelerate"
+                    "transformers and peft are required. Install: pip install transformers peft accelerate"
                 )
 
             device_map = self._resolve_device(config)
@@ -213,16 +215,11 @@ class SLMTrainer(TrainerBase):
             fn = tp
             precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            f1_per_label[label] = (
-                (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-            )
+            f1_per_label[label] = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
         total = sum(label_counts.values())
         if total > 0:
-            weighted_f1 = sum(
-                f1_per_label.get(label, 0.0) * (count / total)
-                for label, count in label_counts.items()
-            )
+            weighted_f1 = sum(f1_per_label.get(label, 0.0) * (count / total) for label, count in label_counts.items())
         else:
             weighted_f1 = 0.0
 

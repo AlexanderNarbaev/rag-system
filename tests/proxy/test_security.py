@@ -1,17 +1,13 @@
 """Tests for proxy/app/security.py security hardening module."""
-import json
+
 import os
-import re
 import tempfile
-from unittest.mock import patch
 
-import pytest
-
-from proxy.app.security import (
+from proxy.app.shared.security import (
+    DependencyScanner,
     InputValidator,
     SecretsManager,
     SecurityHeaders,
-    DependencyScanner,
 )
 
 

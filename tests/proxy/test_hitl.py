@@ -1,19 +1,18 @@
 """Tests for proxy/app/hitl.py - HITL logging and feedback module."""
+
 import json
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from proxy.app.hitl import (
+from proxy.app.core.hitl import (
     FeedbackType,
     InteractionLogger,
-    get_logger,
-    log_interaction,
-    log_feedback_sync,
-    export_training_dataset,
     export_intent_dataset,
+    export_training_dataset,
+    get_logger,
+    log_feedback_sync,
+    log_interaction,
 )
 
 
@@ -52,7 +51,7 @@ class TestInteractionLogger:
             user_query="How to set up CI?",
             context="Some context",
             response="Use .gitlab-ci.yml",
-            metadata={"model": "test-model"}
+            metadata={"model": "test-model"},
         )
         assert logger.interactions_file.exists()
         with open(logger.interactions_file) as f:
@@ -68,7 +67,7 @@ class TestInteractionLogger:
             context="ctx",
             response="resp",
             user_feedback=FeedbackType.POSITIVE,
-            corrected_response="better resp"
+            corrected_response="better resp",
         )
         with open(logger.interactions_file) as f:
             record = json.loads(f.readline())
@@ -77,22 +76,14 @@ class TestInteractionLogger:
 
     def test_context_truncated(self, logger):
         long_context = "x" * 6000
-        logger.log_interaction(
-            request_id="req-3",
-            user_query="q",
-            context=long_context,
-            response="r"
-        )
+        logger.log_interaction(request_id="req-3", user_query="q", context=long_context, response="r")
         with open(logger.interactions_file) as f:
             record = json.loads(f.readline())
         assert len(record["context"]) <= 5000
 
     def test_log_feedback_writes_file(self, logger):
         logger.log_feedback(
-            request_id="req-1",
-            feedback_type=FeedbackType.POSITIVE,
-            comment="Great answer!",
-            expert_id="expert-42"
+            request_id="req-1", feedback_type=FeedbackType.POSITIVE, comment="Great answer!", expert_id="expert-42"
         )
         assert logger.feedback_file.exists()
         with open(logger.feedback_file) as f:
@@ -104,9 +95,7 @@ class TestInteractionLogger:
 
     def test_log_feedback_with_correction(self, logger):
         logger.log_feedback(
-            request_id="req-x",
-            feedback_type=FeedbackType.CORRECTION,
-            corrected_response="The correct answer is..."
+            request_id="req-x", feedback_type=FeedbackType.CORRECTION, corrected_response="The correct answer is..."
         )
         with open(logger.feedback_file) as f:
             record = json.loads(f.readline())
@@ -118,42 +107,24 @@ class TestInteractionLogger:
 
     def test_get_interactions_returns_reverse_order(self, logger):
         for i in range(5):
-            logger.log_interaction(
-                request_id=f"req-{i}",
-                user_query=f"query {i}",
-                context="ctx",
-                response=f"resp {i}"
-            )
+            logger.log_interaction(request_id=f"req-{i}", user_query=f"query {i}", context="ctx", response=f"resp {i}")
         result = logger.get_interactions(limit=3)
         assert len(result) == 3
         assert result[0]["request_id"] == "req-4"  # newest first
 
     def test_get_interactions_limit(self, logger):
         for i in range(10):
-            logger.log_interaction(
-                request_id=f"req-{i}",
-                user_query=f"q{i}",
-                context="c",
-                response=f"r{i}"
-            )
+            logger.log_interaction(request_id=f"req-{i}", user_query=f"q{i}", context="c", response=f"r{i}")
         result = logger.get_interactions(limit=5)
         assert len(result) == 5
 
     def test_log_interaction_error_handling(self, logger):
-        with patch("builtins.open", side_effect=IOError("disk full")):
-            logger.log_interaction(
-                request_id="req-e",
-                user_query="q",
-                context="c",
-                response="r"
-            )
+        with patch("builtins.open", side_effect=OSError("disk full")):
+            logger.log_interaction(request_id="req-e", user_query="q", context="c", response="r")
 
     def test_log_feedback_error_handling(self, logger):
-        with patch("builtins.open", side_effect=IOError("disk full")):
-            logger.log_feedback(
-                request_id="req-e",
-                feedback_type=FeedbackType.NEGATIVE
-            )
+        with patch("builtins.open", side_effect=OSError("disk full")):
+            logger.log_feedback(request_id="req-e", feedback_type=FeedbackType.NEGATIVE)
 
 
 class TestGetLoggerSingleton:
@@ -165,7 +136,8 @@ class TestGetLoggerSingleton:
         assert a is b
 
     def test_creates_instance_if_none(self):
-        import proxy.app.hitl as hitl_mod
+        import proxy.app.core.hitl as hitl_mod
+
         old = hitl_mod._logger
         hitl_mod._logger = None
         inst = get_logger()
@@ -178,17 +150,18 @@ class TestLogInteractionAsync:
 
     @pytest.mark.asyncio
     async def test_skips_when_logging_disabled(self):
-        with patch("proxy.app.hitl.LOG_REQUESTS", False), \
-             patch("proxy.app.hitl.get_logger") as mock_get:
+        with patch("proxy.app.core.hitl.LOG_REQUESTS", False), patch("proxy.app.core.hitl.get_logger") as mock_get:
             await log_interaction("rid", "q", "ctx", "resp")
             mock_get.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_calls_logger_when_enabled(self):
         mock_logger = MagicMock()
-        with patch("proxy.app.hitl.LOG_REQUESTS", True), \
-             patch("proxy.app.hitl.get_logger", return_value=mock_logger), \
-             patch("asyncio.to_thread", new_callable=lambda: AsyncMock()) as mock_thread:
+        with (
+            patch("proxy.app.core.hitl.LOG_REQUESTS", True),
+            patch("proxy.app.core.hitl.get_logger", return_value=mock_logger),
+            patch("asyncio.to_thread", new_callable=lambda: AsyncMock()) as mock_thread,
+        ):
             await log_interaction("rid", "q", "ctx", "resp", metadata={"k": "v"})
             mock_thread.assert_called_once()
 
@@ -203,12 +176,8 @@ class TestLogFeedbackSync:
 
     def test_calls_logger_with_correct_args(self):
         mock_logger = MagicMock()
-        with patch("proxy.app.hitl.get_logger", return_value=mock_logger):
-            log_feedback_sync(
-                request_id="r1",
-                feedback_type="positive",
-                comment="good"
-            )
+        with patch("proxy.app.core.hitl.get_logger", return_value=mock_logger):
+            log_feedback_sync(request_id="r1", feedback_type="positive", comment="good")
             mock_logger.log_feedback.assert_called_once()
             call_args = mock_logger.log_feedback.call_args
             assert call_args[1]["request_id"] == "r1"
@@ -226,25 +195,21 @@ class TestExportTrainingDataset:
             user_query="How to X?",
             context="ctx",
             response="bad answer",
-            corrected_response="good answer"
+            corrected_response="good answer",
         )
         logger.log_interaction(
             request_id="r2",
             user_query="What is Y?",
             context="ctx",
             response="just ok",
-            user_feedback=FeedbackType.POSITIVE
+            user_feedback=FeedbackType.POSITIVE,
         )
         logger.log_interaction(
-            request_id="r3",
-            user_query="What is Z?",
-            context="ctx",
-            response="bad",
-            user_feedback=FeedbackType.NEGATIVE
+            request_id="r3", user_query="What is Z?", context="ctx", response="bad", user_feedback=FeedbackType.NEGATIVE
         )
 
         output = tmp_path / "training.jsonl"
-        with patch("proxy.app.hitl.get_logger", return_value=logger):
+        with patch("proxy.app.core.hitl.get_logger", return_value=logger):
             export_training_dataset(output)
 
         with open(output) as f:
@@ -283,7 +248,8 @@ class TestExportIntentDataset:
         output = tmp_path / "intent_dataset.jsonl"
 
         def mock_classify(query):
-            from proxy.app.slm_router import IntentType
+            from proxy.app.llm.slm import IntentType
+
             if "CI/CD" in query:
                 return IntentType.PROCEDURAL, 0.8
             elif "Docker" in query:
@@ -293,8 +259,8 @@ class TestExportIntentDataset:
             return IntentType.UNKNOWN, 0.5
 
         with (
-            patch("proxy.app.hitl.get_logger", return_value=logger),
-            patch("proxy.app.slm_router.classify_intent", side_effect=mock_classify),
+            patch("proxy.app.core.hitl.get_logger", return_value=logger),
+            patch("proxy.app.llm.slm.classify_intent", side_effect=mock_classify),
         ):
             export_intent_dataset(output)
 
@@ -310,7 +276,7 @@ class TestExportIntentDataset:
         output = tmp_path / "intent_dataset.jsonl"
 
         with (
-            patch("proxy.app.hitl.get_logger", return_value=logger),
+            patch("proxy.app.core.hitl.get_logger", return_value=logger),
         ):
             export_intent_dataset(output)
 
@@ -330,12 +296,13 @@ class TestExportIntentDataset:
         output = tmp_path / "intent_dataset.jsonl"
 
         def mock_classify(query):
-            from proxy.app.slm_router import IntentType
+            from proxy.app.llm.slm import IntentType
+
             return IntentType.GREETING, 0.95
 
         with (
-            patch("proxy.app.hitl.get_logger", return_value=logger),
-            patch("proxy.app.slm_router.classify_intent", side_effect=mock_classify),
+            patch("proxy.app.core.hitl.get_logger", return_value=logger),
+            patch("proxy.app.llm.slm.classify_intent", side_effect=mock_classify),
         ):
             export_intent_dataset(output)
 
@@ -346,8 +313,14 @@ class TestExportIntentDataset:
         assert "query" in record
         assert "intent" in record
         assert record["intent"] in (
-            "greeting", "simple_fact", "factual", "procedural",
-            "comparison", "summarize", "complex", "unknown",
+            "greeting",
+            "simple_fact",
+            "factual",
+            "procedural",
+            "comparison",
+            "summarize",
+            "complex",
+            "unknown",
         )
 
     def test_skips_interactions_with_empty_query(self, tmp_path):
@@ -368,12 +341,13 @@ class TestExportIntentDataset:
         output = tmp_path / "intent_dataset.jsonl"
 
         def mock_classify(query):
-            from proxy.app.slm_router import IntentType
+            from proxy.app.llm.slm import IntentType
+
             return IntentType.FACTUAL, 0.7
 
         with (
-            patch("proxy.app.hitl.get_logger", return_value=logger),
-            patch("proxy.app.slm_router.classify_intent", side_effect=mock_classify),
+            patch("proxy.app.core.hitl.get_logger", return_value=logger),
+            patch("proxy.app.llm.slm.classify_intent", side_effect=mock_classify),
         ):
             export_intent_dataset(output)
 
@@ -394,12 +368,13 @@ class TestExportIntentDataset:
         output = tmp_path / "intent_dataset.jsonl"
 
         def mock_multilingual(query):
-            from proxy.app.slm_router import IntentType
+            from proxy.app.llm.slm import IntentType
+
             return IntentType.GREETING, 0.85
 
         with (
-            patch("proxy.app.hitl.get_logger", return_value=logger),
-            patch("proxy.app.slm_router.classify_intent_multilingual", side_effect=mock_multilingual),
+            patch("proxy.app.core.hitl.get_logger", return_value=logger),
+            patch("proxy.app.llm.slm.classify_intent_multilingual", side_effect=mock_multilingual),
         ):
             export_intent_dataset(output, use_multilingual=True)
 
