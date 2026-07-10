@@ -4,6 +4,7 @@ site_description: >-
   into Qdrant + Neo4j, served via configurable LLM backend. Documentation for developers,
   operators, and integrators.
 site_author: "Alexander Narbaev"
+site_url: https://alexandernarbaev.github.io/rag-system/
 repo_url: https://github.com/AlexanderNarbaev/rag-system
 repo_name: AlexanderNarbaev/rag-system
 edit_uri: edit/main/docs/
