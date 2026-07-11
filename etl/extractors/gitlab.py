@@ -63,6 +63,11 @@ class GitLabExtractor:
         self.since_date = config.get("since_date")
         self.file_paths_filter = config.get("file_paths_filter", [])
 
+        # Timeout configuration
+        self.connect_timeout = config.get("connect_timeout", 10)
+        self.read_timeout = config.get("timeout", 30)
+        self.timeout = (self.connect_timeout, self.read_timeout)
+
         self.session = requests.Session()
 
         # SSL configuration
@@ -95,7 +100,7 @@ class GitLabExtractor:
         url = urljoin(self.url, endpoint)
         logger.debug(f"Requesting: {method} {url}")
         try:
-            resp = self.session.request(method, url, params=params, timeout=(10, 30))
+            resp = self.session.request(method, url, params=params, timeout=self.timeout)
             logger.debug(f"Response: {resp.status_code}")
             resp.raise_for_status()
             return resp.json()

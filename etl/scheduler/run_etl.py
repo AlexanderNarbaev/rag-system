@@ -319,6 +319,7 @@ def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager)
 def main():
     parser = argparse.ArgumentParser(description="RAG ETL Pipeline Orchestrator")
     parser.add_argument("--config", type=Path, default=Path("etl_config.yaml"), help="Path to YAML config")
+    parser.add_argument("--timeout", type=int, default=None, help="Request timeout in seconds (overrides config)")
     parser.add_argument("--test-connection", action="store_true", help="Test connection to all sources and exit")
     parser.add_argument("--skip-extract", action="store_true", help="Skip extraction phase")
     parser.add_argument("--skip-chunk", action="store_true", help="Skip chunking phase")
@@ -335,6 +336,13 @@ def main():
 
     # Загрузка конфигурации
     config = load_config(args.config)
+
+    # Override timeout from command line
+    if args.timeout is not None:
+        for source in ["confluence", "jira", "gitlab"]:
+            if source in config:
+                config[source]["timeout"] = args.timeout
+        logger.info(f"Timeout overridden to {args.timeout}s")
 
     # Test connection mode
     if args.test_connection:

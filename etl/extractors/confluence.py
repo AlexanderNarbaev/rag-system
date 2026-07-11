@@ -60,6 +60,11 @@ class ConfluenceExtractor:
         self.max_versions = config.get("max_versions", 0)
         self.api_version = config.get("api_version", "2")
 
+        # Timeout configuration
+        self.connect_timeout = config.get("connect_timeout", 10)
+        self.read_timeout = config.get("timeout", 30)
+        self.timeout = (self.connect_timeout, self.read_timeout)
+
         self.session = requests.Session()
 
         # SSL configuration
@@ -123,7 +128,7 @@ class ConfluenceExtractor:
         url = urljoin(self.url, endpoint)
         logger.debug(f"Requesting: {url}")
         try:
-            resp = self.session.get(url, params=params, timeout=(10, 30))  # (connect_timeout, read_timeout)
+            resp = self.session.get(url, params=params, timeout=self.timeout)
             logger.debug(f"Response: {resp.status_code}")
             resp.raise_for_status()
             return resp.json()
