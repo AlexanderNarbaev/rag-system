@@ -147,7 +147,7 @@ do_install() {
     echo ""
     echo "  1) Minimal   — Proxy + Qdrant (без графа, без кэша)"
     echo "  2) Standard  — Proxy + Qdrant + Redis + Neo4j"
-    echo "  3) Full      — Standard + MinIO + Monitoring + OpenWebUI"
+    echo "  3) Full      — Standard + MinIO + Monitoring"
     echo ""
     local profile
     read -rp "$(echo -e "${MAGENTA}[?]${NC} Профиль [1/2/3, default=2]: ")" profile
@@ -294,12 +294,10 @@ do_install() {
         fi
     fi
 
-    # OpenWebUI
-    if [ "$profile" = "3" ]; then
-        header "OpenWebUI"
-        if confirm "Установить OpenWebUI?" "y"; then
-            do_openwebui_setup
-        fi
+    # OpenWebUI (optional for all profiles)
+    header "OpenWebUI (optional)"
+    if confirm "Установить OpenWebUI веб-интерфейс?" "n"; then
+        do_openwebui_setup
     fi
 
     # Summary
