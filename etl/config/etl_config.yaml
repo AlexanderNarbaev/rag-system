@@ -115,3 +115,10 @@ graph:
     user: "neo4j"
     password: "your_neo4j_password"
     database: "neo4j"
+
+# SSL / TLS — корпоративные сертификаты
+# В корпоративных средах часто используются самоподписанные сертификаты
+# или перехват TLS (SSL inspection). Настройте здесь.
+ssl:
+  verify: true                           # false — отключить проверку сертификатов (НЕ для production)
+  cert_path: ""                          # путь к корпоративному CA bundle (e.g. /etc/ssl/certs/corporate.pem)

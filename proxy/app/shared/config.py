@@ -294,6 +294,10 @@ MINIO_BUCKET = os.getenv("MINIO_BUCKET", "rag-artifacts")
 MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
 MINIO_DOCS_BUCKET = os.getenv("MINIO_DOCS_BUCKET", "rag-documents")
 
+# SSL / TLS
+SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() == "true"
+SSL_CERT_PATH = os.getenv("SSL_CERT_PATH", "")  # Path to corporate CA bundle
+
 # Training
 TRAINING_PROFILE = os.getenv("TRAINING_PROFILE", "dev")
 
