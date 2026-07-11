@@ -9,6 +9,7 @@ a shared execution context injected into tool handlers.
 from __future__ import annotations
 
 import inspect
+import types
 import typing
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Union, get_args, get_origin
@@ -47,18 +48,22 @@ def _resolve_type(typ: type) -> str:
     """Map a Python type to its JSON Schema type string.
 
     Falls back to "string" for unrecognized types.
+    Handles both typing.Union and types.UnionType (Python 3.10+).
     """
     typ = _unwrap_annotated(typ)
     origin = get_origin(typ)
+
+    # Handle Union types (typing.Union and types.UnionType)
+    if origin is Union or isinstance(typ, types.UnionType):
+        args = get_args(typ)
+        non_none = [a for a in args if a is not type(None)]
+        return _resolve_type(non_none[0]) if non_none else "string"
+
     if origin is not None:
         if origin is list:
             return "array"
         if origin is dict:
             return "object"
-        if origin is Union:
-            args = get_args(typ)
-            non_none = [a for a in args if a is not type(None)]
-            return _resolve_type(non_none[0]) if non_none else "string"
         return _TYPE_MAP.get(origin, "string")
     return _TYPE_MAP.get(typ, "string")
 
