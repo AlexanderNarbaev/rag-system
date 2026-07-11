@@ -226,8 +226,7 @@ class TestToolDecorator:
         assert td.async_handler is not None
 
     def test_tags_category_visibility_passed_through(self):
-        from tools.definition import ToolVisibility
-
+        from proxy.app.tools.definition import ToolVisibility
         from proxy.app.tools.sdk import _sdk_registered_tools, tool
 
         @tool(category="search", tags=["fast", "cached"], visibility=ToolVisibility.USER, version="2.0.0")
@@ -284,8 +283,7 @@ class TestToolDecorator:
         assert result == 7
 
     def test_timeout_retry_policy_passed_through(self):
-        from tools.definition import RetryPolicy
-
+        from proxy.app.tools.definition import RetryPolicy
         from proxy.app.tools.sdk import _sdk_registered_tools, tool
 
         rp = RetryPolicy(max_retries=5)
@@ -379,16 +377,14 @@ class TestToolBuilder:
         assert tool_def.timeout_seconds == 15.0
 
     def test_with_visibility(self):
-        from tools.definition import ToolVisibility
-
+        from proxy.app.tools.definition import ToolVisibility
         from proxy.app.tools.sdk import ToolBuilder
 
         tool_def = ToolBuilder("sample").with_visibility(ToolVisibility.ADMIN).build()
         assert tool_def.visibility == ToolVisibility.ADMIN
 
     def test_builder_fluent_chaining(self):
-        from tools.definition import ToolVisibility
-
+        from proxy.app.tools.definition import ToolVisibility
         from proxy.app.tools.sdk import ToolBuilder
 
         def h(query: str) -> str:
