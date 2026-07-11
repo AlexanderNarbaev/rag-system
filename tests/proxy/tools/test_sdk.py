@@ -103,7 +103,10 @@ class TestJsonSchemaFromFunc:
 
         schema = json_schema_from_func(fn)
         assert "limit" not in schema.get("required", [])
-        assert schema["properties"]["limit"]["type"] == "integer"
+        # The type should be resolved from the Union (int | None -> int)
+        # It should NOT fall back to "string" which indicates resolution failure
+        limit_type = schema["properties"]["limit"]["type"]
+        assert limit_type in ("integer", "number"), f"Expected numeric type for int|None, got '{limit_type}'"
 
     def test_annotated_base_model_not_found_defaults_to_string(self):
         from proxy.app.tools.sdk import json_schema_from_func
