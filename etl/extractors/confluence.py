@@ -142,36 +142,28 @@ class ConfluenceExtractor:
 
     def _get_all_pages(self, space_key: str = None, start: int = 0, limit: int = 50) -> list[dict]:
         """
-        Рекурсивно получает все страницы с пагинацией.
-        Возвращает список страниц (с минимальными полями).
+        Получает все страницы с пагинацией (только метаданные, без body).
+        Body загружается отдельно при обработке каждой страницы.
         """
         pages = []
         while True:
             params = {
                 "limit": limit,
                 "start": start,
-                "expand": "version,space,body.storage,body.view,ancestors",
+                "expand": "version,space",  # Без body — быстрее и не зависает
             }
             if space_key:
                 params["spaceKey"] = space_key
             data = self._request("/rest/api/content", params)
-            pages.extend(data["results"])
-            if "_links" in data and "next" in data["_links"]:
-                # Используем URL следующей страницы
-                next_url = data["_links"]["next"]
-                if next_url.startswith("http"):
-                    resp = self.session.get(next_url, timeout=30)
-                    resp.raise_for_status()
-                    data = resp.json()
-                else:
-                    # относительный путь
-                    data = self._request(next_url)
-                start = 0  # сброс, т.к. следующий URL уже включает start
-                # Чтобы избежать бесконечного цикла, проверяем
-                if not data.get("results"):
-                    break
-            else:
+            results = data.get("results", [])
+            pages.extend(results)
+            logger.info(f"  Fetched {len(results)} pages (total: {len(pages)})")
+
+            # Проверяем есть ли следующая страница
+            if len(results) < limit:
                 break
+            start += limit
+
         return pages
 
     def _get_page_versions(self, page_id: str) -> list[dict]:
