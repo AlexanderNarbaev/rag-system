@@ -21,8 +21,12 @@ from typing import Any
 from urllib.parse import urljoin
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
+
+# Подавление SSL warnings для самоподписанных сертификатов
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

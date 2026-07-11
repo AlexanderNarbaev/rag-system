@@ -21,7 +21,11 @@ from typing import Any
 from urllib.parse import urljoin
 
 import requests
+import urllib3
 from requests.auth import HTTPBasicAuth
+
+# Подавление SSL warnings для самоподписанных сертификатов
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
