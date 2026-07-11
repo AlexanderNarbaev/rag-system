@@ -28,11 +28,14 @@ COPY --from=builder /install /usr/local
 
 WORKDIR /app
 
-# Copy proxy application code
-COPY proxy/app/ ./app/
+# Copy proxy package (preserves proxy.app.* import paths)
+COPY proxy/ ./proxy/
 
 # Create directories for logs and model cache
 RUN mkdir -p /app/logs /app/cache
+
+# Add project root to Python path so 'proxy.app.*' imports work
+ENV PYTHONPATH=/app
 
 # HuggingFace cache paths (override at runtime)
 ENV HF_HOME=/app/cache/huggingface
@@ -50,4 +53,4 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
     CMD curl -f http://localhost:8080/v1/health/live || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+CMD ["uvicorn", "proxy.app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
