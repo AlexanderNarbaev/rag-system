@@ -64,10 +64,7 @@ class TestLatency:
         errors = 0
 
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            futures = [
-                executor.submit(_send_chat_request, service_url)
-                for _ in range(num_workers)
-            ]
+            futures = [executor.submit(_send_chat_request, service_url) for _ in range(num_workers)]
             for future in as_completed(futures):
                 latency_ms, status, _ = future.result()
                 if status == 200:
@@ -136,10 +133,7 @@ class TestThroughput:
         start_time = time.perf_counter()
 
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            futures = [
-                executor.submit(_send_chat_request, service_url)
-                for _ in range(num_workers)
-            ]
+            futures = [executor.submit(_send_chat_request, service_url) for _ in range(num_workers)]
             for future in as_completed(futures):
                 latency_ms, status, _ = future.result()
                 if status == 200:
@@ -181,8 +175,7 @@ class TestStress:
 
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
             futures = [
-                executor.submit(_send_chat_request, service_url, f"Stress test query {i}")
-                for i in range(num_workers)
+                executor.submit(_send_chat_request, service_url, f"Stress test query {i}") for i in range(num_workers)
             ]
             for future in as_completed(futures):
                 latency_ms, status, _ = future.result()

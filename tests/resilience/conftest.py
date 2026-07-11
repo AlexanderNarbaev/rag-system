@@ -1,4 +1,5 @@
 """Shared fixtures for chaos/resilience tests."""
+
 import sys
 from pathlib import Path
 

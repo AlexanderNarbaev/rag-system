@@ -13,6 +13,7 @@ class TestRemoteEmbeddingClient:
 
     def test_init_defaults(self):
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
         client = RemoteEmbeddingClient(endpoint="http://localhost:8080")
         assert client._endpoint == "http://localhost:8080"
         assert client._model == "default"
@@ -20,11 +21,13 @@ class TestRemoteEmbeddingClient:
 
     def test_init_strips_trailing_slash(self):
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
         client = RemoteEmbeddingClient(endpoint="http://localhost:8080/")
         assert client._endpoint == "http://localhost:8080"
 
     def test_encode_empty_input(self):
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
         client = RemoteEmbeddingClient(endpoint="http://localhost:8080")
         result = client.encode([])
         assert isinstance(result, np.ndarray)
@@ -32,11 +35,13 @@ class TestRemoteEmbeddingClient:
 
     def test_encode_sparse_returns_none(self):
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
         client = RemoteEmbeddingClient(endpoint="http://localhost:8080")
         assert client.encode_sparse("hello") is None
 
     def test_is_healthy_property(self):
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
         client = RemoteEmbeddingClient(endpoint="http://localhost:8080")
         assert client.is_healthy is True
         client._healthy = False
@@ -44,6 +49,7 @@ class TestRemoteEmbeddingClient:
 
     def test_check_health_already_unhealthy(self):
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
         client = RemoteEmbeddingClient(endpoint="http://localhost:8080")
         client._healthy = False
         assert client._check_health() is False
@@ -54,9 +60,7 @@ class TestRemoteEmbeddingClient:
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}]
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps({"data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}]}).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -72,12 +76,14 @@ class TestRemoteEmbeddingClient:
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "data": [
-                {"embedding": [0.1, 0.2, 0.3], "index": 0},
-                {"embedding": [0.4, 0.5, 0.6], "index": 1},
-            ]
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps(
+            {
+                "data": [
+                    {"embedding": [0.1, 0.2, 0.3], "index": 0},
+                    {"embedding": [0.4, 0.5, 0.6], "index": 1},
+                ]
+            }
+        ).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -122,9 +128,7 @@ class TestRemoteEmbeddingClient:
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "data": [{"embedding": [0.1], "index": 0}]
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps({"data": [{"embedding": [0.1], "index": 0}]}).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -139,9 +143,7 @@ class TestRemoteEmbeddingClient:
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "data": [{"embedding": [3.0, 4.0], "index": 0}]
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps({"data": [{"embedding": [3.0, 4.0], "index": 0}]}).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -157,6 +159,7 @@ class TestRemoteRerankerClient:
 
     def test_init_defaults(self):
         from proxy.app.llm.remote_services import RemoteRerankerClient
+
         client = RemoteRerankerClient(endpoint="http://localhost:8080")
         assert client._endpoint == "http://localhost:8080"
         assert client._model == "default"
@@ -165,12 +168,14 @@ class TestRemoteRerankerClient:
 
     def test_max_length_setter(self):
         from proxy.app.llm.remote_services import RemoteRerankerClient
+
         client = RemoteRerankerClient(endpoint="http://localhost:8080")
         client.max_length = 1024
         assert client.max_length == 1024
 
     def test_predict_empty_pairs(self):
         from proxy.app.llm.remote_services import RemoteRerankerClient
+
         client = RemoteRerankerClient(endpoint="http://localhost:8080")
         result = client.predict([])
         assert isinstance(result, np.ndarray)
@@ -182,12 +187,14 @@ class TestRemoteRerankerClient:
         from proxy.app.llm.remote_services import RemoteRerankerClient
 
         mock_resp = MagicMock()
-        mock_resp.read.return_value = json.dumps({
-            "results": [
-                {"index": 0, "relevance_score": 0.9},
-                {"index": 1, "relevance_score": 0.3},
-            ]
-        }).encode("utf-8")
+        mock_resp.read.return_value = json.dumps(
+            {
+                "results": [
+                    {"index": 0, "relevance_score": 0.9},
+                    {"index": 1, "relevance_score": 0.3},
+                ]
+            }
+        ).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
 
@@ -229,6 +236,7 @@ class TestRemoteRerankerClient:
 
     def test_check_health_already_unhealthy(self):
         from proxy.app.llm.remote_services import RemoteRerankerClient
+
         client = RemoteRerankerClient(endpoint="http://localhost:8080")
         client._healthy = False
         assert client._check_health() is False
@@ -239,11 +247,12 @@ class TestRemoteRerankerClient:
         from proxy.app.llm.remote_services import RemoteRerankerClient
 
         call_count = [0]
+
         def mock_urlopen(req, timeout=60):
             mock_resp = MagicMock()
-            mock_resp.read.return_value = json.dumps({
-                "results": [{"index": 0, "relevance_score": 0.8}]
-            }).encode("utf-8")
+            mock_resp.read.return_value = json.dumps({"results": [{"index": 0, "relevance_score": 0.8}]}).encode(
+                "utf-8"
+            )
             mock_resp.__enter__ = MagicMock(return_value=mock_resp)
             mock_resp.__exit__ = MagicMock(return_value=False)
             call_count[0] += 1
@@ -264,6 +273,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteEmbeddingClient._check_health", return_value=True)
     def test_create_embedder_remote(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._embedder_instance = None
         embedder = rs.create_embedder()
         assert embedder is not None
@@ -274,6 +284,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteEmbeddingClient._check_health", return_value=False)
     def test_create_embedder_remote_no_fallback(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._embedder_instance = None
         with pytest.raises(ConnectionError):
             rs.create_embedder()
@@ -283,6 +294,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.EMBEDDER_MODEL", "")
     def test_create_embedder_no_model_raises(self):
         import proxy.app.llm.remote_services as rs
+
         rs._embedder_instance = None
         with pytest.raises((ValueError, ImportError)):
             rs.create_embedder()
@@ -294,6 +306,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteRerankerClient._check_health", return_value=True)
     def test_create_reranker_remote(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._reranker_instance = None
         reranker = rs.create_reranker()
         assert reranker is not None
@@ -304,6 +317,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteRerankerClient._check_health", return_value=False)
     def test_create_reranker_remote_no_fallback(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._reranker_instance = None
         with pytest.raises(ConnectionError):
             rs.create_reranker()
@@ -313,6 +327,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RERANKER_MODEL", "")
     def test_create_reranker_no_model_raises(self):
         import proxy.app.llm.remote_services as rs
+
         rs._reranker_instance = None
         with pytest.raises((ValueError, ImportError)):
             rs.create_reranker()
@@ -320,6 +335,7 @@ class TestFactoryFunctions:
 
     def test_get_embedder_returns_none_by_default(self):
         import proxy.app.llm.remote_services as rs
+
         old = rs._embedder_instance
         rs._embedder_instance = None
         assert rs.get_embedder() is None
@@ -327,6 +343,7 @@ class TestFactoryFunctions:
 
     def test_get_reranker_returns_none_by_default(self):
         import proxy.app.llm.remote_services as rs
+
         old = rs._reranker_instance
         rs._reranker_instance = None
         assert rs.get_reranker() is None
@@ -338,6 +355,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteEmbeddingClient._check_health", return_value=False)
     def test_create_embedder_fallback_no_model(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._embedder_instance = None
         with pytest.raises((ValueError, ImportError)):
             rs.create_embedder()
@@ -349,6 +367,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteRerankerClient._check_health", return_value=False)
     def test_create_reranker_fallback_no_model(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._reranker_instance = None
         with pytest.raises((ValueError, ImportError)):
             rs.create_reranker()
@@ -357,6 +376,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteEmbeddingClient._check_health", return_value=True)
     def test_create_embedder_caches_instance(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._embedder_instance = None
         with patch("proxy.app.llm.remote_services.EMBEDDER_ENDPOINT", "http://remote:8080"):
             e1 = rs.create_embedder()
@@ -367,6 +387,7 @@ class TestFactoryFunctions:
     @patch("proxy.app.llm.remote_services.RemoteRerankerClient._check_health", return_value=True)
     def test_create_reranker_caches_instance(self, mock_health):
         import proxy.app.llm.remote_services as rs
+
         rs._reranker_instance = None
         with patch("proxy.app.llm.remote_services.RERANKER_ENDPOINT", "http://remote:8080"):
             r1 = rs.create_reranker()

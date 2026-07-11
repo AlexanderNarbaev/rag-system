@@ -327,9 +327,7 @@ class TestMultiProviderRouter:
     async def test_non_stream_completion_success(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "answer"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "answer"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 
@@ -340,18 +338,14 @@ class TestMultiProviderRouter:
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            result = await router.non_stream_completion(
-                [{"role": "user", "content": "hi"}]
-            )
+            result = await router.non_stream_completion([{"role": "user", "content": "hi"}])
             assert result["choices"][0]["message"]["content"] == "answer"
 
     @pytest.mark.asyncio
     async def test_non_stream_completion_text(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "hello world"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "hello world"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 
@@ -362,9 +356,7 @@ class TestMultiProviderRouter:
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            text = await router.non_stream_completion_text(
-                [{"role": "user", "content": "hi"}]
-            )
+            text = await router.non_stream_completion_text([{"role": "user", "content": "hi"}])
             assert text == "hello world"
 
     @pytest.mark.asyncio
@@ -383,9 +375,7 @@ class TestMultiProviderRouter:
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with pytest.raises(LLMError):
-                await router.non_stream_completion_text(
-                    [{"role": "user", "content": "hi"}]
-                )
+                await router.non_stream_completion_text([{"role": "user", "content": "hi"}])
 
     @pytest.mark.asyncio
     async def test_stream_completion(self):
@@ -411,9 +401,7 @@ class TestMultiProviderRouter:
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
             chunks = []
-            async for chunk in router.stream_completion(
-                [{"role": "user", "content": "hi"}]
-            ):
+            async for chunk in router.stream_completion([{"role": "user", "content": "hi"}]):
                 chunks.append(chunk)
             assert len(chunks) == 2
 
@@ -433,9 +421,7 @@ class TestMultiProviderRouter:
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with pytest.raises(LLMError, match="LLM returned 500"):
-                await router.non_stream_completion(
-                    [{"role": "user", "content": "hi"}]
-                )
+                await router.non_stream_completion([{"role": "user", "content": "hi"}])
 
     @pytest.mark.asyncio
     async def test_tool_use_completion(self):
@@ -474,9 +460,7 @@ class TestMultiProviderRouter:
         router = MultiProviderRouter()
         tools = [ToolDefinition(name="search", description="Search", parameters=[])]
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            calls = await router.tool_use_completion(
-                [{"role": "user", "content": "search for test"}], tools=tools
-            )
+            calls = await router.tool_use_completion([{"role": "user", "content": "search for test"}], tools=tools)
             assert len(calls) == 1
             assert calls[0].name == "search"
 
@@ -484,9 +468,7 @@ class TestMultiProviderRouter:
     async def test_tool_use_completion_no_calls(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "no tools needed"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "no tools needed"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 
@@ -500,18 +482,14 @@ class TestMultiProviderRouter:
         router = MultiProviderRouter()
         tools = [ToolDefinition(name="search", description="Search", parameters=[])]
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            calls = await router.tool_use_completion(
-                [{"role": "user", "content": "hi"}], tools=tools
-            )
+            calls = await router.tool_use_completion([{"role": "user", "content": "hi"}], tools=tools)
             assert calls == []
 
     @pytest.mark.asyncio
     async def test_tool_results_injection(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "result processed"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "result processed"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 
@@ -525,9 +503,7 @@ class TestMultiProviderRouter:
         router = MultiProviderRouter()
         tool_results = [ToolResult(tool_name="search", tool_call_id="tc1", content="found it")]
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            await router.non_stream_completion(
-                [{"role": "user", "content": "hi"}], tool_results=tool_results
-            )
+            await router.non_stream_completion([{"role": "user", "content": "hi"}], tool_results=tool_results)
             # Verify tool result was injected into messages
             call_args = mock_session.post.call_args
             payload = call_args.kwargs.get("json") or call_args[1].get("json")
@@ -538,9 +514,7 @@ class TestMultiProviderRouter:
     def test_non_stream_completion_sync(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "sync result"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "sync result"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 
@@ -551,9 +525,7 @@ class TestMultiProviderRouter:
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            result = router.non_stream_completion_sync(
-                [{"role": "user", "content": "hi"}]
-            )
+            result = router.non_stream_completion_sync([{"role": "user", "content": "hi"}])
             assert result == "sync result"
 
 
@@ -604,9 +576,7 @@ class TestSingletonAndWrappers:
     async def test_module_level_non_stream(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "module answer"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "module answer"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 
@@ -622,9 +592,7 @@ class TestSingletonAndWrappers:
     def test_module_level_sync(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "sync"}}]}
-        )
+        mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "sync"}}]})
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=None)
 

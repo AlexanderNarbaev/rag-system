@@ -354,6 +354,7 @@ def main():
         if confluence_config.get("url"):
             try:
                 from etl.extractors.confluence import ConfluenceExtractor
+
                 extractor = ConfluenceExtractor(confluence_config)
                 results["confluence"] = extractor.test_connection()
             except Exception as e:
@@ -365,6 +366,7 @@ def main():
         if jira_config.get("url"):
             try:
                 from etl.extractors.jira import JiraExtractor
+
                 extractor = JiraExtractor(jira_config)
                 logger.info(f"Testing Jira connection to {jira_config['url']}...")
                 resp = extractor._request("/rest/api/2/myself")
@@ -379,6 +381,7 @@ def main():
         if gitlab_config.get("url"):
             try:
                 from etl.extractors.gitlab import GitLabExtractor
+
                 extractor = GitLabExtractor(gitlab_config)
                 logger.info(f"Testing GitLab connection to {gitlab_config['url']}...")
                 resp = extractor._request("/api/v4/user")

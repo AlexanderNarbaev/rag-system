@@ -69,6 +69,7 @@ nav:
       - "Agentic Tools - OpenAPI": guides/agentic-tools-openapi.md
       - Integration with OpenCode: guides/integration-opencode.md
       - Development Roadmap: guides/roadmap.md
+      - Configuration Reference: guides/configuration-reference.md
       - Deployment Guide: guides/deployment-guide.md
       - Operations Guide: guides/operations-guide.md
       - Troubleshooting: guides/troubleshooting.md

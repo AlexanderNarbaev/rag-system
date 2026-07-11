@@ -14,9 +14,7 @@ class TestStreamingRAG:
         """SSE streaming -> collect chunks -> verify final metadata."""
         payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "user", "content": "What is RAG?"}
-            ],
+            "messages": [{"role": "user", "content": "What is RAG?"}],
             "temperature": 0.2,
             "stream": True,
         }
@@ -38,7 +36,7 @@ class TestStreamingRAG:
             if not line:
                 continue
             if line.startswith("data: "):
-                data_str = line[len("data: "):]
+                data_str = line[len("data: ") :]
                 if data_str == "[DONE]":
                     done_received = True
                     break
@@ -61,9 +59,7 @@ class TestStreamingRAG:
         """SSE streaming with minimal query -> still returns chunks."""
         payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "user", "content": "test"}
-            ],
+            "messages": [{"role": "user", "content": "test"}],
             "stream": True,
         }
         resp = requests.post(
@@ -86,9 +82,7 @@ class TestStreamingRAG:
         """Verify SSE response has correct content type and status."""
         payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "user", "content": "Hello"}
-            ],
+            "messages": [{"role": "user", "content": "Hello"}],
             "stream": True,
         }
         resp = requests.post(

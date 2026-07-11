@@ -147,7 +147,6 @@ class TestAuthenticateLdap:
         # Temporarily remove ldap3 from sys.modules and make import fail
         saved = sys.modules.pop("ldap3", None)
         try:
-
             # Patch __import__ to fail for ldap3
             real_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
 

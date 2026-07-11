@@ -10,6 +10,7 @@ class TestLoadConfig:
         config_file = tmp_path / "config.yaml"
         config_file.write_text("confluence:\n  base_url: http://test\njira:\n  base_url: http://jira\n")
         from etl.scheduler.run_etl import load_config
+
         config = load_config(config_file)
         assert "confluence" in config
         assert config["confluence"]["base_url"] == "http://test"
@@ -25,6 +26,7 @@ class TestCollectAllDocuments:
         gitlab_dir.mkdir()
 
         from etl.scheduler.run_etl import collect_all_documents
+
         docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
         assert docs == []
 
@@ -49,6 +51,7 @@ class TestCollectAllDocuments:
         gitlab_dir.mkdir()
 
         from etl.scheduler.run_etl import collect_all_documents
+
         docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
         assert len(docs) == 1
         assert docs[0]["source_type"] == "confluence"
@@ -77,6 +80,7 @@ class TestCollectAllDocuments:
         gitlab_dir.mkdir()
 
         from etl.scheduler.run_etl import collect_all_documents
+
         docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
         assert len(docs) == 1
         assert docs[0]["source_type"] == "jira"
@@ -104,6 +108,7 @@ class TestCollectAllDocuments:
         jira_dir.mkdir()
 
         from etl.scheduler.run_etl import collect_all_documents
+
         docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
         assert len(docs) == 1
         assert docs[0]["source_type"] == "gitlab_commit"
@@ -130,6 +135,7 @@ class TestCollectAllDocuments:
         jira_dir.mkdir()
 
         from etl.scheduler.run_etl import collect_all_documents
+
         docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
         assert len(docs) == 1
         assert docs[0]["source_type"] == "gitlab_merge_request"
@@ -147,6 +153,7 @@ class TestCollectAllDocuments:
         jira_dir.mkdir()
 
         from etl.scheduler.run_etl import collect_all_documents
+
         docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
         assert len(docs) == 1
         assert docs[0]["source_type"] == "gitlab_code"
@@ -155,28 +162,49 @@ class TestCollectAllDocuments:
 class TestRunChunking:
     def test_basic_chunking(self, tmp_path):
         from etl.scheduler.run_etl import run_chunking
+
         mock_chunker = MagicMock()
         mock_chunk = MagicMock()
         mock_chunk.__dict__ = {"text": "chunk text", "source_id": "doc1"}
         mock_chunker.process_document.return_value = [mock_chunk]
 
-        docs = [{"id": "doc1", "source_type": "wiki", "title": "T", "content": "content", "content_type": "markdown", "metadata": {"version": "1.0"}}]
+        docs = [
+            {
+                "id": "doc1",
+                "source_type": "wiki",
+                "title": "T",
+                "content": "content",
+                "content_type": "markdown",
+                "metadata": {"version": "1.0"},
+            }
+        ]
         output_dir = tmp_path / "chunks"
         result = run_chunking(docs, mock_chunker, output_dir)
         assert len(result) == 1
 
     def test_chunking_error_continues(self, tmp_path):
         from etl.scheduler.run_etl import run_chunking
+
         mock_chunker = MagicMock()
         mock_chunker.process_document.side_effect = Exception("chunk error")
 
-        docs = [{"id": "doc1", "source_type": "wiki", "title": "T", "content": "content", "content_type": "markdown", "metadata": {}}]
+        docs = [
+            {
+                "id": "doc1",
+                "source_type": "wiki",
+                "title": "T",
+                "content": "content",
+                "content_type": "markdown",
+                "metadata": {},
+            }
+        ]
         output_dir = tmp_path / "chunks"
         result = run_chunking(docs, mock_chunker, output_dir)
         assert result == []
 
     def test_empty_documents(self, tmp_path):
         from etl.scheduler.run_etl import run_chunking
+
         mock_chunker = MagicMock()
         output_dir = tmp_path / "chunks"
         result = run_chunking([], mock_chunker, output_dir)
@@ -188,6 +216,7 @@ class TestRunGraphExtraction:
     @patch("etl.scheduler.run_etl.Neo4jLoader")
     def test_basic_extraction(self, MockNeo4j, MockExtractor):
         from etl.scheduler.run_etl import run_graph_extraction
+
         mock_extractor = MagicMock()
         mock_extractor.extract_batch.return_value = ([], [])
         mock_loader = MagicMock()
@@ -199,6 +228,7 @@ class TestRunGraphExtraction:
     @patch("etl.scheduler.run_etl.EntityRelationExtractor")
     def test_no_neo4j_loader(self, MockExtractor):
         from etl.scheduler.run_etl import run_graph_extraction
+
         mock_extractor = MagicMock()
         mock_extractor.extract_batch.return_value = ([], [])
         chunks = [{"text": "chunk", "source_id": "d1", "metadata": {}}]
@@ -211,6 +241,7 @@ class TestRunIndexing:
     @patch("etl.scheduler.run_etl.WALManager")
     def test_basic_indexing(self, MockWal, MockLake):
         from etl.scheduler.run_etl import run_indexing
+
         mock_lake = MagicMock()
         mock_lake.sync_document.return_value = (5, 0)
         mock_wal = MagicMock()
@@ -223,6 +254,7 @@ class TestRunIndexing:
     @patch("etl.scheduler.run_etl.WALManager")
     def test_empty_chunks(self, MockWal, MockLake):
         from etl.scheduler.run_etl import run_indexing
+
         mock_lake = MagicMock()
         mock_wal = MagicMock()
         run_indexing([], mock_lake, mock_wal)
@@ -232,6 +264,7 @@ class TestRunIndexing:
 class TestRunGraphExtractionExtended:
     def test_with_entities_and_neo4j(self):
         from etl.scheduler.run_etl import run_graph_extraction
+
         mock_extractor = MagicMock()
         entity = MagicMock()
         entity.__dict__ = {"id": "e1", "name": "Test", "type": "PERSON", "source_id": "doc1", "properties": {}}
@@ -252,7 +285,9 @@ class TestMainFunction:
     @patch("etl.scheduler.run_etl.WALManager")
     def test_main_dry_run(self, MockWal, mock_config, tmp_path):
         config_file = tmp_path / "config.yaml"
-        config_file.write_text("confluence:\n  base_url: http://test\n  output_dir: /tmp/out\njira:\n  base_url: http://jira\n  output_dir: /tmp/out\ngitlab:\n  base_url: http://gitlab\n  output_dir: /tmp/out\n")
+        config_file.write_text(
+            "confluence:\n  base_url: http://test\n  output_dir: /tmp/out\njira:\n  base_url: http://jira\n  output_dir: /tmp/out\ngitlab:\n  base_url: http://gitlab\n  output_dir: /tmp/out\n"
+        )
         mock_config.return_value = {
             "confluence": {"base_url": "http://test", "output_dir": "/tmp/out"},
             "jira": {"base_url": "http://jira", "output_dir": "/tmp/out"},
@@ -262,5 +297,6 @@ class TestMainFunction:
         MockWal.return_value = MagicMock()
         # Just test that load_config works
         from etl.scheduler.run_etl import load_config
+
         result = load_config(config_file)
         assert "confluence" in result

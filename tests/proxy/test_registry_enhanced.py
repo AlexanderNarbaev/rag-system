@@ -89,16 +89,22 @@ class TestEnhancedToolRegistry:
         assert len(result) >= 1
 
     def test_list_tools_by_visibility(self):
-        self.registry.register(ToolDefinition(name="v1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC))
+        self.registry.register(
+            ToolDefinition(name="v1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC)
+        )
         result = self.registry.list_tools(visibility_filter="user")
         assert len(result) >= 1
 
     def test_execute_success(self):
         def handler(x: str):
             return f"result: {x}"
-        tool = ToolDefinition(name="exec", description="d", handler=handler, parameters=[
-            ToolParam(name="x", type=str, description="input", required=True)
-        ])
+
+        tool = ToolDefinition(
+            name="exec",
+            description="d",
+            handler=handler,
+            parameters=[ToolParam(name="x", type=str, description="input", required=True)],
+        )
         self.registry.register(tool)
         result = self.registry.execute("exec", {"x": "hello"})
         assert result.content == "result: hello"
@@ -109,9 +115,12 @@ class TestEnhancedToolRegistry:
         assert "not found" in result.error
 
     def test_execute_missing_param(self):
-        tool = ToolDefinition(name="req", description="d", handler=lambda x: x, parameters=[
-            ToolParam(name="x", type=str, description="input", required=True)
-        ])
+        tool = ToolDefinition(
+            name="req",
+            description="d",
+            handler=lambda x: x,
+            parameters=[ToolParam(name="x", type=str, description="input", required=True)],
+        )
         self.registry.register(tool)
         result = self.registry.execute("req", {})
         assert "Missing" in result.error
@@ -125,6 +134,7 @@ class TestEnhancedToolRegistry:
     def test_execute_exception(self):
         def bad_handler():
             raise ValueError("boom")
+
         tool = ToolDefinition(name="bad", description="d", handler=bad_handler)
         self.registry.register(tool)
         result = self.registry.execute("bad", {})
@@ -134,9 +144,13 @@ class TestEnhancedToolRegistry:
     async def test_execute_async_success(self):
         async def ah(x: str):
             return f"async: {x}"
-        tool = ToolDefinition(name="async_t", description="d", async_handler=ah, parameters=[
-            ToolParam(name="x", type=str, description="input", required=True)
-        ])
+
+        tool = ToolDefinition(
+            name="async_t",
+            description="d",
+            async_handler=ah,
+            parameters=[ToolParam(name="x", type=str, description="input", required=True)],
+        )
         self.registry.register(tool)
         result = await self.registry.execute_async("async_t", {"x": "world"})
         assert result.content == "async: world"
@@ -148,9 +162,12 @@ class TestEnhancedToolRegistry:
 
     @pytest.mark.asyncio
     async def test_execute_async_missing_param(self):
-        tool = ToolDefinition(name="async_req", description="d", async_handler=AsyncMock(), parameters=[
-            ToolParam(name="x", type=str, description="input", required=True)
-        ])
+        tool = ToolDefinition(
+            name="async_req",
+            description="d",
+            async_handler=AsyncMock(),
+            parameters=[ToolParam(name="x", type=str, description="input", required=True)],
+        )
         self.registry.register(tool)
         result = await self.registry.execute_async("async_req", {})
         assert "Missing" in result.error
@@ -166,6 +183,7 @@ class TestEnhancedToolRegistry:
     async def test_execute_async_fallback_to_sync(self):
         def sync_handler():
             return "sync fallback"
+
         tool = ToolDefinition(name="sync_fb", description="d", handler=sync_handler)
         self.registry.register(tool)
         result = await self.registry.execute_async("sync_fb", {})
@@ -175,18 +193,23 @@ class TestEnhancedToolRegistry:
     async def test_execute_async_exception(self):
         async def bad():
             raise RuntimeError("async boom")
+
         tool = ToolDefinition(name="async_bad", description="d", async_handler=bad)
         self.registry.register(tool)
         result = await self.registry.execute_async("async_bad", {})
         assert "async boom" in result.error
 
     def test_get_tools_for_llm_openai(self):
-        self.registry.register(ToolDefinition(name="llm1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC))
+        self.registry.register(
+            ToolDefinition(name="llm1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC)
+        )
         tools = self.registry.get_tools_for_llm(provider_type="openai", user_role="user")
         assert len(tools) >= 1
 
     def test_get_tools_for_llm_anthropic(self):
-        self.registry.register(ToolDefinition(name="llm2", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC))
+        self.registry.register(
+            ToolDefinition(name="llm2", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC)
+        )
         tools = self.registry.get_tools_for_llm(provider_type="anthropic", user_role="user")
         assert len(tools) >= 1
 
@@ -211,10 +234,15 @@ class TestEnhancedToolRegistry:
         assert "handler" in issues[0].lower()
 
     def test_validate_tool_duplicate_params(self):
-        tool = ToolDefinition(name="t", description="d", handler=lambda: "", parameters=[
-            ToolParam(name="x", type=str, description="a"),
-            ToolParam(name="x", type=str, description="b"),
-        ])
+        tool = ToolDefinition(
+            name="t",
+            description="d",
+            handler=lambda: "",
+            parameters=[
+                ToolParam(name="x", type=str, description="a"),
+                ToolParam(name="x", type=str, description="b"),
+            ],
+        )
         issues = self.registry.validate_tool(tool)
         assert any("duplicate" in i.lower() for i in issues)
 

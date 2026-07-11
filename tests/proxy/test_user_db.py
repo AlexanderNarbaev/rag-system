@@ -332,10 +332,12 @@ class TestLegacyMigration:
         db_path = str(tmp_path / "migrate_test.db")
         monkeypatch.setattr(
             "proxy.app.auth.user_db.AUTH_VALID_USERS",
-            json.dumps({
-                "admin": {"password": "admin-pass", "roles": ["admin"], "groups": ["ops"]},
-                "viewer": {"password": "view-pass", "roles": ["viewer"]},
-            }),
+            json.dumps(
+                {
+                    "admin": {"password": "admin-pass", "roles": ["admin"], "groups": ["ops"]},
+                    "viewer": {"password": "view-pass", "roles": ["viewer"]},
+                }
+            ),
         )
         monkeypatch.setattr("proxy.app.auth.user_db.BCRYPT_ROUNDS", 4)
 

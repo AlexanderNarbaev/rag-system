@@ -44,10 +44,12 @@ class TestQdrantUnavailable:
 
     def test_qdrant_unavailable_chat(self, client):
         """Qdrant down -> chat still returns 200 (no context, LLM-only fallback)."""
-        with patch("proxy.app.main.hybrid_search", side_effect=Exception("Qdrant unavailable")), \
-             patch("proxy.app.main.non_stream_completion", return_value="Fallback answer without context"), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", side_effect=Exception("Qdrant unavailable")),
+            patch("proxy.app.main.non_stream_completion", return_value="Fallback answer without context"),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             resp = client.post(
                 "/v1/chat/completions",
                 json={
@@ -88,13 +90,15 @@ class TestNeo4jUnavailable:
 
     def test_neo4j_unavailable_chat(self, client):
         """Neo4j down -> chat still returns 200 (graph expansion skipped)."""
-        with patch("proxy.app.main.hybrid_search") as mock_search, \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.deduplicate_chunks", return_value=[]), \
-             patch("proxy.app.main.build_context", return_value=""), \
-             patch("proxy.app.main.non_stream_completion", return_value="Graph expansion skipped"), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search") as mock_search,
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
+            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.non_stream_completion", return_value="Graph expansion skipped"),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             # Mock search results (without graph expansion being called)
             hit = MagicMock()
             hit.payload = {
@@ -126,13 +130,15 @@ class TestRedisUnavailable:
 
     def test_redis_unavailable_chat(self, client):
         """Redis down -> chat still returns 200 (in-memory cache fallback)."""
-        with patch("proxy.app.main.hybrid_search", return_value=[]), \
-             patch("proxy.app.main.rerank_chunks", return_value=[]), \
-             patch("proxy.app.main.deduplicate_chunks", return_value=[]), \
-             patch("proxy.app.main.build_context", return_value=""), \
-             patch("proxy.app.main.non_stream_completion", return_value="In-memory cache fallback"), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=[]),
+            patch("proxy.app.main.rerank_chunks", return_value=[]),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
+            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.non_stream_completion", return_value="In-memory cache fallback"),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             resp = client.post(
                 "/v1/chat/completions",
                 json={
@@ -156,13 +162,15 @@ class TestLLMTimeout:
 
     def test_llm_timeout_non_streaming(self, client):
         """LLM timeout -> non-streaming returns 500 with error."""
-        with patch("proxy.app.main.hybrid_search", return_value=[]), \
-             patch("proxy.app.main.rerank_chunks", return_value=[]), \
-             patch("proxy.app.main.deduplicate_chunks", return_value=[]), \
-             patch("proxy.app.main.build_context", return_value=""), \
-             patch("proxy.app.main.non_stream_completion", side_effect=Exception("LLM request timeout")), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=[]),
+            patch("proxy.app.main.rerank_chunks", return_value=[]),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
+            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.non_stream_completion", side_effect=Exception("LLM request timeout")),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             try:
                 resp = client.post(
                     "/v1/chat/completions",
@@ -178,13 +186,15 @@ class TestLLMTimeout:
 
     def test_llm_timeout_streaming(self, client):
         """LLM timeout during streaming -> stream returns error event."""
-        with patch("proxy.app.main.hybrid_search", return_value=[]), \
-             patch("proxy.app.main.rerank_chunks", return_value=[]), \
-             patch("proxy.app.main.deduplicate_chunks", return_value=[]), \
-             patch("proxy.app.main.build_context", return_value=""), \
-             patch("proxy.app.main.stream_completion", side_effect=Exception("LLM stream timeout")), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=[]),
+            patch("proxy.app.main.rerank_chunks", return_value=[]),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
+            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.stream_completion", side_effect=Exception("LLM stream timeout")),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             resp = client.post(
                 "/v1/chat/completions",
                 json={
@@ -211,10 +221,12 @@ class TestRapidRestart:
     def test_chat_after_simulated_failure_recovery(self, client):
         """After Qdrant failure is resolved, proxy recovers."""
         # First: simulate Qdrant failure -> degraded
-        with patch("proxy.app.main.hybrid_search", side_effect=[Exception("Qdrant down")]), \
-             patch("proxy.app.main.non_stream_completion", return_value="Degraded response"), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", side_effect=[Exception("Qdrant down")]),
+            patch("proxy.app.main.non_stream_completion", return_value="Degraded response"),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             resp1 = client.post(
                 "/v1/chat/completions",
                 json={
@@ -235,13 +247,15 @@ class TestRapidRestart:
         }
         hit.score = 0.95
 
-        with patch("proxy.app.main.hybrid_search", return_value=[hit]), \
-             patch("proxy.app.main.rerank_chunks", return_value=[0]), \
-             patch("proxy.app.main.deduplicate_chunks", return_value=[]), \
-             patch("proxy.app.main.build_context", return_value=""), \
-             patch("proxy.app.main.non_stream_completion", return_value="Recovered response"), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", return_value=[hit]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
+            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.non_stream_completion", return_value="Recovered response"),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             resp2 = client.post(
                 "/v1/chat/completions",
                 json={
@@ -261,10 +275,12 @@ class TestCombinedFailures:
 
     def test_multiple_services_down(self, client):
         """Qdrant + Redis + Neo4j all down -> proxy still serves via LLM."""
-        with patch("proxy.app.main.hybrid_search", side_effect=Exception("Qdrant down")), \
-             patch("proxy.app.main.non_stream_completion", return_value="All services down, LLM only"), \
-             patch("proxy.app.main.cache_manager", None), \
-             patch("proxy.app.main.log_interaction"):
+        with (
+            patch("proxy.app.main.hybrid_search", side_effect=Exception("Qdrant down")),
+            patch("proxy.app.main.non_stream_completion", return_value="All services down, LLM only"),
+            patch("proxy.app.main.cache_manager", None),
+            patch("proxy.app.main.log_interaction"),
+        ):
             resp = client.post(
                 "/v1/chat/completions",
                 json={

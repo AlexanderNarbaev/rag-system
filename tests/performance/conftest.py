@@ -14,6 +14,7 @@ def service_url() -> str:
     """Return the base URL of the running proxy service."""
     url = os.getenv("E2E_SERVICE_URL", "http://localhost:8080")
     import requests
+
     try:
         resp = requests.get(f"{url}/v1/health/live", timeout=3)
         if resp.status_code != 200:

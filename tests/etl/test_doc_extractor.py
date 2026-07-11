@@ -54,7 +54,9 @@ class TestExtractMarkdown:
         extractor = DocExtractor(config)
 
         md_file = tmp_path / "test.md"
-        md_file.write_text("# Main Title\n\nSome content.\n\n## Section 1\n\nMore content.\n\n## Section 2\n\nEven more.")
+        md_file.write_text(
+            "# Main Title\n\nSome content.\n\n## Section 1\n\nMore content.\n\n## Section 2\n\nEven more."
+        )
 
         results = extractor._extract_markdown(md_file)
         assert len(results) >= 1
@@ -122,6 +124,7 @@ class TestValidateConnection:
         config.base_url = ""
         extractor = DocExtractor(config)
         import asyncio
+
         result = asyncio.run(extractor.validate_connection())
         assert result is False
 
@@ -131,6 +134,7 @@ class TestValidateConnection:
         config.exclude_patterns = []
         extractor = DocExtractor(config)
         import asyncio
+
         result = asyncio.run(extractor.validate_connection())
         assert result is False
 
@@ -141,6 +145,7 @@ class TestValidateConnection:
         extractor = DocExtractor(config)
         (tmp_path / "test.md").write_text("# Hello")
         import asyncio
+
         result = asyncio.run(extractor.validate_connection())
         assert result is True
 
@@ -150,6 +155,7 @@ class TestValidateConnection:
         config.exclude_patterns = []
         extractor = DocExtractor(config)
         import asyncio
+
         result = asyncio.run(extractor.validate_connection())
         assert result is False
 
@@ -163,6 +169,7 @@ class TestValidateConnection:
         sub.mkdir()
         (sub / "ignored.md").write_text("# Ignored")
         import asyncio
+
         result = asyncio.run(extractor.validate_connection())
         assert result is True
         assert len(extractor._source_files) == 1
@@ -216,7 +223,9 @@ class TestMakeDocument:
         extractor = DocExtractor(config)
         file_path = tmp_path / "test.md"
         file_path.write_text("content")
-        doc = extractor._make_document(file_path, "Test Title", "content", "markdown", 0, 1, ["code1"], ["table1"], ["link1"])
+        doc = extractor._make_document(
+            file_path, "Test Title", "content", "markdown", 0, 1, ["code1"], ["table1"], ["link1"]
+        )
         assert doc.title == "Test Title"
         assert doc.content == "content"
         assert doc.content_type == "markdown"

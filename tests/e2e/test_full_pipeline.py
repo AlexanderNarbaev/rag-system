@@ -1,6 +1,5 @@
 """E2E tests for the full RAG pipeline: chat completion -> retrieval -> generation."""
 
-
 import pytest
 import requests
 
@@ -13,9 +12,7 @@ class TestChatCompletionRAG:
         """POST /v1/chat/completions -> verify rag_feedback_id, rag_confidence, rag_sources."""
         payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "user", "content": "What is RAG?"}
-            ],
+            "messages": [{"role": "user", "content": "What is RAG?"}],
             "temperature": 0.2,
             "stream": False,
         }
@@ -41,9 +38,7 @@ class TestChatCompletionRAG:
         """POST /v1/chat/completions with rag_version parameter."""
         payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "user", "content": "Explain RAG architecture"}
-            ],
+            "messages": [{"role": "user", "content": "Explain RAG architecture"}],
             "temperature": 0.1,
             "stream": False,
             "rag_version": "1.0",
@@ -63,9 +58,7 @@ class TestChatCompletionRAG:
         """POST /v1/chat/completions with no user message -> 400."""
         payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."}
-            ],
+            "messages": [{"role": "system", "content": "You are a helpful assistant."}],
             "stream": False,
         }
         resp = requests.post(
@@ -128,9 +121,7 @@ class TestFeedbackFlow:
         """Chat -> extract feedback_id -> POST /v1/feedback."""
         chat_payload = {
             "model": "rag-proxy",
-            "messages": [
-                {"role": "user", "content": "What is RAG?"}
-            ],
+            "messages": [{"role": "user", "content": "What is RAG?"}],
             "stream": False,
         }
         chat_resp = requests.post(

@@ -49,6 +49,7 @@ class TestInMemoryCache:
         await cache.set("key", "value", ttl=0)
         # With ttl=0, the entry should be expired immediately
         import time
+
         time.sleep(0.01)
         result = await cache.get("key")
         # Should be expired or still present depending on timing

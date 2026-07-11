@@ -256,9 +256,7 @@ class TestPresignedUrl:
         """Returns presigned URL."""
         c, mock_minio = client
         mock_minio.get_file_metadata.return_value = {"key": "test.txt"}
-        mock_minio.generate_presigned_url.return_value = (
-            "http://localhost:9000/bucket/test.txt?signed=abc"
-        )
+        mock_minio.generate_presigned_url.return_value = "http://localhost:9000/bucket/test.txt?signed=abc"
 
         response = c.get("/v1/files/test.txt/presigned")
         assert response.status_code == 200
