@@ -97,9 +97,21 @@ class JiraExtractor:
 
     def _request(self, endpoint: str, params: dict = None) -> dict:
         url = urljoin(self.url, endpoint)
-        resp = self.session.get(url, params=params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        logger.debug(f"Requesting: {url}")
+        try:
+            resp = self.session.get(url, params=params, timeout=(10, 30))
+            logger.debug(f"Response: {resp.status_code}")
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.SSLError as e:
+            logger.error(f"SSL Error: {e}")
+            raise
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection Error: {e}")
+            raise
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout: {e}")
+            raise
 
     def _paginated_issues(self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[dict]:
         """Генератор для пагинированного получения задач."""

@@ -319,6 +319,7 @@ def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager)
 def main():
     parser = argparse.ArgumentParser(description="RAG ETL Pipeline Orchestrator")
     parser.add_argument("--config", type=Path, default=Path("etl_config.yaml"), help="Path to YAML config")
+    parser.add_argument("--test-connection", action="store_true", help="Test connection to all sources and exit")
     parser.add_argument("--skip-extract", action="store_true", help="Skip extraction phase")
     parser.add_argument("--skip-chunk", action="store_true", help="Skip chunking phase")
     parser.add_argument("--skip-graph", action="store_true", help="Skip graph building phase")
@@ -334,6 +335,62 @@ def main():
 
     # Загрузка конфигурации
     config = load_config(args.config)
+
+    # Test connection mode
+    if args.test_connection:
+        logger.info("=== Testing connections ===")
+        results = {}
+
+        # Test Confluence
+        confluence_config = config.get("confluence", {})
+        if confluence_config.get("url"):
+            try:
+                from etl.extractors.confluence import ConfluenceExtractor
+                extractor = ConfluenceExtractor(confluence_config)
+                results["confluence"] = extractor.test_connection()
+            except Exception as e:
+                logger.error(f"Confluence: {e}")
+                results["confluence"] = False
+
+        # Test Jira
+        jira_config = config.get("jira", {})
+        if jira_config.get("url"):
+            try:
+                from etl.extractors.jira import JiraExtractor
+                extractor = JiraExtractor(jira_config)
+                logger.info(f"Testing Jira connection to {jira_config['url']}...")
+                resp = extractor._request("/rest/api/2/myself")
+                logger.info(f"✅ Jira: {resp.get('displayName', 'OK')}")
+                results["jira"] = True
+            except Exception as e:
+                logger.error(f"❌ Jira: {e}")
+                results["jira"] = False
+
+        # Test GitLab
+        gitlab_config = config.get("gitlab", {})
+        if gitlab_config.get("url"):
+            try:
+                from etl.extractors.gitlab import GitLabExtractor
+                extractor = GitLabExtractor(gitlab_config)
+                logger.info(f"Testing GitLab connection to {gitlab_config['url']}...")
+                resp = extractor._request("/api/v4/user")
+                logger.info(f"✅ GitLab: {resp.get('name', 'OK')}")
+                results["gitlab"] = True
+            except Exception as e:
+                logger.error(f"❌ GitLab: {e}")
+                results["gitlab"] = False
+
+        # Summary
+        logger.info("=== Connection Test Results ===")
+        for source, ok in results.items():
+            status = "✅ OK" if ok else "❌ FAILED"
+            logger.info(f"  {source}: {status}")
+
+        if all(results.values()):
+            logger.info("All connections OK!")
+        else:
+            logger.error("Some connections failed. Check logs above.")
+        return
 
     # Инициализация WAL
     wal_path = Path(config.get("wal", {}).get("wal_file", "./wal/etl_wal.json"))

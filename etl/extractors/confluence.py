@@ -85,6 +85,28 @@ class ConfluenceExtractor:
 
         self.wal_data = self._load_wal()
 
+    def test_connection(self) -> bool:
+        """Тестирует подключение к Confluence API."""
+        logger.info(f"Testing connection to {self.url}...")
+        logger.info(f"SSL verify: {self.session.verify}")
+        logger.info(f"Auth: {'Bearer token' if 'Authorization' in self.session.headers else 'Basic auth'}")
+        try:
+            resp = self.session.get(
+                urljoin(self.url, "/rest/api/content"),
+                params={"limit": 1},
+                timeout=(10, 30),
+            )
+            logger.info(f"Connection test: {resp.status_code}")
+            if resp.status_code == 200:
+                logger.info("✅ Подключение успешно")
+                return True
+            else:
+                logger.error(f"❌ Ошибка: {resp.status_code} - {resp.text[:200]}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ Ошибка подключения: {e}")
+            return False
+
     def _load_wal(self) -> dict:
         """Загружает WAL (последние успешные метки времени и хеши страниц)."""
         if self.wal_path.exists():
@@ -99,9 +121,24 @@ class ConfluenceExtractor:
     def _request(self, endpoint: str, params: dict = None) -> dict:
         """Выполняет GET запрос к Confluence API."""
         url = urljoin(self.url, endpoint)
-        resp = self.session.get(url, params=params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        logger.debug(f"Requesting: {url}")
+        try:
+            resp = self.session.get(url, params=params, timeout=(10, 30))  # (connect_timeout, read_timeout)
+            logger.debug(f"Response: {resp.status_code}")
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.SSLError as e:
+            logger.error(f"SSL Error: {e}")
+            logger.error("Попробуйте установить verify_ssl: false в конфиге")
+            raise
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection Error: {e}")
+            logger.error(f"Не удалось подключиться к {self.url}")
+            raise
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout: {e}")
+            logger.error("Сервер не отвечает. Проверьте URL и доступность")
+            raise
 
     def _get_all_pages(self, space_key: str = None, start: int = 0, limit: int = 50) -> list[dict]:
         """

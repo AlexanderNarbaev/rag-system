@@ -93,9 +93,21 @@ class GitLabExtractor:
 
     def _request(self, endpoint: str, params: dict = None, method: str = "GET") -> dict:
         url = urljoin(self.url, endpoint)
-        resp = self.session.request(method, url, params=params, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        logger.debug(f"Requesting: {method} {url}")
+        try:
+            resp = self.session.request(method, url, params=params, timeout=(10, 30))
+            logger.debug(f"Response: {resp.status_code}")
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.SSLError as e:
+            logger.error(f"SSL Error: {e}")
+            raise
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection Error: {e}")
+            raise
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Timeout: {e}")
+            raise
 
     def _paginated_get(self, endpoint: str, params: dict = None, per_page: int = 100) -> Iterator[dict]:
         """Пагинированный сбор всех элементов (постранично)."""
