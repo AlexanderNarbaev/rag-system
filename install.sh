@@ -63,6 +63,12 @@ check_prerequisites() {
 
 # ── Clone or update repository ─────────────────────────────────────────────
 clone_repo() {
+    # Check if we're already inside the rag-system repo
+    if [ -f "proxy/docker-compose.yml" ] && [ -f "install.sh" ]; then
+        log "Already inside rag-system repository"
+        return 0
+    fi
+
     INSTALL_DIR="${INSTALL_DIR:-$(pwd)/rag-system}"
 
     if [ -d "$INSTALL_DIR" ]; then

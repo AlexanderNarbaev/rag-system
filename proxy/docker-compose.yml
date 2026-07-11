@@ -102,12 +102,10 @@ services:
       - "8000:8000"
     environment:
       - HUGGINGFACE_HUB_CACHE=/models/cache
-    command: >
-      --model /models/${MODEL_FILE:-model.gguf}
-      --api-key ${LLM_API_KEY:-}
-      --port 8000
-      --max-model-len ${LLM_MAX_MODEL_LEN:-65536}
-      --tensor-parallel-size ${LLM_TP_SIZE:-1}
+      - MODEL_FILE=${MODEL_FILE:-model.gguf}
+      - LLM_MAX_MODEL_LEN=${LLM_MAX_MODEL_LEN:-65536}
+      - LLM_TP_SIZE=${LLM_TP_SIZE:-1}
+    command: ["--model", "/models/${MODEL_FILE:-model.gguf}", "--port", "8000", "--max-model-len", "${LLM_MAX_MODEL_LEN:-65536}", "--tensor-parallel-size", "${LLM_TP_SIZE:-1}"]
     deploy:
       resources:
         reservations:
