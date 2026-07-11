@@ -58,6 +58,13 @@ class TestBuildUserDn:
 class TestAuthenticateLdap:
     """Tests for authenticate_ldap entry point."""
 
+    @pytest.fixture(autouse=True)
+    def _cleanup_ldap3_mock(self):
+        """Clean up ldap3 mock after each test to avoid test isolation issues."""
+        yield
+        # Remove the mock ldap3 from sys.modules after each test
+        sys.modules.pop("ldap3", None)
+
     @pytest.mark.asyncio
     @patch("proxy.app.auth.ldap.AD_ENABLED", False)
     async def test_returns_none_when_disabled(self):
