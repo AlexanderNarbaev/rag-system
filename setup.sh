@@ -1,7 +1,19 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# RAG System — Interactive Setup Wizard
-# Usage: ./setup.sh [--install|--configure|--expand|--status]
+# RAG System — Interactive Setup Wizard v2
+# Usage: ./setup.sh [command]
+#
+# Commands:
+#   (none)     — interactive menu
+#   install    — fresh install
+#   configure  — modify existing config
+#   expand     — add components
+#   status     — show current status
+#   test       — run tests and checks
+#   docker     — manage containers
+#   build      — build proxy image
+#   etl        — run ETL pipeline
+#   openwebui  — setup OpenWebUI
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -23,10 +35,13 @@ error()   { echo -e "${RED}[✗]${NC} $1"; }
 info()    { echo -e "${BLUE}[i]${NC} $1"; }
 header()  { echo -e "\n${BOLD}${CYAN}━━━ $1 ━━━${NC}\n"; }
 
-# ── Config ───────────────────────────────────────────────────────────────────
-ENV_FILE="proxy/.env"
-COMPOSE_FILE="proxy/docker-compose.yml"
-ENV_EXAMPLE=".env.example"
+# ── Paths ────────────────────────────────────────────────────────────────────
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$PROJECT_ROOT/proxy/.env"
+ETL_CONFIG="$PROJECT_ROOT/etl/config/etl_config.yaml"
+COMPOSE_FILE="$PROJECT_ROOT/proxy/docker-compose.yml"
+OPENWEBUI_COMPOSE="$PROJECT_ROOT/deploy/docker/docker-compose.openwebui.yml"
+ENV_EXAMPLE="$PROJECT_ROOT/.env.example"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 get_env() {
@@ -50,6 +65,26 @@ set_env() {
     fi
 }
 
+get_yaml() {
+    local key="$1" default="${2:-}"
+    if [ -f "$ETL_CONFIG" ]; then
+        local val
+        val=$(grep "^  ${key}:" "$ETL_CONFIG" 2>/dev/null | head -1 | cut -d':' -f2- | sed 's/#.*//' | xargs | sed 's/"//g')
+        echo "${val:-$default}"
+    else
+        echo "$default"
+    fi
+}
+
+set_yaml() {
+    local key="$1" value="$2"
+    if [ -f "$ETL_CONFIG" ]; then
+        if grep -q "^  ${key}:" "$ETL_CONFIG"; then
+            sed -i "s|^  ${key}:.*|  ${key}: ${value}|" "$ETL_CONFIG"
+        fi
+    fi
+}
+
 ask() {
     local prompt="$1" default="${2:-}" answer
     if [ -n "$default" ]; then
@@ -68,22 +103,36 @@ confirm() {
     [[ "$answer" =~ ^[Yy] ]]
 }
 
+# ── Compose command ──────────────────────────────────────────────────────────
+get_compose_cmd() {
+    if docker compose version >/dev/null 2>&1; then
+        echo "docker compose"
+    elif command -v docker-compose >/dev/null 2>&1; then
+        echo "docker-compose"
+    else
+        echo ""
+    fi
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# SHOW MENU
+# MENU
 # ═══════════════════════════════════════════════════════════════════════════════
 show_menu() {
     echo ""
     echo -e "${BOLD}${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BOLD}${CYAN}║          RAG System — Setup Wizard                       ║${NC}"
+    echo -e "${BOLD}${CYAN}║          RAG System — Setup Wizard v2                    ║${NC}"
     echo -e "${BOLD}${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo "  1) Fresh Install     — полная установка с нуля"
-    echo "  2) Configure         — настроить существующую установку"
-    echo "  3) Expand            — добавить компоненты"
-    echo "  4) Status            — показать текущий статус"
-    echo "  5) Test              — запустить проверку"
-    echo "  6) Docker            — управление контейнерами"
-    echo "  0) Exit"
+    echo "  1)  Fresh Install      — полная установка с нуля"
+    echo "  2)  Configure          — настроить существующую установку"
+    echo "  3)  Expand             — добавить компоненты"
+    echo "  4)  ETL Setup          — настроить и запустить ETL"
+    echo "  5)  Proxy Build        — собрать образ прокси"
+    echo "  6)  Docker             — управление контейнерами"
+    echo "  7)  OpenWebUI          — настройка веб-интерфейса"
+    echo "  8)  Status             — показать текущий статус"
+    echo "  9)  Test               — запустить проверку"
+    echo "  0)  Exit"
     echo ""
 }
 
@@ -93,11 +142,12 @@ show_menu() {
 do_install() {
     header "Fresh Install"
 
+    # Profile
     echo "Выберите профиль установки:"
     echo ""
     echo "  1) Minimal   — Proxy + Qdrant (без графа, без кэша)"
     echo "  2) Standard  — Proxy + Qdrant + Redis + Neo4j"
-    echo "  3) Full      — Standard + MinIO + Monitoring"
+    echo "  3) Full      — Standard + MinIO + Monitoring + OpenWebUI"
     echo ""
     local profile
     read -rp "$(echo -e "${MAGENTA}[?]${NC} Профиль [1/2/3, default=2]: ")" profile
@@ -224,22 +274,36 @@ do_install() {
         fi
     fi
 
-    # Summary
-    header "Summary"
-    echo "Конфигурация:"
-    echo "  LLM:           $(get_env LLM_ENDPOINT)"
-    echo "  Model:         $(get_env LLM_MODEL_NAME)"
-    echo "  Embedder:      $(get_env EMBEDDER_MODEL) $(get_env EMBEDDER_ENDPOINT)"
-    echo "  Reranker:      $(get_env RERANKER_MODEL) $(get_env RERANKER_ENDPOINT)"
-    echo "  SSL Verify:    $(get_env SSL_VERIFY)"
-    echo "  Redis:         $(get_env USE_REDIS)"
-    echo "  Neo4j:         $(get_env GRAPH_ENABLED)"
-    echo "  Auth:          $(get_env AUTH_ENABLED)"
-    echo ""
+    # Build proxy
+    header "Build Proxy Image"
+    if confirm "Собрать образ прокси сейчас?" "y"; then
+        do_build_proxy
+    fi
 
-    if confirm "Сохранить и запустить сервисы?" "y"; then
+    # Start services
+    header "Start Services"
+    if confirm "Запустить сервисы?" "y"; then
         do_start_services
     fi
+
+    # ETL setup
+    if [ "$profile" = "2" ] || [ "$profile" = "3" ]; then
+        header "ETL Setup"
+        if confirm "Настроить ETL пайплайн?" "y"; then
+            do_etl_setup
+        fi
+    fi
+
+    # OpenWebUI
+    if [ "$profile" = "3" ]; then
+        header "OpenWebUI"
+        if confirm "Установить OpenWebUI?" "y"; then
+            do_openwebui_setup
+        fi
+    fi
+
+    # Summary
+    do_status
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -265,7 +329,8 @@ do_configure() {
     echo "  8)  MinIO / File Storage"
     echo "  9)  Rate Limiting"
     echo "  10) Logging"
-    echo "  11) Показать текущую конфигурацию"
+    echo "  11) ETL Configuration"
+    echo "  12) Показать текущую конфигурацию"
     echo "  0)  Назад"
     echo ""
 
@@ -282,57 +347,84 @@ do_configure() {
             ;;
         2)
             header "Embedding Model"
-            set_env "EMBEDDER_MODEL" "$(ask 'Model Name' "$(get_env EMBEDDER_MODEL)")"
-            set_env "EMBEDDER_ENDPOINT" "$(ask 'Endpoint (пусто = локально)' "$(get_env EMBEDDER_ENDPOINT)")"
-            set_env "EMBEDDER_API_KEY" "$(ask 'API Key' "$(get_env EMBEDDER_API_KEY)")"
+            echo "  1) Remote"
+            echo "  2) Local"
+            local ec
+            read -rp "$(echo -e "${MAGENTA}[?]${NC} Выбор [1/2]: ")" ec
+            if [ "$ec" = "1" ]; then
+                set_env "EMBEDDER_ENDPOINT" "$(ask 'Endpoint' "$(get_env EMBEDDER_ENDPOINT)")"
+                set_env "EMBEDDER_API_KEY" "$(ask 'API Key' "$(get_env EMBEDDER_API_KEY)")"
+                set_env "EMBEDDER_MODEL" "$(ask 'Model Name' "$(get_env EMBEDDER_MODEL)")"
+                set_env "EMBEDDER_FALLBACK_LOCAL" "false"
+            else
+                set_env "EMBEDDER_MODEL" "$(ask 'Model Name' "$(get_env EMBEDDER_MODEL)")"
+                set_env "EMBEDDER_DEVICE" "$(ask 'Device' "$(get_env EMBEDDER_DEVICE)")"
+                set_env "EMBEDDER_ENDPOINT" ""
+                set_env "EMBEDDER_FALLBACK_LOCAL" "true"
+            fi
             log "Embedder настроен"
             ;;
         3)
             header "Reranker Model"
-            set_env "RERANKER_MODEL" "$(ask 'Model Name' "$(get_env RERANKER_MODEL)")"
-            set_env "RERANKER_ENDPOINT" "$(ask 'Endpoint (пусто = локально)' "$(get_env RERANKER_ENDPOINT)")"
-            set_env "RERANKER_API_KEY" "$(ask 'API Key' "$(get_env RERANKER_API_KEY)")"
+            echo "  1) Remote"
+            echo "  2) Local"
+            echo "  3) None"
+            local rc
+            read -rp "$(echo -e "${MAGENTA}[?]${NC} Выбор [1/2/3]: ")" rc
+            if [ "$rc" = "1" ]; then
+                set_env "RERANKER_ENDPOINT" "$(ask 'Endpoint' "$(get_env RERANKER_ENDPOINT)")"
+                set_env "RERANKER_API_KEY" "$(ask 'API Key' "$(get_env RERANKER_API_KEY)")"
+                set_env "RERANKER_MODEL" "$(ask 'Model Name' "$(get_env RERANKER_MODEL)")"
+                set_env "RERANKER_FALLBACK_LOCAL" "false"
+            elif [ "$rc" = "2" ]; then
+                set_env "RERANKER_MODEL" "$(ask 'Model Name' "$(get_env RERANKER_MODEL)")"
+                set_env "RERANKER_ENDPOINT" ""
+                set_env "RERANKER_FALLBACK_LOCAL" "true"
+            else
+                set_env "RERANKER_MODEL" ""
+                set_env "RERANKER_ENDPOINT" ""
+            fi
             log "Reranker настроен"
             ;;
         4)
             header "SSL / TLS"
-            local verify_val
-            verify_val=$(ask 'Verify SSL (true/false)' "$(get_env SSL_VERIFY 'true')")
-            set_env "SSL_VERIFY" "$verify_val"
-            if [ "$verify_val" = "false" ]; then
+            local sv
+            sv=$(ask 'Verify SSL (true/false)' "$(get_env SSL_VERIFY 'true')")
+            set_env "SSL_VERIFY" "$sv"
+            if [ "$sv" = "false" ]; then
                 set_env "SSL_CERT_PATH" "$(ask 'CA Bundle Path' "$(get_env SSL_CERT_PATH)")"
             fi
             log "SSL настроен"
             ;;
         5)
             header "Authentication"
-            local auth_val
-            auth_val=$(ask 'Enable Auth (true/false)' "$(get_env AUTH_ENABLED 'false')")
-            set_env "AUTH_ENABLED" "$auth_val"
-            if [ "$auth_val" = "true" ]; then
+            local av
+            av=$(ask 'Enable Auth (true/false)' "$(get_env AUTH_ENABLED 'false')")
+            set_env "AUTH_ENABLED" "$av"
+            if [ "$av" = "true" ]; then
                 set_env "JWT_SECRET" "$(ask 'JWT Secret' "$(get_env JWT_SECRET)")"
-                local rbac_val
-                rbac_val=$(ask 'Enable RBAC (true/false)' "$(get_env RBAC_ENABLED 'false')")
-                set_env "RBAC_ENABLED" "$rbac_val"
+                local rv
+                rv=$(ask 'Enable RBAC (true/false)' "$(get_env RBAC_ENABLED 'false')")
+                set_env "RBAC_ENABLED" "$rv"
             fi
             log "Auth настроен"
             ;;
         6)
             header "Redis / Cache"
-            local redis_val
-            redis_val=$(ask 'Enable Redis (true/false)' "$(get_env USE_REDIS 'false')")
-            set_env "USE_REDIS" "$redis_val"
-            if [ "$redis_val" = "true" ]; then
+            local rdis
+            rdis=$(ask 'Enable Redis (true/false)' "$(get_env USE_REDIS 'false')")
+            set_env "USE_REDIS" "$rdis"
+            if [ "$rdis" = "true" ]; then
                 set_env "REDIS_URL" "$(ask 'Redis URL' "$(get_env REDIS_URL 'redis://localhost:6379')")"
             fi
             log "Redis настроен"
             ;;
         7)
             header "Neo4j / Knowledge Graph"
-            local graph_val
-            graph_val=$(ask 'Enable Graph (true/false)' "$(get_env GRAPH_ENABLED 'false')")
-            set_env "GRAPH_ENABLED" "$graph_val"
-            if [ "$graph_val" = "true" ]; then
+            local gv
+            gv=$(ask 'Enable Graph (true/false)' "$(get_env GRAPH_ENABLED 'false')")
+            set_env "GRAPH_ENABLED" "$gv"
+            if [ "$gv" = "true" ]; then
                 set_env "NEO4J_URI" "$(ask 'Neo4j URI' "$(get_env NEO4J_URI)")"
                 set_env "NEO4J_USER" "$(ask 'Neo4j User' "$(get_env NEO4J_USER)")"
                 set_env "NEO4J_PASSWORD" "$(ask 'Neo4j Password' "$(get_env NEO4J_PASSWORD)")"
@@ -348,10 +440,10 @@ do_configure() {
             ;;
         9)
             header "Rate Limiting"
-            local rl_val
-            rl_val=$(ask 'Enable Rate Limiting (true/false)' "$(get_env RATE_LIMIT_ENABLED 'false')")
-            set_env "RATE_LIMIT_ENABLED" "$rl_val"
-            if [ "$rl_val" = "true" ]; then
+            local rl
+            rl=$(ask 'Enable Rate Limiting (true/false)' "$(get_env RATE_LIMIT_ENABLED 'false')")
+            set_env "RATE_LIMIT_ENABLED" "$rl"
+            if [ "$rl" = "true" ]; then
                 set_env "RATE_LIMIT_PER_MINUTE" "$(ask 'Requests per minute' "$(get_env RATE_LIMIT_PER_MINUTE '60')")"
                 set_env "RATE_LIMIT_BURST" "$(ask 'Burst limit' "$(get_env RATE_LIMIT_BURST '10')")"
             fi
@@ -361,13 +453,16 @@ do_configure() {
             header "Logging"
             set_env "LOG_LEVEL" "$(ask 'Log Level (DEBUG/INFO/WARNING/ERROR)' "$(get_env LOG_LEVEL 'INFO')")"
             set_env "LOG_FORMAT" "$(ask 'Log Format (text/json)' "$(get_env LOG_FORMAT 'text')")"
-            local log_req
-            log_req=$(ask 'Log Requests (true/false)' "$(get_env LOG_REQUESTS 'false')")
-            set_env "LOG_REQUESTS" "$log_req"
+            local lr
+            lr=$(ask 'Log Requests (true/false)' "$(get_env LOG_REQUESTS 'false')")
+            set_env "LOG_REQUESTS" "$lr"
             log "Logging настроен"
             ;;
         11)
-            show_config
+            do_etl_configure
+            ;;
+        12)
+            do_status
             ;;
         0)
             return 0
@@ -386,15 +481,17 @@ do_expand() {
 
     echo "Добавить компонент:"
     echo ""
-    echo "  1) MinIO           — объектное хранилище для файлов"
-    echo "  2) Monitoring      — Prometheus + Grafana"
-    echo "  3) OpenWebUI       — веб-интерфейс для чата"
-    echo "  4) MCP Server      — для OpenCode / Claude Desktop"
-    echo "  5) Auth            — JWT аутентификация"
-    echo "  6) Rate Limiting   — ограничение запросов"
-    echo "  7) Tools           — система инструментов"
-    echo "  8) File Upload     — загрузка файлов через API"
-    echo "  0) Назад"
+    echo "  1)  MinIO           — объектное хранилище для файлов"
+    echo "  2)  Monitoring      — Prometheus + Grafana"
+    echo "  3)  OpenWebUI       — веб-интерфейс для чата"
+    echo "  4)  MCP Server      — для OpenCode / Claude Desktop"
+    echo "  5)  Auth            — JWT аутентификация"
+    echo "  6)  Rate Limiting   — ограничение запросов"
+    echo "  7)  Tools           — система инструментов"
+    echo "  8)  ETL Sources     — добавить источники данных"
+    echo "  9)  Knowledge Graph — Neo4j граф знаний"
+    echo "  10) LangGraph       — агентный оркестратор"
+    echo "  0)  Назад"
     echo ""
 
     local choice
@@ -413,12 +510,10 @@ do_expand() {
             header "Adding Monitoring"
             set_env "METRICS_ENABLED" "true"
             log "Мониторинг включён"
-            info "Запустите: docker compose -f config/monitoring/docker-compose.monitoring.yml up -d"
+            info "Используйте: docker compose -f config/monitoring/docker-compose.monitoring.yml up -d"
             ;;
         3)
-            header "Adding OpenWebUI"
-            info "OpenWebUI подключается к RAG Proxy как OpenAI-compatible backend"
-            log "Используйте deploy/docker/docker-compose.openwebui.yml"
+            do_openwebui_setup
             ;;
         4)
             header "Adding MCP Server"
@@ -429,7 +524,7 @@ do_expand() {
             echo '    "mcp": {'
             echo '      "rag-system": {'
             echo '        "type": "local",'
-            echo "        \"command\": [\"python\", \"$(pwd)/mcp_server/server.py\"],"
+            echo "        \"command\": [\"python\", \"$PROJECT_ROOT/mcp_server/server.py\"],"
             echo '        "env": {"RAG_PROXY_URL": "http://localhost:8080"}'
             echo '      }'
             echo '    }'
@@ -470,9 +565,22 @@ do_expand() {
             log "Tools включены"
             ;;
         8)
-            header "Adding File Upload"
-            info "File Upload API доступен по /v1/files"
-            info "Требуется MinIO (добавьте сначала его)"
+            do_etl_setup
+            ;;
+        9)
+            header "Adding Knowledge Graph"
+            set_env "GRAPH_ENABLED" "true"
+            set_env "NEO4J_URI" "$(ask 'Neo4j URI' 'bolt://localhost:7687')"
+            set_env "NEO4J_USER" "$(ask 'Neo4j User' 'neo4j')"
+            set_env "NEO4J_PASSWORD" "$(ask 'Neo4j Password' '')"
+            set_env "USE_GRAPH_EXPANSION" "true"
+            log "Knowledge Graph включён"
+            ;;
+        10)
+            header "Adding LangGraph"
+            set_env "USE_LANGGRAPH" "true"
+            set_env "MAX_RETRIEVAL_LOOPS" "$(ask 'Max retrieval loops' '3')"
+            log "LangGraph включён"
             ;;
         0)
             return 0
@@ -484,75 +592,140 @@ do_expand() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 4. STATUS
+# 4. ETL SETUP
 # ═══════════════════════════════════════════════════════════════════════════════
-do_status() {
-    header "System Status"
+do_etl_setup() {
+    header "ETL Pipeline Setup"
 
-    echo "Docker Containers:"
-    if command -v docker >/dev/null 2>&1; then
-        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null | head -20 || echo "  Нет запущенных контейнеров"
-    else
-        echo "  Docker не установлен"
-    fi
-    echo ""
-
-    echo "Health Check:"
-    if curl -sf http://localhost:8080/v1/health/live >/dev/null 2>&1; then
-        log "Proxy: OK (http://localhost:8080)"
-    else
-        warn "Proxy: не отвечает"
-    fi
-    echo ""
-
-    show_config
-}
-
-show_config() {
-    header "Current Configuration"
-
-    if [ ! -f "$ENV_FILE" ]; then
-        warn "Файл $ENV_FILE не найден"
+    if [ ! -f "$ETL_CONFIG" ]; then
+        error "Файл $ETL_CONFIG не найден"
         return 1
     fi
 
-    echo "Основные:"
-    echo "  LLM Endpoint:      $(get_env LLM_ENDPOINT)"
-    echo "  LLM Model:         $(get_env LLM_MODEL_NAME)"
-    echo "  Embedder Model:    $(get_env EMBEDDER_MODEL)"
-    echo "  Embedder Endpoint: $(get_env EMBEDDER_ENDPOINT '—')"
-    echo "  Reranker Model:    $(get_env RERANKER_MODEL)"
-    echo "  Reranker Endpoint: $(get_env RERANKER_ENDPOINT '—')"
+    echo "Настройка ETL пайплайна для загрузки данных из корпоративных систем"
     echo ""
-    echo "Компоненты:"
-    echo "  Redis:             $(get_env USE_REDIS 'false')"
-    echo "  Neo4j:             $(get_env GRAPH_ENABLED 'false')"
-    echo "  LangGraph:         $(get_env USE_LANGGRAPH 'false')"
-    echo "  MinIO:             $(get_env MINIO_ENDPOINT '—')"
-    echo "  Auth:              $(get_env AUTH_ENABLED 'false')"
-    echo "  RBAC:              $(get_env RBAC_ENABLED 'false')"
-    echo "  Rate Limiting:     $(get_env RATE_LIMIT_ENABLED 'false')"
-    echo "  Metrics:           $(get_env METRICS_ENABLED 'false')"
-    echo "  Tools:             $(get_env TOOLS_ENABLED 'false')"
-    echo ""
-    echo "SSL:"
-    echo "  Verify:            $(get_env SSL_VERIFY 'true')"
-    echo "  CA Bundle:         $(get_env SSL_CERT_PATH '—')"
+
+    # Global timeout
+    header "Global Settings"
+    local timeout
+    timeout=$(ask 'Request timeout (seconds)' "$(get_yaml timeout '30')")
+    set_yaml timeout "$timeout"
+
+    local connect_timeout
+    connect_timeout=$(ask 'Connect timeout (seconds)' "$(get_yaml connect_timeout '10')")
+    set_yaml connect_timeout "$connect_timeout"
+
+    # Confluence
+    header "Confluence"
+    if confirm "Настроить Confluence?" "y"; then
+        local url
+        url=$(ask 'Confluence URL' "$(get_yaml url 'https://confluence.internal.company.com')")
+        set_yaml url "\"$url\""
+
+        local token
+        token=$(ask 'Confluence Token (Bearer)' "$(get_yaml token '')")
+        set_yaml token "\"$token\""
+
+        local verify_ssl
+        verify_ssl=$(ask 'Verify SSL (true/false)' "$(get_yaml verify_ssl 'false')")
+        set_yaml verify_ssl "$verify_ssl"
+
+        log "Confluence настроен"
+    fi
+
+    # Jira
+    header "Jira"
+    if confirm "Настроить Jira?" "y"; then
+        local url
+        url=$(ask 'Jira URL' "$(get_yaml url 'https://jira.internal.company.com')")
+        set_yaml url "\"$url\""
+
+        local token
+        token=$(ask 'Jira Token' "$(get_yaml token '')")
+        set_yaml token "\"$token\""
+
+        local verify_ssl
+        verify_ssl=$(ask 'Verify SSL (true/false)' "$(get_yaml verify_ssl 'false')")
+        set_yaml verify_ssl "$verify_ssl"
+
+        log "Jira настроен"
+    fi
+
+    # GitLab
+    header "GitLab"
+    if confirm "Настроить GitLab?" "y"; then
+        local url
+        url=$(ask 'GitLab URL' "$(get_yaml url 'https://gitlab.internal.company.com')")
+        set_yaml url "\"$url\""
+
+        local token
+        token=$(ask 'GitLab Token' "$(get_yaml token '')")
+        set_yaml token "\"$token\""
+
+        local verify_ssl
+        verify_ssl=$(ask 'Verify SSL (true/false)' "$(get_yaml verify_ssl 'false')")
+        set_yaml verify_ssl "$verify_ssl"
+
+        log "GitLab настроен"
+    fi
+
+    # Test connection
+    if confirm "Проверить подключение?" "y"; then
+        do_etl_test_connection
+    fi
+}
+
+do_etl_configure() {
+    header "ETL Configuration"
+    do_etl_setup
+}
+
+do_etl_test_connection() {
+    header "Testing ETL Connections"
+
+    if [ ! -f "$ETL_CONFIG" ]; then
+        error "Файл $ETL_CONFIG не найден"
+        return 1
+    fi
+
+    info "Запускаю проверку подключения..."
+    python -m etl.scheduler.run_etl --config "$ETL_CONFIG" --test-connection
+}
+
+do_etl_run() {
+    header "Running ETL Pipeline"
+
+    if [ ! -f "$ETL_CONFIG" ]; then
+        error "Файл $ETL_CONFIG не найден"
+        return 1
+    fi
+
+    local timeout
+    timeout=$(ask 'Timeout (seconds, empty = from config)' "")
+    local timeout_arg=""
+    if [ -n "$timeout" ]; then
+        timeout_arg="--timeout $timeout"
+    fi
+
+    info "Запускаю ETL пайплайн..."
+    python -m etl.scheduler.run_etl --config "$ETL_CONFIG" $timeout_arg
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 5. TEST
+# 5. PROXY BUILD
 # ═══════════════════════════════════════════════════════════════════════════════
-do_test() {
-    header "Running Tests"
+do_build_proxy() {
+    header "Building Proxy Image"
 
-    if confirm "Запустить pytest?" "y"; then
-        python -m pytest tests/proxy/ tests/etl/ tests/integration/ -q --tb=short --ignore=tests/performance --ignore=tests/e2e --ignore=tests/resilience
+    if [ ! -f "$PROJECT_ROOT/Dockerfile.proxy" ]; then
+        error "Dockerfile.proxy не найден"
+        return 1
     fi
 
-    if confirm "Проверить Ruff lint?" "y"; then
-        python -m ruff check proxy/ etl/ tests/
-    fi
+    info "Собираю образ rag-proxy:latest..."
+    docker build -f "$PROJECT_ROOT/Dockerfile.proxy" -t rag-proxy:latest "$PROJECT_ROOT"
+
+    log "Образ собран: rag-proxy:latest"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -563,28 +736,36 @@ do_docker() {
 
     echo "Действие:"
     echo ""
-    echo "  1) Start     — запустить все сервисы"
-    echo "  2) Stop      — остановить все сервисы"
-    echo "  3) Restart   — перезапустить все сервисы"
-    echo "  4) Logs      — показать логи"
-    echo "  5) Status    — показать статус"
-    echo "  6) Clean     — удалить контейнеры и volumes"
+    echo "  1) Start          — запустить все сервисы"
+    echo "  2) Stop           — остановить все сервисы"
+    echo "  3) Restart        — перезапустить все сервисы"
+    echo "  4) Logs           — показать логи"
+    echo "  5) Status         — показать статус"
+    echo "  6) Clean          — удалить контейнеры и volumes"
+    echo "  7) Build & Start  — собрать образ и запустить"
     echo "  0) Назад"
     echo ""
 
     local choice
     read -rp "$(echo -e "${MAGENTA}[?]${NC} Выбор: ")" choice
 
+    local compose_cmd
+    compose_cmd=$(get_compose_cmd)
+
     case "$choice" in
-        1) do_start_services ;;
-        2) docker compose -f "$COMPOSE_FILE" down ;;
-        3) docker compose -f "$COMPOSE_FILE" restart ;;
-        4) docker compose -f "$COMPOSE_FILE" logs -f ;;
-        5) docker compose -f "$COMPOSE_FILE" ps ;;
+        1) $compose_cmd -f "$COMPOSE_FILE" up -d ;;
+        2) $compose_cmd -f "$COMPOSE_FILE" down ;;
+        3) $compose_cmd -f "$COMPOSE_FILE" restart ;;
+        4) $compose_cmd -f "$COMPOSE_FILE" logs -f ;;
+        5) $compose_cmd -f "$COMPOSE_FILE" ps ;;
         6)
             if confirm "Удалить все контейнеры и volumes?" "n"; then
-                docker compose -f "$COMPOSE_FILE" down -v
+                $compose_cmd -f "$COMPOSE_FILE" down -v
             fi
+            ;;
+        7)
+            do_build_proxy
+            $compose_cmd -f "$COMPOSE_FILE" up -d
             ;;
         0) return 0 ;;
         *) error "Неверный выбор" ;;
@@ -600,11 +781,9 @@ do_start_services() {
     fi
 
     local compose_cmd
-    if docker compose version >/dev/null 2>&1; then
-        compose_cmd="docker compose"
-    elif command -v docker-compose >/dev/null 2>&1; then
-        compose_cmd="docker-compose"
-    else
+    compose_cmd=$(get_compose_cmd)
+
+    if [ -z "$compose_cmd" ]; then
         error "Docker Compose не найден"
         return 1
     fi
@@ -639,16 +818,153 @@ do_start_services() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 7. OPENWEBUI
+# ═══════════════════════════════════════════════════════════════════════════════
+do_openwebui_setup() {
+    header "OpenWebUI Setup"
+
+    info "OpenWebUI — веб-интерфейс для чата с RAG системой"
+    echo ""
+
+    # Check if compose file exists
+    if [ ! -f "$OPENWEBUI_COMPOSE" ]; then
+        error "Файл $OPENWEBUI_COMPOSE не найден"
+        return 1
+    fi
+
+    # Configure
+    local api_key
+    api_key=$(ask 'OpenWebUI API Key (для подключения к прокси)' "sk-rag-proxy")
+    set_env "OPENWEBUI_API_KEY" "$api_key"
+
+    # Build proxy image if not exists
+    if ! docker image inspect rag-proxy:latest >/dev/null 2>&1; then
+        warn "Образ rag-proxy:latest не найден"
+        if confirm "Собрать образ сейчас?" "y"; then
+            do_build_proxy
+        fi
+    fi
+
+    # Start
+    if confirm "Запустить OpenWebUI?" "y"; then
+        local compose_cmd
+        compose_cmd=$(get_compose_cmd)
+
+        info "Запускаю OpenWebUI..."
+        $compose_cmd -f "$OPENWEBUI_COMPOSE" up -d
+
+        echo ""
+        log "OpenWebUI запущен"
+        info "  OpenWebUI: http://localhost:3000"
+        info "  Proxy:     http://localhost:8080"
+        echo ""
+        info "Первый пользователь = админ"
+        info "В Settings → Connections укажите:"
+        info "  OpenAI API: http://rag-proxy:8080/v1"
+        info "  API Key: $api_key"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 8. STATUS
+# ═══════════════════════════════════════════════════════════════════════════════
+do_status() {
+    header "System Status"
+
+    # Docker containers
+    echo "Docker Containers:"
+    if command -v docker >/dev/null 2>&1; then
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null | head -20 || echo "  Нет запущенных контейнеров"
+    else
+        echo "  Docker не установлен"
+    fi
+    echo ""
+
+    # Health checks
+    echo "Health Checks:"
+    if curl -sf http://localhost:8080/v1/health/live >/dev/null 2>&1; then
+        log "Proxy: OK (http://localhost:8080)"
+    else
+        warn "Proxy: не отвечает"
+    fi
+    echo ""
+
+    # Config
+    show_config
+}
+
+show_config() {
+    header "Current Configuration"
+
+    if [ ! -f "$ENV_FILE" ]; then
+        warn "Файл $ENV_FILE не найден"
+        return 1
+    fi
+
+    echo "Proxy:"
+    echo "  LLM Endpoint:      $(get_env LLM_ENDPOINT)"
+    echo "  LLM Model:         $(get_env LLM_MODEL_NAME)"
+    echo "  Embedder Model:    $(get_env EMBEDDER_MODEL)"
+    echo "  Embedder Endpoint: $(get_env EMBEDDER_ENDPOINT '—')"
+    echo "  Reranker Model:    $(get_env RERANKER_MODEL)"
+    echo "  Reranker Endpoint: $(get_env RERANKER_ENDPOINT '—')"
+    echo ""
+    echo "Components:"
+    echo "  Redis:             $(get_env USE_REDIS 'false')"
+    echo "  Neo4j:             $(get_env GRAPH_ENABLED 'false')"
+    echo "  LangGraph:         $(get_env USE_LANGGRAPH 'false')"
+    echo "  MinIO:             $(get_env MINIO_ENDPOINT '—')"
+    echo "  Auth:              $(get_env AUTH_ENABLED 'false')"
+    echo "  RBAC:              $(get_env RBAC_ENABLED 'false')"
+    echo "  Rate Limiting:     $(get_env RATE_LIMIT_ENABLED 'false')"
+    echo "  Metrics:           $(get_env METRICS_ENABLED 'false')"
+    echo "  Tools:             $(get_env TOOLS_ENABLED 'false')"
+    echo ""
+    echo "SSL:"
+    echo "  Verify:            $(get_env SSL_VERIFY 'true')"
+    echo "  CA Bundle:         $(get_env SSL_CERT_PATH '—')"
+
+    if [ -f "$ETL_CONFIG" ]; then
+        echo ""
+        echo "ETL:"
+        echo "  Timeout:           $(get_yaml timeout '30')s"
+        echo "  Connect Timeout:   $(get_yaml connect_timeout '10')s"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 9. TEST
+# ═══════════════════════════════════════════════════════════════════════════════
+do_test() {
+    header "Running Tests"
+
+    if confirm "Запустить pytest?" "y"; then
+        python -m pytest tests/proxy/ tests/etl/ tests/integration/ -q --tb=short --ignore=tests/performance --ignore=tests/e2e --ignore=tests/resilience
+    fi
+
+    if confirm "Проверить Ruff lint?" "y"; then
+        python -m ruff check proxy/ etl/ tests/
+    fi
+
+    if confirm "Проверить ETL подключение?" "y"; then
+        do_etl_test_connection
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 main() {
     case "${1:-}" in
-        --install)   do_install; exit 0 ;;
-        --configure) do_configure; exit 0 ;;
-        --expand)    do_expand; exit 0 ;;
-        --status)    do_status; exit 0 ;;
-        --test)      do_test; exit 0 ;;
-        --docker)    do_docker; exit 0 ;;
+        install)    do_install; exit 0 ;;
+        configure)  do_configure; exit 0 ;;
+        expand)     do_expand; exit 0 ;;
+        etl)        do_etl_run; exit 0 ;;
+        build)      do_build_proxy; exit 0 ;;
+        openwebui)  do_openwebui_setup; exit 0 ;;
+        status)     do_status; exit 0 ;;
+        test)       do_test; exit 0 ;;
+        docker)     do_docker; exit 0 ;;
     esac
 
     while true; do
@@ -660,9 +976,12 @@ main() {
             1) do_install ;;
             2) do_configure ;;
             3) do_expand ;;
-            4) do_status ;;
-            5) do_test ;;
+            4) do_etl_setup ;;
+            5) do_build_proxy ;;
             6) do_docker ;;
+            7) do_openwebui_setup ;;
+            8) do_status ;;
+            9) do_test ;;
             0)
                 echo -e "\n${GREEN}До свидания!${NC}\n"
                 exit 0
