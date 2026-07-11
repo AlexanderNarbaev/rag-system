@@ -124,6 +124,27 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+- **Python (openai — стриминг)**
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="your-api-key",
+)
+
+stream = client.chat.completions.create(
+    model="your-model-name",
+    messages=[{"role": "user", "content": "Объясните ETL-пайплайн"}],
+    stream=True,
+)
+for chunk in stream:
+    content = chunk.choices[0].delta.content
+    if content:
+        print(content, end="", flush=True)
+```
+
 - **Node.js (пакет openai)**
 
 ```javascript

@@ -146,6 +146,14 @@ Authorization: Bearer <access_token>
 
 ### RAG-Specific Parameters
 
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `rag_version` | `string` | `null` | Request a specific document version |
+| `rag_force_refresh` | `bool` | `false` | Bypass response cache for fresh results |
+| `rag_top_k` | `int` | `null` | Override the number of retrieved chunks |
+| `rag_skip_generation` | `bool` | `false` | Return retrieved chunks without LLM generation |
+| `rag_return_chunks` | `bool` | `false` | Include raw chunks in the response |
+
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -159,6 +167,123 @@ curl -X POST http://localhost:8080/v1/chat/completions \
     "rag_top_k": 5
   }'
 ```
+
+**Return chunks without generation** (useful for debugging retrieval):
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [
+      {"role": "user", "content": "deployment guide"}
+    ],
+    "rag_skip_generation": true,
+    "rag_return_chunks": true
+  }'
+```
+
+### Tools / Function Calling
+
+Pass `tools` in the request to enable agentic tool calling. The proxy selects and invokes tools automatically via the orchestrator.
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [
+      {"role": "user", "content": "Search for deployment docs in Confluence"}
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "search_confluence",
+          "description": "Search Confluence pages by query",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Search query"
+              },
+              "max_results": {
+                "type": "integer",
+                "description": "Max results to return",
+                "default": 5
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      }
+    ]
+  }'
+```
+
+=== "Python"
+
+    ```python
+    import httpx
+
+    response = httpx.post(
+        "http://localhost:8080/v1/chat/completions",
+        json={
+            "model": "rag-proxy",
+            "messages": [
+                {"role": "user", "content": "Search for deployment docs"}
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search_confluence",
+                        "description": "Search Confluence pages",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                            },
+                            "required": ["query"],
+                        },
+                    },
+                }
+            ],
+        },
+    )
+    data = response.json()
+    print(data["choices"][0]["message"]["content"])
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const response = await fetch("http://localhost:8080/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "rag-proxy",
+        messages: [{ role: "user", content: "Search for deployment docs" }],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "search_confluence",
+              description: "Search Confluence pages",
+              parameters: {
+                type: "object",
+                properties: { query: { type: "string" } },
+                required: ["query"],
+              },
+            },
+          },
+        ],
+      }),
+    });
+    const data = await response.json();
+    console.log(data.choices[0].message.content);
+    ```
 
 ### Multi-Turn Conversation
 
@@ -358,19 +483,55 @@ curl -X POST http://localhost:8080/v1/auth/logout \
 
 ### Submit Positive Feedback
 
-```bash
-curl -X POST http://localhost:8080/v1/feedback \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <access_token>" \
-  -d '{
-    "feedback_id": "fb-abc123",
-    "rating": "positive",
-    "comment": "Answer was accurate and well-sourced",
-    "corrections": null
-  }'
-```
+=== "curl"
 
-### Submit Negative Feedback with Corrections
+    ```bash
+    curl -X POST http://localhost:8080/v1/feedback \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer <access_token>" \
+      -d '{
+        "feedback_id": "fb-abc123",
+        "rating": "positive",
+        "comment": "Answer was accurate and well-sourced"
+      }'
+    ```
+
+=== "Python"
+
+    ```python
+    import httpx
+
+    r = httpx.post(
+        "http://localhost:8080/v1/feedback",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "feedback_id": "fb-abc123",
+            "rating": "positive",
+            "comment": "Answer was accurate and well-sourced",
+        },
+    )
+    print(r.json())  # {"status": "ok", "message": "Feedback recorded"}
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const response = await fetch("http://localhost:8080/v1/feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        feedback_id: "fb-abc123",
+        rating: "positive",
+        comment: "Answer was accurate and well-sourced",
+      }),
+    });
+    console.log(await response.json());
+    ```
+
+### Submit Negative Feedback with Correction
 
 ```bash
 curl -X POST http://localhost:8080/v1/feedback \
@@ -380,9 +541,153 @@ curl -X POST http://localhost:8080/v1/feedback \
     "feedback_id": "fb-def456",
     "rating": "negative",
     "comment": "Answer missed the latest policy update",
-    "corrections": "The correct procedure is to submit via the new portal"
+    "correction": "The correct procedure is to submit via the new portal"
   }'
 ```
+
+!!! note
+    The `feedback_id` comes from the `rag_feedback_id` field in the chat completion response. The `correction` field (singular) provides the corrected answer text. The `comment` field is an optional expert note. Requires `expert` or `admin` role.
+
+---
+
+## Files
+
+The files API provides upload, download, list, and delete operations backed by MinIO. Requires `user` role or above.
+
+!!! info
+    The files API requires MinIO/S3 to be configured. Install `boto3` (`pip install boto3`) and set the `MINIO_*` environment variables in `proxy/.env`.
+
+### Upload File
+
+=== "curl"
+
+    ```bash
+    curl -X POST http://localhost:8080/v1/files \
+      -H "Authorization: Bearer <access_token>" \
+      -F "file=@/path/to/document.pdf"
+    ```
+
+=== "Python"
+
+    ```python
+    import httpx
+
+    with open("/path/to/document.pdf", "rb") as f:
+        r = httpx.post(
+            "http://localhost:8080/v1/files",
+            headers={"Authorization": f"Bearer {access_token}"},
+            files={"file": ("document.pdf", f, "application/pdf")},
+        )
+    print(r.json())
+    # {"id": "abc123", "filename": "document.pdf", "size": 102400, ...}
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    const response = await fetch("http://localhost:8080/v1/files", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    });
+    console.log(await response.json());
+    ```
+
+**Allowed file types:** PDF, plain text, Markdown, CSV, JSON, JSONL, XLSX, DOCX (max 100 MB).
+
+### List Files
+
+=== "curl"
+
+    ```bash
+    curl http://localhost:8080/v1/files \
+      -H "Authorization: Bearer <access_token>"
+
+    # With prefix filter
+    curl "http://localhost:8080/v1/files?prefix=documents/" \
+      -H "Authorization: Bearer <access_token>"
+    ```
+
+=== "Python"
+
+    ```python
+    import httpx
+
+    r = httpx.get(
+        "http://localhost:8080/v1/files",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    for f in r.json()["files"]:
+        print(f"{f['filename']} ({f['size']} bytes)")
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const response = await fetch("http://localhost:8080/v1/files", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const data = await response.json();
+    data.files.forEach((f) => console.log(`${f.filename} (${f.size} bytes)`));
+    ```
+
+### Download File
+
+=== "curl"
+
+    ```bash
+    curl -o output.pdf http://localhost:8080/v1/files/<file_id> \
+      -H "Authorization: Bearer <access_token>"
+    ```
+
+=== "Python"
+
+    ```python
+    import httpx
+
+    r = httpx.get(
+        f"http://localhost:8080/v1/files/{file_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    with open("output.pdf", "wb") as f:
+        f.write(r.content)
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const response = await fetch(`http://localhost:8080/v1/files/${fileId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const blob = await response.blob();
+    ```
+
+### Get File Metadata
+
+```bash
+curl http://localhost:8080/v1/files/<file_id>/metadata \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### Get Presigned URL
+
+```bash
+curl "http://localhost:8080/v1/files/<file_id>/presign?expiration=3600" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### Delete File
+
+```bash
+curl -X DELETE http://localhost:8080/v1/files/<file_id> \
+  -H "Authorization: Bearer <access_token>"
+```
+
+!!! warning
+    Deleting files requires `expert` or `admin` role.
 
 ---
 
@@ -706,14 +1011,14 @@ def chat_with_retry(messages, max_retries=3):
     feedback_id = answer.get("rag_feedback_id")
     print("Answer:", answer["choices"][0]["message"]["content"][:200])
 
-    # 4. Submit feedback
+    # 4. Submit feedback (requires expert role)
     if feedback_id:
         r = httpx.post(f"{BASE}/feedback", headers=headers, json={
             "feedback_id": feedback_id,
             "rating": "positive",
             "comment": "Helpful answer",
         })
-        print("Feedback submitted:", r.status_code)
+        print("Feedback submitted:", r.status_code, r.json())
     ```
 
 === "JavaScript"

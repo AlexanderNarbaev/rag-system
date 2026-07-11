@@ -138,9 +138,17 @@ make etl-gitlab
 ### Pipeline Options
 
 ```bash
+# Test connectivity to all configured sources and exit
+python scheduler/run_etl.py --config config/etl_config.yaml --test-connection
+
 # Skip specific stages
-python scheduler/run_etl.py --config config/etl_config.yaml --skip-graph
 python scheduler/run_etl.py --config config/etl_config.yaml --skip-extract
+python scheduler/run_etl.py --config config/etl_config.yaml --skip-chunk
+python scheduler/run_etl.py --config config/etl_config.yaml --skip-graph
+python scheduler/run_etl.py --config config/etl_config.yaml --skip-index
+
+# Override request timeout (seconds)
+python scheduler/run_etl.py --config config/etl_config.yaml --timeout 60
 
 # Force full reindex (ignore WAL)
 python scheduler/run_etl.py --config config/etl_config.yaml --force-reindex
@@ -148,6 +156,23 @@ python scheduler/run_etl.py --config config/etl_config.yaml --force-reindex
 # Reset WAL and start fresh
 python scheduler/run_etl.py --config config/etl_config.yaml --reset-wal
 ```
+
+**Full CLI reference:**
+
+| Flag | Description |
+|------|-------------|
+| `--config PATH` | Path to YAML config file (default: `etl_config.yaml`) |
+| `--timeout N` | Override request timeout in seconds for all sources |
+| `--test-connection` | Test connectivity to all configured sources and exit |
+| `--skip-extract` | Skip extraction phase (reuse existing raw data) |
+| `--skip-chunk` | Skip chunking phase (reuse existing chunks) |
+| `--skip-graph` | Skip graph building phase |
+| `--skip-index` | Skip indexing phase |
+| `--force-reindex` | Force full reindex (ignore WAL, recreate collection) |
+| `--reset-wal` | Reset all WAL checkpoints before run |
+| `--streaming` | Start streaming ETL (webhook + consumer) alongside batch |
+| `--webhook-only` | Start only webhook server |
+| `--consumer-only` | Start only stream consumer |
 
 ### Streaming Mode (Real-time)
 

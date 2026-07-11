@@ -1,37 +1,75 @@
-# RAG System — Корпоративный ассистент знаний · Corporate Knowledge Assistant
+# RAG System — Corporate Knowledge Assistant
 
 [![CI](https://github.com/AlexanderNarbaev/rag-system/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexanderNarbaev/rag-system/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-80%25+-brightgreen)](https://github.com/AlexanderNarbaev/rag-system/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Docker](https://img.shields.io/badge/docker-24.0+-2496ED.svg)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-526CFE.svg)](https://alexandernarbaev.github.io/rag-system/)
-
-**EN:** OpenAI-compatible RAG proxy with ETL pipeline for Confluence, Jira, GitLab, documents, books, and chat history — indexed into Qdrant + Neo4j, served via any LLM. Features HyDE, CRAG, hallucination detection, NLI verification, agentic tools, federated search, and model fine-tuning.
-
-**RU:** OpenAI-совместимый RAG-прокси с ETL-конвейером для Confluence, Jira, GitLab, документов, книг и истории чатов. HyDE, CRAG, детекция галлюцинаций, NLI-верификация, агентные инструменты, федеративный поиск, дообучение моделей.
+[![Coverage](https://img.shields.io/badge/coverage-80%25+-brightgreen)](https://github.com/AlexanderNarbaev/rag-system/actions)
+[![Docker](https://img.shields.io/badge/docker-24.0+-2496ED.svg)](https://www.docker.com/)
 
 ---
 
-## Quick Start · Быстрый старт
+## What is this?
+
+RAG System is a production-ready, OpenAI-compatible RAG (Retrieval-Augmented Generation) proxy that turns your corporate knowledge base into an intelligent assistant. It ingests data from Confluence, Jira, GitLab, documents, and chat history via an ETL pipeline, indexes it into Qdrant (vector search) and Neo4j (knowledge graph), and serves answers through a configurable LLM backend — with hybrid search, cross-encoder reranking, hallucination detection, and agentic tool support built in. Designed for air-gapped enterprise environments, it runs fully offline with no external API calls at runtime.
+
+---
+
+## Quick Start
 
 ```bash
+# Clone
 git clone https://github.com/AlexanderNarbaev/rag-system.git
 cd rag-system
-cp proxy/.env.example proxy/.env   # Configure LLM endpoint
-cd proxy && docker compose up -d   # Start all services
-curl http://localhost:8080/v1/health  # Verify
+
+# Configure
+cp proxy/.env.example proxy/.env
+# Edit proxy/.env — set LLM_ENDPOINT, LLM_MODEL_NAME, QDRANT_HOST
+
+# Start
+cd proxy && docker compose up -d
+
+# Test
+curl http://localhost:8080/v1/health
 ```
 
 **Prerequisites:** Docker 24.0+, Python 3.11+, 16 GB RAM, 20 GB disk.
 
-[Full Quick Start Guide →](docs/en/guides/quickstart.md) | [Руководство на русском →](docs/ru/guides/quickstart.md)
+[Full Quick Start Guide (EN) →](docs/en/guides/quickstart.md) | [Руководство на русском →](docs/ru/guides/quickstart.md)
 
 ---
 
-## Architecture · Архитектура
+## Features
 
-Six-layer architecture with multi-provider LLM support:
+### RAG Pipeline
+
+- ✅ OpenAI-compatible API — drop-in replacement for any OpenAI client
+- ✅ Hybrid search — dense (BGE-M3 1024-dim) + sparse (BM25) + ColBERT multi-vectors
+- ✅ Cross-encoder reranking — MiniLM-L-6-v2 with fine-tuning support
+- ✅ Knowledge graph (Neo4j) — entity extraction, multi-hop traversal
+- ✅ HyDE query expansion — hypothetical document generation for better retrieval
+- ✅ CRAG evaluator — retrieval quality assessment with corrective loops
+- ✅ Hallucination grounding — NLI-based fact verification against context
+
+### Agentic Tools
+
+- ✅ Tools SDK — `@tool` decorator with automatic JSON Schema from type hints
+- ✅ Declarative tools — YAML/JSON definitions for HTTP and shell commands
+- ✅ OpenAPI auto-discovery — convert REST APIs to tools automatically
+- ✅ MCP server integration — STDIO + Streamable HTTP for IDE integration
+
+### Production
+
+- ✅ User profiles and feedback — JWT auth, Keycloak OIDC, LDAP/AD, RBAC (4 roles)
+- ✅ Air-gapped deployment — all models pre-downloaded, fully offline operation
+- ✅ Federated RAG — multi-silo fan-out with weighted RRF merge
+- ✅ Model evolution — LoRA/QLoRA fine-tuning, canary deployment, MLflow tracking
+- ✅ Observability — Prometheus metrics, structured logging, Grafana dashboards
+- ✅ K8s ready — Helm chart with HPA, probes, secrets, network policies
+
+---
+
+## Architecture
 
 ```mermaid
 graph TB
@@ -76,50 +114,53 @@ graph TB
 
 ---
 
-## Key Features · Ключевые возможности
+## Documentation
 
-### RAG Pipeline
-- [x] **HyDE query expansion** — Generate hypothetical documents to improve retrieval
-- [x] **CRAG evaluator** — Assess retrieval quality and trigger corrective loops
-- [x] **Self-reflection** — Critique and regenerate answers for quality
-- [x] **Hallucination grounding** — NLI-based fact verification against retrieved context
-- [x] **Hybrid search** — Dense (BGE-M3 1024-dim) + Sparse (BM25 lexical) + ColBERT multi-vectors
-- [x] **Cross-encoder reranking** — MiniLM-L-6-v2 with fine-tuning support
-- [x] **Graph expansion** — Neo4j knowledge graph with entity extraction and multi-hop traversal
+### Getting Started
 
-### Agentic Tools
-- [x] **Python SDK** — `@tool` decorator with automatic JSON Schema from type hints
-- [x] **Declarative tools** — YAML/JSON definitions for HTTP and shell commands
-- [x] **OpenAPI auto-discovery** — Convert REST APIs to tools automatically
-- [x] **Parallel execution** — Dependency-aware tool orchestration
-- [x] **RBAC visibility** — Per-tool access control (public/user/internal/admin)
+| Guide | Description |
+|-------|-------------|
+| [Quick Start](docs/en/guides/quickstart.md) | 5-minute setup tutorial with troubleshooting |
+| [API Examples](docs/en/guides/api-examples.md) | curl, Python, JavaScript examples for all endpoints |
+| [API Reference](docs/en/api_reference.md) | Complete endpoint reference with request/response schemas |
+| [Configuration Reference](docs/en/guides/configuration-reference.md) | All environment variables and settings |
 
-### Federated RAG
-- [x] **Multi-silo fan-out** — Query multiple independent RAG instances simultaneously
-- [x] **Weighted RRF merge** — Cross-silo result fusion with configurable weights
-- [x] **Auto-routing** — SLM-based query classification to target silos
-- [x] **Circuit breakers** — Per-silo resilience with automatic recovery
-- [x] **Generation delegation** — Route to primary silo or direct LLM
+### Architecture & Design
 
-### Model Evolution
-- [x] **LoRA/QLoRA fine-tuning** — SLM, LLM, and Reranker training pipelines
-- [x] **MLflow + MinIO** — Experiment tracking and artifact storage
-- [x] **Hot-reload adapters** — Zero-downtime model swapping
-- [x] **Canary deployment** — Gradual rollout with automatic rollback
-- [x] **EvalGate CI/CD** — Automated quality gating before promotion
+| Guide | Description |
+|-------|-------------|
+| [Architecture Decision Records](docs/en/adr/) | 14 ADRs covering all major design decisions |
+| [C4 Architecture Diagrams](docs/en/diagrams/) | L1 (System Context), L2 (Containers), L3 (Components) |
+| [Knowledge Graph Strategy](docs/en/guides/knowledge-graph-strategy.md) | Neo4j entity extraction, graph enrichment |
+| [RAG Maturity Assessment](docs/en/guides/rag-maturity-assessment.md) | Capability scoring across 5 levels |
 
-### Production Features
-- [x] **JWT auth + Keycloak OIDC** — Corporate SSO with token pairs
-- [x] **RBAC** — 4 roles: admin, expert, user, read-only
-- [x] **LDAP/AD integration** — Enterprise directory authentication
-- [x] **Rate limiting** — Token bucket per IP
-- [x] **Prometheus metrics** — 30+ counters, histograms, gauges
-- [x] **Response compression** — gzip/brotli
-- [x] **K8s Helm chart** — HPA, probes, secrets, network policies
+### Features
+
+| Guide | Description |
+|-------|-------------|
+| [Agentic Tools — SDK](docs/en/guides/agentic-tools-sdk.md) | `@tool` decorator, `ToolBuilder`, `ToolContext` |
+| [Agentic Tools — Declarative](docs/en/guides/agentic-tools-declarative.md) | YAML/JSON tool definitions |
+| [Agentic Tools — OpenAPI](docs/en/guides/agentic-tools-openapi.md) | Auto-discover tools from OpenAPI specs |
+| [Federated RAG](docs/en/guides/federated-rag.md) | Multi-silo search with RRF merge |
+| [Model Evolution](docs/en/guides/model-evolution.md) | LoRA/QLoRA fine-tuning, EvalGate, canary deployment |
+| [Extensibility Guide](docs/en/guides/extensibility-data-sources.md) | Adding custom data sources |
+
+### Operations
+
+| Guide | Description |
+|-------|-------------|
+| [Deployment Guide](docs/en/guides/deployment-guide.md) | Docker + K8s production deployment |
+| [Operations Guide](docs/en/guides/operations-guide.md) | Monitoring, backup, scaling, maintenance |
+| [Access Control & RBAC](docs/en/guides/access-control-rbac.md) | JWT, Keycloak OIDC, LDAP/AD, roles |
+| [Performance & Quality](docs/en/guides/performance-quality.md) | HNSW tuning, quantization, caching, monitoring |
+| [Disaster Recovery](docs/en/guides/disaster-recovery-runbook.md) | Restore procedures for all failure scenarios |
+| [Troubleshooting](docs/en/guides/troubleshooting.md) | Common issues and resolutions |
+| [SLI/SLO Definitions](docs/en/sli_slo.md) | Service level indicators and error budgets |
+| [Production Checklist](docs/en/guides/best-practices-checklist.md) | 8-dimension readiness tracker |
 
 ---
 
-## API Endpoints · API эндпоинты
+## API Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -149,6 +190,7 @@ graph TB
 | `GET` | `/metrics` | No | Prometheus metrics |
 
 RAG-specific parameters on `/v1/chat/completions`:
+
 - `rag_version` — Request specific document version
 - `rag_force_refresh` — Bypass response cache
 - `rag_skip_generation` — Search-only mode (federation)
@@ -160,9 +202,9 @@ RAG-specific parameters on `/v1/chat/completions`:
 
 ---
 
-## Configuration · Конфигурация
+## Configuration
 
-All settings via environment variables or `proxy/.env`. See [Configuration Reference](docs/en/guides/deployment-guide.md).
+All settings via environment variables or `proxy/.env`. See [Configuration Reference](docs/en/guides/configuration-reference.md).
 
 ### Essential
 
@@ -185,13 +227,9 @@ METRICS_ENABLED=true        # Prometheus metrics
 MODEL_EVOLUTION_ENABLED=true # Fine-tuning pipelines
 ```
 
-### Multi-Provider LLM
-
-Supports any OpenAI-compatible endpoint, vLLM, llama.cpp, Anthropic Claude, or generic REST API. Configure per-request via `provider_type` parameter.
-
 ---
 
-## Deployment · Развёртывание
+## Deployment
 
 ### Docker Compose (development / single-server)
 
@@ -210,7 +248,7 @@ helm install rag-system ./k8s/helm/rag-system \
   --set auth.enabled=true
 ```
 
-See [K8s Deployment Guide](docs/en/guides/deployment-guide.md) for HA setup with HPA, probes, and secrets.
+See [Deployment Guide](docs/en/guides/deployment-guide.md) for HA setup with HPA, probes, and secrets.
 
 ### Air-Gapped Environment
 
@@ -222,48 +260,7 @@ MODEL_CACHE_DIR=/data/models docker compose up -d
 
 ---
 
-## Key Principles · Ключевые принципы
-
-1. **Air-gapped first** — All models pre-downloaded. No external API calls at runtime. Fully offline operation.
-2. **Graceful degradation** — Neo4j unavailable → skip graph expansion. Reranker OOM → raw hybrid scores. Redis down → in-memory cache. Proxy never crashes.
-3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents reindexed.
-4. **OpenAI compatibility** — Drop-in replacement for any OpenAI client. RAG extensions silently ignored by standard clients.
-5. **Dual-model routing** — SLM (2-3B params) for fast preprocessing. LLM for heavy generation. Keeps latency low.
-6. **Multi-provider** — Pluggable adapters for vLLM, llama.cpp, OpenAI-compatible, Anthropic, Ollama.
-7. **Optional complexity** — LangGraph, Neo4j, Redis all optional. Runs in simple RAG mode by default.
-8. **Token economy** — BPE-aware counting, 4 compression strategies, smart budget allocation.
-
----
-
-## Documentation · Документация
-
-| Document | Description |
-|----------|-------------|
-| [Quick Start Guide](docs/en/guides/quickstart.md) | 5-minute setup tutorial with troubleshooting |
-| [API Examples](docs/en/guides/api-examples.md) | curl, Python, JavaScript examples for all endpoints |
-| [Contributing Guide](CONTRIBUTING.md) | Development setup, code style, PR process |
-| [Architecture Decision Records](docs/en/adr/) | 10 ADRs covering all major design decisions |
-| [C4 Architecture Diagrams](docs/en/diagrams/) | L1 (System Context), L2 (Containers), L3 (Components) |
-| [API Reference](docs/en/api_reference.md) | Complete endpoint reference with request/response schemas |
-| [Deployment Guide](docs/en/guides/deployment-guide.md) | Docker + K8s production deployment |
-| [Operations Guide](docs/en/guides/operations-guide.md) | Monitoring, backup, scaling, maintenance |
-| [Access Control & RBAC](docs/en/guides/access-control-rbac.md) | JWT, Keycloak OIDC, LDAP/AD, roles |
-| [Performance & Quality](docs/en/guides/performance-quality.md) | HNSW tuning, quantization, caching, monitoring |
-| [Knowledge Graph Strategy](docs/en/guides/knowledge-graph-strategy.md) | Neo4j entity extraction, graph enrichment |
-| [Agentic Tools — SDK](docs/en/guides/agentic-tools-sdk.md) | `@tool` decorator, `ToolBuilder`, `ToolContext` |
-| [Agentic Tools — Declarative](docs/en/guides/agentic-tools-declarative.md) | YAML/JSON tool definitions |
-| [Agentic Tools — OpenAPI](docs/en/guides/agentic-tools-openapi.md) | Auto-discover tools from OpenAPI specs |
-| [Extensibility Guide](docs/en/guides/extensibility-data-sources.md) | Adding custom data sources |
-| [Disaster Recovery](docs/en/guides/disaster-recovery-runbook.md) | Restore procedures for all failure scenarios |
-| [SLI/SLO Definitions](docs/en/sli_slo.md) | Service level indicators and error budgets |
-| [RAG Maturity Assessment](docs/en/guides/rag-maturity-assessment.md) | Capability scoring across 5 levels |
-| [Production Checklist](docs/en/guides/best-practices-checklist.md) | 8-dimension readiness tracker |
-| [Roadmap](docs/en/guides/roadmap.md) | Development roadmap and phased approach |
-| [Troubleshooting](docs/en/guides/troubleshooting.md) | Common issues and resolutions |
-
----
-
-## Development · Разработка
+## Development
 
 ```bash
 make install        # Full setup
@@ -313,7 +310,24 @@ rag-system/
 
 ---
 
-## Tech Stack · Технологический стек
+## Contributing
+
+Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) before submitting a pull request.
+
+```bash
+# Quick start for contributors
+git clone https://github.com/AlexanderNarbaev/rag-system.git
+cd rag-system
+make install-dev                    # Install with dev dependencies
+cd proxy && docker compose up -d qdrant redis neo4j  # Start infrastructure
+make test                           # Run tests to verify setup
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, testing requirements, commit guidelines, and PR process.
+
+---
+
+## Tech Stack
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
@@ -334,7 +348,7 @@ rag-system/
 
 ---
 
-## Git Remotes · Удалённые репозитории
+## Git Remotes
 
 - GitHub: https://github.com/AlexanderNarbaev/rag-system
 - GitVerse: https://gitverse.ru/AlexandrNarbaev/rag-system

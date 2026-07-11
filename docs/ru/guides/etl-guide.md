@@ -138,9 +138,17 @@ make etl-gitlab
 ### Опции пайплайна
 
 ```bash
+# Проверка подключения ко всем настроенным источникам и выход
+python scheduler/run_etl.py --config config/etl_config.yaml --test-connection
+
 # Пропуск отдельных этапов
-python scheduler/run_etl.py --config config/etl_config.yaml --skip-graph
 python scheduler/run_etl.py --config config/etl_config.yaml --skip-extract
+python scheduler/run_etl.py --config config/etl_config.yaml --skip-chunk
+python scheduler/run_etl.py --config config/etl_config.yaml --skip-graph
+python scheduler/run_etl.py --config config/etl_config.yaml --skip-index
+
+# Переопределение таймаута запросов (секунды)
+python scheduler/run_etl.py --config config/etl_config.yaml --timeout 60
 
 # Принудительная переиндексация (игнорировать WAL)
 python scheduler/run_etl.py --config config/etl_config.yaml --force-reindex
@@ -148,6 +156,23 @@ python scheduler/run_etl.py --config config/etl_config.yaml --force-reindex
 # Сброс WAL и запуск с нуля
 python scheduler/run_etl.py --config config/etl_config.yaml --reset-wal
 ```
+
+**Полный справочник по CLI:**
+
+| Флаг | Описание |
+|------|----------|
+| `--config PATH` | Путь к YAML-конфигурации (по умолчанию: `etl_config.yaml`) |
+| `--timeout N` | Переопределение таймаута запросов в секундах для всех источников |
+| `--test-connection` | Проверка подключения ко всем источникам и выход |
+| `--skip-extract` | Пропуск этапа извлечения (повторное использование сырых данных) |
+| `--skip-chunk` | Пропуск этапа нарезки (повторное использование существующих чанков) |
+| `--skip-graph` | Пропуск этапа построения графа |
+| `--skip-index` | Пропуск этапа индексации |
+| `--force-reindex` | Принудительная переиндексация (игнорировать WAL, пересоздать коллекцию) |
+| `--reset-wal` | Сброс всех WAL-чекпоинтов перед запуском |
+| `--streaming` | Запуск потокового ETL (вебхук + потребитель) параллельно с пакетным |
+| `--webhook-only` | Запуск только вебхук-сервера |
+| `--consumer-only` | Запуск только потребителя потока |
 
 ### Потоковый режим (реальное время)
 

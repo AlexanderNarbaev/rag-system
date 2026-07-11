@@ -52,6 +52,7 @@ theme:
 nav:
   - Home: index.md
   - Quick Start: guides/quickstart.md
+  - Architecture: architecture.md
   - Design Guides:
       - guides/index.md
       - RAG Maturity Assessment: guides/rag-maturity-assessment.md
@@ -72,6 +73,12 @@ nav:
       - Configuration Reference: guides/configuration-reference.md
       - Deployment Guide: guides/deployment-guide.md
       - Operations Guide: guides/operations-guide.md
+      - Monitoring Guide: guides/monitoring-guide.md
+      - ETL Guide: guides/etl-guide.md
+      - Security Guide: guides/security-guide.md
+      - MCP Server Guide: guides/mcp-server-guide.md
+      - User Guide: guides/user-guide.md
+      - Runbook: guides/runbook.md
       - Troubleshooting: guides/troubleshooting.md
   - API Reference: api_reference.md
   - API Examples: guides/api-examples.md
@@ -87,6 +94,10 @@ nav:
       - "ADR-008: Java/Quarkus Hybrid Migration": adr/ADR-008-java-quarkus-hybrid-migration.md
       - "ADR-009: Agentic Tools Expansion": adr/ADR-009-agentic-tools-expansion.md
       - "ADR-010: Model Evolution Pipeline": adr/ADR-010-model-evolution.md
+      - "ADR-011: Incremental Architecture": adr/ADR-011-incremental-architecture.md
+      - "ADR-012: OpenWebUI Integration": adr/ADR-012-openwebui-integration.md
+      - "ADR-013: MCP Server Architecture": adr/ADR-013-mcp-server-architecture.md
+      - "ADR-014: MinIO Object Storage": adr/ADR-014-minio-object-storage.md
   - C4 Architecture Diagrams:
       - diagrams/index.md
   - Deployment:

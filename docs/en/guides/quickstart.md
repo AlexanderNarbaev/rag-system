@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-**Version:** v2.0.0 | **Last Updated:** 2026-07-10
+**Version:** v2.0.0 | **Last Updated:** 2026-07-12
 
 Get the RAG Knowledge Assistant up and running in 5 minutes. This guide covers local development setup with Docker Compose.
 
@@ -17,7 +17,7 @@ Get the RAG Knowledge Assistant up and running in 5 minutes. This guide covers l
 | **GPU** | Optional | CPU-only works for testing |
 
 !!! tip "GPU Acceleration"
-    An NVIDIA GPU with 12+ GB VRAM is recommended for LLM inference. Without a GPU, the system works in CPU mode with significantly slower response times. You can also point to a remote LLM endpoint.
+    An NVIDIA GPU with 12+ GB VRAM is recommended for LLM inference. Without a GPU, the system works in CPU mode with significantly slower response times. You can also point to a remote LLM endpoint (e.g., a GPU server on your network).
 
 ---
 
@@ -68,7 +68,7 @@ LLM_ENDPOINT=http://llama-cpp:8080/v1
 LLM_MODEL_NAME=your-model-name
 LLM_PROVIDER=llama_cpp
 
-# Option C: Any OpenAI-compatible endpoint
+# Option C: Any OpenAI-compatible endpoint (OpenAI, Anthropic, Ollama, etc.)
 LLM_ENDPOINT=https://your-api.example.com/v1
 LLM_MODEL_NAME=your-model-name
 LLM_PROVIDER=openai_compatible
@@ -152,7 +152,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-### Using Python
+### Using Python (OpenAI SDK)
 
 ```python
 from openai import OpenAI
@@ -215,13 +215,15 @@ Open in a browser:
 http://localhost:8080/v1/widget
 ```
 
+The widget provides a ready-made chat interface you can embed in any webpage. See the [API Examples](api-examples.md) for more integration options.
+
 ### K8s Health Probes
 
 ```bash
-# Liveness
+# Liveness — is the process alive?
 curl http://localhost:8080/v1/health/live
 
-# Readiness
+# Readiness — can it serve traffic?
 curl http://localhost:8080/v1/health/ready
 ```
 
@@ -327,6 +329,23 @@ lsof -i :8080
 ```bash
 # Fix data directory permissions
 sudo chown -R 1000:1000 proxy/data/
+```
+
+### 7. Docker Compose plugin not found
+
+**Symptom:** `docker: 'compose' is not a docker command`
+
+**Solution:**
+
+```bash
+# Check Docker Compose version
+docker compose version
+
+# If using older Docker, install the plugin:
+# https://docs.docker.com/compose/install/linux/
+
+# Or use the legacy hyphenated command:
+docker-compose up -d
 ```
 
 ---

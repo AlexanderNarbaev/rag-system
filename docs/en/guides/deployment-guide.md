@@ -76,7 +76,77 @@ ss -tlnp | grep -E '6333|6379|7687|8000|808[0-2]|8501|900[01]|5000'
 
 ---
 
-## 2. Quick Docker Compose Deployment (Development / Single-Server)
+## 2. Quick Deploy with setup.sh
+
+The fastest way to get the RAG system running. The interactive setup wizard handles dependency checks, configuration, Docker Compose startup, and health verification.
+
+### 2.1 Minimal Prerequisites
+
+| Requirement | Minimum |
+|-------------|---------|
+| **Docker** | 20.10+ |
+| **Docker Compose** | v2 (plugin) |
+| **RAM** | 4 GB |
+| **Disk** | 10 GB free |
+
+!!! note
+    These are absolute minimums for a CPU-only development setup with a small model. For production workloads with GPU inference, see the [full prerequisites](#1-prerequisites) (16+ GB RAM, 8+ cores, GPU recommended).
+
+### 2.2 Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/AlexanderNarbaev/rag-system.git
+cd rag-system
+
+# Run the interactive setup wizard
+./setup.sh
+```
+
+The wizard guides you through:
+
+1. **Dependency check** — verifies Docker, Docker Compose, Python, and available ports
+2. **Configuration** — creates `proxy/.env` from defaults, prompts for LLM endpoint and model name
+3. **Docker Compose startup** — builds and starts Qdrant, Redis, Neo4j, and the RAG proxy
+4. **Collection initialization** — creates Qdrant collections with the correct vector schema
+5. **Health verification** — runs `/v1/health`, `/v1/health/live`, and `/v1/health/ready` checks
+
+### 2.3 setup.sh Commands
+
+```bash
+./setup.sh              # Interactive menu (default)
+./setup.sh install      # Fresh install (non-interactive)
+./setup.sh configure    # Modify existing configuration
+./setup.sh expand       # Add components (Neo4j, Redis, SLM, etc.)
+./setup.sh status       # Show current status of all services
+./setup.sh test         # Run tests and health checks
+./setup.sh docker       # Manage containers (start/stop/restart)
+./setup.sh build        # Build proxy Docker image
+./setup.sh etl          # Run ETL pipeline
+```
+
+### 2.4 Verify After Setup
+
+```bash
+# Proxy health
+curl http://localhost:8080/v1/health
+
+# List models
+curl http://localhost:8080/v1/models
+
+# Test a completion
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "What is this system?"}],
+    "max_tokens": 50
+  }'
+```
+
+---
+
+## 3. Quick Docker Compose Deployment (Development / Single-Server)
 
 This deploys all services on one machine for development or small production workloads.
 
@@ -249,9 +319,9 @@ docker compose down -v    # Stops AND removes volumes (⚠ destroys data)
 
 ---
 
-## 3. Production Docker Deployment
+## 4. Production Docker Deployment
 
-### 3.1 Production Docker Compose (standalone)
+### 4.1 Production Docker Compose (standalone)
 
 Use `docker-compose.standalone.yml` for a self-contained production deployment with resource limits, health checks, and nginx reverse proxy:
 
@@ -436,7 +506,7 @@ services:
 
 ---
 
-## 4. Kubernetes Deployment with Helm
+## 5. Kubernetes Deployment with Helm
 
 ### 4.1 Helm Chart Structure
 
@@ -911,7 +981,7 @@ Qdrant startup probe uses the native `:6333/health` endpoint. vLLM startup probe
 
 ---
 
-## 5. Air-Gapped Deployment
+## 6. Air-Gapped Deployment
 
 For environments without internet access, pre-download all assets on a connected machine, then transfer.
 
@@ -1051,7 +1121,7 @@ proxy:
 
 ---
 
-## 6. LLM Backend Setup
+## 7. LLM Backend Setup
 
 The RAG proxy communicates with ANY OpenAI-compatible `/v1/chat/completions` endpoint. Configure via:
 
@@ -1186,7 +1256,7 @@ PREFIX_CACHING_ENABLED=true             # vLLM KV-cache reuse
 
 ---
 
-## 7. Federation Setup
+## 8. Federation Setup
 
 Federation allows querying multiple RAG silos (e.g., different departments or geographic regions) through a single endpoint.
 
@@ -1315,7 +1385,7 @@ spec:
 
 ---
 
-## 8. Model Evolution Setup
+## 9. Model Evolution Setup
 
 The Model Evolution pipeline supports fine-tuning SLM, LLM, and Reranker models, with MLflow tracking, MinIO artifact storage, automated quality gates, and canary rollouts.
 
@@ -1519,7 +1589,7 @@ curl -X POST http://localhost:8080/v1/admin/models/canary/split \
 
 ---
 
-## 9. Security Hardening
+## 10. Security Hardening
 
 ### 9.1 Non-Root Users
 
@@ -1708,7 +1778,7 @@ LLM_API_KEY=your-key
 
 ---
 
-## 10. Monitoring Setup
+## 11. Monitoring Setup
 
 ### 10.1 Prometheus Scrape Configuration
 
@@ -1899,7 +1969,7 @@ kubectl label configmap grafana-dashboard-rag-overview \
 
 ---
 
-## 11. Backup Strategy
+## 12. Backup Strategy
 
 ### 11.1 Backup Schedule
 
@@ -2100,7 +2170,7 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --full
 
 ---
 
-## 12. Troubleshooting Common Deployment Issues
+## 13. Troubleshooting Common Deployment Issues
 
 ### 12.1 Port Conflicts
 

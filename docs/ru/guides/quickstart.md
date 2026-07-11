@@ -1,6 +1,6 @@
 # Быстрый старт
 
-**Версия:** v2.0.0 | **Обновлено:** 2026-07-10
+**Версия:** v2.0.0 | **Обновлено:** 2026-07-12
 
 Запустите корпоративный ассистент знаний RAG за 5 минут. Руководство охватывает локальную настройку для разработки с использованием Docker Compose.
 
@@ -17,7 +17,7 @@
 | **GPU** | Опционально | Режим только CPU подходит для тестирования |
 
 !!! tip "Ускорение на GPU"
-    NVIDIA GPU с 12+ ГБ VRAM рекомендуется для генерации LLM. Без GPU система работает в режиме CPU с значительно меньшей скоростью ответов. Также можно указать удалённую LLM-конечную точку.
+    NVIDIA GPU с 12+ ГБ VRAM рекомендуется для генерации LLM. Без GPU система работает в режиме CPU с значительно меньшей скоростью ответов. Также можно указать удалённую LLM-конечную точку (например, GPU-сервер в вашей сети).
 
 ---
 
@@ -68,7 +68,7 @@ LLM_ENDPOINT=http://llama-cpp:8080/v1
 LLM_MODEL_NAME=your-model-name
 LLM_PROVIDER=llama_cpp
 
-# Вариант C: Любая OpenAI-совместимая конечная точка
+# Вариант C: Любая OpenAI-совместимая конечная точка (OpenAI, Anthropic, Ollama и т.д.)
 LLM_ENDPOINT=https://your-api.example.com/v1
 LLM_MODEL_NAME=your-model-name
 LLM_PROVIDER=openai_compatible
@@ -152,7 +152,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-### Использование Python
+### Использование Python (OpenAI SDK)
 
 ```python
 from openai import OpenAI
@@ -215,13 +215,15 @@ curl http://localhost:8080/metrics
 http://localhost:8080/v1/widget
 ```
 
+Виджет предоставляет готовый интерфейс чата, который можно встроить на любую веб-страницу. Больше вариантов интеграции см. в [Примерах API](api-examples.md).
+
 ### Зонды здоровья для K8s
 
 ```bash
-# Liveness
+# Liveness — процесс жив?
 curl http://localhost:8080/v1/health/live
 
-# Readiness
+# Readiness — может обрабатывать трафик?
 curl http://localhost:8080/v1/health/ready
 ```
 
@@ -327,6 +329,23 @@ lsof -i :8080
 ```bash
 # Исправить права на директорию данных
 sudo chown -R 1000:1000 proxy/data/
+```
+
+### 7. Плагин Docker Compose не найден
+
+**Симптом:** `docker: 'compose' is not a docker command`
+
+**Решение:**
+
+```bash
+# Проверить версию Docker Compose
+docker compose version
+
+# Если используется старый Docker, установите плагин:
+# https://docs.docker.com/compose/install/linux/
+
+# Или используйте legacy-команду с дефисом:
+docker-compose up -d
 ```
 
 ---
