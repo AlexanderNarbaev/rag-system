@@ -11,9 +11,14 @@ Uses boto3 (S3-compatible API) for MinIO access.
 import logging
 from typing import BinaryIO
 
-import boto3
-from botocore.config import Config as BotoConfig
-from botocore.exceptions import ClientError, EndpointConnectionError
+try:
+    import boto3  # type: ignore[import-untyped]
+    from botocore.config import Config as BotoConfig  # type: ignore[import-untyped]
+    from botocore.exceptions import ClientError, EndpointConnectionError  # type: ignore[import-untyped]
+
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
 
 from proxy.app.shared.config import (
     MINIO_ACCESS_KEY,
@@ -43,12 +48,14 @@ class MinioClient:
         bucket: str | None = None,
         secure: bool | None = None,
     ) -> None:
+        if not HAS_BOTO3:
+            raise ImportError("boto3 is required for MinIO. Install with: pip install boto3")
         self._endpoint = endpoint or MINIO_ENDPOINT
         self._access_key = access_key or MINIO_ACCESS_KEY
         self._secret_key = secret_key or MINIO_SECRET_KEY
         self._bucket = bucket or MINIO_BUCKET
         self._secure = secure if secure is not None else MINIO_SECURE
-        self._client: boto3.client | None = None
+        self._client = None
 
     def _get_client(self) -> boto3.client:
         """Lazy-initialize and return the boto3 S3 client."""

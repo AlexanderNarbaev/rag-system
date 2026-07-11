@@ -18,7 +18,13 @@ from proxy.app.auth import UserContext
 from proxy.app.auth.rbac import Role, require_role
 from proxy.app.shared.config import MINIO_BUCKET
 from proxy.app.shared.exceptions import StorageError
-from proxy.app.shared.minio_client import MinioClient
+
+try:
+    from proxy.app.shared.minio_client import MinioClient
+
+    HAS_MINIO = True
+except ImportError:
+    HAS_MINIO = False
 
 logger = logging.getLogger("rag-proxy")
 
@@ -48,7 +54,9 @@ ALLOWED_CONTENT_TYPES = {
 
 def _get_minio_client() -> MinioClient:
     """Dependency: return a MinIO client instance."""
-    return MinioClient()
+    if not HAS_MINIO:
+        raise HTTPException(status_code=503, detail="MinIO not available. Install boto3: pip install boto3")
+    return MinioClient()  # type: ignore[misc]
 
 
 # ── Response Models ────────────────────────────────────────────────────────
