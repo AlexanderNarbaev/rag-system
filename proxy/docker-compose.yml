@@ -1,7 +1,7 @@
 # docker-compose.yml
 # Docker Compose for RAG proxy with infrastructure dependencies
-# Start:   docker-compose up -d
-# Stop:    docker-compose down
+# Start:   docker compose up -d
+# Stop:    docker compose down
 
 services:
   # ── Qdrant (vector database) ────────────────────────────────────────────────
@@ -11,12 +11,9 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     ports:
-      - "6333:6333"   # HTTP API
-      - "6334:6334"   # gRPC (optional)
-    environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      - "6333:6333"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:6333/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -31,15 +28,11 @@ services:
     container_name: rag-neo4j
     volumes:
       - neo4j_data:/data
-      - neo4j_logs:/logs
     ports:
-      - "7474:7474"   # HTTP Browser
-      - "7687:7687"   # Bolt
+      - "7474:7474"
+      - "7687:7687"
     environment:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
-      - NEO4J_server_memory_pagecache_size=1G
-      - NEO4J_server_memory_heap_initial__size=1G
-      - NEO4J_server_memory_heap_max__size=2G
     healthcheck:
       test: ["CMD", "neo4j", "status"]
       interval: 15s
@@ -75,11 +68,11 @@ services:
     container_name: rag-minio
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web Console
+      - "9000:9000"
+      - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -91,70 +84,54 @@ services:
     networks:
       - rag-network
 
-  # ── LLM backend (OpenAI-compatible) ─────────────────────────────────────────
-  # Set MODEL_PATH and MODEL_NAME in .env or override below
-  vllm:
-    image: vllm/vllm-openai:v0.6.6
-    container_name: rag-vllm
-    volumes:
-      - ${MODEL_PATH:-/path/to/models}:/models:ro
-    ports:
-      - "8000:8000"
-    environment:
-      - HUGGINGFACE_HUB_CACHE=/models/cache
-      - MODEL_FILE=${MODEL_FILE:-model.gguf}
-      - LLM_MAX_MODEL_LEN=${LLM_MAX_MODEL_LEN:-65536}
-      - LLM_TP_SIZE=${LLM_TP_SIZE:-1}
-    command: ["--model", "/models/${MODEL_FILE:-model.gguf}", "--port", "8000", "--max-model-len", "${LLM_MAX_MODEL_LEN:-65536}", "--tensor-parallel-size", "${LLM_TP_SIZE:-1}"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-    networks:
-      - rag-network
+  # ── LLM backend (optional — uncomment if running local vLLM) ───────────────
+  # For remote LLM (GPUStack, OpenAI-compatible), set LLM_ENDPOINT in .env
+  # vllm:
+  #   image: vllm/vllm-openai:v0.6.6
+  #   container_name: rag-vllm
+  #   volumes:
+  #     - ${MODEL_PATH:-/path/to/models}:/models:ro
+  #   ports:
+  #     - "8000:8000"
+  #   command: ["--model", "/models/${MODEL_FILE:-model.gguf}", "--port", "8000"]
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 60s
+  #   restart: unless-stopped
+  #   networks:
+  #     - rag-network
 
   # ── RAG proxy (FastAPI) ─────────────────────────────────────────────────────
   rag-proxy:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile.proxy
     container_name: rag-proxy
     ports:
       - "8080:8080"
     volumes:
-      - ${MODEL_CACHE_PATH:-/path/to/model_cache}:/app/cache:ro
       - ./logs:/app/logs
       - ./.env:/app/.env:ro
+    env_file:
+      - .env
     environment:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - NEO4J_URI=bolt://neo4j:7687
       - REDIS_URL=redis://redis:6379
-      - LLM_ENDPOINT=http://vllm:8000/v1
-      - USE_REDIS=true
-      - USE_LANGGRAPH=true
-      - GRAPH_ENABLED=true
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
     depends_on:
       qdrant:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health/live"]
@@ -166,78 +143,11 @@ services:
     networks:
       - rag-network
 
-  # ── Monitoring stack (disabled by default) ───────────────────────────────────
-  # Uncomment the services below to enable Prometheus + Grafana monitoring.
-  # Alternatively, use the standalone monitoring compose:
-  #   docker compose -f ../config/monitoring/docker-compose.monitoring.yml up -d
-  #
-  # prometheus:
-  #   image: prom/prometheus:v2.53.0
-  #   container_name: rag-prometheus
-  #   volumes:
-  #     - ../config/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-  #     - ../config/monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
-  #     - prometheus_data:/prometheus
-  #   ports:
-  #     - "9090:9090"
-  #   command:
-  #     - "--config.file=/etc/prometheus/prometheus.yml"
-  #     - "--storage.tsdb.retention.time=30d"
-  #     - "--web.enable-lifecycle"
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
-  #     interval: 15s
-  #     timeout: 5s
-  #     retries: 3
-  #   restart: unless-stopped
-  #   networks:
-  #     - rag-network
-  #
-  # grafana:
-  #   image: grafana/grafana:11.1.0
-  #   container_name: rag-grafana
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #     - ../config/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-  #     - ../config/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-  #     - GF_USERS_ALLOW_SIGN_UP=false
-  #     - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/rag-overview.json
-  #   depends_on:
-  #     prometheus:
-  #       condition: service_healthy
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
-  #     interval: 15s
-  #     timeout: 5s
-  #     retries: 3
-  #   restart: unless-stopped
-  #   networks:
-  #     - rag-network
-  #
-  # redis-exporter:
-  #   image: oliver006/redis_exporter:v1.58.0
-  #   container_name: rag-redis-exporter
-  #   ports:
-  #     - "9121:9121"
-  #   environment:
-  #     - REDIS_ADDR=redis://redis:6379
-  #   restart: unless-stopped
-  #   networks:
-  #     - rag-network
-
 volumes:
   qdrant_data:
   neo4j_data:
-  neo4j_logs:
   redis_data:
   minio_data:
-  # prometheus_data:   # Uncomment with monitoring stack
-  # grafana_data:      # Uncomment with monitoring stack
 
 networks:
   rag-network:
