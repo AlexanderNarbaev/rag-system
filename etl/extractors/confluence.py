@@ -15,6 +15,7 @@ import hashlib
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -52,6 +53,7 @@ class ConfluenceExtractor:
         }
         """
         self.url = config["url"].rstrip("/")
+        self.config = config  # Store full config for retry logic
         self.space_keys = config.get("space_keys")
         self.output_dir = Path(config.get("output_dir", "./raw_data/confluence"))
         self.wal_path = Path(config.get("wal_file", "./wal/confluence_wal.json"))
@@ -124,26 +126,38 @@ class ConfluenceExtractor:
             json.dump(self.wal_data, f, indent=2)
 
     def _request(self, endpoint: str, params: dict = None) -> dict:
-        """Выполняет GET запрос к Confluence API."""
+        """Выполняет GET запрос к Confluence API с retry логикой."""
         url = urljoin(self.url, endpoint)
-        logger.debug(f"Requesting: {url}")
-        try:
-            resp = self.session.get(url, params=params, timeout=self.timeout)
-            logger.debug(f"Response: {resp.status_code}")
-            resp.raise_for_status()
-            return resp.json()
-        except requests.exceptions.SSLError as e:
-            logger.error(f"SSL Error: {e}")
-            logger.error("Попробуйте установить verify_ssl: false в конфиге")
-            raise
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection Error: {e}")
-            logger.error(f"Не удалось подключиться к {self.url}")
-            raise
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout: {e}")
-            logger.error("Сервер не отвечает. Проверьте URL и доступность")
-            raise
+        max_retries = self.config.get("max_retries", 5)
+        retry_delay = self.config.get("retry_delay", 5)
+
+        for attempt in range(max_retries + 1):
+            try:
+                logger.debug(f"Requesting: {url} (attempt {attempt + 1})")
+                resp = self.session.get(url, params=params, timeout=self.timeout)
+                logger.debug(f"Response: {resp.status_code}")
+                resp.raise_for_status()
+                return resp.json()
+            except requests.exceptions.SSLError as e:
+                logger.error(f"SSL Error: {e}")
+                logger.error("Попробуйте установить verify_ssl: false в конфиге")
+                raise
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection Error: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Не удалось подключиться к {self.url} после {max_retries} попыток")
+                    raise
+            except requests.exceptions.Timeout as e:
+                logger.warning(f"Timeout: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Сервер не отвечает после {max_retries} попыток. Увеличьте timeout в конфиге")
+                    raise
 
     def _get_all_pages(self, space_key: str = None, start: int = 0, limit: int = 50) -> list[dict]:
         """

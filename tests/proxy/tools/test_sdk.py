@@ -227,6 +227,7 @@ class TestToolDecorator:
 
     def test_tags_category_visibility_passed_through(self):
         from tools.definition import ToolVisibility
+
         from proxy.app.tools.sdk import _sdk_registered_tools, tool
 
         @tool(category="search", tags=["fast", "cached"], visibility=ToolVisibility.USER, version="2.0.0")
@@ -284,6 +285,7 @@ class TestToolDecorator:
 
     def test_timeout_retry_policy_passed_through(self):
         from tools.definition import RetryPolicy
+
         from proxy.app.tools.sdk import _sdk_registered_tools, tool
 
         rp = RetryPolicy(max_retries=5)
@@ -378,6 +380,7 @@ class TestToolBuilder:
 
     def test_with_visibility(self):
         from tools.definition import ToolVisibility
+
         from proxy.app.tools.sdk import ToolBuilder
 
         tool_def = ToolBuilder("sample").with_visibility(ToolVisibility.ADMIN).build()
@@ -385,6 +388,7 @@ class TestToolBuilder:
 
     def test_builder_fluent_chaining(self):
         from tools.definition import ToolVisibility
+
         from proxy.app.tools.sdk import ToolBuilder
 
         def h(query: str) -> str:

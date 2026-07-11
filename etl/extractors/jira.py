@@ -14,6 +14,7 @@
 import json
 import logging
 import os
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -52,6 +53,7 @@ class JiraExtractor:
         }
         """
         self.url = config["url"].rstrip("/")
+        self.config = config  # Store full config for retry logic
         self.base_jql = config.get("jql", "ORDER BY updated DESC")
         self.output_dir = Path(config.get("output_dir", "./raw_data/jira"))
         self.wal_path = Path(config.get("wal_file", "./wal/jira_wal.json"))
@@ -101,21 +103,35 @@ class JiraExtractor:
             json.dump(self.wal_data, f, indent=2)
 
     def _request(self, endpoint: str, params: dict = None) -> dict:
+        """Выполняет GET запрос к Jira API с retry логикой."""
         url = urljoin(self.url, endpoint)
-        logger.debug(f"Requesting: {url}")
-        try:
-            resp = self.session.get(url, params=params, timeout=self.timeout)
-            logger.debug(f"Response: {resp.status_code}")
-            resp.raise_for_status()
-            return resp.json()
-        except requests.exceptions.SSLError as e:
-            logger.error(f"SSL Error: {e}")
-            raise
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection Error: {e}")
-            raise
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout: {e}")
+        max_retries = self.config.get("max_retries", 5)
+        retry_delay = self.config.get("retry_delay", 5)
+
+        for attempt in range(max_retries + 1):
+            try:
+                logger.debug(f"Requesting: {url} (attempt {attempt + 1})")
+                resp = self.session.get(url, params=params, timeout=self.timeout)
+                logger.debug(f"Response: {resp.status_code}")
+                resp.raise_for_status()
+                return resp.json()
+            except requests.exceptions.SSLError as e:
+                logger.error(f"SSL Error: {e}")
+                raise
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection Error: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                else:
+                    raise
+            except requests.exceptions.Timeout as e:
+                logger.warning(f"Timeout: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                else:
+                    raise
             raise
 
     def _paginated_issues(self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[dict]:
