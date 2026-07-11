@@ -84,38 +84,9 @@ services:
     networks:
       - rag-network
 
-  # ── LLM backend (optional — uncomment if running local vLLM) ───────────────
-  # For remote LLM (GPUStack, OpenAI-compatible), set LLM_ENDPOINT in .env
-  # vllm:
-  #   image: vllm/vllm-openai:v0.6.6
-  #   container_name: rag-vllm
-  #   volumes:
-  #     - ${MODEL_PATH:-/path/to/models}:/models:ro
-  #   ports:
-  #     - "8000:8000"
-  #   command: ["--model", "/models/${MODEL_FILE:-model.gguf}", "--port", "8000"]
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: [gpu]
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-  #     interval: 15s
-  #     timeout: 5s
-  #     retries: 3
-  #     start_period: 60s
-  #   restart: unless-stopped
-  #   networks:
-  #     - rag-network
-
   # ── RAG proxy (FastAPI) ─────────────────────────────────────────────────────
   rag-proxy:
-    build:
-      context: ..
-      dockerfile: Dockerfile.proxy
+    image: rag-proxy:latest
     container_name: rag-proxy
     ports:
       - "8080:8080"
