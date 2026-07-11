@@ -32,16 +32,18 @@ class GitLabExtractor:
         config: {
             "url": "https://gitlab.internal.company.com",
             "token": "personal_access_token",
-            "project_ids": None,  # None = все проекты, или список [1,2,3]
+            "verify_ssl": true,                  # false для самоподписанных сертификатов
+            "ca_bundle": "",                     # путь к корпоративному CA bundle
+            "project_ids": None,
             "output_dir": "./raw_data/gitlab",
             "wal_file": "./wal/gitlab_wal.json",
             "incremental": True,
             "fetch_commits": True,
-            "fetch_files": True,          # исходный код (ограниченный набор путей)
+            "fetch_files": True,
             "fetch_merge_requests": True,
-            "max_commits_per_project": 0,  # 0 = все
-            "since_date": None,            # ISO datetime, только коммиты/MR после этой даты
-            "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml"]  # glob-like
+            "max_commits_per_project": 0,
+            "since_date": None,
+            "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml"]
         }
         """
         self.url = config["url"].rstrip("/")
@@ -54,10 +56,21 @@ class GitLabExtractor:
         self.fetch_files = config.get("fetch_files", True)
         self.fetch_merge_requests = config.get("fetch_merge_requests", True)
         self.max_commits_per_project = config.get("max_commits_per_project", 0)
-        self.since_date = config.get("since_date")  # строка ISO
+        self.since_date = config.get("since_date")
         self.file_paths_filter = config.get("file_paths_filter", [])
 
         self.session = requests.Session()
+
+        # SSL configuration
+        verify_ssl = config.get("verify_ssl", True)
+        ca_bundle = config.get("ca_bundle", "")
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.session.verify = ca_bundle
+        else:
+            self.session.verify = verify_ssl
+
+        # GitLab token auth
+        self.session.headers["PRIVATE-TOKEN"] = self.token
         self.session.headers.update({"PRIVATE-TOKEN": self.token, "Accept": "application/json"})
 
         self.output_dir.mkdir(parents=True, exist_ok=True)

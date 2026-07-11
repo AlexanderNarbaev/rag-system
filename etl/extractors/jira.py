@@ -32,21 +32,22 @@ class JiraExtractor:
         """
         config: {
             "url": "https://jira.internal.company.com",
-            "username": "bot",
-            "token": "api_token_or_password",
-            "jql": "project in (ABC, DEF) ORDER BY updated DESC",  # базовый JQL
+            "username": "bot",                   # опционально для Basic Auth
+            "token": "api_token_or_password",    # Bearer токен или пароль
+            "verify_ssl": true,                  # false для самоподписанных сертификатов
+            "ca_bundle": "",                     # путь к корпоративному CA bundle
+            "jql": "project in (ABC, DEF) ORDER BY updated DESC",
             "output_dir": "./raw_data/jira",
             "wal_file": "./wal/jira_wal.json",
             "incremental": True,
             "download_attachments": True,
-            "max_issues_per_run": 0,   # 0 = без ограничений
-            "since_date": None,        # ISO datetime, переопределяет last_run из WAL
-            "fields": "*all",          # или список полей
-            "expand": "changelog,renderedBody"  # для комментариев и изменений
+            "max_issues_per_run": 0,
+            "since_date": None,
+            "fields": "*all",
+            "expand": "changelog,renderedBody"
         }
         """
         self.url = config["url"].rstrip("/")
-        self.auth = HTTPBasicAuth(config["username"], config["token"])
         self.base_jql = config.get("jql", "ORDER BY updated DESC")
         self.output_dir = Path(config.get("output_dir", "./raw_data/jira"))
         self.wal_path = Path(config.get("wal_file", "./wal/jira_wal.json"))
@@ -58,7 +59,22 @@ class JiraExtractor:
         self.expand = config.get("expand", "changelog,renderedBody")
 
         self.session = requests.Session()
-        self.session.auth = self.auth
+
+        # SSL configuration
+        verify_ssl = config.get("verify_ssl", True)
+        ca_bundle = config.get("ca_bundle", "")
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.session.verify = ca_bundle
+        else:
+            self.session.verify = verify_ssl
+
+        # Auth: Bearer token (если нет username) или Basic Auth
+        token = config.get("token", "")
+        username = config.get("username", "")
+        if username:
+            self.session.auth = HTTPBasicAuth(username, token)
+        else:
+            self.session.headers["Authorization"] = f"Bearer {token}"
         self.session.headers.update({"Accept": "application/json"})
 
         self.output_dir.mkdir(parents=True, exist_ok=True)

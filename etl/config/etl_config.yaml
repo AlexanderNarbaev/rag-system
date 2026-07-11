@@ -11,28 +11,32 @@ wal:
 # Confluence (Self-Hosted)
 confluence:
   url: "https://confluence.internal.company.com"
-  username: "etl_bot"
-  token: "your_personal_access_token"    # или пароль
-  space_keys:                            # список ключей пространств (None = все)
+  username: ""                             # оставьте пустым для Bearer token auth
+  token: "your_personal_access_token"      # Bearer токен (или пароль с username)
+  verify_ssl: false                        # false для самоподписанных сертификатов
+  ca_bundle: ""                            # путь к корпоративному CA bundle (e.g. /etc/ssl/certs/company.pem)
+  space_keys:                              # список ключей пространств (None = все)
     - "DEV"
     - "OPS"
     - "QA"
   output_dir: "./raw_data/confluence"
   incremental: true
   download_attachments: true
-  max_versions: 0                        # 0 = все версии
-  api_version: "2"                       # "2" или "1"
+  max_versions: 0                          # 0 = все версии
+  api_version: "2"                         # "2" или "1"
 
 # Jira (Self-Hosted)
 jira:
   url: "https://jira.internal.company.com"
-  username: "etl_bot"
-  token: "your_api_token"                # или пароль
+  username: ""                             # оставьте пустым для Bearer token auth
+  token: "your_api_token"                  # Bearer токен (или пароль с username)
+  verify_ssl: false                        # false для самоподписанных сертификатов
+  ca_bundle: ""                            # путь к корпоративному CA bundle
   jql: "project in (DEV, OPS) ORDER BY updated DESC"
   output_dir: "./raw_data/jira"
   incremental: true
   download_attachments: true
-  max_issues_per_run: 0                  # 0 = без ограничений
+  max_issues_per_run: 0                    # 0 = без ограничений
   fields: "*all"
   expand: "changelog,renderedBody"
 
@@ -40,15 +44,17 @@ jira:
 gitlab:
   url: "https://gitlab.internal.company.com"
   token: "your_personal_access_token"
-  project_ids: null                      # null = все проекты, либо список [1,2,3]
+  verify_ssl: false                        # false для самоподписанных сертификатов
+  ca_bundle: ""                            # путь к корпоративному CA bundle
+  project_ids: null                        # null = все проекты, либо список [1,2,3]
   output_dir: "./raw_data/gitlab"
   incremental: true
   fetch_commits: true
   fetch_files: true
   fetch_merge_requests: true
-  max_commits_per_project: 1000          # ограничение для больших репозиториев
-  since_date: null                       # ISO дата, например "2025-01-01T00:00:00Z"
-  file_paths_filter:                     # фильтр файлов для индексации кода
+  max_commits_per_project: 1000            # ограничение для больших репозиториев
+  since_date: null                         # ISO дата, например "2025-01-01T00:00:00Z"
+  file_paths_filter:                       # фильтр файлов для индексации кода
     - "*.py"
     - "*.md"
     - "Dockerfile"

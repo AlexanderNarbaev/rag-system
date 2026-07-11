@@ -34,29 +34,46 @@ class ConfluenceExtractor:
         """
         config: {
             "url": "https://confluence.internal/",
-            "username": "bot",
-            "token": "personal_access_token",
-            "space_keys": ["DEV", "OPS"],  # None для всех пространств
+            "username": "bot",                  # опционально для Basic Auth
+            "token": "personal_access_token",   # Bearer токен или пароль
+            "verify_ssl": true,                 # false для самоподписанных сертификатов
+            "ca_bundle": "",                    # путь к корпоративному CA bundle
+            "space_keys": ["DEV", "OPS"],       # None для всех пространств
             "output_dir": "./raw_data/confluence",
             "wal_file": "./wal/confluence_wal.json",
             "incremental": True,
             "download_attachments": True,
-            "max_versions": 0,  # 0 = все версии
-            "api_version": "2"   # '2' для нового REST API, '1' для старого
+            "max_versions": 0,                  # 0 = все версии
+            "api_version": "2"                  # '2' для нового REST API, '1' для старого
         }
         """
         self.url = config["url"].rstrip("/")
-        self.auth = HTTPBasicAuth(config["username"], config["token"])
         self.space_keys = config.get("space_keys")
         self.output_dir = Path(config.get("output_dir", "./raw_data/confluence"))
         self.wal_path = Path(config.get("wal_file", "./wal/confluence_wal.json"))
         self.incremental = config.get("incremental", True)
         self.download_attachments = config.get("download_attachments", True)
         self.max_versions = config.get("max_versions", 0)
-        self.api_version = config.get("api_version", "2")  # '2' или '1'
+        self.api_version = config.get("api_version", "2")
 
         self.session = requests.Session()
-        self.session.auth = self.auth
+
+        # SSL configuration
+        verify_ssl = config.get("verify_ssl", True)
+        ca_bundle = config.get("ca_bundle", "")
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.session.verify = ca_bundle
+        else:
+            self.session.verify = verify_ssl
+
+        # Auth: Bearer token (если нет username) или Basic Auth
+        token = config.get("token", "")
+        username = config.get("username", "")
+        if username:
+            self.session.auth = HTTPBasicAuth(username, token)
+        else:
+            self.session.headers["Authorization"] = f"Bearer {token}"
+
         self.session.headers.update({"Accept": "application/json"})
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
