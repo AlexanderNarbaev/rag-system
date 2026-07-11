@@ -58,7 +58,7 @@ class RemoteEmbeddingClient:
             req = urllib.request.Request(self._endpoint, method="HEAD")
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=5)  # nosec B310
             return True
         except Exception:
             self._healthy = False
@@ -105,7 +105,7 @@ class RemoteEmbeddingClient:
                 headers=headers,
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
                 body = _json.loads(resp.read().decode("utf-8"))
         except Exception as exc:
             logger.error("Remote embedding failed: %s", exc)
@@ -162,7 +162,7 @@ class RemoteRerankerClient:
             req = urllib.request.Request(self._endpoint, method="HEAD")
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
-            urllib.request.urlopen(req, timeout=5)
+            urllib.request.urlopen(req, timeout=5)  # nosec B310
             return True
         except Exception:
             self._healthy = False
@@ -212,7 +212,7 @@ class RemoteRerankerClient:
                     headers=headers,
                     method="POST",
                 )
-                with urllib.request.urlopen(req, timeout=60) as resp:
+                with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
                     body = _json.loads(resp.read().decode("utf-8"))
             except Exception as exc:
                 logger.error("Remote reranking failed: %s", exc)

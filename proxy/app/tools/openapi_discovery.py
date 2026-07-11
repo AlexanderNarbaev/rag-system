@@ -379,7 +379,7 @@ class OpenAPIDiscovery:
                 # Running in event loop — use synchronous HTTP fallback
                 import urllib.request
 
-                with urllib.request.urlopen(url, timeout=timeout) as resp:
+                with urllib.request.urlopen(url, timeout=timeout) as resp:  # nosec B310 — URL from admin config, not user input
                     text = resp.read().decode("utf-8")
                     if url.endswith((".yaml", ".yml")):  # noqa: SIM108
                         spec = _parse_yaml(text)

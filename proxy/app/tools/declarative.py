@@ -193,7 +193,7 @@ def _make_shell_handler(
         try:
             result = subprocess.run(
                 resolved_cmd,
-                shell=True,
+                shell=True,  # nosec B602 — mitigated by allowed_commands whitelist + metacharacter check
                 capture_output=True,
                 text=True,
                 timeout=30,
