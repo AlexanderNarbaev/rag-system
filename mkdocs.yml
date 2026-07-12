@@ -78,6 +78,10 @@ nav:
       - Security Guide: guides/security-guide.md
       - MCP Server Guide: guides/mcp-server-guide.md
       - User Guide: guides/user-guide.md
+      - Development Guide: guides/development-guide.md
+      - Integration Guide: guides/integration-guide.md
+      - Knowledge Graph Guide: guides/knowledge-graph-guide.md
+      - Project Checklist: guides/project-checklist.md
       - Runbook: guides/runbook.md
       - Troubleshooting: guides/troubleshooting.md
   - API Reference: api_reference.md

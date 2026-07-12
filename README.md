@@ -23,7 +23,7 @@ git clone https://github.com/AlexanderNarbaev/rag-system.git
 cd rag-system
 
 # Configure
-cp proxy/.env.example proxy/.env
+cp .env.example proxy/.env
 # Edit proxy/.env — set LLM_ENDPOINT, LLM_MODEL_NAME, QDRANT_HOST
 
 # Start
@@ -235,7 +235,7 @@ MODEL_EVOLUTION_ENABLED=true # Fine-tuning pipelines
 
 ```bash
 cd proxy
-cp .env.example .env          # Edit configuration
+cp ../.env.example .env        # Edit configuration
 docker compose up -d           # Qdrant + Redis + Neo4j + Proxy
 ```
 

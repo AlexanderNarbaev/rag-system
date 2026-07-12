@@ -1241,7 +1241,52 @@ LLM_MODEL_NAME=llama3.1:70b
 LLM_PROVIDER_TYPE=generic
 ```
 
-### 6.4 Proxy Configuration for Backend
+### 6.4 GPUStack Backend
+
+[GPUStack](https://github.com/gpustack/gpustack) is an open-source GPU cluster manager that serves OpenAI-compatible endpoints for LLM, embedding, and reranker models. It's ideal for on-premise deployments where you need centralized model serving across multiple GPU nodes.
+
+**Configure the RAG proxy to use GPUStack:**
+
+```bash
+# proxy/.env
+
+# LLM via GPUStack
+LLM_ENDPOINT=http://<gpu-host>:80/v1
+LLM_MODEL_NAME=Qwen3-635B-AWQ-T
+LLM_API_KEY=gpustack_<your-api-key>
+LLM_PROVIDER_TYPE=openai
+
+# Embeddings via GPUStack
+EMBEDDER_ENDPOINT=http://<gpu-host>:80/v1
+EMBEDDER_API_KEY=gpustack_<your-api-key>
+EMBEDDER_FALLBACK_LOCAL=true        # Fall back to local model if GPUStack unavailable
+
+# Reranker via GPUStack
+RERANKER_ENDPOINT=http://<gpu-host>:80/v1
+RERANKER_API_KEY=gpustack_<your-api-key>
+RERANKER_FALLBACK_LOCAL=true
+```
+
+**List available models:**
+
+```bash
+curl http://<gpu-host>:80/v1/models \
+  -H "Authorization: Bearer gpustack_<your-api-key>"
+```
+
+**Key benefits:**
+
+| Feature | Description |
+|---------|-------------|
+| Multi-node GPU cluster | Distribute models across multiple GPU servers |
+| Automatic load balancing | Round-robin across model replicas |
+| OpenAI-compatible API | Drop-in replacement for vLLM/llama.cpp |
+| Model auto-download | Pulls from HuggingFace on first deployment |
+| API key management | Per-model and per-user access control |
+
+See the [GPUStack documentation](https://docs.gpustack.ai/) for cluster setup and model management.
+
+### 6.5 Proxy Configuration for Backend
 
 ```bash
 # proxy/.env

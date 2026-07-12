@@ -65,6 +65,14 @@ EMBEDDER_API_KEY=your-api-key
 EMBEDDER_FALLBACK_LOCAL=true
 ```
 
+**GPUStack embedder example:**
+
+```ini
+EMBEDDER_ENDPOINT=http://<gpu-host>:80/v1
+EMBEDDER_API_KEY=gpustack_<your-api-key>
+EMBEDDER_FALLBACK_LOCAL=true
+```
+
 ---
 
 ### Reranker (Cross-Encoder)
@@ -92,6 +100,14 @@ EMBEDDER_FALLBACK_LOCAL=true
 RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
 RERANKER_MAX_LENGTH=512
 RERANKER_BATCH_SIZE=32
+```
+
+**GPUStack reranker example:**
+
+```ini
+RERANKER_ENDPOINT=http://<gpu-host>:80/v1
+RERANKER_API_KEY=gpustack_<your-api-key>
+RERANKER_FALLBACK_LOCAL=true
 ```
 
 ---
@@ -131,6 +147,15 @@ LLM_PROVIDER_TYPE=generic
 LLM_ENDPOINT=https://api.openai.com/v1
 LLM_MODEL_NAME=gpt-4o
 LLM_API_KEY=sk-...
+LLM_PROVIDER_TYPE=openai
+```
+
+**Example (GPUStack):**
+
+```ini
+LLM_ENDPOINT=http://<gpu-host>:80/v1
+LLM_MODEL_NAME=Qwen3-635B-AWQ-T
+LLM_API_KEY=gpustack_<your-api-key>
 LLM_PROVIDER_TYPE=openai
 ```
 
