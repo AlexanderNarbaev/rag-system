@@ -42,9 +42,9 @@ class RemoteEmbeddingClient:
     """
 
     def __init__(self, endpoint: str, api_key: str = "", model: str = ""):
-        # Strip trailing slashes and known path suffixes to get base URL
+        # Normalize endpoint to base URL (strip path suffixes like /v1/embeddings)
         base = endpoint.rstrip("/")
-        for suffix in ("/embeddings", "/v1/embeddings"):
+        for suffix in ("/v1/embeddings", "/embeddings", "/v1"):
             if base.endswith(suffix):
                 base = base[: -len(suffix)]
                 break
@@ -174,9 +174,9 @@ class RemoteRerankerClient:
     """
 
     def __init__(self, endpoint: str, api_key: str = "", model: str = ""):
-        # Strip trailing slashes and known path suffixes to get base URL
+        # Normalize endpoint to base URL (strip path suffixes like /v1/rerank)
         base = endpoint.rstrip("/")
-        for suffix in ("/rerank", "/v1/rerank"):
+        for suffix in ("/v1/rerank", "/rerank", "/v1"):
             if base.endswith(suffix):
                 base = base[: -len(suffix)]
                 break
