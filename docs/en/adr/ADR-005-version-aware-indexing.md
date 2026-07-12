@@ -13,18 +13,18 @@ Alternatives considered: **full reindexing per ETL run** (wasteful, high latency
 
 **Implement content-addressable chunk versioning via SHA-256 hashing with a LiveVectorLake hot/cold storage pattern and WAL-based incremental checkpointing.**
 
-The `ChunkVersionStore` (`etl/chunker/hash_versioning.py:52-275`) computes SHA-256 hashes over chunk content and key metadata (`hash_versioning.py:30-49`). The hash serves as the Qdrant point ID, making every chunk uniquely addressable. Incremental updates compare new chunk hashes against the WAL-stored last-known state (`hash_versioning.py:115-161`), returning only added and deleted hashes.
+The `ChunkVersionStore` (`etl/chunker/hash_versioning.py`) computes SHA-256 hashes over chunk content and key metadata. The hash serves as the Qdrant point ID, making every chunk uniquely addressable. Incremental updates compare new chunk hashes against the WAL-stored last-known state, returning only added and deleted hashes.
 
-`LiveVectorLake` (`etl/indexer/live_vector_lake.py:32-209`) stratifies storage: hot layer (Qdrant — current chunks for fast search) and cold layer (Parquet/Delta Lake — complete version history with timestamps). The `sync_document()` method (`live_vector_lake.py:110-140`) coordinates both layers: new chunks are upserted to Qdrant, deleted chunks removed, and all changes appended to cold storage.
+`LiveVectorLake` (`etl/indexer/live_vector_lake.py`) stratifies storage: hot layer (Qdrant — current chunks for fast search) and cold layer (Parquet/Delta Lake — complete version history with timestamps). The `sync_document()` method coordinates both layers: new chunks are upserted to Qdrant, deleted chunks removed, and all changes appended to cold storage.
 
-WAL (`etl/indexer/wal_manager.py`) tracks per-pipeline checkpoints (Confluence, Jira, GitLab, Indexing, Graph), enabling resume-after-failure without data loss. The ETL orchestrator (`etl/scheduler/run_etl.py:305`) updates WAL after indexing completes.
+WAL (`etl/indexer/wal_manager.py`) tracks per-pipeline checkpoints (Confluence, Jira, GitLab, Indexing, Graph), enabling resume-after-failure without data loss. The ETL orchestrator (`etl/scheduler/run_etl.py`) updates WAL after indexing completes.
 
-Version-pinned retrieval is supported via Qdrant filter on the `version` payload field (`proxy/app/retrieval.py:146-148`), exposed through the proxy's `rag_version` parameter.
+Version-pinned retrieval is supported via Qdrant filter on the `version` payload field (`proxy/app/core/retrieval.py`), exposed through the proxy's `rag_version` parameter.
 
 ## Consequences
 
 **Positive:** Incremental updates reduce ETL runtime from hours to minutes for large repositories. Content addressability eliminates duplicates — same content across sources shares the same hash. Rollback support via cold storage (`live_vector_lake.py:169-209`). Hot/cold separation reduces Qdrant storage costs.
 
-**Negative:** SHA-256 computation adds ~5ms per chunk during ETL. Cold storage (Parquet files) grows unboundedly; cleanup is manual (`cleanup_old_versions` at `hash_versioning.py:236-252`). Hash collisions are theoretically possible but practically negligible with SHA-256. WAL corruption requires manual intervention (`--reset-wal` flag at `run_etl.py:318`).
+**Negative:** SHA-256 computation adds ~5ms per chunk during ETL. Cold storage (Parquet files) grows unboundedly; cleanup is manual. Hash collisions are theoretically possible but practically negligible with SHA-256. WAL corruption requires manual intervention (`--reset-wal` flag in `run_etl.py`).
 
-**Mitigations:** `force_reindex` (`run_etl.py:317`) bypasses WAL for disaster recovery. Version-aware deduplication at retrieval time (`proxy/app/context_builder.py`) resolves same-document conflicts by preferring newer versions or explicit user requests.
+**Mitigations:** `force_reindex` in `run_etl.py` bypasses WAL for disaster recovery. Version-aware deduplication at retrieval time (`proxy/app/core/context/builder.py`) resolves same-document conflicts by preferring newer versions or explicit user requests.

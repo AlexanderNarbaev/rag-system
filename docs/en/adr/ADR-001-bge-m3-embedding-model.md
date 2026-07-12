@@ -14,14 +14,14 @@ Alternatives evaluated: `text-embedding-3-small` (OpenAI API — requires intern
 **Use `BAAI/bge-m3` as the sole embedding model.** It provides dense (1024-dim), sparse (lexical BM25-style), and ColBERT-style multi-vector representations in a single encode call. The model supports 100+ languages and 8192 token input context.
 
 Implementation in code:
-- `proxy/app/retrieval.py:64` loads `SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)` with `BAAI/bge-m3` as default.
-- `etl/indexer/qdrant_hybrid.py:89` loads the same model for ETL indexing with `encode_sparse()` used at `qdrant_hybrid.py:152` to extract sparse vectors.
-- Dense vectors are used for semantic cosine search; sparse vectors for lexical BM25 over the same collection with RRF fusion at `retrieval.py:113`.
+- `proxy/app/core/retrieval.py` loads `SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)` with `BAAI/bge-m3` as default.
+- `etl/indexer/qdrant_hybrid.py` loads the same model for ETL indexing with `encode_sparse()` used to extract sparse vectors.
+- Dense vectors are used for semantic cosine search; sparse vectors for lexical BM25 over the same collection with RRF fusion in `proxy/app/core/retrieval.py`.
 
 ## Consequences
 
-**Positive:** Single model for both indexing and query-time retrieval; no synchronization needed between separate dense/sparse models. Sparse vector index stored on-disk (`qdrant_hybrid.py:118-121`) keeps memory footprint low. Air-gapped compatible — model weights downloaded once to a shared volume.
+**Positive:** Single model for both indexing and query-time retrieval; no synchronization needed between separate dense/sparse models. Sparse vector index stored on-disk keeps memory footprint low. Air-gapped compatible — model weights downloaded once to a shared volume.
 
 **Negative:** The model (~2.2 GB) is larger than pure dense alternatives like `all-MiniLM-L6-v2` (~90 MB). Sparse vectors increase collection storage by ~30%. ColBERT multi-vectors are not currently utilized in the pipeline (deferred optimization).
 
-**Mitigations:** Embeddings are cached via Redis/in-memory (`retrieval.py:88-95`), reducing recomputation. CPU inference is acceptable for the ETL batch path; GPU acceleration is optional via `EMBEDDER_DEVICE=cuda` (`config.py:22`).
+**Mitigations:** Embeddings are cached via Redis/in-memory (`proxy/app/shared/cache.py`), reducing recomputation. CPU inference is acceptable for the ETL batch path; GPU acceleration is optional via `EMBEDDER_DEVICE=cuda` (`proxy/app/shared/config.py`).

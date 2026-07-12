@@ -5,11 +5,11 @@
 
 ## Context
 
-The RAG System proxy layer is currently implemented in Python with FastAPI (25 endpoints, 1806-line `main.py`), LangGraph orchestrator (10-node state graph), hybrid Qdrant retrieval, cross-encoder reranker, multi-provider LLM routing (vLLM, llama.cpp, OpenAI-compatible), JWT auth with RBAC (4 roles), SQLite user DB, LDAP/AD integration, Redis caching, Prometheus metrics, and SSE streaming.
+The RAG System proxy layer is currently implemented in Python with FastAPI (25+ endpoints across `proxy/app/api/` modules), LangGraph orchestrator (10-node state graph in `proxy/app/core/orchestrator/`), hybrid Qdrant retrieval, cross-encoder reranker, multi-provider LLM routing (vLLM, llama.cpp, OpenAI-compatible), JWT auth with RBAC (4 roles), SQLite user DB, LDAP/AD integration, Redis caching, Prometheus metrics, and SSE streaming.
 
 The current Python stack imposes structural limitations:
 
-1. **GIL constraints** — the Global Interpreter Lock prevents true parallelism for CPU-bound request processing, forcing reliance on `asyncio` concurrency and `WORKERS=1` (`config.py:158`) to protect shared embedder/cache state.
+1. **GIL constraints** — the Global Interpreter Lock prevents true parallelism for CPU-bound request processing, forcing reliance on `asyncio` concurrency and `WORKERS=1` (`proxy/app/shared/config.py`) to protect shared embedder/cache state.
 2. **Memory footprint** — Python process with loaded models (SentenceTransformer, CrossEncoder) typically occupies 3–5 GB RAM at idle, growing under load.
 3. **Startup time** — model loading (bge-m3 ~2.2 GB) plus FastAPI startup takes 2–3 seconds, which is unacceptable for serverless/Knative scale-to-zero deployments.
 4. **Team expertise** — the development team is JVM-first; Python is maintained but not the primary competency.
@@ -213,7 +213,7 @@ message HealthCheckResponse {
 
 ### LangChain4j Orchestrator Design
 
-The current LangGraph state graph (`orchestrator.py:451-535`) defines 11 nodes with conditional routing for self-correction. LangChain4j does not have a first-class `StateGraph` equivalent, but the pattern can be replicated with:
+The current LangGraph state graph (`proxy/app/core/orchestrator/graph.py`) defines 11 nodes with conditional routing for self-correction. LangChain4j does not have a first-class `StateGraph` equivalent, but the pattern can be replicated with:
 
 ```java
 @AiService
@@ -297,12 +297,12 @@ public Uni<EmbedResponse> embedWithResilience(List<String> texts) {
 }
 ```
 
-All gRPC calls are wrapped with MicroProfile Fault Tolerance annotations (`@Retry`, `@CircuitBreaker`, `@Fallback`, `@Timeout`) matching the current Python resilience patterns (`MAX_RETRIES=3`, `RETRY_DELAY=1.0` from `config.py:53-54`).
+All gRPC calls are wrapped with MicroProfile Fault Tolerance annotations (`@Retry`, `@CircuitBreaker`, `@Fallback`, `@Timeout`) matching the current Python resilience patterns (`MAX_RETRIES=3`, `RETRY_DELAY=1.0` from `proxy/app/shared/config.py`).
 
 ### Migration Phases
 
 **Phase 1 — ML Sidecar (Month 1–2):**
-- Extract all ML components from `proxy/app/retrieval.py`, `proxy/app/rerank.py`, `proxy/app/grounding.py`, `proxy/app/token_optimizer.py` into a standalone Python gRPC service.
+- Extract all ML components from `proxy/app/core/retrieval.py`, `proxy/app/core/rerank.py`, `proxy/app/core/grounding.py`, `proxy/app/core/token_optimizer.py` into a standalone Python gRPC service.
 - Define and version the protobuf contracts in a shared `proto/` directory.
 - Implement the Python gRPC server with `grpcio` and `grpcio-tools`.
 - Run the existing Python proxy against the ML sidecar (internal gRPC instead of in-process imports).
@@ -411,13 +411,13 @@ rag-system/
 
 2. **True reactive programming** — no GIL, no `asyncio` workarounds, no `WORKERS=1` constraint (`config.py:158`). Quarkus with Vert.x provides genuine non-blocking I/O across all layers (HTTP, gRPC, database, Redis) with built-in backpressure.
 
-3. **JVM observability ecosystem** — JMX beans, Micrometer metrics, Flight Recorder for zero-overhead profiling, heap dump analysis, thread dump on demand. The current Python proxy relies on `prometheus_client` (`proxy/app/metrics.py`) and structured logging; these are a strict subset of what the JVM provides.
+3. **JVM observability ecosystem** — JMX beans, Micrometer metrics, Flight Recorder for zero-overhead profiling, heap dump analysis, thread dump on demand. The current Python proxy relies on `prometheus_client` (`proxy/app/shared/metrics.py`) and structured logging; these are a strict subset of what the JVM provides.
 
 4. **Team alignment** — JVM-first team can own, debug, and extend the proxy layer without Python friction. Python expertise is concentrated on the ML sidecar where it is irreplaceable.
 
-5. **Type safety** — Java's compile-time type checking with null-safety annotations (SpotBugs, Error Prone) catches entire classes of errors at build time that Python's runtime duck-typing allows through (e.g., `retrieval.py:126` — `hit.payload.get("text", "")` accessing untyped dicts).
+5. **Type safety** — Java's compile-time type checking with null-safety annotations (SpotBugs, Error Prone) catches entire classes of errors at build time that Python's runtime duck-typing allows through (e.g., accessing untyped dicts in `proxy/app/core/retrieval.py`).
 
-6. **Ecosystem maturity** — Quarkus provides battle-tested extensions for JWT, OIDC, rate limiting, metrics, health probes, and configuration that are first-class (vs. `PyJWT` + custom middleware in `proxy/app/auth.py`, `proxy/app/rate_limiter.py`).
+6. **Ecosystem maturity** — Quarkus provides battle-tested extensions for JWT, OIDC, rate limiting, metrics, health probes, and configuration that are first-class (vs. `PyJWT` + custom middleware in `proxy/app/auth/`, `proxy/app/shared/rate_limiter.py`).
 
 7. **Decoupled deployment** — the ML sidecar scales independently from the proxy. CPU-bound embedding calls can be horizontally scaled without scaling the proxy layer. GPU resources can be dedicated to the sidecar alone.
 
@@ -429,7 +429,7 @@ rag-system/
 
 3. **Cross-language debugging** — tracing a request through Java (Quarkus) → gRPC → Python (ML sidecar) → back requires correlated distributed tracing (OpenTelemetry spans across language boundaries). The current Python-only stack has single-process debugging. Must invest in Jaeger/Zipkin integration from day one.
 
-4. **LangChain4j immaturity** — LangChain4j is a younger ecosystem than LangGraph and may lack the `StateGraph`, `MemorySaver`, and conditional routing primitives that the orchestrator depends on (`orchestrator.py:451-535`). The CRAG evaluator, self-reflection router, and tool-calling loop may require custom implementation beyond what LangChain4j provides. This is mitigated by implementing a custom `StateGraph` abstraction (see Decision section) that mirrors LangGraph semantics.
+4. **LangChain4j immaturity** — LangChain4j is a younger ecosystem than LangGraph and may lack the `StateGraph`, `MemorySaver`, and conditional routing primitives that the orchestrator depends on (`proxy/app/core/orchestrator/graph.py`). The CRAG evaluator, self-reflection router, and tool-calling loop may require custom implementation beyond what LangChain4j provides. This is mitigated by implementing a custom `StateGraph` abstraction (see Decision section) that mirrors LangGraph semantics.
 
 5. **Test migration burden** — 1012 proxy tests must be ported to Java (JUnit 5 + RestAssured). Integration tests require Testcontainers to spin up Qdrant, Neo4j, Redis, and the ML sidecar. Test parity verification is a significant effort.
 

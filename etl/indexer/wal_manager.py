@@ -65,9 +65,13 @@ class WALManager:
             return {}
 
     def _write_wal(self, data: dict):
-        """Записывает WAL (без блокировки)."""
-        with open(self.wal_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        """Записывает WAL (без блокировки). Raises OSError on disk full."""
+        try:
+            with open(self.wal_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except OSError as e:
+            logger.error(f"Failed to write WAL file {self.wal_path}: {e}")
+            raise
 
     def _update_wal(self, update_func):
         """
@@ -76,14 +80,14 @@ class WALManager:
         """
         lock = self._get_lock()
         if lock:
-            lock.acquire()
-        try:
+            with lock:
+                data = self._read_wal()
+                new_data = update_func(data)
+                self._write_wal(new_data)
+        else:
             data = self._read_wal()
             new_data = update_func(data)
             self._write_wal(new_data)
-        finally:
-            if lock:
-                lock.release()
 
     def get_checkpoint(self, pipeline: str, key: str = None) -> dict | Any | None:
         """

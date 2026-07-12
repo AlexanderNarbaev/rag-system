@@ -13,11 +13,11 @@ Alternatives considered: **no feedback** (quality degrades over time), **automat
 
 **Implement a lightweight Human-in-the-Loop (HITL) feedback system with JSONL logging, a Streamlit expert dashboard, and training dataset export.**
 
-The `InteractionLogger` (`proxy/app/hitl.py:28-109`) records every query-response pair as JSON Lines (`interactions.jsonl`) with request ID, timestamp, user query (up to 5000 chars of context), response, and metadata (model, version, client IP, cache status). Feedback is stored separately in `feedback.jsonl` (`hitl.py:72-96`) with three types: `positive`, `negative`, and `correction` (expert-corrected response).
+The `InteractionLogger` (`proxy/app/core/hitl.py`) records every query-response pair as JSON Lines (`interactions.jsonl`) with request ID, timestamp, user query (up to 5000 chars of context), response, and metadata (model, version, client IP, cache status). Feedback is stored separately in `feedback.jsonl` with three types: `positive`, `negative`, and `correction` (expert-corrected response).
 
-Logging is asynchronous and non-blocking (`hitl.py:122-144`) — executed via `asyncio.to_thread()` so it never delays the API response. It can be disabled with `LOG_REQUESTS=false` (`config.py:63`).
+Logging is asynchronous and non-blocking — executed via `asyncio.to_thread()` so it never delays the API response. It can be disabled with `LOG_REQUESTS=false` (`proxy/app/shared/config.py`).
 
-The training dataset exporter (`hitl.py:166-192`) filters interactions for:
+The training dataset exporter filters interactions for:
 1. Expert-corrected responses (pair: original question → corrected answer)
 2. Positively-rated responses (pair: question → system answer)
 
@@ -34,4 +34,4 @@ The expert review dashboard (under `hitl_dashboard/`, Streamlit-based) provides:
 
 **Negative:** JSONL files grow unboundedly — no automatic rotation or retention policy. Feedback depends on expert availability; without experts, only raw logs are collected (no corrections, no positive signal). No authentication/authorization on the feedback path — any client can submit feedback.
 
-**Mitigations:** Context is truncated to 5000 characters (`hitl.py:56`) to bound log file growth. Training dataset export supports `min_length=50` to filter noise. Future improvements: log rotation via logrotate or internal retention policy, feedback endpoint authentication.
+**Mitigations:** Context is truncated to 5000 characters to bound log file growth. Training dataset export supports `min_length=50` to filter noise. Future improvements: log rotation via logrotate or internal retention policy, feedback endpoint authentication (now implemented via JWT + RBAC in `proxy/app/api/feedback.py`).

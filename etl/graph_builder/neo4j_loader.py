@@ -10,6 +10,7 @@
 """
 
 import logging
+import time
 
 try:
     from neo4j import Driver, GraphDatabase
@@ -50,11 +51,29 @@ class Neo4jLoader:
         self.driver: Driver | None = None
 
     def connect(self):
-        """Устанавливает соединение с Neo4j."""
-        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
-        # Проверка соединения
-        self.driver.verify_connectivity()
-        logger.info(f"Connected to Neo4j at {self.uri}")
+        """Устанавливает соединение с Neo4j с retry логикой и экспоненциальной задержкой."""
+        base_delay = 2
+        for attempt in range(self.max_retries):
+            try:
+                self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
+                self.driver.verify_connectivity()
+                logger.info(f"Connected to Neo4j at {self.uri}")
+                return
+            except Exception as e:
+                logger.warning(f"Neo4j connection attempt {attempt + 1}/{self.max_retries} failed: {e}")
+                if self.driver:
+                    try:
+                        self.driver.close()
+                    except Exception:
+                        pass
+                    self.driver = None
+                if attempt < self.max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying Neo4j connection in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Failed to connect to Neo4j at {self.uri} after {self.max_retries} attempts")
+                    raise
 
     def close(self):
         """Закрывает соединение."""
@@ -70,10 +89,11 @@ class Neo4jLoader:
         self.close()
 
     def _execute_with_retry(self, query: str, parameters: dict = None) -> bool:
-        """Выполняет запрос с повторными попытками при временных ошибках."""
+        """Выполняет запрос с повторными попытками при временных ошибках (с экспоненциальной задержкой)."""
         if not self.driver:
             raise RuntimeError("Not connected to Neo4j")
 
+        base_delay = 1
         for attempt in range(self.max_retries):
             try:
                 with self.driver.session(database=self.database) as session:
@@ -82,7 +102,11 @@ class Neo4jLoader:
                     return summary.counters.contains_updates
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1}/{self.max_retries} failed: {e}")
-                if attempt == self.max_retries - 1:
+                if attempt < self.max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
                     raise
         return False
 
@@ -215,6 +239,9 @@ class Neo4jLoader:
             logger.warning("No valid source ids provided, skipping deletion")
             return 0
 
+        if not self.driver:
+            raise RuntimeError("Not connected to Neo4j")
+
         query = """
         MATCH (n:Entity)
         WHERE n.source_id IS NOT NULL AND NOT n.source_id IN $valid_ids
@@ -222,17 +249,31 @@ class Neo4jLoader:
         RETURN count(n) as deleted
         """
         params = {"valid_ids": valid_source_ids}
-        # Получаем количество удалённых узлов
-        with self.driver.session(database=self.database) as session:
-            record = session.run(query, params).single()
-            deleted_count = record["deleted"] if record else 0
-        logger.info(f"Deleted {deleted_count} outdated entities")
-        return deleted_count
+        base_delay = 1
+        for attempt in range(self.max_retries):
+            try:
+                with self.driver.session(database=self.database) as session:
+                    record = session.run(query, params).single()
+                    deleted_count = record["deleted"] if record else 0
+                logger.info(f"Deleted {deleted_count} outdated entities")
+                return deleted_count
+            except Exception as e:
+                logger.warning(f"delete_outdated_entities attempt {attempt + 1}/{self.max_retries} failed: {e}")
+                if attempt < self.max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    raise
+        return 0
 
     def delete_outdated_relations(self, max_age_days: int = 30):
         """
         Удаляет отношения, которые не обновлялись более max_age_days (опционально).
         """
+        if not self.driver:
+            raise RuntimeError("Not connected to Neo4j")
+
         query = """
         MATCH ()-[r:RELATES_TO]->()
         WHERE r.updated_at IS NULL OR r.updated_at < datetime() - duration({days: $max_age_days})
@@ -240,30 +281,57 @@ class Neo4jLoader:
         RETURN count(r) as deleted
         """
         params = {"max_age_days": max_age_days}
-        with self.driver.session(database=self.database) as session:
-            result = session.run(query, params)
-            deleted_count = result.single()["deleted"]
-        logger.info(f"Deleted {deleted_count} outdated relations")
-        return deleted_count
+        base_delay = 1
+        for attempt in range(self.max_retries):
+            try:
+                with self.driver.session(database=self.database) as session:
+                    result = session.run(query, params)
+                    deleted_count = result.single()["deleted"]
+                logger.info(f"Deleted {deleted_count} outdated relations")
+                return deleted_count
+            except Exception as e:
+                logger.warning(f"delete_outdated_relations attempt {attempt + 1}/{self.max_retries} failed: {e}")
+                if attempt < self.max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    raise
+        return 0
 
     def get_graph_statistics(self) -> dict[str, int]:
         """Возвращает статистику графа: количество узлов, рёбер, типов сущностей."""
+        if not self.driver:
+            raise RuntimeError("Not connected to Neo4j")
+
         query = """
         MATCH (n:Entity)
         WITH labels(n) as labels, count(n) as nodes
         RETURN sum(nodes) as total_nodes,
                [l in collect(DISTINCT labels) | l] as labels
         """
-        with self.driver.session(database=self.database) as session:
-            result = session.run(query).single()
-            total_nodes = result["total_nodes"] if result else 0
+        base_delay = 1
+        for attempt in range(self.max_retries):
+            try:
+                with self.driver.session(database=self.database) as session:
+                    result = session.run(query).single()
+                    total_nodes = result["total_nodes"] if result else 0
 
-        query_rels = "MATCH ()-[r]->() RETURN count(r) as total_rels"
-        with self.driver.session(database=self.database) as session:
-            result = session.run(query_rels).single()
-            total_rels = result["total_rels"] if result else 0
+                query_rels = "MATCH ()-[r]->() RETURN count(r) as total_rels"
+                with self.driver.session(database=self.database) as session:
+                    result = session.run(query_rels).single()
+                    total_rels = result["total_rels"] if result else 0
 
-        return {"nodes": total_nodes, "relations": total_rels}
+                return {"nodes": total_nodes, "relations": total_rels}
+            except Exception as e:
+                logger.warning(f"get_graph_statistics attempt {attempt + 1}/{self.max_retries} failed: {e}")
+                if attempt < self.max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    raise
+        return {"nodes": 0, "relations": 0}
 
 
 def batch_load_from_extractor(

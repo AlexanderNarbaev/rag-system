@@ -18,7 +18,7 @@ All endpoints are prefixed with `/v1` to match the OpenAI API convention. The `/
 
 ### Overview
 
-Authentication uses JWT token pairs (access + refresh). When disabled (`AUTH_ENABLED=false`, the default), the proxy accepts all requests without authentication. When enabled, all endpoints except `/v1/auth/login`, `/v1/auth/register`, `/v1/auth/refresh`, `/v1/health*`, `/v1/models`, `/v1/widget*`, and `/metrics` require a valid JWT.
+Authentication uses JWT token pairs (access + refresh). When disabled (`AUTH_ENABLED=false`), the proxy accepts all requests without authentication. When enabled (the default), all endpoints except `/v1/auth/login`, `/v1/auth/register`, `/v1/auth/refresh`, `/v1/health*`, `/v1/models`, `/v1/widget*`, and `/metrics` require a valid JWT.
 
 Four RBAC roles (hierarchical):
 | Role | Rank | Access |
@@ -453,27 +453,11 @@ Chat completion with RAG augmentation. Accepts standard OpenAI parameters plus R
   "top_p": "number (0–1, default: 0.95)",
   "max_tokens": "integer (default: 4096)",
   "stream": "boolean (default: false)",
-  "stop": ["string (optional)"],
-  "presence_penalty": "number (-2.0 to 2.0, optional)",
-  "frequency_penalty": "number (-2.0 to 2.0, optional)",
-  "tools": [
-    {
-      "type": "function",
-      "function": {
-        "name": "string",
-        "description": "string",
-        "parameters": "object (JSON Schema)"
-      }
-    }
-  ],
-  "tool_choice": "string | object (none | auto | {type: 'function', function: {name: '...'}})",
   "rag_version": "string (optional)",
   "rag_force_refresh": "boolean (default: false)",
   "rag_skip_generation": "boolean (default: false)",
   "rag_return_chunks": "boolean (default: false)",
-  "rag_top_k": "integer (optional)",
-  "federation_silo": "string (optional)",
-  "federation_mode": "string (optional: auto | local | remote)"
+  "rag_top_k": "integer (optional)"
 }
 ```
 
@@ -487,11 +471,9 @@ Chat completion with RAG augmentation. Accepts standard OpenAI parameters plus R
 | `top_p` | number | No | `0.95` | Nucleus sampling threshold |
 | `max_tokens` | integer | No | `4096` | Maximum tokens in the generated response |
 | `stream` | boolean | No | `false` | Enable Server-Sent Events streaming |
-| `stop` | array | No | — | Up to 4 stop sequences |
-| `presence_penalty` | number | No | — | Penalize repeated tokens (-2.0 to 2.0) |
-| `frequency_penalty` | number | No | — | Penalize frequent tokens (-2.0 to 2.0) |
-| `tools` | array | No | — | Available function/tool definitions |
-| `tool_choice` | string/object | No | `"auto"` | Tool selection: `"none"`, `"auto"`, or specific function |
+
+!!! note "Planned Parameters"
+    The following standard OpenAI parameters are planned but not yet implemented: `stop`, `presence_penalty`, `frequency_penalty`, `tools`, `tool_choice`. Tool calling is supported via the `/v1/tools` discovery endpoints and LangGraph orchestrator when `TOOLS_ENABLED=true`.
 
 #### RAG-Specific Parameters
 
@@ -501,11 +483,9 @@ These parameters extend the standard OpenAI schema. They are silently ignored by
 |-------|------|----------|---------|-------------|
 | `rag_version` | string | No | — | Request context from a specific document version. Accepts ISO date (`"2026-01-15"`), SHA-256 prefix (`"a1b2c3d4"`), or version tag (`"v2.1"`). Filters retrieved chunks to match the specified version |
 | `rag_force_refresh` | boolean | No | `false` | Bypass Redis response cache. Forces fresh retrieval, reranking, and LLM generation |
-| `rag_skip_generation` | boolean | No | `false` | Federation: skip LLM generation entirely, return only retrieved chunks |
-| `rag_return_chunks` | boolean | No | `false` | Federation: include full chunk text bodies in the response |
-| `rag_top_k` | integer | No | — | Federation: override the default `MAX_CHUNKS_RETRIEVAL` for this request only |
-| `federation_silo` | string | No | — | Federation: route query to a specific deployment silo by name |
-| `federation_mode` | string | No | `"auto"` | Federation: `"auto"` (local + remote merge), `"local"` (local only), `"remote"` (remote only) |
+| `rag_skip_generation` | boolean | No | `false` | Skip LLM generation entirely, return only retrieved chunks |
+| `rag_return_chunks` | boolean | No | `false` | Include full chunk text bodies in the response |
+| `rag_top_k` | integer | No | — | Override the default `MAX_CHUNKS_RETRIEVAL` for this request only |
 
 #### Response Schema (200 OK — Non-Streaming)
 
@@ -961,8 +941,7 @@ Authorization: Bearer <admin-token>
     "reranker": true,
     "slm": true,
     "llm": false
-  },
-  "duration_ms": 2500
+  }
 }
 ```
 
@@ -1768,6 +1747,12 @@ COMPRESSION_LEVEL=6         # Compression level (gzip: 1-9, brotli: 0-11)
 | `GET` | `/v1/tools` | Optional | No | List tools with category/tag/provider filters |
 | `GET` | `/v1/tools/{name}` | Optional | No | Single tool details |
 | `POST` | `/v1/feedback` | Yes (EXPERT) | No | Expert feedback submission |
+| `POST` | `/v1/files` | Yes (USER) | No | Upload a file to MinIO storage |
+| `GET` | `/v1/files` | Yes (USER) | No | List uploaded files |
+| `GET` | `/v1/files/{file_id}` | Yes (USER) | No | Get file metadata |
+| `GET` | `/v1/files/{file_id}/download` | Yes (USER) | No | Download a file |
+| `GET` | `/v1/files/{file_id}/presigned` | Yes (USER) | No | Generate presigned download URL |
+| `DELETE` | `/v1/files/{file_id}` | Yes (EXPERT) | No | Delete a file |
 | `POST` | `/v1/admin/warmup` | Yes (ADMIN) | No | Pre-load models into memory |
 | `GET` | `/v1/widget` | No | No | Embeddable chat widget HTML |
 | `GET` | `/v1/widget.js` | No | No | Widget JavaScript |
@@ -2028,7 +2013,7 @@ All proxy configuration is loaded from environment variables or the `proxy/.env`
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `AUTH_ENABLED` | boolean | `false` | Enable JWT authentication |
+| `AUTH_ENABLED` | boolean | `true` | Enable JWT authentication |
 | `JWT_SECRET` | string | `""` | JWT signing secret. Generate: `openssl rand -hex 32` |
 | `JWT_ALGORITHM` | string | `HS256` | JWT signing algorithm: `HS256`, `RS256` |
 | `JWT_PUBLIC_KEY` | string | `""` | PEM public key for RS256 verification |

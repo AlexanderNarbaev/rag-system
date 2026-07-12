@@ -51,7 +51,17 @@ class GitLabExtractor:
             "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml"]
         }
         """
-        self.url = config["url"].rstrip("/")
+        # Input validation
+        url = config.get("url", "")
+        if not url or not url.strip():
+            raise ValueError("GitLabExtractor: 'url' is required and must not be empty")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"GitLabExtractor: 'url' must start with http:// or https://, got: {url}")
+        token = config.get("token", "")
+        if not token or not token.strip():
+            raise ValueError("GitLabExtractor: 'token' is required and must not be empty")
+
+        self.url = url.rstrip("/")
         self.config = config  # Store full config for retry logic
         self.token = config["token"]
         self.project_ids = config.get("project_ids")
@@ -90,8 +100,12 @@ class GitLabExtractor:
 
     def _load_wal(self) -> dict:
         if self.wal_path.exists():
-            with open(self.wal_path) as f:
-                return json.load(f)
+            try:
+                with open(self.wal_path) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
+                return {"last_run": None, "projects": {}}
         return {"last_run": None, "projects": {}}
 
     def _save_wal(self):
@@ -118,15 +132,15 @@ class GitLabExtractor:
                 logger.error(f"Connection Error: {e}")
                 if attempt < max_retries:
                     delay = base_delay * (2 ** attempt)
-                    logger.info(f"Повтор через {delay}с... ({attempt + 1}/{max_retries})")
+                    logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(delay)
                 else:
                     raise
             except requests.exceptions.Timeout as e:
-                logger.error(f"Timeout: {e}")
+                logger.warning(f"Timeout: {e}")
                 if attempt < max_retries:
                     delay = base_delay * (2 ** attempt)
-                    logger.info(f"Повтор через {delay}с... ({attempt + 1}/{max_retries})")
+                    logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(delay)
                 else:
                     raise

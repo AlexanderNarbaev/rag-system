@@ -11,18 +11,18 @@ Alternatives evaluated: **Milvus** (heavier deployment, immature sparse support 
 
 ## Decision
 
-**Use Qdrant as the primary vector store with hybrid search via Reciprocal Rank Fusion (RRF).** The collection is configured with dual vector types: `dense` (1024-dim, cosine distance) and `sparse` (on-disk index) — configured at `etl/indexer/qdrant_hybrid.py:113-131`.
+**Use Qdrant as the primary vector store with hybrid search via Reciprocal Rank Fusion (RRF).** The collection is configured with dual vector types: `dense` (1024-dim, cosine distance) and `sparse` (on-disk index) — configured in `etl/indexer/qdrant_hybrid.py`.
 
-RRF fusion merges dense and sparse result lists in `proxy/app/retrieval.py:113-128`, using `k=60` to balance rank bias. Sparse index is stored on-disk (`SparseIndexParams(on_disk=True)` at `qdrant_hybrid.py:118-121`) to reduce RAM usage on the proxy machine.
+RRF fusion merges dense and sparse result lists in `proxy/app/core/retrieval.py`, using `k=60` to balance rank bias. Sparse index is stored on-disk (`SparseIndexParams(on_disk=True)`) to reduce RAM usage on the proxy machine.
 
-Collection creation supports version-aware filtered queries via Qdrant's `FieldCondition` on the `version` field (`retrieval.py:146-148`), enabling retrieval of specific document versions when requested.
+Collection creation supports version-aware filtered queries via Qdrant's `FieldCondition` on the `version` field (`proxy/app/core/retrieval.py`), enabling retrieval of specific document versions when requested.
 
 Quantization (binary/scalar) and HNSW tuning (`ef_construct`, `m`) are deferred defaults; Qdrant's defaults provide adequate performance for <1M chunks.
 
 ## Consequences
 
-**Positive:** Single deployment for both dense and sparse search, no separate BM25 index needed. On-disk sparse index keeps RAM under 8 GB for the proxy machine. REST API (`qdrant-client` HTTP at port 6333) simplifies integration with the FastAPI proxy. Incremental upsert by chunk hash (`qdrant_hybrid.py:186`, `id=point_id`) enables live document updates without full reindexing.
+**Positive:** Single deployment for both dense and sparse search, no separate BM25 index needed. On-disk sparse index keeps RAM under 8 GB for the proxy machine. REST API (`qdrant-client` HTTP at port 6333) simplifies integration with the FastAPI proxy. Incremental upsert by chunk hash enables live document updates without full reindexing.
 
-**Negative:** Qdrant lacks built-in cross-encoder reranking — our pipeline adds this separately via `proxy/app/rerank.py`. No native graph traversal (addressed by Neo4j integration). Disk-based sparse index is slower than in-memory for very large collections (>10M points).
+**Negative:** Qdrant lacks built-in cross-encoder reranking — our pipeline adds this separately via `proxy/app/core/rerank.py`. No native graph traversal (addressed by Neo4j integration). Disk-based sparse index is slower than in-memory for very large collections (>10M points).
 
-**Mitigations:** Cross-encoder reranking post-retrieval compensates for RRF fusion limitations. Cache layer (`proxy/app/cache.py`) reduces repeated identical queries. Monitoring via `/v1/health` endpoint (`main.py:211-238`) checks Qdrant connectivity on every health probe.
+**Mitigations:** Cross-encoder reranking post-retrieval compensates for RRF fusion limitations. Cache layer (`proxy/app/shared/cache.py`) reduces repeated identical queries. Monitoring via `/v1/health` endpoint (`proxy/app/api/health.py`) checks Qdrant connectivity on every health probe.

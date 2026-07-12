@@ -13,15 +13,15 @@ Alternatives considered: **single large model** (running everything on one model
 
 **Use a dual-LLM architecture: a small language model (SLM) for lightweight routing tasks and a primary large language model (LLM) for generation (for example, Gemma-2B-it and Gemma-4-26B-it).**
 
-The SLM (`SLM_MODEL_NAME` in `proxy/app/config.py:39`) handles:
-- Intent classification (`proxy/app/slm_router.py:67-87`): classifies queries into factual, procedural, comparison, summarization, or greeting.
-- Query decomposition (`slm_router.py:90-113`): splits complex queries into up to 3 sub-queries.
-- Entity extraction (`slm_router.py:143-164`): extracts technologies, project names, ticket numbers.
-- Lightweight query rewriting (`slm_router.py:125-140`).
+The SLM (`SLM_MODEL_NAME` in `proxy/app/shared/config.py`) handles:
+- Intent classification (`proxy/app/llm/slm.py`): classifies queries into factual, procedural, comparison, summarization, or greeting.
+- Query decomposition (`proxy/app/llm/slm.py`): splits complex queries into up to 3 sub-queries.
+- Entity extraction (`proxy/app/llm/slm.py`): extracts technologies, project names, ticket numbers.
+- Lightweight query rewriting (`proxy/app/llm/slm.py`).
 
-The LLM (`LLM_MODEL_NAME` in `config.py:31`) handles generation via `proxy/app/llm_router.py` through an OpenAI-compatible API (e.g., `llama.cpp` or `vLLM` server). Both models are served from the same inference server (`LLM_ENDPOINT`), distinguished by model name.
+The LLM (`LLM_MODEL_NAME` in `proxy/app/shared/config.py`) handles generation via `proxy/app/llm/router.py` through an OpenAI-compatible API (e.g., `llama.cpp` or `vLLM` server). Both models are served from the same inference server (`LLM_ENDPOINT`), distinguished by model name.
 
-Fallback: if `SLM_ENDPOINT` is empty (`config.py:38`), the system uses heuristics — keyword matching for intent, regex for entity extraction (`slm_router.py:41` returns empty string with a warning).
+Fallback: if `SLM_ENDPOINT` is empty (`proxy/app/shared/config.py`), the system uses heuristics — keyword matching for intent, regex for entity extraction.
 
 ## Consequences
 
@@ -29,4 +29,4 @@ Fallback: if `SLM_ENDPOINT` is empty (`config.py:38`), the system uses heuristic
 
 **Negative:** Two models to maintain and update. Prompts must be versioned for both models separately. SLM quality degrades for edge-case queries; the heuristic fallback is crude.
 
-**Mitigations:** SLM tasks are constrained to structured outputs (JSON/enums) for validation (`slm_router.py:102-111`). The orchestrator (`proxy/app/orchestrator.py`) can use either SLM or LLM for query rewriting, configured via `MAX_RETRIEVAL_LOOPS` (`config.py:53`).
+**Mitigations:** SLM tasks are constrained to structured outputs (JSON/enums) for validation. The orchestrator (`proxy/app/core/orchestrator/graph.py`) can use either SLM or LLM for query rewriting, configured via `MAX_RETRIEVAL_LOOPS` (`proxy/app/shared/config.py`).

@@ -52,7 +52,17 @@ class JiraExtractor:
             "expand": "changelog,renderedBody"
         }
         """
-        self.url = config["url"].rstrip("/")
+        # Input validation
+        url = config.get("url", "")
+        if not url or not url.strip():
+            raise ValueError("JiraExtractor: 'url' is required and must not be empty")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"JiraExtractor: 'url' must start with http:// or https://, got: {url}")
+        token = config.get("token", "")
+        if not token or not token.strip():
+            raise ValueError("JiraExtractor: 'token' is required and must not be empty")
+
+        self.url = url.rstrip("/")
         self.config = config  # Store full config for retry logic
         self.base_jql = config.get("jql", "ORDER BY updated DESC")
         self.output_dir = Path(config.get("output_dir", "./raw_data/jira"))
@@ -94,8 +104,12 @@ class JiraExtractor:
 
     def _load_wal(self) -> dict:
         if self.wal_path.exists():
-            with open(self.wal_path) as f:
-                return json.load(f)
+            try:
+                with open(self.wal_path) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
+                return {"last_run": None, "last_issue_id": None, "processed_issues": []}
         return {"last_run": None, "last_issue_id": None, "processed_issues": []}
 
     def _save_wal(self):
@@ -103,10 +117,10 @@ class JiraExtractor:
             json.dump(self.wal_data, f, indent=2)
 
     def _request(self, endpoint: str, params: dict = None) -> dict:
-        """Выполняет GET запрос к Jira API с retry логикой."""
+        """Выполняет GET запрос к Jira API с retry логикой и экспоненциальной задержкой."""
         url = urljoin(self.url, endpoint)
         max_retries = self.config.get("max_retries", 5)
-        retry_delay = self.config.get("retry_delay", 5)
+        base_delay = self.config.get("retry_delay", 2)
 
         for attempt in range(max_retries + 1):
             try:
@@ -121,15 +135,17 @@ class JiraExtractor:
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection Error: {e}")
                 if attempt < max_retries:
-                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
                 else:
                     raise
             except requests.exceptions.Timeout as e:
                 logger.warning(f"Timeout: {e}")
                 if attempt < max_retries:
-                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
                 else:
                     raise
 

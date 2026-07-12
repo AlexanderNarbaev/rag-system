@@ -61,17 +61,17 @@ QDRANT_HOST=qdrant
 # Option A: Local vLLM (requires GPU)
 LLM_ENDPOINT=http://vllm:8000/v1
 LLM_MODEL_NAME=your-model-name
-LLM_PROVIDER=vllm
+LLM_PROVIDER_TYPE=openai
 
 # Option B: llama.cpp server
 LLM_ENDPOINT=http://llama-cpp:8080/v1
 LLM_MODEL_NAME=your-model-name
-LLM_PROVIDER=llama_cpp
+LLM_PROVIDER_TYPE=openai
 
 # Option C: Any OpenAI-compatible endpoint (OpenAI, Anthropic, Ollama, etc.)
 LLM_ENDPOINT=https://your-api.example.com/v1
 LLM_MODEL_NAME=your-model-name
-LLM_PROVIDER=openai_compatible
+LLM_PROVIDER_TYPE=openai
 ```
 
 !!! warning "No LLM Endpoint?"
@@ -114,10 +114,12 @@ Expected health response:
 
 ```json
 {
-  "status": "healthy",
-  "qdrant": "connected",
-  "llm": "connected",
-  "version": "2.0.0"
+  "status": "ok",
+  "timestamp": "2026-07-12T14:30:00Z",
+  "components": {
+    "qdrant": "ok",
+    "llm": "ok"
+  }
 }
 ```
 
@@ -159,7 +161,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key="not-needed",  # Auth disabled by default
+    api_key="not-needed",  # Set a valid JWT token when AUTH_ENABLED=true
 )
 
 response = client.chat.completions.create(

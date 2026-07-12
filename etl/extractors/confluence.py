@@ -52,7 +52,17 @@ class ConfluenceExtractor:
             "api_version": "2"                  # '2' для нового REST API, '1' для старого
         }
         """
-        self.url = config["url"].rstrip("/")
+        # Input validation
+        url = config.get("url", "")
+        if not url or not url.strip():
+            raise ValueError("ConfluenceExtractor: 'url' is required and must not be empty")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"ConfluenceExtractor: 'url' must start with http:// or https://, got: {url}")
+        token = config.get("token", "")
+        if not token or not token.strip():
+            raise ValueError("ConfluenceExtractor: 'token' is required and must not be empty")
+
+        self.url = url.rstrip("/")
         self.config = config  # Store full config for retry logic
         self.space_keys = config.get("space_keys")
         self.output_dir = Path(config.get("output_dir", "./raw_data/confluence"))
@@ -117,8 +127,12 @@ class ConfluenceExtractor:
     def _load_wal(self) -> dict:
         """Загружает WAL (последние успешные метки времени и хеши страниц)."""
         if self.wal_path.exists():
-            with open(self.wal_path) as f:
-                return json.load(f)
+            try:
+                with open(self.wal_path) as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
+                return {"last_run": None, "pages_hash": {}}
         return {"last_run": None, "pages_hash": {}}
 
     def _save_wal(self):
@@ -126,10 +140,10 @@ class ConfluenceExtractor:
             json.dump(self.wal_data, f, indent=2)
 
     def _request(self, endpoint: str, params: dict = None) -> dict:
-        """Выполняет GET запрос к Confluence API с retry логикой."""
+        """Выполняет GET запрос к Confluence API с retry логикой и экспоненциальной задержкой."""
         url = urljoin(self.url, endpoint)
         max_retries = self.config.get("max_retries", 5)
-        retry_delay = self.config.get("retry_delay", 5)
+        base_delay = self.config.get("retry_delay", 2)
 
         for attempt in range(max_retries + 1):
             try:
@@ -145,18 +159,20 @@ class ConfluenceExtractor:
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection Error: {e}")
                 if attempt < max_retries:
-                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
                 else:
-                    logger.error(f"Не удалось подключиться к {self.url} после {max_retries} попыток")
+                    logger.error(f"Failed to connect to {self.url} after {max_retries} attempts")
                     raise
             except requests.exceptions.Timeout as e:
                 logger.warning(f"Timeout: {e}")
                 if attempt < max_retries:
-                    logger.info(f"Повтор через {retry_delay}с... ({attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
                 else:
-                    logger.error(f"Сервер не отвечает после {max_retries} попыток. Увеличьте timeout в конфиге")
+                    logger.error(f"Server not responding after {max_retries} attempts. Increase timeout in config")
                     raise
 
     def _get_all_pages(self, space_key: str = None, start: int = 0, limit: int = 50) -> list[dict]:

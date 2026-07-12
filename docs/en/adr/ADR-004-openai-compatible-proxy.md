@@ -13,20 +13,20 @@ Alternatives considered: **native LangChain integration** (ties clients to a spe
 
 **Implement an OpenAI-compatible proxy using FastAPI, exposing `/v1/chat/completions`, `/v1/models`, and `/v1/health`.**
 
-The proxy is defined in `proxy/app/main.py` with Pydantic models matching OpenAI's schema:
-- `ChatCompletionRequest` (`main.py:93-103`) mirrors OpenAI fields (model, messages, temperature, max_tokens, stream) and adds RAG-specific extensions: `rag_version` for version-pinned retrieval, `rag_force_refresh` to bypass cache.
-- `ChatCompletionResponse` (`main.py:111-117`) includes usage statistics, finish_reason, and model identifiers.
+The proxy is defined in `proxy/app/main.py` with Pydantic models in `proxy/app/api/chat.py`:
+- `ChatCompletionRequest` mirrors OpenAI fields (model, messages, temperature, max_tokens, stream) and adds RAG-specific extensions: `rag_version` for version-pinned retrieval, `rag_force_refresh` to bypass cache.
+- `ChatCompletionResponse` includes usage statistics, finish_reason, and model identifiers.
 
-Streaming uses Server-Sent Events (`main.py:317-337`) — `text/event-stream` with `data: {json}\n\n` chunks, terminated by `data: [DONE]\n\n`, matching OpenAI's streaming protocol.
+Streaming uses Server-Sent Events — `text/event-stream` with `data: {json}\n\n` chunks, terminated by `data: [DONE]\n\n`, matching OpenAI's streaming protocol.
 
-The internal RAG pipeline (`main.py:137-208`) is transparent to the client: retrieval, reranking, deduplication, and context assembly happen within the proxy before the LLM call. Non-streaming responses are cached in Redis for 1 hour (`main.py:207`, `ttl=3600`).
+The internal RAG pipeline (`proxy/app/main.py:process_rag_query`) is transparent to the client: retrieval, reranking, deduplication, and context assembly happen within the proxy before the LLM call. Non-streaming responses are cached in Redis for 1 hour (ttl=3600).
 
-Health check (`/v1/health` at `main.py:211-238`) reports Qdrant and LLM endpoint status, returning 503 if degraded — compatible with Docker health checks and load balancers.
+Health check (`/v1/health` in `proxy/app/api/health.py`) reports Qdrant and LLM endpoint status, returning 503 if degraded — compatible with Docker health checks and load balancers.
 
 ## Consequences
 
 **Positive:** Drop-in replacement for any OpenAI client — existing tools point to the proxy URL and continue working unchanged. Single proxy handles both RAG logic and LLM routing, reducing network hops. RAG extensions (`rag_version`, `rag_force_refresh`) are ignored by standard OpenAI clients (extra fields are silently accepted).
 
-**Negative:** Non-RAG queries still go through the full pipeline (retrieval, context assembly) unless special-cased. The proxy adds 200-500ms latency for retrieval+reranking before LLM generation starts. Single worker mode (`main.py:377`, `workers=1`) limits concurrency to protect shared state (embedder, cache).
+**Negative:** Non-RAG queries still go through the full pipeline (retrieval, context assembly) unless special-cased. The proxy adds 200-500ms latency for retrieval+reranking before LLM generation starts. Single worker mode (`WORKERS=1` in `proxy/app/shared/config.py`) limits concurrency to protect shared state (embedder, cache).
 
-**Mitigations:** Cache layer reduces repeated query latency to <10ms. SLM-based intent classification (`slm_router.py:116-122`) can detect greetings/no-context queries and skip retrieval. Production scaling can use Redis-backed cache to enable multiple workers.
+**Mitigations:** Cache layer reduces repeated query latency to <10ms. SLM-based intent classification (`proxy/app/llm/slm.py`) can detect greetings/no-context queries and skip retrieval. Production scaling can use Redis-backed cache to enable multiple workers.
