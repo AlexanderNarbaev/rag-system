@@ -320,14 +320,22 @@ class TestOrchestratorFlow:
 
     def test_orchestrator_state_flows_through_nodes(self):
         """Orchestrator invokes the graph and produces final answer in state."""
+        import proxy.app.core.orchestrator as _orch_mod
+        import proxy.app.core.orchestrator.graph as _graph_mod
+
+        # Pre-set the attributes if they are None (langgraph not installed)
+        _graph_mod.StateGraph = _graph_mod.StateGraph or _MockStateGraph
+        _graph_mod.END = _graph_mod.END or _END_SENTINEL
+        _graph_mod.MemorySaver = _graph_mod.MemorySaver or _MockMemorySaver
+
         with (
             patch("proxy.app.shared.config.USE_LANGGRAPH", True),
-            patch("proxy.app.core.orchestrator.StateGraph", _MockStateGraph),
-            patch("proxy.app.core.orchestrator.END", _END_SENTINEL),
-            patch("proxy.app.core.orchestrator.MemorySaver", _MockMemorySaver),
-            patch("proxy.app.core.orchestrator.hybrid_search") as mock_search,
-            patch("proxy.app.core.orchestrator.rerank_chunks", return_value=[0, 1]),
-            patch("proxy.app.core.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm,
+            patch.object(_graph_mod, "StateGraph", _MockStateGraph),
+            patch.object(_graph_mod, "END", _END_SENTINEL),
+            patch.object(_graph_mod, "MemorySaver", _MockMemorySaver),
+            patch.object(_orch_mod, "hybrid_search") as mock_search,
+            patch.object(_orch_mod, "rerank_chunks", return_value=[0, 1]),
+            patch.object(_orch_mod, "non_stream_completion", new_callable=MagicMock) as mock_llm,
         ):
             mock_llm.return_value = "RAG — это техника объединения LLM с базой знаний."
 
@@ -368,15 +376,23 @@ class TestOrchestratorFlow:
 
     def test_orchestrator_rewrite_loop_limit(self):
         """Orchestrator respects max rewrite loops and produces answer."""
+        import proxy.app.core.orchestrator as _orch_mod
+        import proxy.app.core.orchestrator.graph as _graph_mod
+
+        # Pre-set the attributes if they are None (langgraph not installed)
+        _graph_mod.StateGraph = _graph_mod.StateGraph or _MockStateGraph
+        _graph_mod.END = _graph_mod.END or _END_SENTINEL
+        _graph_mod.MemorySaver = _graph_mod.MemorySaver or _MockMemorySaver
+
         with (
             patch("proxy.app.shared.config.USE_LANGGRAPH", True),
             patch("proxy.app.shared.config.MAX_RETRIEVAL_LOOPS", 1),
-            patch("proxy.app.core.orchestrator.StateGraph", _MockStateGraph),
-            patch("proxy.app.core.orchestrator.END", _END_SENTINEL),
-            patch("proxy.app.core.orchestrator.MemorySaver", _MockMemorySaver),
-            patch("proxy.app.core.orchestrator.hybrid_search") as mock_search,
-            patch("proxy.app.core.orchestrator.rerank_chunks", return_value=[0]),
-            patch("proxy.app.core.orchestrator.non_stream_completion", new_callable=MagicMock) as mock_llm,
+            patch.object(_graph_mod, "StateGraph", _MockStateGraph),
+            patch.object(_graph_mod, "END", _END_SENTINEL),
+            patch.object(_graph_mod, "MemorySaver", _MockMemorySaver),
+            patch.object(_orch_mod, "hybrid_search") as mock_search,
+            patch.object(_orch_mod, "rerank_chunks", return_value=[0]),
+            patch.object(_orch_mod, "non_stream_completion", new_callable=MagicMock) as mock_llm,
         ):
             mock_llm.return_value = "Ответ после ограничения циклов."
 
