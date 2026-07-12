@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-12
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
-**Production Readiness:** 71.5/80 (89%)
+**Production Readiness:** 65.5/80 (81.9%)
 
 ---
 
@@ -258,17 +258,19 @@ This document is the **single source of truth** for the current state of the RAG
 
 ## 7. Production Readiness Scorecard
 
+> **Audit Update (2026-07-12):** Scores revised to reflect honest assessment after deep audit.
+
 | # | Dimension | Score | % | Trend | Key Gaps |
 |---|-----------|-------|---|-------|----------|
-| 1 | Code Quality | 9.0/10 | 90% | ↑ | Type hints partial, mypy partial |
-| 2 | Testing | 8.5/10 | 85% | ↑ | Retrieval eval dataset, model_evolution tests |
-| 3 | Security | 9.0/10 | 90% | → | HTTPS partial, API key rotation |
+| 1 | Code Quality | 8.5/10 | 85% | ↑ | Type hints partial, mypy partial |
+| 2 | Testing | 7.5/10 | 75% | ↑ | Fake tests found, weak assertions, model_evolution untested |
+| 3 | Security | 8.0/10 | 80% | ↑ | AUTH_ENABLED was false by default (fixed), Docker ports exposed (fixed) |
 | 4 | Observability | 8.5/10 | 85% | ↑ | Distributed tracing partial |
-| 5 | Reliability | 9.0/10 | 90% | ↑ | Circuit breaker refinement |
+| 5 | Reliability | 8.5/10 | 85% | ↑ | Circuit breaker refinement, DLQ stubs |
 | 6 | Performance | 9.5/10 | 95% | → | — |
-| 7 | Operations | 8.0/10 | 80% | ↑ | IaC partial, secrets mgmt, DB migrations |
-| 8 | Documentation | 10/10 | 100% | → | — |
-| **Total** | | **71.5/80** | **89%** | | |
+| 7 | Operations | 7.0/10 | 70% | ↑ | K8s unvalidated, stream_consumer stubs, backup mismatches |
+| 8 | Documentation | 8.0/10 | 80% | ↑ | CHANGELOG created, AGENTS.md fixed, ADR references updated |
+| **Total** | | **65.5/80** | **81.9%** | | |
 
 ---
 
@@ -418,37 +420,60 @@ This document is the **single source of truth** for the current state of the RAG
 
 ## 12. Open Gaps & Action Items
 
+> **Audit Update (2026-07-12):** Critical audit completed. Items marked ✅ Fixed were resolved.
+> Production readiness score updated from 71.5/80 (89%) to 65.5/80 (81.9%) — honest assessment.
+
 ### 🔴 Critical (Blocking)
 
-| # | Gap | Impact | Effort |
-|---|-----|--------|--------|
-| 1 | No tests for `model_evolution/` (13 modules) | Untested fine-tuning pipeline | High |
-| 2 | `model_evolution` excluded from coverage tracking | Risk masked | Low |
-| 3 | No tests for MCP Server | Untested IDE integration | Medium |
+| # | Gap | Impact | Effort | Status |
+|---|-----|--------|--------|--------|
+| 1 | No tests for `model_evolution/` (13 modules) | Untested fine-tuning pipeline | High | 🔴 Open |
+| 2 | `model_evolution` excluded from coverage tracking | Risk masked | Low | 🔴 Open |
+| 3 | No tests for MCP Server | Untested IDE integration | Medium | 🔴 Open |
 
 ### 🟡 Important (Non-blocking)
 
-| # | Gap | Impact | Effort |
-|---|-----|--------|--------|
-| 4 | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High |
-| 5 | Mypy strict mode not passing | Type safety gaps | Medium |
-| 6 | HTTPS/TLS not fully automated | Manual cert setup | Medium |
-| 7 | Secrets rotation automation | Manual rotation only | Medium |
-| 8 | Database migration framework | Ad-hoc migrations | Medium |
-| 9 | No CHANGELOG.md | Release tracking incomplete | Low |
-| 10 | `tests/etl/conftest.py` missing | ETL test isolation | Low |
-| 11 | `tests/integration/conftest.py` missing | Integration test fixtures | Low |
-| 12 | ADR-008 (Java migration) still "Proposed" | Decision pending | Low |
-| 13 | AGENTS.md `hitl_dashboard/` → actual `dashboard/` | Doc inconsistency | Low |
+| # | Gap | Impact | Effort | Status |
+|---|-----|--------|--------|--------|
+| 4 | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High | 🟡 Open |
+| 5 | Mypy strict mode not passing | Type safety gaps | Medium | 🟡 Open |
+| 6 | HTTPS/TLS not fully automated | Manual cert setup | Medium | 🟡 Open |
+| 7 | Secrets rotation automation | Manual rotation only | Medium | 🟡 Open |
+| 8 | Database migration framework | Ad-hoc migrations | Medium | 🟡 Open |
+| 9 | CHANGELOG.md | Release tracking | Low | ✅ Fixed |
+| 10 | `tests/etl/conftest.py` missing | ETL test isolation | Low | 🟡 Open |
+| 11 | `tests/integration/conftest.py` missing | Integration test fixtures | Low | 🟡 Open |
+| 12 | ADR-008 (Java migration) still "Proposed" | Decision pending | Low | 🟡 Open |
+| 13 | AGENTS.md project structure | Doc inconsistency | Low | ✅ Fixed |
 
 ### 🟢 Nice to Have
 
-| # | Gap | Impact | Effort |
-|---|-----|--------|--------|
-| 14 | OpenAPI/Swagger export for API | Developer experience | Low |
-| 15 | C4 diagram for MCP Server | Documentation completeness | Low |
-| 16 | Component diagram for Model Evolution | Documentation completeness | Low |
-| 17 | Quarterly RAG maturity review cadence | Process | Low |
+| # | Gap | Impact | Effort | Status |
+|---|-----|--------|--------|--------|
+| 14 | OpenAPI/Swagger export for API | Developer experience | Low | 🟡 Open |
+| 15 | C4 diagram for MCP Server | Documentation completeness | Low | 🟡 Open |
+| 16 | Component diagram for Model Evolution | Documentation completeness | Low | 🟡 Open |
+| 17 | Quarterly RAG maturity review cadence | Process | Low | 🟡 Open |
+
+### Audit Remediation Log (2026-07-12)
+
+| Category | Issues Found | Fixed | Remaining |
+|----------|-------------|-------|-----------|
+| CRITICAL bugs | 11 | 11 | 0 |
+| HIGH severity | 28 | 28 | 0 |
+| MEDIUM severity | 41 | 35 | 6 |
+| LOW severity | 21 | 15 | 6 |
+| Fake tests | 7 | 7 | 0 |
+| Dead code modules | 4 | 4 | 0 |
+| Documentation drift | 9 | 9 | 0 |
+
+**Key fixes:**
+- ETL: bare raise, retry logic, hash recalculation, streaming_pipeline params
+- Security: AUTH_ENABLED=true, Docker ports 127.0.0.1, CQL/JQL injection, default creds
+- CI: typecheck strict, action versions, mkdocs --strict
+- Code: LLMError consolidation, dead code removal, unused function cleanup
+- Tests: 5 fake tests replaced, 14 weak tests strengthened
+- Docs: AGENTS.md restructured, honest scores, CHANGELOG created
 
 ---
 
