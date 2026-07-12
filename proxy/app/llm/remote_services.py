@@ -49,20 +49,43 @@ class RemoteEmbeddingClient:
         self._healthy = True
 
     def _check_health(self) -> bool:
-        """Quick connectivity check (non-blocking)."""
+        """Quick connectivity check (non-blocking).
+
+        Uses GET to /models endpoint which is more widely supported than HEAD.
+        Falls back to checking the embeddings endpoint directly.
+        """
         import urllib.request
 
         if not self._healthy:
             return False
         try:
-            req = urllib.request.Request(self._endpoint, method="HEAD")
+            # Try /models endpoint first (OpenAI-compatible)
+            models_url = f"{self._endpoint}/models"
+            req = urllib.request.Request(models_url)
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
             urllib.request.urlopen(req, timeout=5)  # nosec B310
             return True
         except Exception:
-            self._healthy = False
-            return False
+            try:
+                # Fallback: try the embeddings endpoint with a minimal request
+                import json as _json
+
+                test_payload = _json.dumps(
+                    {"model": self._model, "input": ["test"], "max_tokens": 1}
+                ).encode("utf-8")
+                req = urllib.request.Request(
+                    self._embedding_url,
+                    data=test_payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                if self._api_key:
+                    req.add_header("Authorization", f"Bearer {self._api_key}")
+                urllib.request.urlopen(req, timeout=5)  # nosec B310
+                return True
+            except Exception:
+                self._healthy = False
+                return False
 
     def encode(
         self,
@@ -154,12 +177,30 @@ class RemoteRerankerClient:
         self._healthy = True
 
     def _check_health(self) -> bool:
+        """Quick connectivity check (non-blocking).
+
+        Uses a minimal rerank request to verify the service is reachable.
+        """
+        import json as _json
         import urllib.request
 
         if not self._healthy:
             return False
         try:
-            req = urllib.request.Request(self._endpoint, method="HEAD")
+            # Send a minimal rerank request to check connectivity
+            test_payload = _json.dumps(
+                {
+                    "model": self._model,
+                    "query": "test",
+                    "documents": ["test document"],
+                    "top_n": 1,
+                }
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                self._rerank_url,
+                data=test_payload,
+                headers={"Content-Type": "application/json"},
+            )
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
             urllib.request.urlopen(req, timeout=5)  # nosec B310

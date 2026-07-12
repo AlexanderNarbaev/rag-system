@@ -86,20 +86,20 @@ PETSORE_SPEC = {
 
 class TestDiscoveryMode:
     def test_enum_values(self):
-        from tools.openapi_discovery import DiscoveryMode
+        from tools.openapi import DiscoveryMode
 
         assert DiscoveryMode.AUTO.value == "auto"
         assert DiscoveryMode.LLM_DRIVEN.value == "llm_driven"
 
     def test_enum_is_string_subclass(self):
-        from tools.openapi_discovery import DiscoveryMode
+        from tools.openapi import DiscoveryMode
 
         assert isinstance(DiscoveryMode.AUTO, str)
 
 
 class TestOpenAPIDiscoveryAuto:
     def test_discover_auto_generates_four_tools(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -109,7 +109,7 @@ class TestOpenAPIDiscoveryAuto:
         assert names == {"listPets", "createPet", "getPetById", "deletePet"}
 
     def test_get_endpoints_are_search_category(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -119,7 +119,7 @@ class TestOpenAPIDiscoveryAuto:
             assert t.category == "search", f"{t.name} should be search, got {t.category}"
 
     def test_post_delete_are_action_category(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -129,7 +129,7 @@ class TestOpenAPIDiscoveryAuto:
             assert t.category == "action", f"{t.name} should be action, got {t.category}"
 
     def test_path_params_extracted_as_tool_param(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -143,7 +143,7 @@ class TestOpenAPIDiscoveryAuto:
         assert pet_id_param.type is int  # noqa: E721
 
     def test_query_params_extracted_as_optional_tool_param(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -163,7 +163,7 @@ class TestOpenAPIDiscoveryAuto:
         assert status.enum == ["available", "pending", "sold"]
 
     def test_request_body_json_mapped_to_tool_param(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -174,7 +174,7 @@ class TestOpenAPIDiscoveryAuto:
         assert "status" in body_params
 
     def test_include_tags_filtering(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO, include_tags=["admin"])
@@ -183,7 +183,7 @@ class TestOpenAPIDiscoveryAuto:
         assert tools[0].name == "deletePet"
 
     def test_exclude_tags_filtering(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO, exclude_tags=["admin"])
@@ -193,7 +193,7 @@ class TestOpenAPIDiscoveryAuto:
         assert "deletePet" not in names
 
     def test_all_tools_have_openapi_provider(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO)
@@ -202,7 +202,7 @@ class TestOpenAPIDiscoveryAuto:
             assert t.provider == "openapi", f"{t.name} provider should be openapi"
 
     def test_async_handler_is_set(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.AUTO, base_url_override="https://api.example.com")
@@ -213,13 +213,13 @@ class TestOpenAPIDiscoveryAuto:
 
 class TestSlugify:
     def test_slugify_path_with_params(self):
-        from tools.openapi_discovery import _slugify_path
+        from tools.openapi import _slugify_path
 
         result = _slugify_path("/pets/{petId}")
         assert result == "pets_petId"
 
     def test_slugify_path_nested_with_params(self):
-        from tools.openapi_discovery import _slugify_path
+        from tools.openapi import _slugify_path
 
         result = _slugify_path("/store/orders/{orderId}/items/{itemId}")
         assert result == "store_orders_orderId_items_itemId"
@@ -227,7 +227,7 @@ class TestSlugify:
 
 class TestEndpointFallbackNaming:
     def test_no_operation_id_uses_method_path_slug(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         spec = {
             "openapi": "3.0.0",
@@ -248,7 +248,7 @@ class TestEndpointFallbackNaming:
         assert tools[0].name == "get_users_id"
 
     def test_swagger_2_0_spec_parsing(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         spec = {
             "swagger": "2.0",
@@ -275,7 +275,7 @@ class TestEndpointFallbackNaming:
 
 class TestLLMDrivenMode:
     def test_llm_driven_returns_empty_stub(self):
-        from tools.openapi_discovery import DiscoveryMode, OpenAPIDiscovery
+        from tools.openapi import DiscoveryMode, OpenAPIDiscovery
 
         discovery = OpenAPIDiscovery()
         tools = discovery.discover(PETSORE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)

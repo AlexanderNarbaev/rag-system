@@ -222,6 +222,8 @@ async def get_auth_context(
     When AUTH_ENABLED is False (default), returns an anonymous context.
     When AUTH_ENABLED is True, requires a valid Bearer token and returns
     401 for missing/invalid tokens.
+
+    Supports both JWT tokens and API keys (sk-* prefix).
     """
     if not AUTH_ENABLED:
         return UserContext.anonymous()
@@ -236,7 +238,32 @@ async def get_auth_context(
     if not token:
         raise HTTPException(status_code=401, detail="Authentication required")
 
+    # Check for API key (sk-* prefix)
+    if token.startswith("sk-"):
+        return _validate_api_key(token)
+
     return verify_token(token)
+
+
+def _validate_api_key(key: str) -> UserContext:
+    """Validate an API key and return a UserContext.
+
+    Raises HTTPException(401) if the key is invalid or revoked.
+    """
+    from proxy.app.auth.api_keys import api_key_manager
+
+    api_key = api_key_manager.validate_key(key)
+    if api_key is None:
+        raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+
+    return UserContext(
+        user_id=api_key.user_id,
+        username=api_key.user_id,
+        roles=api_key.roles,
+        groups=[],
+        access_level="internal",
+        namespace="",
+    )
 
 
 async def get_optional_auth_context(
@@ -246,6 +273,7 @@ async def get_optional_auth_context(
     """FastAPI dependency that extracts UserContext when available but never fails.
 
     Useful for endpoints that work both with and without authentication.
+    Supports both JWT tokens and API keys (sk-* prefix).
     """
     token: str | None = None
     if credentials:
@@ -254,9 +282,24 @@ async def get_optional_auth_context(
         token = request.headers["x-auth-token"]
 
     if token:
-        result = get_user_from_token(token)
-        if result is not None:
-            return result
+        # Check for API key (sk-* prefix)
+        if token.startswith("sk-"):
+            from proxy.app.auth.api_keys import api_key_manager
+
+            api_key = api_key_manager.validate_key(token)
+            if api_key is not None:
+                return UserContext(
+                    user_id=api_key.user_id,
+                    username=api_key.user_id,
+                    roles=api_key.roles,
+                    groups=[],
+                    access_level="internal",
+                    namespace="",
+                )
+        else:
+            result = get_user_from_token(token)
+            if result is not None:
+                return result
 
     return UserContext.anonymous()
 
@@ -345,7 +388,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 )
 
             try:
-                user_ctx = verify_token(token)
+                # Check for API key (sk-* prefix)
+                user_ctx = _validate_api_key(token) if token.startswith("sk-") else verify_token(token)
             except HTTPException as exc:
                 return JSONResponse(
                     status_code=exc.status_code,

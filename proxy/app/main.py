@@ -163,7 +163,7 @@ async def lifespan(app: FastAPI):
         # OpenAPI provider
         if TOOLS_OPENAPI_SPECS:
             try:
-                from proxy.app.tools.openapi_discovery import OpenAPIProvider
+                from proxy.app.tools.openapi import OpenAPIProvider
 
                 provider = OpenAPIProvider()
                 discovered = await provider.discover()

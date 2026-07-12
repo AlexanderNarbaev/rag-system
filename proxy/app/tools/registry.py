@@ -509,7 +509,7 @@ class EnhancedToolRegistry:
         # OpenAPI provider (only if specs configured)
         if TOOLS_OPENAPI_SPECS:
             try:
-                from proxy.app.tools.openapi_discovery import OpenAPIProvider as RealOpenAPIProvider
+                from proxy.app.tools.openapi import OpenAPIProvider as RealOpenAPIProvider
 
                 openapi = RealOpenAPIProvider()
                 discovered = await openapi.discover()

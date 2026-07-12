@@ -5,10 +5,14 @@ ETL Pipeline — Parallel extraction with streaming indexing.
 Extracts from Confluence, Jira, GitLab in parallel with concurrency limits.
 Streams chunks directly to Qdrant instead of saving locally first.
 Resumes from WAL checkpoints on restart.
+
+Supports graceful shutdown via SIGINT/SIGTERM — saves WAL checkpoint
+before exiting so the pipeline can resume from where it left off.
 """
 
 import asyncio
 import logging
+import signal
 import sys
 import time
 from datetime import UTC, datetime
@@ -83,6 +87,39 @@ class StreamingETLPipeline:
             "jira": {"issues": 0, "chunks": 0, "errors": 0},
             "gitlab": {"projects": 0, "chunks": 0, "errors": 0},
         }
+
+        # Graceful shutdown
+        self._shutdown = False
+        self._setup_signal_handlers()
+
+    def _setup_signal_handlers(self):
+        """Setup signal handlers for graceful shutdown."""
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, self._handle_shutdown, sig)
+
+    def _handle_shutdown(self, sig):
+        """Handle shutdown signal — save WAL and exit gracefully."""
+        if self._shutdown:
+            logger.warning("Forced shutdown requested — exiting immediately")
+            sys.exit(1)
+        self._shutdown = True
+        logger.warning(f"Received {sig.name} — saving WAL checkpoint and shutting down gracefully...")
+        self._save_shutdown_checkpoint()
+
+    def _save_shutdown_checkpoint(self):
+        """Save current progress to WAL before shutdown."""
+        try:
+            self.wal.set_checkpoint("pipeline", {
+                "last_run": datetime.now(UTC).isoformat(),
+                "shutdown": True,
+                "stats": self.stats,
+                "total_chunks": sum(s["chunks"] for s in self.stats.values()),
+                "total_errors": sum(s["errors"] for s in self.stats.values()),
+            })
+            logger.info("WAL checkpoint saved — pipeline can resume from this point")
+        except Exception as e:
+            logger.error(f"Failed to save WAL checkpoint: {e}")
 
     def _create_extractors(self) -> dict[str, Any]:
         """Create extractors for configured sources."""
@@ -304,6 +341,10 @@ class StreamingETLPipeline:
         space_keys = extractor.space_keys or [None]
 
         for space in space_keys:
+            if self._shutdown:
+                logger.info("Shutdown requested — stopping Confluence extraction")
+                break
+
             logger.info(f"Processing space: {space if space else 'ALL'}")
 
             # Get page list (metadata only)

@@ -1,45 +1,10 @@
-# proxy/app/orchestrator.py
-"""
-Agentic RAG pipeline orchestration using LangGraph.
-
-Implements a state graph with the following nodes:
-1. Query rewrite (rewrite) — LLM-based query improvement
-2. Hybrid search (retrieve) — dense + sparse retrieval from Qdrant
-3. Sufficiency check (check_sufficiency) — triggers re-retrieval if needed
-4. Graph expansion (graph_expand) — optional Neo4j knowledge graph enrichment
-5. Reranking (rerank) — cross-encoder precision ranking
-6. Context building (build_context) — token-budgeted context assembly
-7. Generation (generate) — LLM answer generation
-8. Self-reflection and confidence scoring for quality assurance
-
-Агентная оркестрация RAG-пайплайна с использованием LangGraph.
-Реализует циклы:
-1. Переписывание запроса (rewrite)
-2. Гибридный поиск (retrieve)
-3. Оценка достаточности (check_sufficiency) -> если недостаточно, повторный rewrite/retrieve
-4. Графовое расширение (graph_expand) – опционально
-5. Реранкинг (rerank)
-6. Генерация ответа (generate)
-"""
+# proxy/app/core/orchestrator/nodes.py
+"""Node implementations for the RAG LangGraph state graph."""
 
 import logging
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal
 
-try:
-    from langgraph.checkpoint import MemorySaver
-    from langgraph.graph import END, StateGraph
-
-    LANGGRAPH_AVAILABLE = True
-except ImportError:
-    LANGGRAPH_AVAILABLE = False
-
-# Импорт модулей RAG
-from proxy.app.core.context import build_context, deduplicate_chunks
-from proxy.app.core.rerank import rerank_chunks
-from proxy.app.core.retrieval import apply_time_decay, graph_expand_query, hybrid_search
 from proxy.app.core.token_optimizer import TokenOptimizer
-from proxy.app.llm.provider import non_stream_completion
-from proxy.app.llm.slm import IntentType, classify_intent
 from proxy.app.shared.config import (
     MAX_CHUNKS_AFTER_RERANK,
     MAX_CHUNKS_RETRIEVAL,
@@ -50,6 +15,55 @@ from proxy.app.shared.config import (
 logger = logging.getLogger(__name__)
 
 
+def _get_hybrid_search():
+    """Lazy import to allow test patching at orchestrator level."""
+    from proxy.app.core.orchestrator import hybrid_search
+
+    return hybrid_search
+
+
+def _get_rerank_chunks():
+    """Lazy import to allow test patching at orchestrator level."""
+    from proxy.app.core.orchestrator import rerank_chunks
+
+    return rerank_chunks
+
+
+def _get_non_stream_completion():
+    """Lazy import to allow test patching at orchestrator level."""
+    from proxy.app.core.orchestrator import non_stream_completion
+
+    return non_stream_completion
+
+
+def _get_deduplicate_chunks():
+    """Lazy import to allow test patching at orchestrator level."""
+    from proxy.app.core.context import deduplicate_chunks
+
+    return deduplicate_chunks
+
+
+def _get_build_context():
+    """Lazy import to allow test patching at orchestrator level."""
+    from proxy.app.core.context import build_context
+
+    return build_context
+
+
+def _get_apply_time_decay():
+    """Lazy import for apply_time_decay."""
+    from proxy.app.core.retrieval import apply_time_decay
+
+    return apply_time_decay
+
+
+def _get_graph_expand_query():
+    """Lazy import for graph_expand_query."""
+    from proxy.app.core.retrieval import graph_expand_query
+
+    return graph_expand_query
+
+
 def _dynamic_top_k(query: str, *, max_default: int = 50) -> int:
     """Determine the optimal number of chunks to retrieve based on query intent.
 
@@ -58,6 +72,9 @@ def _dynamic_top_k(query: str, *, max_default: int = 50) -> int:
     Comparison/Complex → max_default. Falls back to max_default on error.
     """
     try:
+        # Import here to allow test patching at orchestrator level
+        from proxy.app.core.orchestrator import IntentType, classify_intent
+
         intent, _ = classify_intent(query)
         mapping = {
             IntentType.GREETING: 0,
@@ -73,30 +90,7 @@ def _dynamic_top_k(query: str, *, max_default: int = 50) -> int:
         return max_default
 
 
-class RAGState(TypedDict):
-    """Состояние графа RAG."""
-
-    query: str
-    version: str | None
-    rewritten_query: str | None
-    rewrite_count: int
-    retrieved_chunks: list[dict[str, Any]]
-    reranked_chunks: list[dict[str, Any]]
-    graph_context: str | None
-    context: str
-    answer: str
-    sufficient: bool
-    temperature: float
-    max_tokens: int
-    stream: bool
-    # Tool/function calling
-    tool_calls: list[dict[str, Any]]
-    tool_results: list[dict[str, Any]]
-    tool_loop_count: int
-    tools_enabled: bool
-
-
-def rewrite_query(state: RAGState) -> dict[str, Any]:
+def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
     """
     Переписывает запрос с помощью LLM для улучшения ретривала.
     Используется при первом входе или когда контекст признан недостаточным.
@@ -120,7 +114,7 @@ def rewrite_query(state: RAGState) -> dict[str, Any]:
     )
 
     try:
-        rewritten = non_stream_completion([{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100)
+        rewritten = _get_non_stream_completion()([{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100)
         rewritten = rewritten.strip()
         logger.info(f"Rewritten query: '{query}' -> '{rewritten}'")
         return {"rewritten_query": rewritten, "rewrite_count": rewrite_count + 1}
@@ -129,7 +123,7 @@ def rewrite_query(state: RAGState) -> dict[str, Any]:
         return {"rewritten_query": query, "rewrite_count": rewrite_count + 1}
 
 
-def retrieve(state: RAGState) -> dict[str, Any]:
+def retrieve(state: dict[str, Any]) -> dict[str, Any]:
     """
     Выполняет гибридный поиск в Qdrant.
     Использует переписанный запрос, если есть, иначе оригинальный.
@@ -139,7 +133,7 @@ def retrieve(state: RAGState) -> dict[str, Any]:
     version = state.get("version")
 
     logger.info(f"Retrieving for: '{query_to_use}' (version: {version})")
-    results = hybrid_search(query=query_to_use, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
+    results = _get_hybrid_search()(query=query_to_use, version=version, top_k=MAX_CHUNKS_RETRIEVAL)
 
     # Преобразуем результаты в список словарей для единообразия
     chunks = []
@@ -147,13 +141,13 @@ def retrieve(state: RAGState) -> dict[str, Any]:
         chunks.append({"id": hit.id, "text": hit.payload.get("text", ""), "score": hit.score, "payload": hit.payload})
 
     # Применяем time-decay бустинг для версионированных документов
-    chunks = apply_time_decay(chunks)
+    chunks = _get_apply_time_decay()(chunks)
 
     logger.info(f"Retrieved {len(chunks)} chunks (with time-decay)")
     return {"retrieved_chunks": chunks}
 
 
-def graph_expand(state: RAGState) -> dict[str, Any]:
+def graph_expand(state: dict[str, Any]) -> dict[str, Any]:
     """
     Расширяет запрос с помощью графа знаний (Neo4j).
     Возвращает дополнительные сущности или связанные документы.
@@ -163,7 +157,7 @@ def graph_expand(state: RAGState) -> dict[str, Any]:
 
     query = state.get("rewritten_query") or state["query"]
     try:
-        graph_results = graph_expand_query(query)
+        graph_results = _get_graph_expand_query()(query)
         context = f"\n\nСвязанные сущности из графа знаний:\n{graph_results}\n"
         logger.info("Graph expansion added")
         return {"graph_context": context}
@@ -172,7 +166,7 @@ def graph_expand(state: RAGState) -> dict[str, Any]:
         return {"graph_context": ""}
 
 
-def check_sufficiency(state: RAGState) -> Literal["rewrite", "rerank"]:
+def check_sufficiency(state: dict[str, Any]) -> Literal["rewrite", "rerank"]:
     """
     Оценивает, достаточно ли релевантны извлечённые чанки.
     Если средний балл или покрытие низкое -> инициирует повторное переписывание.
@@ -188,13 +182,11 @@ def check_sufficiency(state: RAGState) -> Literal["rewrite", "rerank"]:
         logger.info(f"Low average score {avg_score:.2f}, rewriting query")
         return "rewrite"
 
-    # Альтернатива: проверяем, содержит ли топ-3 чанк хоть какие-то ключевые слова из запроса
-    # (можно сделать через LLM-классификатор, но для скорости – эвристика)
     logger.info(f"Sufficient context (avg_score={avg_score:.2f})")
     return "rerank"
 
 
-def rerank(state: RAGState) -> dict[str, Any]:
+def rerank(state: dict[str, Any]) -> dict[str, Any]:
     """
     Выполняет кросс-энкодер реранкинг извлечённых чанков.
     """
@@ -206,16 +198,16 @@ def rerank(state: RAGState) -> dict[str, Any]:
     texts = [c["text"] for c in chunks]
     scores = [c["score"] for c in chunks]
 
-    indices = rerank_chunks(query, texts, top_k=MAX_CHUNKS_AFTER_RERANK)
+    indices = _get_rerank_chunks()(query, texts, top_k=MAX_CHUNKS_AFTER_RERANK)
     reranked = [(chunks[i], scores[i]) for i in indices]
 
     # Дедупликация
-    unique = deduplicate_chunks(reranked)
+    unique = _get_deduplicate_chunks()(reranked)
     logger.info(f"Reranked to {len(unique)} chunks")
     return {"reranked_chunks": unique}
 
 
-def build_context_node(state: RAGState) -> dict[str, Any]:
+def build_context_node(state: dict[str, Any]) -> dict[str, Any]:
     """
     Собирает финальный контекст из отреранжированных чанков и графового расширения.
     Применяет extractive-компрессию если контекст превышает токен-бюджет.
@@ -225,7 +217,7 @@ def build_context_node(state: RAGState) -> dict[str, Any]:
     query = state.get("rewritten_query") or state["query"]
     max_tokens = state.get("max_tokens", 120000)
 
-    context = build_context(chunks_with_scores, max_tokens=max_tokens)
+    context = _get_build_context()(chunks_with_scores, max_tokens=max_tokens)
 
     # Оценка токенов и extractive-компрессия при превышении бюджета
     optimizer = TokenOptimizer()
@@ -235,7 +227,7 @@ def build_context_node(state: RAGState) -> dict[str, Any]:
         chunk_texts = [chunk.get("text", "") for chunk, _ in chunks_with_scores]
         compressed_text = optimizer.extractive_compress(chunk_texts, query, max_sentences=3)
         compressed_chunks = [(dict(chunk, text=compressed_text), score) for chunk, score in chunks_with_scores[:1]]
-        context = build_context(compressed_chunks, max_tokens=max_tokens)
+        context = _get_build_context()(compressed_chunks, max_tokens=max_tokens)
 
     if graph_ctx:
         context += graph_ctx
@@ -244,7 +236,7 @@ def build_context_node(state: RAGState) -> dict[str, Any]:
     return {"context": context, "sufficient": True}
 
 
-def generate(state: RAGState) -> dict[str, Any]:
+def generate(state: dict[str, Any]) -> dict[str, Any]:
     """
     Генерация ответа с использованием контекста.
     Поддерживает как потоковый, так и обычный режим.
@@ -253,7 +245,6 @@ def generate(state: RAGState) -> dict[str, Any]:
     context = state.get("context", "")
     temperature = state.get("temperature", 0.2)
     max_tokens = state.get("max_tokens", 4096)
-    _stream = state.get("stream", False)
 
     system_prompt = (
         "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
@@ -262,8 +253,7 @@ def generate(state: RAGState) -> dict[str, Any]:
     )
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_query}]
 
-    # Note: streaming is handled at the main.py level, not inside LangGraph
-    answer = non_stream_completion(messages, temperature=temperature, max_tokens=max_tokens)
+    answer = _get_non_stream_completion()(messages, temperature=temperature, max_tokens=max_tokens)
     logger.info(f"Generated answer length: {len(answer)}")
     return {"answer": answer}
 
@@ -287,8 +277,6 @@ def check_confidence(state: dict) -> dict:
     if not answer:
         return {"confidence": None, "needs_escalation": False, "needs_self_critique": False}
 
-    # HALLUCINATION_CHECK_ENABLED gates the full confidence/NLI grounding pipeline.
-    # When disabled, skip hallucination detection and accept the answer as-is.
     if not HALLUCINATION_CHECK_ENABLED:
         return {"confidence": 0.7, "needs_escalation": False, "needs_self_critique": False}
 
@@ -312,9 +300,6 @@ def check_confidence(state: dict) -> dict:
         "escalation_reason": "; ".join(report.uncertainties) if needs_escalation else "",
         "needs_self_critique": needs_self_critique,
     }
-
-
-# ── F3: Self-Critique Node (ISUSE) ──
 
 
 def self_critique(state: dict) -> dict:
@@ -384,16 +369,6 @@ def self_critique(state: dict) -> dict:
         }
 
 
-def _self_critique_route(state: dict) -> str:
-    """Route after self-critique: rewrite if needed, otherwise done."""
-    if state.get("needs_rewrite"):
-        return "rewrite"
-    return "done"
-
-
-# ── F3: Self-Reflection Node (Level 5) ──
-
-
 def self_reflection(state: dict) -> dict:
     """Evaluate answer quality: is the answer fully supported by the context?
 
@@ -460,111 +435,7 @@ def self_reflection(state: dict) -> dict:
         return {"needs_reflection": False, "reflection_count": reflection_count + 1}
 
 
-def _self_reflection_route(state: dict) -> str:
-    """Route after self-reflection: re-retrieve if gaps found, otherwise done."""
-    if state.get("needs_reflection"):
-        return "retrieve"
-    return "done"
-
-
-# Строим граф
-def build_rag_graph() -> StateGraph:
-    """Создаёт и компилирует граф RAG с tool-calling поддержкой."""
-    builder = StateGraph(RAGState)
-
-    # Добавляем узлы
-    builder.add_node("rewrite", rewrite_query)
-    builder.add_node("retrieve", retrieve)
-    builder.add_node("graph_expand", graph_expand)
-    builder.add_node("rerank", rerank)
-    builder.add_node("build_context", build_context_node)
-    builder.add_node("generate", generate)
-    builder.add_node("check_sufficiency", check_sufficiency)
-
-    # Начало
-    builder.set_entry_point("rewrite")
-
-    # Переходы
-    builder.add_edge("rewrite", "retrieve")
-    builder.add_edge("retrieve", "check_sufficiency")
-
-    # Условное ребро после проверки
-    builder.add_conditional_edges("check_sufficiency", check_sufficiency, {"rewrite": "rewrite", "rerank": "rerank"})
-
-    builder.add_edge("build_context", "generate")
-    builder.add_node("self_reflection", self_reflection)
-    builder.add_node("check_confidence", check_confidence)
-    builder.add_node("self_critique", self_critique)
-    builder.add_node("call_tools", call_tools)
-
-    # Route from generate:
-    # - If tool_calls were requested → call_tools
-    # - Otherwise → self_reflection
-    builder.add_conditional_edges(
-        "generate",
-        _route_after_generate,
-        {
-            "call_tools": "call_tools",
-            "reflect": "self_reflection",
-        },
-    )
-
-    # After tool calls, loop back to generate with tool results
-    builder.add_edge("call_tools", "generate")
-
-    # Removed: builder.add_edge("generate", "self_reflection") — conditional edge handles this
-
-    builder.add_conditional_edges(
-        "self_reflection",
-        _self_reflection_route,
-        {
-            "retrieve": "retrieve",
-            "done": "check_confidence",
-        },
-    )
-
-    # Route from check_confidence:
-    builder.add_conditional_edges(
-        "check_confidence",
-        lambda s: (
-            "escalate" if s.get("needs_escalation") else ("self_critique" if s.get("needs_self_critique") else "done")
-        ),
-        {
-            "escalate": "rewrite",
-            "self_critique": "self_critique",
-            "done": END,
-        },
-    )
-
-    # Route from self_critique:
-    builder.add_conditional_edges(
-        "self_critique",
-        _self_critique_route,
-        {
-            "rewrite": "rewrite",
-            "done": END,
-        },
-    )
-
-    # Добавляем графовое расширение как опциональный узел между rerank и build_context
-    builder.add_edge("rerank", "graph_expand")
-    builder.add_edge("graph_expand", "build_context")
-
-    return builder
-
-
-def _route_after_generate(state: RAGState) -> str:
-    """Route after generate: if tool calls were requested, go to call_tools."""
-    tool_calls = state.get("tool_calls", [])
-    tool_loop_count = state.get("tool_loop_count", 0)
-    max_tool_loops = 5
-
-    if tool_calls and tool_loop_count < max_tool_loops:
-        return "call_tools"
-    return "reflect"
-
-
-def call_tools(state: RAGState) -> dict[str, Any]:
+def call_tools(state: dict[str, Any]) -> dict[str, Any]:
     """Execute tool calls requested by the LLM and collect results."""
     from proxy.app.tools import get_tool_registry, handle_function_call
 
@@ -603,32 +474,3 @@ def call_tools(state: RAGState) -> dict[str, Any]:
         "tool_loop_count": tool_loop_count + 1,
         "tool_calls": [],  # Clear for next iteration
     }
-
-
-class RAGOrchestrator:
-    """Обёртка над скомпилированным графом."""
-
-    def __init__(self, checkpointer=None):
-        self.builder = build_rag_graph()
-        self.graph = self.builder.compile(checkpointer=checkpointer or MemorySaver())
-
-    async def ainvoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Асинхронный вызов графа."""
-        # Поскольку LangGraph поддерживает async, используем.
-        # Но для синхронного вызова можно invoke.
-        return await self.graph.ainvoke(inputs)
-
-    def invoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Синхронный вызов графа."""
-        return self.graph.invoke(inputs)
-
-
-# Функция для получения экземпляра оркестратора (синглтон)
-_orchestrator = None
-
-
-def get_orchestrator() -> RAGOrchestrator:
-    global _orchestrator
-    if _orchestrator is None:
-        _orchestrator = RAGOrchestrator()
-    return _orchestrator
