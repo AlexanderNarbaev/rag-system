@@ -22,6 +22,8 @@ The system can operate in two modes:
 - When KEYCLOAK_URL is not set: uses HS256 with JWT_SECRET (mock/local mode)
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from collections.abc import Callable

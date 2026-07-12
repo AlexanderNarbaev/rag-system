@@ -121,7 +121,9 @@ def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     try:
-        rewritten = _get_non_stream_completion_sync()([{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100)
+        rewritten = _get_non_stream_completion_sync()(
+            [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100
+        )
         rewritten = rewritten.strip()
         logger.info(f"Rewritten query: '{query}' -> '{rewritten}'")
         return {"rewritten_query": rewritten, "rewrite_count": rewrite_count + 1}

@@ -1,6 +1,6 @@
 # Development Roadmap
 
-**Last Updated:** 2026-07-10
+**Last Updated:** 2026-07-13
 
 ---
 
@@ -10,9 +10,27 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 1: Core Infrastructure
+## Current Status
+
+**All Phases 1–8: COMPLETE ✅**
+
+| Component | Status | Tests |
+|-----------|--------|-------|
+| Core RAG Pipeline | ✅ Complete | 544 |
+| Model Evolution (LoRA/QLoRA, EvalGate, Canary) | ✅ Complete | 277 |
+| MCP Server | ✅ Complete | 56 |
+| Integration Tests | ✅ Complete | 64 |
+| E2E Tests | ✅ Complete | 32 |
+| Performance Tests | ✅ Complete | 12 |
+| **Total Test Suite** | **✅ 985+ tests** | **985** |
+
+---
+
+## Phase 1: Core Infrastructure ✅
 
 **Theme:** Establish the foundation — hybrid retrieval, reranking, ETL pipeline, and OpenAI-compatible API.
+
+**Status:** Complete
 
 ### Features
 
@@ -34,9 +52,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 2: Self-Improving RAG
+## Phase 2: Self-Improving RAG ✅
 
 **Theme:** Add confidence scoring, active feedback, and knowledge base self-enrichment.
+
+**Status:** Complete
 
 ### Features
 
@@ -49,9 +69,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 3: Token Optimization & Quality Foundations
+## Phase 3: Token Optimization & Quality Foundations ✅
 
 **Theme:** Reduce token costs and establish measurable quality baselines.
+
+**Status:** Complete
 
 ### Features
 
@@ -69,9 +91,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 4: Security & Multi-Tenancy
+## Phase 4: Security & Multi-Tenancy ✅
 
 **Theme:** Make the system safe for multi-user corporate deployment.
+
+**Status:** Complete
 
 ### Features
 
@@ -90,9 +114,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 5: Multi-Modal RAG
+## Phase 5: Multi-Modal RAG ✅
 
 **Theme:** Expand beyond text to images, diagrams, and code.
+
+**Status:** Complete
 
 ### Features
 
@@ -108,9 +134,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 6: Real-Time Indexing & Streaming
+## Phase 6: Real-Time Indexing & Streaming ✅
 
 **Theme:** Eliminate ETL latency with streaming ingestion.
+
+**Status:** Complete
 
 ### Features
 
@@ -125,9 +153,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 7: Production Hardening
+## Phase 7: Production Hardening ✅
 
 **Theme:** Meet all production readiness checklist items.
+
+**Status:** Complete
 
 ### Features
 
@@ -147,9 +177,11 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
-## Phase 8: Self-Correcting RAG
+## Phase 8: Self-Correcting RAG ✅
 
 **Theme:** Achieve full self-correction with agentic tools and multi-language support.
+
+**Status:** Complete
 
 ### Features
 
@@ -167,30 +199,57 @@ The RAG system follows a phased development approach, building capabilities incr
 
 ---
 
+## Beyond Phases (v2.0) ✅
+
+These items were originally in Future Horizons and have been completed:
+
+| Feature | Status | Tests |
+|---------|--------|-------|
+| **Model Evolution** — LoRA/QLoRA fine-tuning, EvalGate CI/CD gating, CanaryController, MLflow tracking, MinIO artifacts | ✅ Complete | 277 |
+| **Agentic Tools Expansion** — Custom tool SDK, `@tool` decorator, `ToolBuilder`, `ToolContext`, YAML/JSON declarative tools, OpenAPI auto-discovery, parallel execution | ✅ Complete | — |
+| **MCP Server** — Model Context Protocol for OpenCode/Claude Desktop integration, STDIO + Streamable HTTP transports | ✅ Complete | 56 |
+| **Federated RAG** — Multi-silo federated RAG with fan-out, RRF merge, privacy-preserving aggregation | ✅ Complete | — |
+
+---
+
+## In Progress
+
+These items are actively being worked on:
+
+| Item | Description | Status |
+|------|-------------|--------|
+| **Documentation improvements** | Updating guides, ADRs, and operational docs to reflect v2.0 capabilities | 🔄 In Progress |
+| **Code quality improvements** | Linting cleanup, type annotation coverage, dead code removal | 🔄 In Progress |
+| **Test coverage improvements** | Expanding unit test coverage for edge cases and error paths | 🔄 In Progress |
+
+---
+
 ## Future Horizons
+
+These items remain planned for future development:
 
 | Horizon | Theme | Ideas |
 |---------|-------|-------|
-| Near-term | **Federated RAG** | Multi-instance search across departments; federated query routing; cross-silo retrieval; privacy-preserving aggregation |
-| Near-term | **Agentic Tools Expansion** | Custom tool SDK for user-defined tools; tool composition patterns; automated tool discovery from API specs |
-| Mid-term | **Model Evolution** | On-prem fine-tuning pipeline for domain adaptation; evaluation of next-gen architectures; continuous model benchmarking |
+| Mid-term | **Java/Quarkus Migration** | Migrate proxy layer from FastAPI to Quarkus for enterprise Java ecosystem integration |
 | Mid-term | **Advanced Multi-Modal** | Video/audio content indexing; OCR pipeline for scanned documents; diagram understanding with visual QA |
 | Long-term | **Autonomous Knowledge Curation** | Automated knowledge gap detection; proactive document update recommendations; knowledge freshness scoring |
+| Long-term | **Federated Learning** | Privacy-preserving model training across distributed knowledge silos without centralizing data |
 
 ---
 
 ## Phased Approach Summary
 
 ```
-Phase 1  ████████████ Core Infrastructure
-Phase 2  ████████████ Self-Improving RAG
-Phase 3  ████████████ Token Optimization & Quality
-Phase 4  ████████████ Security & Multi-Tenancy
-Phase 5  ████████████ Multi-Modal RAG
-Phase 6  ████████████ Real-Time Indexing & Streaming
-Phase 7  ████████████ Production Hardening
-Phase 8  ████████████ Self-Correcting RAG
-Future   ░░░░░░░░░░░░ Federated RAG, Agentic Tools, Model Evolution
+Phase 1  ████████████ Core Infrastructure              ✅ COMPLETE
+Phase 2  ████████████ Self-Improving RAG                ✅ COMPLETE
+Phase 3  ████████████ Token Optimization & Quality       ✅ COMPLETE
+Phase 4  ████████████ Security & Multi-Tenancy           ✅ COMPLETE
+Phase 5  ████████████ Multi-Modal RAG                   ✅ COMPLETE
+Phase 6  ████████████ Real-Time Indexing & Streaming     ✅ COMPLETE
+Phase 7  ████████████ Production Hardening               ✅ COMPLETE
+Phase 8  ████████████ Self-Correcting RAG                ✅ COMPLETE
+v2.0     ████████████ Model Evolution, MCP, Federated    ✅ COMPLETE
+Future   ░░░░░░░░░░░░ Java Migration, Advanced Multi-Modal, Autonomous Curation
 ```
 
 Each phase builds on the previous one, with features designed to compose incrementally. The system is designed to run in simple RAG mode (Phase 1 only) or with any combination of advanced features enabled via configuration flags.
