@@ -22,7 +22,7 @@ langgraph>=1.2.8
 langchain-core>=1.4.8  # требуется для LangGraph
 
 # Граф знаний (Neo4j, опционально)
-neo4j>=5.14.0
+neo4j>=6.2.0
 
 # Утилиты
 requests>=2.31.0
