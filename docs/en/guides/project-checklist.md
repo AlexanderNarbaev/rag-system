@@ -23,8 +23,8 @@ This document is the **single source of truth** for the current state of the RAG
 8. [Deployment & Infrastructure](#8-deployment--infrastructure)
 9. [Configuration & Environment](#9-configuration--environment)
 10. [Security Checklist](#10-security-checklist)
-11. [Observability & Monitoring](#11-observability--monitoring)
-12. [Open Gaps & Action Items](#12-open-gaps--action-items)
+11. [Observability &amp; Monitoring](#11-observability-monitoring)
+12. [Open Gaps &amp; Action Items](#12-open-gaps-action-items)
 13. [Roadmap Status](#13-roadmap-status)
 
 ---

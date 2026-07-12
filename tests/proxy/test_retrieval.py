@@ -308,24 +308,41 @@ class TestCrossLingualRetrieval:
 
     @patch("proxy.app.core.retrieval.hybrid_search")
     def test_hybrid_search_accepts_lang_parameter(self, mock_hybrid):
-        """hybrid_search should accept an optional lang parameter."""
-        import inspect
+        mock_hybrid.return_value = [_make_mock_scored_point("a", 0.9)]
+        from proxy.app.core.retrieval import hybrid_search
 
-        inspect.signature(mock_hybrid)
-        assert True  # accept any signature
+        result = hybrid_search("was ist das", version=None, lang="de")
+        assert len(result) == 1
+        mock_hybrid.assert_called_once()
 
-    def test_bge_m3_supports_multilingual(self):
-        """bge-m3 embedder (BAAI/bge-m3) supports 100+ languages natively."""
-        assert True
+    @patch("proxy.app.core.retrieval.hybrid_search")
+    def test_bge_m3_accepts_multilingual_queries(self, mock_hybrid):
+        mock_hybrid.return_value = [_make_mock_scored_point("a", 0.9)]
+        from proxy.app.core.retrieval import hybrid_search
 
-    def test_cross_lingual_search_german_query(self):
-        """A German query should retrieve results (bge-m3 is cross-lingual)."""
-        pass
+        result = hybrid_search("was ist das", version=None)
+        assert len(result) == 1
 
-    def test_cross_lingual_search_french_query(self):
-        """A French query should retrieve results."""
-        pass
+    @patch("proxy.app.core.retrieval.hybrid_search")
+    def test_cross_lingual_search_german_query(self, mock_hybrid):
+        mock_hybrid.return_value = [_make_mock_scored_point("de1", 0.9)]
+        from proxy.app.core.retrieval import hybrid_search
 
-    def test_cross_lingual_search_chinese_query(self):
-        """A Chinese query should retrieve results."""
-        pass
+        result = hybrid_search("Was ist die Architektur des Systems?", version=None, lang="de")
+        assert len(result) == 1
+
+    @patch("proxy.app.core.retrieval.hybrid_search")
+    def test_cross_lingual_search_french_query(self, mock_hybrid):
+        mock_hybrid.return_value = [_make_mock_scored_point("fr1", 0.9)]
+        from proxy.app.core.retrieval import hybrid_search
+
+        result = hybrid_search("Quelle est l'architecture du système?", version=None, lang="fr")
+        assert len(result) == 1
+
+    @patch("proxy.app.core.retrieval.hybrid_search")
+    def test_cross_lingual_search_chinese_query(self, mock_hybrid):
+        mock_hybrid.return_value = [_make_mock_scored_point("zh1", 0.9)]
+        from proxy.app.core.retrieval import hybrid_search
+
+        result = hybrid_search("系统的架构是什么?", version=None, lang="zh")
+        assert len(result) == 1
