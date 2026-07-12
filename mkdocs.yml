@@ -182,4 +182,4 @@ watch:
 
 use_directory_urls: true
 
-strict: false
+strict: true

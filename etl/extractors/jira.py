@@ -212,7 +212,10 @@ class JiraExtractor:
                     logger.info(f"Retrying attachment download in {delay}s...")
                     time.sleep(delay)
                 else:
-                    logger.error(f"Failed to download attachment {attachment_id} for {issue_key} after {max_retries + 1} attempts: {e}")
+                    logger.error(
+                        f"Failed to download attachment {attachment_id} for {issue_key}"
+                        f" after {max_retries + 1} attempts: {e}"
+                    )
                     return None
             except requests.exceptions.Timeout as e:
                 logger.warning(f"Attachment download timeout (attempt {attempt + 1}/{max_retries + 1}): {e}")
@@ -221,7 +224,10 @@ class JiraExtractor:
                     logger.info(f"Retrying attachment download in {delay}s...")
                     time.sleep(delay)
                 else:
-                    logger.error(f"Failed to download attachment {attachment_id} for {issue_key} after {max_retries + 1} attempts: {e}")
+                    logger.error(
+                        f"Failed to download attachment {attachment_id} for {issue_key}"
+                        f" after {max_retries + 1} attempts: {e}"
+                    )
                     return None
             except Exception as e:
                 logger.error(f"Failed to download attachment {attachment_id} for {issue_key}: {e}")

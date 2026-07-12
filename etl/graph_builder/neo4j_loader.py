@@ -8,7 +8,7 @@
 - Создание индексов и уникальных ограничений
 - Очистку устаревших связей
 """
-
+import contextlib
 import logging
 import time
 
@@ -62,10 +62,8 @@ class Neo4jLoader:
             except Exception as e:
                 logger.warning(f"Neo4j connection attempt {attempt + 1}/{self.max_retries} failed: {e}")
                 if self.driver:
-                    try:
+                    with contextlib.suppress(Exception):
                         self.driver.close()
-                    except Exception:
-                        pass
                     self.driver = None
                 if attempt < self.max_retries - 1:
                     delay = base_delay * (2 ** attempt)
