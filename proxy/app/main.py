@@ -88,8 +88,9 @@ from proxy.app.shared.rate_limiter import add_rate_limit_middleware
 from proxy.app.tools.registry import get_enhanced_registry
 
 # Optional modules
-if USE_LANGGRAPH:
-    from proxy.app.core.orchestrator import get_orchestrator
+# Note: get_orchestrator is imported lazily inside lifespan() to avoid
+# "possibly unbound" type-checker warnings and to keep the module-level
+# import surface minimal when USE_LANGGRAPH is false.
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("rag-proxy")
@@ -149,6 +150,8 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
         logger.info("In-memory cache initialized (no Redis)")
     # Initialize LangGraph orchestrator (if enabled)
     if USE_LANGGRAPH:
+        from proxy.app.core.orchestrator import get_orchestrator
+
         orchestrator = get_orchestrator()
         logger.info("LangGraph orchestrator initialized")
     # Tool discovery from all providers

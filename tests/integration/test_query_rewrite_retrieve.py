@@ -336,8 +336,10 @@ class TestOrchestratorFlow:
             patch.object(_orch_mod, "hybrid_search") as mock_search,
             patch.object(_orch_mod, "rerank_chunks", return_value=[0, 1]),
             patch.object(_orch_mod, "non_stream_completion", new_callable=MagicMock) as mock_llm,
+            patch.object(_orch_mod, "non_stream_completion_sync", new_callable=MagicMock) as mock_llm_sync,
         ):
             mock_llm.return_value = "RAG — это техника объединения LLM с базой знаний."
+            mock_llm_sync.return_value = "RAG — это техника объединения LLM с базой знаний."
 
             class FakeScoredPoint:
                 def __init__(self, id, score, payload):
@@ -393,8 +395,10 @@ class TestOrchestratorFlow:
             patch.object(_orch_mod, "hybrid_search") as mock_search,
             patch.object(_orch_mod, "rerank_chunks", return_value=[0]),
             patch.object(_orch_mod, "non_stream_completion", new_callable=MagicMock) as mock_llm,
+            patch.object(_orch_mod, "non_stream_completion_sync", new_callable=MagicMock) as mock_llm_sync,
         ):
             mock_llm.return_value = "Ответ после ограничения циклов."
+            mock_llm_sync.return_value = "Ответ после ограничения циклов."
 
             class FakeScoredPoint:
                 def __init__(self, id, score, payload):

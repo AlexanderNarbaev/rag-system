@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from proxy.app.tools.errors import ToolError as ToolErrorBase  # noqa: E402, F401
+
 _UNSET: Any = object()
 
 
@@ -162,18 +164,3 @@ class ToolCall:
     id: str
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
-
-
-class ToolErrorBase(Exception):  # noqa: N818
-    """Base exception for tool-related errors."""
-    def __init__(
-        self,
-        tool_name: str,
-        tool_call_id: str = "",
-        retryable: bool = False,
-        message: str = "",
-    ):
-        super().__init__(message or f"Error in tool '{tool_name}'")
-        self.tool_name = tool_name
-        self.tool_call_id = tool_call_id
-        self.retryable = retryable

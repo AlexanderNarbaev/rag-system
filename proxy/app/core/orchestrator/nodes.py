@@ -36,6 +36,13 @@ def _get_non_stream_completion():
     return non_stream_completion
 
 
+def _get_non_stream_completion_sync():
+    """Lazy import of sync variant for non-async graph nodes."""
+    from proxy.app.core.orchestrator import non_stream_completion_sync
+
+    return non_stream_completion_sync
+
+
 def _get_deduplicate_chunks():
     """Lazy import to allow test patching at orchestrator level."""
     from proxy.app.core.context import deduplicate_chunks
@@ -114,7 +121,7 @@ def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     try:
-        rewritten = _get_non_stream_completion()([{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100)
+        rewritten = _get_non_stream_completion_sync()([{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100)
         rewritten = rewritten.strip()
         logger.info(f"Rewritten query: '{query}' -> '{rewritten}'")
         return {"rewritten_query": rewritten, "rewrite_count": rewrite_count + 1}
@@ -253,7 +260,7 @@ def generate(state: dict[str, Any]) -> dict[str, Any]:
     )
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_query}]
 
-    answer = _get_non_stream_completion()(messages, temperature=temperature, max_tokens=max_tokens)
+    answer = _get_non_stream_completion_sync()(messages, temperature=temperature, max_tokens=max_tokens)
     logger.info(f"Generated answer length: {len(answer)}")
     return {"answer": answer}
 
