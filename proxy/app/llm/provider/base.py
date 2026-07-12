@@ -226,23 +226,27 @@ class MultiProviderRouter:
 
         for attempt in range(retry + 1):
             try:
-                async with aiohttp.ClientSession() as session:  # noqa: SIM117
-                    async with session.post(url, json=payload, headers=headers, timeout=timeout) as response:
-                        if response.status != 200:
-                            error_text = await response.text()
-                            logger.error(f"LLM API error {response.status}: {error_text}")
-                            raise LLMError(f"LLM returned {response.status}: {error_text}")
+                session = aiohttp.ClientSession()
+                response = await session.post(url, json=payload, headers=headers, timeout=timeout)
+                if response.status != 200:
+                    error_text = await response.text()
+                    response.close()
+                    await session.close()
+                    logger.error(f"LLM API error {response.status}: {error_text}")
+                    raise LLMError(f"LLM returned {response.status}: {error_text}")
 
-                        if stream:
-                            _record_llm_success()
-                            return response, adapter
-                        else:
-                            data = await response.json()
-                            translated = adapter.translate_response(data)
-                            if "choices" not in translated or not translated["choices"]:
-                                raise LLMError("Invalid response format from LLM")
-                            _record_llm_success()
-                            return translated
+                if stream:
+                    _record_llm_success()
+                    return session, response, adapter
+                else:
+                    data = await response.json()
+                    response.close()
+                    await session.close()
+                    translated = adapter.translate_response(data)
+                    if "choices" not in translated or not translated["choices"]:
+                        raise LLMError("Invalid response format from LLM")
+                    _record_llm_success()
+                    return translated
             except (TimeoutError, ClientError, LLMError) as e:
                 logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
                 if attempt < retry:
@@ -260,8 +264,7 @@ class MultiProviderRouter:
         tools: list[ToolDefinition] | None = None,
         provider_type: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Streaming completion with provider translation."""
-        response, adapter = await self._send_request(
+        session, response, adapter = await self._send_request(
             messages,
             temperature,
             max_tokens,
@@ -270,13 +273,17 @@ class MultiProviderRouter:
             provider_type=provider_type,
         )
 
-        async for raw_line in response.content:
-            chunk = adapter.translate_stream_chunk(raw_line)
-            if chunk is None:
-                continue
-            if chunk.get("_done"):
-                break
-            yield chunk
+        try:
+            async for raw_line in response.content:
+                chunk = adapter.translate_stream_chunk(raw_line)
+                if chunk is None:
+                    continue
+                if chunk.get("_done"):
+                    break
+                yield chunk
+        finally:
+            response.close()
+            await session.close()
 
     async def non_stream_completion(
         self,

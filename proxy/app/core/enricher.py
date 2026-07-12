@@ -78,7 +78,7 @@ async def _index_chunk(chunk: dict) -> bool:
 
         model = create_embedder()
 
-        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
 
         embedding = model.encode(chunk["text"]).tolist()
 

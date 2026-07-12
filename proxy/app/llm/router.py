@@ -33,10 +33,6 @@ class LLMError(Exception):
 async def _send_completion_request(
     messages: list[dict[str, str]], temperature: float, max_tokens: int, stream: bool, retry: int = 0
 ) -> Any:
-    """
-    Отправляет запрос к LLM API с повторными попытками.
-    Возвращает либо объект Response для потокового режима, либо JSON для не-потокового.
-    """
     url = f"{LLM_ENDPOINT}/chat/completions"
     headers = {
         "Content-Type": "application/json",
@@ -56,25 +52,28 @@ async def _send_completion_request(
 
     for attempt in range(retry + 1):
         try:
-            async with aiohttp.ClientSession() as session:  # noqa: SIM117
-                async with session.post(url, json=payload, headers=headers, timeout=timeout) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"LLM API error {response.status}: {error_text}")
-                        raise LLMError(f"LLM returned {response.status}: {error_text}")
+            session = aiohttp.ClientSession()
+            response = await session.post(url, json=payload, headers=headers, timeout=timeout)
+            if response.status != 200:
+                error_text = await response.text()
+                response.close()
+                await session.close()
+                logger.error(f"LLM API error {response.status}: {error_text}")
+                raise LLMError(f"LLM returned {response.status}: {error_text}")
 
-                    if stream:
-                        return response  # возвращаем raw response для стриминга
-                    else:
-                        data = await response.json()
-                        # Проверяем наличие expected полей
-                        if "choices" not in data or not data["choices"]:
-                            raise LLMError("Invalid response format from LLM")
-                        return data
+            if stream:
+                return session, response
+            else:
+                data = await response.json()
+                response.close()
+                await session.close()
+                if "choices" not in data or not data["choices"]:
+                    raise LLMError("Invalid response format from LLM")
+                return data
         except (TimeoutError, ClientError, LLMError) as e:
             logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
             if attempt < retry:
-                await asyncio.sleep(RETRY_DELAY * (attempt + 1))  # экспоненциальная задержка
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
             else:
                 raise LLMError(f"LLM request failed after {retry + 1} attempts: {e}") from e
 
@@ -82,28 +81,28 @@ async def _send_completion_request(
 async def stream_completion(
     messages: list[dict[str, str]], temperature: float = 0.2, max_tokens: int = 4096
 ) -> AsyncIterator[dict[str, Any]]:
-    """
-    Потоковая генерация ответа.
-    Возвращает асинхронный генератор, выдающий чанки в формате OpenAI SSE.
-    Каждый чанк – dict с полями: id, object, choices, etc.
-    """
-    response = await _send_completion_request(messages, temperature, max_tokens, stream=True, retry=MAX_RETRIES)
+    session, response = await _send_completion_request(
+        messages, temperature, max_tokens, stream=True, retry=MAX_RETRIES
+    )
 
-    # Читаем поток построчно
-    async for line in response.content:
-        line = line.decode("utf-8").strip()
-        if not line:
-            continue
-        if line.startswith("data: "):
-            data_str = line[6:]
-            if data_str == "[DONE]":
-                break
-            try:
-                chunk = json.loads(data_str)
-                yield chunk
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse SSE chunk: {data_str}, error: {e}")
+    try:
+        async for line in response.content:
+            line = line.decode("utf-8").strip()
+            if not line:
                 continue
+            if line.startswith("data: "):
+                data_str = line[6:]
+                if data_str == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    yield chunk
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse SSE chunk: {data_str}, error: {e}")
+                    continue
+    finally:
+        response.close()
+        await session.close()
 
 
 async def non_stream_completion(

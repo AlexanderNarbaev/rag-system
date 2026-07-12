@@ -328,13 +328,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "answer"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -346,13 +344,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "hello world"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -364,13 +360,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": []})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -390,13 +384,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.content = mock_content
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -410,13 +402,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 500
         mock_response.text = AsyncMock(return_value="Internal Error")
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -447,13 +437,11 @@ class TestMultiProviderRouter:
                 ]
             }
         )
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         from proxy.app.tools.definition import ToolDefinition
 
@@ -469,13 +457,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "no tools needed"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         from proxy.app.tools.definition import ToolDefinition
 
@@ -490,13 +476,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "result processed"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         from proxy.app.tools.definition import ToolResult
 
@@ -515,13 +499,11 @@ class TestMultiProviderRouter:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "sync result"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -542,13 +524,11 @@ class TestAnthropicRouting:
                 "choices": [{"message": {"content": "hi"}}],
             }
         )
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         router = MultiProviderRouter()
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -577,13 +557,11 @@ class TestSingletonAndWrappers:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "module answer"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await non_stream_completion([{"role": "user", "content": "hi"}])
@@ -593,13 +571,11 @@ class TestSingletonAndWrappers:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "sync"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = non_stream_completion_sync([{"role": "user", "content": "hi"}])
@@ -617,13 +593,11 @@ class TestSingletonAndWrappers:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.content = mock_content
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             chunks = []

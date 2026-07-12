@@ -173,7 +173,7 @@ def _get_document_metadata(doc_id: str) -> str:
 
         from proxy.app.shared.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
 
-        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
         points = client.retrieve(collection_name=COLLECTION_NAME, ids=[doc_id])
         if not points:
             return f"Document '{doc_id}' not found."

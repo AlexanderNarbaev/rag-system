@@ -37,65 +37,61 @@ class TestSendCompletionRequest:
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": [{"message": {"content": "answer"}}]})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await _send_completion_request(
                 [{"role": "user", "content": "hi"}], temperature=0.2, max_tokens=100, stream=False, retry=0
             )
             assert result["choices"][0]["message"]["content"] == "answer"
+            mock_response.close.assert_called_once()
+            mock_session.close.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_non_stream_bad_status(self):
         mock_response = MagicMock()
         mock_response.status = 500
         mock_response.text = AsyncMock(return_value="Internal Error")
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with pytest.raises(LLMError, match="LLM returned 500"):
                 await _send_completion_request([{"role": "user", "content": "hi"}], 0.2, 100, stream=False, retry=0)
+            mock_response.close.assert_called_once()
+            mock_session.close.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_stream_success(self):
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await _send_completion_request([{"role": "user", "content": "hi"}], 0.2, 100, stream=True, retry=0)
-            assert result is mock_response
+            sess, resp = result
+            assert resp is mock_response
+            assert sess is mock_session
 
     @pytest.mark.asyncio
     async def test_invalid_response_format(self):
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"unexpected": "format"})
-        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock(return_value=None)
+        mock_response.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with pytest.raises(LLMError, match="Invalid response format"):
@@ -106,13 +102,11 @@ class TestSendCompletionRequest:
         mock_response_fail = MagicMock()
         mock_response_fail.status = 503
         mock_response_fail.text = AsyncMock(return_value="Service Unavailable")
-        mock_response_fail.__aenter__ = AsyncMock(return_value=mock_response_fail)
-        mock_response_fail.__aexit__ = AsyncMock(return_value=None)
+        mock_response_fail.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(return_value=mock_response_fail)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(return_value=mock_response_fail)
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session), patch("asyncio.sleep", AsyncMock()):
             with pytest.raises(LLMError, match="failed after"):
@@ -124,19 +118,16 @@ class TestSendCompletionRequest:
         mock_response_fail = MagicMock()
         mock_response_fail.status = 429
         mock_response_fail.text = AsyncMock(return_value="Rate limited")
-        mock_response_fail.__aenter__ = AsyncMock(return_value=mock_response_fail)
-        mock_response_fail.__aexit__ = AsyncMock(return_value=None)
+        mock_response_fail.close = MagicMock()
 
         mock_response_ok = MagicMock()
         mock_response_ok.status = 200
         mock_response_ok.json = AsyncMock(return_value={"choices": [{"message": {"content": "ok"}}]})
-        mock_response_ok.__aenter__ = AsyncMock(return_value=mock_response_ok)
-        mock_response_ok.__aexit__ = AsyncMock(return_value=None)
+        mock_response_ok.close = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.post = MagicMock(side_effect=[mock_response_fail, mock_response_ok])
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.post = AsyncMock(side_effect=[mock_response_fail, mock_response_ok])
+        mock_session.close = AsyncMock()
 
         with patch("aiohttp.ClientSession", return_value=mock_session), patch("asyncio.sleep", AsyncMock()):
             result = await _send_completion_request(
@@ -186,13 +177,19 @@ class TestStreamCompletion:
 
         mock_response = MagicMock()
         mock_response.content = mock_content
+        mock_response.close = MagicMock()
 
-        with patch("proxy.app.llm.router._send_completion_request", return_value=mock_response):
+        mock_session = MagicMock()
+        mock_session.close = AsyncMock()
+
+        with patch("proxy.app.llm.router._send_completion_request", return_value=(mock_session, mock_response)):
             chunks = []
             async for chunk in stream_completion([{"role": "user", "content": "hi"}]):
                 chunks.append(chunk)
             assert len(chunks) == 2
             assert chunks[0]["id"] == "1"
+            mock_response.close.assert_called_once()
+            mock_session.close.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_handles_invalid_json(self):
@@ -206,8 +203,12 @@ class TestStreamCompletion:
 
         mock_response = MagicMock()
         mock_response.content = mock_content
+        mock_response.close = MagicMock()
 
-        with patch("proxy.app.llm.router._send_completion_request", return_value=mock_response):
+        mock_session = MagicMock()
+        mock_session.close = AsyncMock()
+
+        with patch("proxy.app.llm.router._send_completion_request", return_value=(mock_session, mock_response)):
             chunks = []
             async for chunk in stream_completion([{"role": "user", "content": "hi"}]):
                 chunks.append(chunk)
@@ -224,8 +225,12 @@ class TestStreamCompletion:
 
         mock_response = MagicMock()
         mock_response.content = mock_content
+        mock_response.close = MagicMock()
 
-        with patch("proxy.app.llm.router._send_completion_request", return_value=mock_response):
+        mock_session = MagicMock()
+        mock_session.close = AsyncMock()
+
+        with patch("proxy.app.llm.router._send_completion_request", return_value=(mock_session, mock_response)):
             chunks = []
             async for chunk in stream_completion([{"role": "user", "content": "hi"}]):
                 chunks.append(chunk)

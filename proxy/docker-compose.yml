@@ -6,7 +6,7 @@
 services:
   # ── Qdrant (vector database) ────────────────────────────────────────────────
   qdrant:
-    image: qdrant/qdrant:v1.12.1
+    image: qdrant/qdrant:v1.14.0
     container_name: rag-qdrant
     volumes:
       - qdrant_data:/qdrant/storage

@@ -74,7 +74,7 @@ def initialize_retrieval() -> None:
     if not QDRANT_AVAILABLE:
         raise ImportError("qdrant-client is required")
 
-    qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
 
     # Use factory to select remote or local embedder
     from proxy.app.llm.remote_services import create_embedder
