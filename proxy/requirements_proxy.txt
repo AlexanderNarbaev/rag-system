@@ -10,7 +10,7 @@ pydantic>=2.0.0
 
 # Векторная база и эмбеддинги
 qdrant-client>=1.10.0
-sentence-transformers>=2.2.0
+sentence-transformers>=5.6.0
 # CrossEncoder included in sentence-transformers package
 
 # Кэш (Redis)
