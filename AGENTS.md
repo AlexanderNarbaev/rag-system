@@ -42,77 +42,148 @@ rag-system/
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized)
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (25 endpoints: chat, models, health, auth, widget, feedback, admin, tools, model evolution)
-│   │   ├── orchestrator.py           # LangGraph agentic query pipeline (8-node state graph with tool calling)
-│   │   ├── provider_adapter.py       # Multi-provider LLM backend adapter (vLLM, llama.cpp, OpenAI-compatible)
-│   │   ├── retrieval.py              # Qdrant hybrid search (dense+sparse RRF) + graph expansion
-│   │   ├── rerank.py                 # Cross-encoder reranker (MiniLM-L-6-v2)
-│   │   ├── context_builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
-│   │   ├── llm_router.py             # Async LLM adapter (streaming + non-streaming) via provider_adapter
-│   │   ├── confidence.py             # Confidence scoring: heuristics + optional SLM verification
-│   │   ├── enricher.py               # Self-enrichment: feedback Q&A → chunk → Qdrant
-│   │   ├── slm_router.py             # SLM: intent classification, query decomposition, entity extraction
-│   │   ├── token_optimizer.py        # BPE-aware token counting, compression, budget allocation
-│   │   ├── evaluation.py             # Retrieval eval pipeline: MRR, Recall@k, nDCG, Precision@k
-│   │   ├── grounding.py              # NLI-based answer grounding (cosine + entailment)
-│   │   ├── exceptions.py             # RAGError, RetrievalError, LLMError, SecurityError hierarchy
-│   │   ├── auth.py                   # JWT authentication + Keycloak OIDC integration + token pairs
-│   │   ├── rbac.py                   # Role-based access control (admin/expert/user/read-only)
-│   │   ├── user_db.py                # SQLite user database with bcrypt + refresh token management
-│   │   ├── ldap_auth.py              # LDAP/AD authentication integration
-│   │   ├── remote_services.py        # Remote embedder/reranker clients with local fallback
-│   │   ├── sanitizer.py             # Input sanitization (SQL injection, XSS, length limits)
-│   │   ├── ab_test.py               # A/B test harness for pipeline variants
-│   │   ├── cache.py                  # Redis + in-memory multi-tier cache
-│   │   ├── hitl.py                   # Human-in-the-loop: async interaction logging, feedback collection
-│   │   ├── metrics.py                # Prometheus metrics (counters, histograms, gauges)
-│   │   ├── rate_limiter.py           # Token bucket rate limiting middleware (per IP)
-│   │   ├── middleware.py             # Request ID, correlation ID, logging middleware
-│   │   ├── logging_config.py         # Structured logging (text/JSON), secret masking
-│   │   ├── config.py                 # Environment-based configuration (all settings)
-│   │   ├── model_evolution/            # Fine-tuning pipeline (13 modules)
-│   │   │   ├── trainer.py               # Base trainer classes + TrainingJob + registry
-│   │   │   ├── trainer_base.py          # ABC for all trainers
-│   │   │   ├── slm_trainer.py           # SLM LoRA fine-tuning
-│   │   │   ├── llm_trainer.py           # LLM QLoRA fine-tuning
-│   │   │   ├── reranker_trainer.py      # Reranker Full/LoRA fine-tuning
-│   │   │   ├── adapter_manager.py       # Hot-reload trained adapters
-│   │   │   ├── canary_controller.py     # Gradual rollout with traffic splitting
-│   │   │   ├── model_registry.py        # Model artifact registry (MLflow + MinIO)
-│   │   │   ├── eval_gate.py             # EvalGate CI/CD quality gating
-│   │   │   ├── env_profile.py           # Dev/Prod/CI training profiles
-│   │   │   ├── exceptions.py            # Model evolution error hierarchy
-│   │   │   └── __init__.py
-│   │   └── utils.py                  # Shared utilities: token counting, hashing, masking, safe division
+│   │   ├── main.py                   # FastAPI entry point (30+ endpoints: chat, models, health, auth, widget, feedback, admin, tools, files, model evolution)
+│   │   ├── api/                      # API endpoint handlers
+│   │   │   ├── chat.py               # /v1/chat/completions — streaming + non-streaming
+│   │   │   ├── auth_endpoints.py     # /v1/auth/* — login, register, refresh, logout, me
+│   │   │   ├── health.py             # /v1/health, /v1/health/live, /v1/health/ready
+│   │   │   ├── admin.py              # /v1/admin/* — model training, promotion, canary
+│   │   │   ├── feedback.py           # /v1/feedback — expert feedback submission
+│   │   │   ├── files.py              # /v1/files/* — file upload/download via MinIO
+│   │   │   ├── tools.py              # /v1/tools — list/get tools with filters
+│   │   │   ├── widget.py             # /v1/widget — embeddable chat widget HTML/JS
+│   │   │   └── metrics.py            # /metrics — Prometheus endpoint
+│   │   ├── auth/                     # Authentication & authorization
+│   │   │   ├── jwt.py                # JWT token generation (access + refresh pairs)
+│   │   │   ├── rbac.py               # Role-based access control (admin/expert/user/read-only)
+│   │   │   ├── user_db.py            # SQLite user database with bcrypt + refresh token management
+│   │   │   ├── ldap.py               # LDAP/AD authentication integration
+│   │   │   └── api_keys.py           # API key management and validation
+│   │   ├── core/                     # RAG pipeline logic
+│   │   │   ├── retrieval.py          # Qdrant hybrid search (dense+sparse RRF) + graph expansion
+│   │   │   ├── rerank.py             # Cross-encoder reranker (MiniLM-L-6-v2)
+│   │   │   ├── confidence.py         # Confidence scoring: heuristics + optional SLM verification
+│   │   │   ├── grounding.py          # NLI-based answer grounding (cosine + entailment)
+│   │   │   ├── hallucination.py      # Hallucination detection and scoring
+│   │   │   ├── evaluation.py         # Retrieval eval pipeline: MRR, Recall@k, nDCG, Precision@k
+│   │   │   ├── retrieval_evaluator.py # CRAG-style retrieval quality assessment
+│   │   │   ├── hyde.py               # Hypothetical Document Embeddings for query expansion
+│   │   │   ├── query_enhancer.py     # Query rewriting, expansion, and decomposition
+│   │   │   ├── token_optimizer.py    # BPE-aware token counting, compression, budget allocation
+│   │   │   ├── enricher.py           # Self-enrichment: feedback Q&A → chunk → Qdrant
+│   │   │   ├── hitl.py               # Human-in-the-loop: async interaction logging, feedback collection
+│   │   │   ├── live_sources.py       # Live Confluence/Jira/GitLab API queries
+│   │   │   ├── context/              # Context assembly
+│   │   │   │   ├── builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
+│   │   │   │   ├── compression.py    # Context compression strategies
+│   │   │   │   └── versioning.py     # Document version tracking in context
+│   │   │   └── orchestrator/         # LangGraph agentic pipeline
+│   │   │       ├── graph.py          # LangGraph state graph definition (10-node agentic pipeline)
+│   │   │       └── nodes.py          # Individual graph node implementations
+│   │   ├── llm/                      # LLM routing & provider abstraction
+│   │   │   ├── router.py             # Async LLM adapter (streaming + non-streaming)
+│   │   │   ├── slm.py                # SLM: intent classification, query decomposition, entity extraction
+│   │   │   ├── remote_services.py    # Remote embedder/reranker clients with local fallback
+│   │   │   └── provider/             # Provider adapters
+│   │   │       ├── base.py           # Multi-provider router with adapter pattern
+│   │   │       ├── openai.py         # OpenAI/Anthropic/Ollama/Generic adapters
+│   │   │       └── utils.py          # Backward-compatible wrappers
+│   │   ├── tools/                    # Agentic Tools Expansion
+│   │   │   ├── sdk.py                # Custom tool SDK: @tool decorator, ToolBuilder, ToolContext
+│   │   │   ├── definition.py         # ToolDefinition model and schemas
+│   │   │   ├── registry.py           # Central tool registry
+│   │   │   ├── declarative.py        # YAML/JSON declarative tool definitions
+│   │   │   ├── builtin.py            # Built-in tool implementations
+│   │   │   ├── orchestrator.py       # Parallel tool execution with dependency resolution
+│   │   │   ├── security.py           # Tool security validation and sandboxing
+│   │   │   ├── audit.py              # Tool usage auditing and logging
+│   │   │   ├── metrics.py            # Tool execution metrics and monitoring
+│   │   │   ├── errors.py             # Tool-specific error hierarchy
+│   │   │   └── openapi/              # OpenAPI auto-discovery
+│   │   │       ├── discovery.py      # Auto-discovery of OpenAPI endpoints
+│   │   │       └── converter.py      # OpenAPI spec to tool definition converter
+│   │   ├── shared/                   # Shared utilities & middleware
+│   │   │   ├── config.py             # Environment-based configuration (all settings)
+│   │   │   ├── cache.py              # Redis + in-memory multi-tier cache
+│   │   │   ├── exceptions.py         # RAGError, RetrievalError, LLMError, SecurityError hierarchy
+│   │   │   ├── middleware.py         # Request ID, correlation ID, logging, CORS middleware
+│   │   │   ├── logging.py            # Structured logging (text/JSON), secret masking
+│   │   │   ├── metrics.py            # Prometheus metric definitions
+│   │   │   ├── rate_limiter.py       # Token bucket rate limiting middleware (per IP)
+│   │   │   ├── circuit_breaker.py    # Circuit breaker for downstream service calls
+│   │   │   ├── security.py           # Input validation (InputValidator)
+│   │   │   ├── access_control.py     # Unified access control logic
+│   │   │   ├── audit.py              # Audit event logging
+│   │   │   ├── ab_test.py            # A/B test harness for pipeline variants
+│   │   │   ├── i18n.py               # Internationalization support
+│   │   │   ├── tracing.py            # Distributed tracing (OpenTelemetry)
+│   │   │   ├── warmup.py             # Application warmup/cache priming
+│   │   │   ├── memory_manager.py     # Memory management for long-running processes
+│   │   │   ├── minio_client.py       # MinIO/S3 object storage client
+│   │   │   └── utils.py              # Shared utilities: token counting, hashing, masking
+│   │   ├── model_evolution/          # Fine-tuning pipeline (17 modules)
+│   │   │   ├── trainer.py            # Base trainer classes + TrainingJob + registry
+│   │   │   ├── trainer_base.py       # ABC for all trainers
+│   │   │   ├── slm_trainer.py        # SLM LoRA fine-tuning
+│   │   │   ├── llm_trainer.py        # LLM QLoRA fine-tuning
+│   │   │   ├── reranker_trainer.py   # Reranker Full/LoRA fine-tuning
+│   │   │   ├── adapter_manager.py    # Hot-reload trained adapters
+│   │   │   ├── canary_controller.py  # Gradual rollout with traffic splitting
+│   │   │   ├── model_registry.py     # Model artifact registry (MLflow + MinIO)
+│   │   │   ├── artifact_store.py     # Artifact storage abstraction
+│   │   │   ├── eval_gate.py          # EvalGate CI/CD quality gating
+│   │   │   ├── experiment_tracker.py # MLflow experiment tracking
+│   │   │   ├── data_processor.py     # Training data preprocessing
+│   │   │   ├── metrics_gen.py        # Training metrics generation
+│   │   │   ├── nli_evaluator.py      # NLI-based model evaluation
+│   │   │   ├── env_profile.py        # Dev/Prod/CI training profiles
+│   │   │   └── exceptions.py         # Model evolution error hierarchy
+│   │   └── tools.py                  # Legacy tool utilities
 │   ├── .env                          # Configuration (edit before first run)
 │   ├── Dockerfile
 │   ├── requirements_proxy.txt
-│   └── docker-compose.yml            # Qdrant + Redis + Neo4j + LLM backend + Proxy
+│   └── docker-compose.yml            # Qdrant + Redis + Neo4j + MinIO + Proxy
 ├── mcp_server/                       # MCP server for OpenCode/Claude Desktop integration
 │   ├── server.py                     # STDIO + Streamable HTTP transports, tools/resources/prompts
 │   └── __init__.py
-├── hitl_dashboard/                   # Streamlit expert review dashboard
-│   ├── dashboard.py
-│   └── feedback_logger.py
+├── dashboard/                        # Streamlit expert review dashboard (Planned)
+├── tui/                              # Terminal UI for RAG interaction
+│   ├── app.py
+│   └── requirements.txt
 ├── scripts/                          # Utility scripts
 │   ├── init_collections.py           # Initialize Qdrant collections
-│   └── download_models_offline.py    # Pre-download models for air-gapped env
+│   ├── download_models_offline.py    # Pre-download models for air-gapped env
+│   ├── deploy.sh                     # Deploy script (dev/prod)
+│   ├── setup_wizard.py               # Interactive configuration wizard
+│   └── ops/                          # Operations scripts
+│       ├── backup_cron.sh            # Cron backup orchestrator
+│       ├── backup_qdrant.sh          # Qdrant snapshot backup
+│       ├── backup_neo4j.sh           # Neo4j database backup
+│       ├── backup_redis.sh           # Redis RDB backup
+│       ├── restore_all.sh            # Restore all services from backup
+│       └── verify_restore.sh         # Verify backup integrity
+├── deploy/                           # Deployment manifests
+│   ├── docker/                       # Docker Compose variants
+│   │   ├── docker-compose.prod.yml   # Production deployment
+│   │   └── docker-compose.openwebui.yml # OpenWebUI integration
+│   └── k8s/helm/rag-system/          # Kubernetes Helm chart (Planned)
+├── config/                           # Monitoring configuration
+│   └── monitoring/                   # Prometheus + Grafana configs
 ├── tests/                            # Test suite
-│   ├── proxy/                        # Proxy unit tests
-│   ├── etl/                          # ETL unit tests
-│   ├── integration/                  # Integration tests
-│   ├── model_evolution/              # Model evolution tests
-│   ├── e2e/                          # End-to-end tests
-│   ├── benchmark/                    # Load/benchmark tests
-│   ├── mcp_server/                   # MCP server tests
+│   ├── proxy/                        # Proxy unit tests (72 files)
+│   ├── etl/                          # ETL unit tests (22 files)
+│   ├── integration/                  # Integration tests (5 files)
+│   ├── e2e/                          # End-to-end tests (3 files)
+│   ├── performance/                  # Performance tests (2 files)
+│   ├── resilience/                   # Chaos/resilience tests (2 files)
 │   └── conftest.py                   # Shared fixtures
-├── docs/                             # Documentation
-│   ├── en/adr/                       # Architecture Decision Records (English)
+├── docs/                             # Documentation (EN + RU)
+│   ├── en/adr/                       # Architecture Decision Records (14 ADRs)
 │   ├── en/diagrams/                  # C4 diagrams (SVG + Excalidraw)
-│   ├── en/guides/                    # Design & implementation guides (English)
+│   ├── en/guides/                    # Design & implementation guides (29 guides)
 │   ├── ru/adr/                       # Russian translations of ADRs
-│   ├── ru/guides/                    # Russian translations of guides
-├── Makefile                          # Primary dev entry point
+│   └── ru/guides/                    # Russian translations of guides
+├── Makefile                          # Primary dev entry point (36 targets)
 ├── pyproject.toml                    # Python project config (ruff, mypy, pytest)
 ├── setup.sh                          # Installation script
 ├── opencode.json                     # OpenCode IDE configuration
@@ -266,7 +337,7 @@ See `proxy/app/config.py` for all available settings and defaults.
 
 | Document | Purpose |
 |----------|---------|
-| `docs/en/adr/ADR-001` through `ADR-010` | Architecture Decision Records (English) |
+| `docs/en/adr/ADR-001` through `ADR-014` | Architecture Decision Records (English) |
 | `docs/en/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
 | `docs/en/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
 | `docs/en/guides/roadmap.md` | Development roadmap and phased approach |
