@@ -14,10 +14,11 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - "README.md"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 concurrency:
-  group: docs-${{ github.ref }}
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -34,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -43,26 +44,27 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-docs-${{ hashFiles('.github/workflows/docs.yml') }}
+          key: pip-docs-${{ runner.os }}-${{ hashFiles('.github/workflows/docs.yml') }}
           restore-keys: |
-            ${{ runner.os }}-pip-docs-
+            pip-docs-${{ runner.os }}-
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install \
-            mkdocs \
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install \
             mkdocs-material \
-            mkdocs-minify-plugin \
-            mkdocs-mermaid2-plugin \
-            mkdocs-static-i18n \
-            pymdown-extensions
+            mkdocs-static-i18n>=1.2.0 \
+            mkdocs-minify-plugin
 
-      - name: Build docs
-        run: mkdocs build --clean
+      - name: Verify MkDocs configuration
+        run: mkdocs --version
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v5
+      - name: Build docs with --strict
+        run: mkdocs build --strict --clean --site-dir site
+
+      - name: Upload Pages artifact
+        if: success()
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
@@ -76,4 +78,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
