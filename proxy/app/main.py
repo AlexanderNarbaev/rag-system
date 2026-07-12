@@ -369,6 +369,8 @@ async def process_rag_query(
         for msg in other_messages:
             if msg.get("role") != "system":
                 messages_for_llm.append(msg)
+    # Add the user query as the final message
+    messages_for_llm.append({"role": "user", "content": user_query})
 
     # 10. LLM call
     if stream:
