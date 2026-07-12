@@ -5,6 +5,7 @@ import hashlib
 import os
 import re
 import secrets
+from typing import Any
 
 
 class InputValidator:
@@ -155,7 +156,15 @@ class SecurityHeaders:
     }
 
     @classmethod
-    def get_headers(cls, extra: dict | None = None) -> dict[str, str]:
+    def get_headers(cls, extra: dict[str, str] | None = None) -> dict[str, str]:
+        """Return security headers, optionally merging extra headers.
+
+        Args:
+            extra: Additional headers to merge (override defaults).
+
+        Returns:
+            Combined security headers dictionary.
+        """
         headers = dict(cls.DEFAULT_HEADERS)
         if extra:
             headers.update(extra)
@@ -192,8 +201,15 @@ class DependencyScanner:
         return None
 
     @classmethod
-    def scan_requirements(cls, req_file: str) -> list[dict]:
-        """Check requirements.txt against known vulnerabilities."""
+    def scan_requirements(cls, req_file: str) -> list[dict[str, Any]]:
+        """Check requirements.txt against known vulnerabilities.
+
+        Args:
+            req_file: Path to requirements.txt file.
+
+        Returns:
+            List of vulnerability findings (empty if none found).
+        """
         findings = []
         if not os.path.exists(req_file):
             return [{"error": f"File not found: {req_file}"}]

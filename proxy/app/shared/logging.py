@@ -61,7 +61,8 @@ class RequestIdFilter(logging.Filter):
         return True
 
     @classmethod
-    def set_request_id(cls, request_id: str | None):
+    def set_request_id(cls, request_id: str | None) -> None:
+        """Set the current request ID for log correlation."""
         cls._request_id = request_id
 
 
@@ -106,7 +107,7 @@ def get_log_level() -> int:
     return _LOG_LEVEL_MAP.get(raw, logging.INFO)
 
 
-def setup_logging(level: int | None = None):
+def setup_logging(level: int | None = None) -> logging.Handler:
     """
     Configures root logger and returns the configured handler.
     Uses LOG_FORMAT env var: 'json' for structured JSON, 'text' for console.

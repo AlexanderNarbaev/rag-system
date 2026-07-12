@@ -31,6 +31,8 @@ _TYPE_MAP: dict[type | str, str] = {
 
 
 class ToolVisibility(StrEnum):
+    """Access level for tool visibility (role-based filtering)."""
+
     PUBLIC = "public"
     ADMIN = "admin"
     EXPERT = "expert"
@@ -39,6 +41,8 @@ class ToolVisibility(StrEnum):
 
 @dataclass
 class ToolParam:
+    """Single tool parameter definition with type, description, and validation."""
+
     name: str
     type: type | str
     description: str = ""
@@ -69,6 +73,8 @@ class ToolParam:
 
 @dataclass
 class RetryPolicy:
+    """Retry configuration for tool execution failures."""
+
     max_retries: int = 3
     backoff: str = "exponential"
     initial_delay_seconds: float = 1.0
@@ -77,6 +83,7 @@ class RetryPolicy:
 
 @dataclass
 class ToolDefinition:
+    """Complete tool definition with handler, parameters, and metadata."""
     name: str
     description: str
     parameters: list[ToolParam] = field(default_factory=list)
@@ -130,6 +137,8 @@ class ToolDefinition:
 
 @dataclass
 class ToolResult:
+    """Result of a tool execution with content, error, and timing info."""
+
     tool_name: str
     tool_call_id: str = ""
     content: str = ""
@@ -148,12 +157,15 @@ class ToolResult:
 
 @dataclass
 class ToolCall:
+    """Represents a tool invocation with id, name, and arguments."""
+
     id: str
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
 
 
 class ToolErrorBase(Exception):  # noqa: N818
+    """Base exception for tool-related errors."""
     def __init__(
         self,
         tool_name: str,

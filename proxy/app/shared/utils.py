@@ -98,7 +98,7 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def safe_json_loads(s: str, default=None) -> Any:
+def safe_json_loads(s: str, default: Any = None) -> Any:
     """
     Безопасно парсит JSON, возвращает default при ошибке.
     """
@@ -124,7 +124,7 @@ def extract_urls(text: str) -> list[str]:
     return re.findall(pattern, text)
 
 
-def mask_sensitive_data(text: str, secrets: list[str] = None) -> str:
+def mask_sensitive_data(text: str, secrets: list[str] | None = None) -> str:
     """
     Маскирует чувствительные данные (токены, пароли) в логах.
     По умолчанию маскирует строки, похожие на токены (40+ символов).

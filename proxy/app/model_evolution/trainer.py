@@ -11,6 +11,8 @@ from proxy.app.model_evolution.env_profile import EnvProfile, get_preset
 
 
 class TrainerType(Enum):
+    """Type of model trainer (SLM, LLM, or Reranker)."""
+
     SLM = "slm"
     LLM = "llm"
     RERANKER = "reranker"
@@ -18,6 +20,7 @@ class TrainerType(Enum):
 
 @dataclass
 class TrainingConfig:
+    """Configuration for a training job with all hyperparameters."""
     trainer_type: TrainerType
     env_profile: EnvProfile = EnvProfile.DEV
     base_model: str = ""
@@ -42,6 +45,16 @@ class TrainingConfig:
 
     @classmethod
     def from_profile(cls, trainer_type: TrainerType, profile: EnvProfile, **overrides: Any) -> TrainingConfig:
+        """Create a TrainingConfig from an environment profile with optional overrides.
+
+        Args:
+            trainer_type: Type of trainer (SLM, LLM, Reranker).
+            profile: Environment profile (DEV, PROD, CI).
+            **overrides: Override specific config values.
+
+        Returns:
+            Configured TrainingConfig instance.
+        """
         preset = get_preset(profile)
         preset.update(overrides)
         field_names = {f.name for f in fields(cls)}
@@ -51,6 +64,8 @@ class TrainingConfig:
 
 @dataclass
 class TrainingJob:
+    """Tracks a training job's lifecycle, config, status, and metrics."""
+
     job_id: str
     trainer_type: TrainerType
     config: TrainingConfig
@@ -63,6 +78,7 @@ class TrainingJob:
     error_message: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the training job to a dictionary."""
         return {
             "job_id": self.job_id,
             "trainer_type": self.trainer_type.value,
@@ -95,20 +111,31 @@ class TrainingJob:
 
 
 class TrainerBase(ABC):
-    @abstractmethod
-    def prepare_data(self, *args: Any, **kwargs: Any) -> Any: ...
+    """Abstract base class for all model trainers."""
 
     @abstractmethod
-    def train(self, config: TrainingConfig) -> TrainingJob: ...
+    def prepare_data(self, *args: Any, **kwargs: Any) -> Any:
+        """Prepare training data from source."""
+        ...
 
     @abstractmethod
-    def evaluate(self, model: Any, eval_data: Any) -> dict[str, float]: ...
+    def train(self, config: TrainingConfig) -> TrainingJob:
+        """Execute training and return a TrainingJob with results."""
+        ...
+
+    @abstractmethod
+    def evaluate(self, model: Any, eval_data: Any) -> dict[str, float]:
+        """Evaluate model on eval data and return metrics."""
+        ...
 
     def save_adapter(self, model: Any, output_path: str) -> str:
+        """Save trained model/adapter to output_path. Returns URI."""
         raise NotImplementedError("Subclasses must implement save_adapter")
 
 
 class TrainerRegistry:
+    """Singleton registry mapping TrainerType to trainer classes."""
+
     _instance: TrainerRegistry | None = None
 
     def __new__(cls) -> TrainerRegistry:
@@ -119,16 +146,20 @@ class TrainerRegistry:
         return cls._instance
 
     def register(self, trainer_type: TrainerType, trainer_cls: type[TrainerBase]) -> None:
+        """Register a trainer class for a given type."""
         self._registry[trainer_type] = trainer_cls  # type: ignore[attr-defined]
 
     def get(self, trainer_type: TrainerType) -> type[TrainerBase]:
+        """Get the trainer class for a given type. Raises KeyError if not found."""
         if trainer_type not in self._registry:  # type: ignore[attr-defined]
             raise KeyError(f"No trainer registered for type: {trainer_type}")
         return self._registry[trainer_type]  # type: ignore[attr-defined]
 
     def list_types(self) -> list[TrainerType]:
+        """Return all registered trainer types."""
         return list(self._registry.keys())  # type: ignore[attr-defined]
 
     def get_instance(self, trainer_type: TrainerType) -> TrainerBase:
+        """Create a new instance of the trainer for the given type."""
         trainer_cls = self.get(trainer_type)
         return trainer_cls()

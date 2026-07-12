@@ -17,7 +17,9 @@ Exports Prometheus metrics: circuit_breaker_state{name}, circuit_breaker_failure
 import inspect
 import logging
 import time
+from collections.abc import Callable
 from enum import StrEnum
+from typing import Any
 
 import prometheus_client
 from prometheus_client import Counter, Gauge
@@ -32,7 +34,7 @@ logger = logging.getLogger(__name__)
 # We check whether the metric name is already registered before creating it.
 
 
-def _register_metric(metric_cls, name: str, documentation: str, labelnames: list | None = None):
+def _register_metric(metric_cls: Any, name: str, documentation: str, labelnames: list[str] | None = None) -> Any:
     """Register a Prometheus metric, reusing an existing one if already present."""
     registry = prometheus_client.REGISTRY
     # Check if metric name is already registered via any collector
@@ -211,7 +213,7 @@ class CircuitBreaker:
                 raise CircuitBreakerOpenError(self.name)
             self._half_open_calls += 1
 
-    def call_sync(self, fn, *args, **kwargs):
+    def call_sync(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute fn(*args, **kwargs) with circuit breaker protection (synchronous).
 
         For use in synchronous code paths. The passed ``fn`` must be synchronous.
@@ -239,7 +241,7 @@ class CircuitBreaker:
             self.failure()
             raise
 
-    async def call(self, fn, *args, **kwargs):
+    async def call(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute fn(*args, **kwargs) with circuit breaker protection (async).
 
         Supports both sync and async functions. Detects async functions

@@ -24,6 +24,7 @@ The system can operate in two modes:
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC
 from typing import Any
@@ -34,6 +35,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
 
 from proxy.app.shared.config import (
     ACCESS_TOKEN_MINUTES,
@@ -94,7 +96,8 @@ class UserContext:
         return ""
 
     @classmethod
-    def anonymous(cls) -> "UserContext":
+    def anonymous(cls) -> UserContext:
+        """Return an anonymous user context with public access."""
         return cls(
             user_id="anonymous",
             username="anonymous",
@@ -344,7 +347,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     Skips /v1/auth/login and /v1/health even when auth is enabled.
     """
 
-    async def dispatch(self, request: StarletteRequest, call_next):
+    async def dispatch(self, request: StarletteRequest, call_next: Callable) -> Response:
         if not AUTH_ENABLED:
             request.state.user_context = UserContext.anonymous()
             return await call_next(request)

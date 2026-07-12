@@ -26,6 +26,7 @@ import os
 import signal
 import time
 from contextlib import asynccontextmanager
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
@@ -106,6 +107,9 @@ retrieval_evaluator = RetrievalEvaluator()
 shutting_down = False
 _active_requests: set[asyncio.Task] = set()
 
+# Default TTL for cached responses (1 hour)
+DEFAULT_CACHE_TTL_SECONDS = 3600
+
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -113,8 +117,12 @@ _active_requests: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifecycle: initialize and clean up resources."""
+async def lifespan(app: FastAPI):  # type: ignore[type-arg]
+    """Manage application lifecycle: initialize and clean up resources.
+
+    Initializes cache, orchestrator, tools, and warm-up on startup.
+    Drains in-flight requests and closes connections on shutdown.
+    """
     global cache_manager, orchestrator, audit_logger
     setup_logging()
     logger.info("Starting RAG Proxy...")
@@ -207,8 +215,12 @@ async def lifespan(app: FastAPI):
     logger.info("RAG Proxy shutdown")
 
 
-async def _initiate_shutdown(sig: signal.Signals):
-    """Initiate graceful shutdown on SIGTERM/SIGINT."""
+async def _initiate_shutdown(sig: signal.Signals) -> None:
+    """Initiate graceful shutdown on SIGTERM/SIGINT.
+
+    Sets the shutting_down flag and cancels all active tasks
+    after a brief delay to allow in-flight requests to complete.
+    """
     global shutting_down
     if shutting_down:
         return
@@ -232,18 +244,29 @@ async def process_rag_query(
     temperature: float = 0.2,
     max_tokens: int = 4096,
     stream: bool = False,
-    other_messages: list[dict] = None,
+    other_messages: list[dict] | None = None,
     user_context: UserContext | None = None,
     top_k_override: int | None = None,
-):
+) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]]]:
     """
-    Core RAG pipeline:
-    1. Qdrant hybrid search
-    2. Access control filtering
-    3. Reranking
-    4. Deduplication and version filtering
-    5. Context assembly
-    6. LLM call
+    Core RAG pipeline: search → filter → rerank → dedup → context → LLM.
+
+    Steps:
+        1. Cache check (Redis/in-memory)
+        2. Qdrant hybrid search (dense + sparse)
+        3. Row-level access control filtering
+        4. Cross-encoder reranking
+        5. Deduplication and version filtering
+        6. Source citation building
+        7. Retrieval quality evaluation (CRAG-style)
+        8. Context assembly with token budget
+        9. System prompt construction
+        10. LLM call (stream or non-stream)
+
+    Returns:
+        Tuple of (response_text_or_context, messages_or_context, from_cache, sources).
+        When stream=True, second element is the messages list for LLM streaming.
+        When stream=False, first element is the final response text.
     """
     if user_context is None:
         user_context = UserContext.anonymous()
@@ -335,10 +358,11 @@ async def process_rag_query(
                 context = ""
                 chunks_metadata = []
             elif action == "EXPAND":
-                context = build_context(unique_chunks, max_tokens=100000)
+                # Expanded context budget for retrieval quality expansion
+                context = build_context(unique_chunks, max_tokens=100_000)
             else:
                 # 7. Smart token budget allocation
-                available_tokens = 130000
+                available_tokens = 130_000  # approximate context window budget for LLM
                 budget = token_optimizer.smart_token_budget(
                     available_tokens=available_tokens, num_chunks=len(unique_chunks)
                 )
@@ -378,7 +402,7 @@ async def process_rag_query(
     else:
         response_text = await non_stream_completion(messages_for_llm, temperature=temperature, max_tokens=max_tokens)
         if cache_manager and not force_refresh:
-            await cache_manager.set(cache_key, response_text, ttl=3600)
+            await cache_manager.set(cache_key, response_text, ttl=DEFAULT_CACHE_TTL_SECONDS)
         return response_text, context, False, sources
 
 
@@ -422,6 +446,8 @@ if OTEL_ENABLED:
 
 
 class ModelInfo(BaseModel):
+    """Model metadata returned by the /v1/models endpoint."""
+
     id: str
     object: str = "model"
     created: int
@@ -429,12 +455,14 @@ class ModelInfo(BaseModel):
 
 
 class ModelsResponse(BaseModel):
+    """Response wrapper for the /v1/models endpoint."""
+
     object: str = "list"
     data: list[ModelInfo]
 
 
 @app.get("/v1/models")
-async def list_models():
+async def list_models() -> ModelsResponse:
     """Return list of available models."""
     models = [
         ModelInfo(id=LLM_MODEL_NAME, created=int(time.time())),

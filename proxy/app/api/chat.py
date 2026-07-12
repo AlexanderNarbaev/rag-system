@@ -28,11 +28,14 @@ router = APIRouter(tags=["chat"])
 
 
 class ChatMessage(BaseModel):
+    """Single message in a chat conversation."""
+
     role: str
     content: str
 
 
 class ChatCompletionRequest(BaseModel):
+    """OpenAI-compatible chat completion request with RAG extensions."""
     model: str
     messages: list[ChatMessage]
     temperature: float | None = 0.2
@@ -48,12 +51,15 @@ class ChatCompletionRequest(BaseModel):
 
 
 class ChatCompletionResponseChoice(BaseModel):
+    """Single choice in a chat completion response."""
+
     index: int
     message: ChatMessage
     finish_reason: str | None = "stop"
 
 
 class ChatCompletionResponse(BaseModel):
+    """OpenAI-compatible chat completion response with RAG extensions."""
     id: str
     object: str = "chat.completion"
     created: int
@@ -66,6 +72,8 @@ class ChatCompletionResponse(BaseModel):
 
 
 class ModelInfo(BaseModel):
+    """Model metadata for the /v1/models endpoint."""
+
     id: str
     object: str = "model"
     created: int
@@ -73,6 +81,8 @@ class ModelInfo(BaseModel):
 
 
 class ModelsResponse(BaseModel):
+    """Response wrapper for the /v1/models endpoint."""
+
     object: str = "list"
     data: list[ModelInfo]
 
@@ -110,6 +120,7 @@ class StreamOptimizer:
 
 
 def generate_request_id() -> str:
+    """Generate a unique request ID for tracing and logging."""
     return f"rag_{int(time.time())}_{os.urandom(4).hex()}"
 
 

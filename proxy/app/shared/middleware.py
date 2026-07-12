@@ -14,6 +14,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -89,7 +90,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class AuditMiddleware(BaseHTTPMiddleware):
     """Logs every request through AuditLogger for security auditing."""
 
-    def __init__(self, app, audit_logger=None):
+    def __init__(self, app: Any, audit_logger: Any = None) -> None:
         super().__init__(app)
         self.audit_logger = audit_logger
 
@@ -133,7 +134,7 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def add_cors_middleware(app: FastAPI, origins: str = "*"):
+def add_cors_middleware(app: FastAPI, origins: str = "*") -> None:
     """Add CORS middleware with configurable origins."""
     allowed_origins = [o.strip() for o in origins.split(",")] if origins != "*" else ["*"]
     app.add_middleware(
@@ -146,7 +147,7 @@ def add_cors_middleware(app: FastAPI, origins: str = "*"):
     )
 
 
-def setup_all_middleware(app: FastAPI, audit_logger=None):
+def setup_all_middleware(app: FastAPI, audit_logger: Any = None) -> None:
     """Apply all standard middleware in correct order."""
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestIdMiddleware)

@@ -70,7 +70,7 @@ def resolve_versions(
             logger.warning(f"Requested version {requested_version} not found for {source_id}, using latest")
 
         # Найти максимальную версию (простейшее строковое сравнение, для дат и семантических версий)
-        def version_key(chunk):
+        def version_key(chunk: dict[str, Any]) -> tuple[int, ...]:
             v = chunk.get("version", "0")
             # Пытаемся преобразовать в кортеж чисел
             parts = re.split(r"[.-]", v)

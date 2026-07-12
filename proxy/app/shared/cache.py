@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 
 
 class InMemoryCache:
-    """Простой in-memory кэш с TTL."""
+    """Simple in-memory cache with TTL expiration."""
+
+    # Default TTL for cache entries (1 hour)
+    DEFAULT_TTL_SECONDS = 3600
 
     def __init__(self) -> None:
         self._store: dict[str, tuple[Any, float]] = {}  # key -> (value, expire_timestamp)
@@ -86,7 +89,7 @@ class InMemoryCache:
 
 
 class RedisCache:
-    """Redis-кэш (асинхронный)."""
+    """Redis-based cache with async interface."""
 
     def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
