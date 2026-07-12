@@ -8,8 +8,6 @@ Re-exports all public symbols for backward compatibility with
 from proxy.app.core.context.builder import (
     KnowledgeStrip,
     build_context,
-    build_hierarchical_context,
-    build_proposition_context,
     compute_chunk_hash,
     deduplicate_chunks,
     estimate_tokens,
@@ -32,8 +30,6 @@ __all__ = [
     "KnowledgeStrip",
     "assemble_multimodal_context",
     "build_context",
-    "build_hierarchical_context",
-    "build_proposition_context",
     "compute_chunk_hash",
     # compression
     "decompose_to_strips",
