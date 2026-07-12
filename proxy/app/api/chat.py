@@ -316,7 +316,8 @@ async def chat_completions(
                     top_k_override=request.rag_top_k,
                 )
                 async for chunk in _main.stream_completion(messages_for_llm, request.temperature, request.max_tokens):
-                    delta_content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    choices = chunk.get("choices", [])
+                    delta_content = choices[0].get("delta", {}).get("content", "") if choices else ""
                     if delta_content:
                         accumulated_answer.append(delta_content)
                     yield optimizer.format_chunk(chunk)
