@@ -21,7 +21,7 @@ spacy>=3.8.14
 # python -m spacy download en_core_web_sm
 
 # Хранение и обработка данных
-pandas>=2.0.0
+pandas>=3.0.3
 pyarrow>=24.0.0
 
 # Графовая база данных (опционально)
