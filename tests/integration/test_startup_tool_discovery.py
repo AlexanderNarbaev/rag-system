@@ -37,6 +37,7 @@ for mod in _modules_to_mock:
 def tools_client():
     """Create a FastAPI TestClient with tool discovery mocked."""
     from proxy.app import main as proxy_main
+    from proxy.app.auth import jwt as auth_jwt
 
     saved = {}
     for attr in (
@@ -60,12 +61,17 @@ def tools_client():
     proxy_main.GRACEFUL_SHUTDOWN_ENABLED = False
     proxy_main.USE_REDIS = False
 
+    # Disable auth middleware for tests — AuthMiddleware reads AUTH_ENABLED at dispatch time
+    saved_auth_enabled = auth_jwt.AUTH_ENABLED
+    auth_jwt.AUTH_ENABLED = False
+
     from fastapi.testclient import TestClient
 
     client = TestClient(proxy_main.app)
 
     yield client
 
+    auth_jwt.AUTH_ENABLED = saved_auth_enabled
     for attr, value in saved.items():
         setattr(proxy_main, attr, value)
 
