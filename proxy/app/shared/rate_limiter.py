@@ -12,6 +12,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from proxy.app.shared.config import TRUSTED_PROXY_COUNT
+
 
 class TokenBucket:
     """Single token bucket for rate limiting."""
@@ -97,8 +99,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return f"apikey:{auth_header[7:]}"
         client_host = request.client.host if request.client else "unknown"
         x_forwarded = request.headers.get("X-Forwarded-For")
-        if x_forwarded:
-            client_host = x_forwarded.split(",")[0].strip()
+        if x_forwarded and TRUSTED_PROXY_COUNT > 0:
+            # X-Forwarded-For: client, proxy1, proxy2, ...
+            # Take the N-th IP from the right (TRUSTED_PROXY_COUNT=1 → last IP)
+            ips = [ip.strip() for ip in x_forwarded.split(",")]
+            idx = len(ips) - TRUSTED_PROXY_COUNT
+            if idx >= 0:
+                client_host = ips[idx]
         return f"ip:{client_host}"
 
     async def dispatch(self, request: Request, call_next) -> Response:

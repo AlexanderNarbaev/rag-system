@@ -115,26 +115,73 @@ class StreamConsumer:
             return False
 
     def _process_confluence_event(self, event_type: str, doc_id: str, payload: dict) -> bool:
+        """Process a Confluence event through chunk → embed → index.
+
+        Planned, not implemented — StreamConsumer lacks the required pipeline
+        dependencies (MDKeyChunker, LiveVectorLake).  When a chunker and indexer
+        are wired into this class, this method should:
+          1. Extract content from the payload (already available in ``page``).
+          2. Chunk via ``MDKeyChunker.process_document(content, "html", metadata)``.
+          3. Index via ``LiveVectorLake.sync_document(doc_id, chunks)``.
+
+        Returning ``False`` so the message stays un-ACKed and can be retried
+        once real processing is connected.
+        """
         page = payload.get("page", {})
         title = page.get("title", "")
         _body = page.get("body", {}).get("storage", {}).get("value", "") or page.get("body_storage_raw", "") or ""
-        logger.info("Confluence %s: page=%s title='%s'", event_type, doc_id, title)
-        return True
+        logger.warning(
+            "Confluence %s: page=%s title='%s' — STUB: real chunk+index not implemented, "
+            "StreamConsumer needs chunker and indexer wired in. Returning failure.",
+            event_type,
+            doc_id,
+            title,
+        )
+        return False
 
     def _process_gitlab_event(self, event_type: str, doc_id: str, payload: dict) -> bool:
+        """Process a GitLab event through chunk → embed → index.
+
+        Planned, not implemented — StreamConsumer lacks the required pipeline
+        dependencies (MDKeyChunker, LiveVectorLake).  When a chunker and indexer
+        are wired into this class, this method should:
+          1. Build content from commits / MR / wiki payload fields.
+          2. Chunk via ``MDKeyChunker.process_document(content, content_type, metadata)``.
+          3. Index via ``LiveVectorLake.sync_document(doc_id, chunks)``.
+
+        Returning ``False`` so the message stays un-ACKed and can be retried
+        once real processing is connected.
+        """
         if event_type == "push":
             commits = payload.get("commits", [])
-            logger.info("GitLab push: project=%s commits=%d", doc_id, len(commits))
+            logger.warning(
+                "GitLab push: project=%s commits=%d — STUB: real chunk+index not implemented.",
+                doc_id,
+                len(commits),
+            )
         elif event_type == "merge_request":
             mr = payload.get("object_attributes", {})
             title = mr.get("title", "")
-            logger.info("GitLab MR: id=%s title='%s' state=%s", doc_id, title, mr.get("state", ""))
+            logger.warning(
+                "GitLab MR: id=%s title='%s' state=%s — STUB: real chunk+index not implemented.",
+                doc_id,
+                title,
+                mr.get("state", ""),
+            )
         elif event_type == "wiki_page":
             wiki = payload.get("object_attributes", {})
-            logger.info("GitLab wiki: title='%s' action=%s", wiki.get("title", ""), wiki.get("action", ""))
+            logger.warning(
+                "GitLab wiki: title='%s' action=%s — STUB: real chunk+index not implemented.",
+                wiki.get("title", ""),
+                wiki.get("action", ""),
+            )
         else:
-            logger.info("GitLab event: type=%s project=%s", event_type, doc_id)
-        return True
+            logger.warning(
+                "GitLab event: type=%s project=%s — STUB: real chunk+index not implemented.",
+                event_type,
+                doc_id,
+            )
+        return False
 
     def consume_batch(self, block_ms: int | None = 5000) -> int:
         """Consume a batch of messages from the stream."""

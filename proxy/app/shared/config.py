@@ -127,6 +127,7 @@ OTEL_MAX_ATTRIBUTES_PER_SPAN = int(os.getenv("OTEL_MAX_ATTRIBUTES_PER_SPAN", "12
 RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "false").lower() == "true"
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
+TRUSTED_PROXY_COUNT = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
 
 # ============ CORS ============
 # Default allows localhost only. For production, set explicit allowed origins.

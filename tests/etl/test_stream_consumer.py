@@ -84,18 +84,20 @@ class TestConsumerInit:
 
 class TestEventProcessing:
     def test_process_confluence_created_event(self, mock_redis_client, sample_confluence_event):
+        """Confluence stub returns False (planned, not implemented)."""
         from etl.scheduler.stream_consumer import StreamConsumer
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         result = consumer.process_event(sample_confluence_event)
-        assert result is True
+        assert result is False
 
     def test_process_gitlab_push_event(self, mock_redis_client, sample_gitlab_event):
+        """GitLab stub returns False (planned, not implemented)."""
         from etl.scheduler.stream_consumer import StreamConsumer
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         result = consumer.process_event(sample_gitlab_event)
-        assert result is True
+        assert result is False
 
     def test_process_event_invalid_returns_false(self, mock_redis_client):
         from etl.scheduler.stream_consumer import StreamConsumer
@@ -113,7 +115,8 @@ class TestEventProcessing:
 
 
 class TestStreamProcessing:
-    def test_consume_pending_messages(self, mock_redis_client, sample_confluence_event):
+    def test_consume_pending_messages_no_ack_for_stubs(self, mock_redis_client, sample_confluence_event):
+        """Stubs return False, so messages are NOT acknowledged."""
         from etl.scheduler.stream_consumer import StreamConsumer
 
         msg_id = "1719000000000-0"
@@ -121,9 +124,9 @@ class TestStreamProcessing:
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         processed = consumer.consume_batch(block_ms=100)
-        assert processed == 1
+        assert processed == 0
         mock_redis_client.xreadgroup.assert_called_once()
-        mock_redis_client.xack.assert_called_once_with("etl:events", "etl-workers", msg_id)
+        mock_redis_client.xack.assert_not_called()
 
     def test_consume_empty_stream(self, mock_redis_client):
         from etl.scheduler.stream_consumer import StreamConsumer
@@ -133,7 +136,8 @@ class TestStreamProcessing:
         processed = consumer.consume_batch(block_ms=100)
         assert processed == 0
 
-    def test_consume_multiple_messages(self, mock_redis_client):
+    def test_consume_multiple_messages_no_ack_for_stubs(self, mock_redis_client):
+        """Multiple stub events: none are acknowledged."""
         from etl.scheduler.stream_consumer import StreamConsumer
 
         event1 = {
@@ -162,16 +166,26 @@ class TestStreamProcessing:
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
         processed = consumer.consume_batch(block_ms=100)
-        assert processed == 2
-        assert mock_redis_client.xack.call_count == 2
+        assert processed == 0
+        mock_redis_client.xack.assert_not_called()
 
-    def test_acknowledge_after_success(self, mock_redis_client, sample_confluence_event):
+    def test_acknowledge_on_success(self, mock_redis_client):
+        """ACK is called when process_event returns True (e.g. future real processing)."""
         from etl.scheduler.stream_consumer import StreamConsumer
 
+        event = {
+            "source": "confluence",
+            "event_type": "page_created",
+            "doc_id": "1",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "payload": "{}",
+        }
         msg_id = b"1719000000000-0"
-        mock_redis_client.xreadgroup.return_value = [["etl:events", [(msg_id, sample_confluence_event)]]]
+        mock_redis_client.xreadgroup.return_value = [["etl:events", [(msg_id, event)]]]
 
         consumer = StreamConsumer(redis_client=mock_redis_client)
+        # Patch process_event to simulate successful processing
+        consumer.process_event = lambda evt: True  # type: ignore[method-assign]
         consumer.consume_batch(block_ms=100)
         mock_redis_client.xack.assert_called_with("etl:events", "etl-workers", msg_id.decode())
 

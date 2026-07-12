@@ -3,7 +3,7 @@
 # Install: pip install -r requirements-etl.txt
 
 # ── HTTP & API clients ────────────────────────────────────────────────────────
-requests>=2.31.0
+requests>=2.34.2
 beautifulsoup4>=4.12.0
 markdown>=3.5.0
 python-dotenv>=1.0.0
@@ -11,17 +11,17 @@ pyyaml>=6.0
 
 # ── Vector database & embeddings ──────────────────────────────────────────────
 qdrant-client>=1.10.0
-sentence-transformers>=2.2.0
+sentence-transformers>=5.6.0
 
 # ── NLP & entity extraction ───────────────────────────────────────────────────
-spacy>=3.8.0
+spacy>=3.8.14
 
 # ── Data processing ───────────────────────────────────────────────────────────
 pandas>=2.0.0
-pyarrow>=15.0.0
+pyarrow>=24.0.0
 
 # ── Graph database (optional) ─────────────────────────────────────────────────
 neo4j>=5.14.0
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
-filelock>=3.12.0
+filelock>=3.29.5

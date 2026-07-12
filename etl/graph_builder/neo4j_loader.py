@@ -222,7 +222,6 @@ class Neo4jLoader:
         RETURN count(n) as deleted
         """
         params = {"valid_ids": valid_source_ids}
-        _result = self._execute_with_retry(query, params)
         # Получаем количество удалённых узлов
         with self.driver.session(database=self.database) as session:
             record = session.run(query, params).single()
