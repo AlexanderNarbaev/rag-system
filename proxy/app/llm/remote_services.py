@@ -42,16 +42,22 @@ class RemoteEmbeddingClient:
     """
 
     def __init__(self, endpoint: str, api_key: str = "", model: str = ""):
-        self._endpoint = endpoint.rstrip("/")
+        # Strip trailing slashes and known path suffixes to get base URL
+        base = endpoint.rstrip("/")
+        for suffix in ("/embeddings", "/v1/embeddings"):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+                break
+        self._endpoint = base
         self._api_key = api_key
         self._model = model or "default"
-        self._embedding_url = f"{self._endpoint}/embeddings"
+        self._embedding_url = f"{self._endpoint}/v1/embeddings"
         self._healthy = True
 
     def _check_health(self) -> bool:
         """Quick connectivity check.
 
-        Uses GET to /models endpoint which is more widely supported than HEAD.
+        Uses GET to /v1/models endpoint which is more widely supported than HEAD.
         Falls back to checking the embeddings endpoint directly.
         """
         import urllib.request
@@ -59,8 +65,8 @@ class RemoteEmbeddingClient:
         if not self._healthy:
             return False
         try:
-            # Try /models endpoint first (OpenAI-compatible)
-            models_url = f"{self._endpoint}/models"
+            # Try /v1/models endpoint first (OpenAI-compatible)
+            models_url = f"{self._endpoint}/v1/models"
             req = urllib.request.Request(models_url)
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
@@ -168,10 +174,16 @@ class RemoteRerankerClient:
     """
 
     def __init__(self, endpoint: str, api_key: str = "", model: str = ""):
-        self._endpoint = endpoint.rstrip("/")
+        # Strip trailing slashes and known path suffixes to get base URL
+        base = endpoint.rstrip("/")
+        for suffix in ("/rerank", "/v1/rerank"):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+                break
+        self._endpoint = base
         self._api_key = api_key
         self._model = model or "default"
-        self._rerank_url = f"{self._endpoint}/rerank"
+        self._rerank_url = f"{self._endpoint}/v1/rerank"
         self._max_length = 512  # default, configurable
         self._healthy = True
 
