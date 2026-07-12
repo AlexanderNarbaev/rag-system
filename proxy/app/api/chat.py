@@ -36,6 +36,7 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     """OpenAI-compatible chat completion request with RAG extensions."""
+
     model: str
     messages: list[ChatMessage]
     temperature: float | None = 0.2
@@ -60,6 +61,7 @@ class ChatCompletionResponseChoice(BaseModel):
 
 class ChatCompletionResponse(BaseModel):
     """OpenAI-compatible chat completion response with RAG extensions."""
+
     id: str
     object: str = "chat.completion"
     created: int

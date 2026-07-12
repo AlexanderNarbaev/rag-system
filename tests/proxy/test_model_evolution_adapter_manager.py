@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import threading
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,7 +16,6 @@ from proxy.app.model_evolution.adapter_manager import (
     reset_adapter_manager,
 )
 from proxy.app.model_evolution.exceptions import AdapterError
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

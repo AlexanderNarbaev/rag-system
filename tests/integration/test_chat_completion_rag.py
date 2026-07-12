@@ -10,7 +10,7 @@ Tests the end-to-end flow from chat request to response:
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -59,10 +59,12 @@ class TestChatCompletionRAGPipeline:
 
     def test_chat_triggers_retrieval_reranking_and_llm(self, app_client):
         """A chat request triggers hybrid_search → rerank_chunks → LLM generation in sequence."""
-        search_results = _make_scored_points([
-            {"text": "RAG combines retrieval with generation.", "source_type": "confluence", "title": "RAG Guide"},
-            {"text": "CI/CD pipelines automate deployment.", "source_type": "gitlab", "title": "CI/CD Setup"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "RAG combines retrieval with generation.", "source_type": "confluence", "title": "RAG Guide"},
+                {"text": "CI/CD pipelines automate deployment.", "source_type": "gitlab", "title": "CI/CD Setup"},
+            ]
+        )
 
         async def mock_llm(messages, **kwargs):
             return "Based on the context, RAG is a technique combining retrieval and generation."
@@ -94,22 +96,24 @@ class TestChatCompletionRAGPipeline:
 
     def test_response_includes_rag_sources(self, app_client):
         """Non-streaming response includes rag_sources with chunk metadata."""
-        search_results = _make_scored_points([
-            {
-                "text": "RAG is retrieval-augmented generation.",
-                "source_type": "confluence",
-                "source_id": "conf_123",
-                "title": "RAG Overview",
-                "version": "2.0",
-            },
-            {
-                "text": "Hybrid search combines dense and sparse vectors.",
-                "source_type": "gitlab",
-                "source_id": "gl_456",
-                "title": "Search Module",
-                "version": "1.0",
-            },
-        ])
+        search_results = _make_scored_points(
+            [
+                {
+                    "text": "RAG is retrieval-augmented generation.",
+                    "source_type": "confluence",
+                    "source_id": "conf_123",
+                    "title": "RAG Overview",
+                    "version": "2.0",
+                },
+                {
+                    "text": "Hybrid search combines dense and sparse vectors.",
+                    "source_type": "gitlab",
+                    "source_id": "gl_456",
+                    "title": "Search Module",
+                    "version": "1.0",
+                },
+            ]
+        )
 
         async def mock_llm(messages, **kwargs):
             return "RAG uses retrieval-augmented generation with hybrid search."
@@ -142,9 +146,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_response_includes_feedback_id(self, app_client):
         """Non-streaming response includes a rag_feedback_id for feedback tracking."""
-        search_results = _make_scored_points([
-            {"text": "RAG context chunk.", "source_type": "confluence"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "RAG context chunk.", "source_type": "confluence"},
+            ]
+        )
 
         async def mock_llm(messages, **kwargs):
             return "Answer based on context."
@@ -167,9 +173,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_response_includes_confidence_score(self, app_client):
         """Non-streaming response includes rag_confidence score."""
-        search_results = _make_scored_points([
-            {"text": "Highly relevant RAG context.", "source_type": "confluence"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "Highly relevant RAG context.", "source_type": "confluence"},
+            ]
+        )
 
         async def mock_llm(messages, **kwargs):
             return "Detailed answer about RAG with good grounding."
@@ -234,9 +242,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_multi_turn_conversation_preserves_history(self, app_client):
         """Multi-turn messages are forwarded to LLM correctly (excluding system messages from user)."""
-        search_results = _make_scored_points([
-            {"text": "RAG context for multi-turn.", "source_type": "confluence"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "RAG context for multi-turn.", "source_type": "confluence"},
+            ]
+        )
 
         captured_messages = []
 
@@ -271,9 +281,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_version_filter_passed_to_search(self, app_client):
         """When rag_version is specified, it is passed to hybrid_search."""
-        search_results = _make_scored_points([
-            {"text": "Versioned content.", "version": "2.0"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "Versioned content.", "version": "2.0"},
+            ]
+        )
 
         async def mock_llm(messages, **kwargs):
             return "Version-specific answer."
@@ -299,9 +311,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_response_id_format(self, app_client):
         """Response ID follows the 'rag_' prefix convention."""
-        search_results = _make_scored_points([
-            {"text": "Some context.", "source_type": "confluence"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "Some context.", "source_type": "confluence"},
+            ]
+        )
 
         async def mock_llm(messages, **kwargs):
             return "Response text."
@@ -325,9 +339,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_context_passed_to_llm_system_prompt(self, app_client):
         """Retrieved context is embedded in the system prompt sent to LLM."""
-        search_results = _make_scored_points([
-            {"text": "RAG is a powerful technique for LLMs.", "source_type": "confluence", "title": "RAG Guide"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "RAG is a powerful technique for LLMs.", "source_type": "confluence", "title": "RAG Guide"},
+            ]
+        )
 
         captured_messages = []
 
@@ -354,9 +370,11 @@ class TestChatCompletionRAGPipeline:
 
     def test_rerank_exception_propagates(self, app_client):
         """Exception during reranking propagates to the caller."""
-        search_results = _make_scored_points([
-            {"text": "Some text.", "source_type": "confluence"},
-        ])
+        search_results = _make_scored_points(
+            [
+                {"text": "Some text.", "source_type": "confluence"},
+            ]
+        )
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),

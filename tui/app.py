@@ -9,7 +9,6 @@ Usage:
     python tui/app.py
 """
 
-import asyncio
 import os
 import subprocess
 import sys
@@ -17,11 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 from rich.text import Text
-from textual import on, work
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
@@ -29,19 +25,12 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
-    DataTable,
     Footer,
     Header,
     Input,
     Label,
-    ListItem,
-    ListView,
     Log,
-    ProgressBar,
-    RichLog,
-    Select,
     Static,
-    Switch,
 )
 
 # ---------------------------------------------------------------------------
@@ -53,11 +42,31 @@ PROJECT_ROOT = Path(__file__).parent.parent
 ENV_FILE = PROJECT_ROOT / "proxy" / ".env"
 
 # Service endpoints for health checks
+_qdrant_host = os.getenv("QDRANT_HOST", "localhost")
+_qdrant_port = os.getenv("QDRANT_PORT", "6333")
+_neo4j_host = os.getenv("NEO4J_HOST", "localhost")
+_neo4j_port = os.getenv("NEO4J_HTTP_PORT", "7474")
+_redis_host = os.getenv("REDIS_HOST", "localhost")
+_redis_port = os.getenv("REDIS_PORT", "6379")
+_llm_endpoint = os.getenv("LLM_ENDPOINT", "http://localhost:8000/v1")
+
 SERVICES = {
-    "Qdrant": {"url": f"http://{os.getenv('QDRANT_HOST', 'localhost')}:{os.getenv('QDRANT_PORT', '6333')}/collections", "method": "GET"},
-    "Neo4j": {"url": f"http://{os.getenv('NEO4J_HOST', 'localhost')}:{os.getenv('NEO4J_HTTP_PORT', '7474')}", "method": "GET"},
-    "Redis": {"url": f"http://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}", "method": "GET"},
-    "LLM": {"url": f"{os.getenv('LLM_ENDPOINT', 'http://localhost:8000/v1')}/models", "method": "GET"},
+    "Qdrant": {
+        "url": f"http://{_qdrant_host}:{_qdrant_port}/collections",
+        "method": "GET",
+    },
+    "Neo4j": {
+        "url": f"http://{_neo4j_host}:{_neo4j_port}",
+        "method": "GET",
+    },
+    "Redis": {
+        "url": f"http://{_redis_host}:{_redis_port}",
+        "method": "GET",
+    },
+    "LLM": {
+        "url": f"{_llm_endpoint}/models",
+        "method": "GET",
+    },
 }
 
 

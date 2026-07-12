@@ -239,7 +239,10 @@ class MultiProviderRouter:
                     await session.close()
                     translated = adapter.translate_response(data)
                     if "choices" not in translated or not translated["choices"]:
-                        raise LLMError("Invalid response format from LLM")
+                        raise LLMError(
+                            f"Invalid response format from LLM: "
+                            f"missing 'choices' in response. Keys: {list(translated.keys())}"
+                        )
                     _record_llm_success()
                     return translated
             except (TimeoutError, ClientError, LLMError) as e:

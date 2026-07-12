@@ -13,7 +13,6 @@ from proxy.app.model_evolution.trainer import (
     TrainingJob,
 )
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -87,9 +86,7 @@ class TestTrainingConfig:
         assert cfg.env_profile == EnvProfile.PROD
 
     def test_config_from_profile_with_overrides(self):
-        cfg = TrainingConfig.from_profile(
-            TrainerType.RERANKER, EnvProfile.CI, epochs=1, seed=99
-        )
+        cfg = TrainingConfig.from_profile(TrainerType.RERANKER, EnvProfile.CI, epochs=1, seed=99)
         assert cfg.trainer_type == TrainerType.RERANKER
         assert cfg.env_profile == EnvProfile.CI
         assert cfg.epochs == 1
@@ -97,9 +94,7 @@ class TestTrainingConfig:
 
     def test_config_from_profile_filters_unknown_keys(self):
         """Unknown override keys should be silently ignored."""
-        cfg = TrainingConfig.from_profile(
-            TrainerType.SLM, EnvProfile.DEV, nonexistent_key="value"
-        )
+        cfg = TrainingConfig.from_profile(TrainerType.SLM, EnvProfile.DEV, nonexistent_key="value")
         assert not hasattr(cfg, "nonexistent_key")
 
 

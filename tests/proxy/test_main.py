@@ -333,6 +333,7 @@ class TestChatCompletionsStreaming:
         Before the fix, accessing choices[0] on an empty list caused IndexError.
         The fix adds a guard: ``choices[0]... if choices else ""``.
         """
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "Hello"}}]}
             yield {"id": "2", "choices": []}  # Empty choices — the fixed edge case
@@ -354,6 +355,7 @@ class TestChatCompletionsStreaming:
 
     def test_streaming_missing_choices_key_no_error(self, client, mock_rag_pipeline):
         """Streaming chunk missing the 'choices' key entirely must not raise."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "test"}}]}
             yield {"id": "2"}  # No 'choices' key at all — chunk.get("choices", []) returns []
@@ -374,6 +376,7 @@ class TestChatCompletionsStreaming:
 
     def test_streaming_choices_with_no_delta_key(self, client, mock_rag_pipeline):
         """Streaming chunk with choices[0] missing 'delta' must not raise KeyError."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "A"}}]}
             yield {"id": "2", "choices": [{"index": 0}]}  # No 'delta' key

@@ -12,7 +12,6 @@ from proxy.app.model_evolution.eval_gate import (
     MetricThreshold,
 )
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -92,10 +91,12 @@ class TestEvalGatePass:
         assert result.warnings == []
 
     def test_multiple_thresholds_all_pass(self):
-        cfg = _gate_config(thresholds=[
-            _threshold("accuracy", 0.85, "gte"),
-            _threshold("loss", 0.1, "lt"),
-        ])
+        cfg = _gate_config(
+            thresholds=[
+                _threshold("accuracy", 0.85, "gte"),
+                _threshold("loss", 0.1, "lt"),
+            ]
+        )
         result = EvalGate.evaluate({"accuracy": 0.90, "loss": 0.05}, cfg)
         assert result.status == GateStatus.PASS
 
@@ -125,20 +126,24 @@ class TestEvalGateFail:
         assert "accuracy" in result.failures[0]
 
     def test_multiple_failures(self):
-        cfg = _gate_config(thresholds=[
-            _threshold("accuracy", 0.85, "gte"),
-            _threshold("f1", 0.80, "gte"),
-        ])
+        cfg = _gate_config(
+            thresholds=[
+                _threshold("accuracy", 0.85, "gte"),
+                _threshold("f1", 0.80, "gte"),
+            ]
+        )
         result = EvalGate.evaluate({"accuracy": 0.50, "f1": 0.60}, cfg)
         assert result.status == GateStatus.FAIL
         assert len(result.failures) == 2
 
     def test_fail_overrides_warn(self):
         """FAIL status takes priority over WARN when both are present."""
-        cfg = _gate_config(thresholds=[
-            _threshold("accuracy", 0.85, "gte", severity="fail"),
-            _threshold("latency", 100, "lte", severity="warn"),
-        ])
+        cfg = _gate_config(
+            thresholds=[
+                _threshold("accuracy", 0.85, "gte", severity="fail"),
+                _threshold("latency", 100, "lte", severity="warn"),
+            ]
+        )
         result = EvalGate.evaluate({"accuracy": 0.50, "latency": 200}, cfg)
         assert result.status == GateStatus.FAIL
         assert len(result.failures) == 1
@@ -152,19 +157,23 @@ class TestEvalGateWarn:
     """Test gate evaluation with warn-only thresholds."""
 
     def test_warn_only_threshold(self):
-        cfg = _gate_config(thresholds=[
-            _threshold("latency", 100, "lte", severity="warn"),
-        ])
+        cfg = _gate_config(
+            thresholds=[
+                _threshold("latency", 100, "lte", severity="warn"),
+            ]
+        )
         result = EvalGate.evaluate({"latency": 200}, cfg)
         assert result.status == GateStatus.WARN
         assert len(result.warnings) == 1
         assert result.failures == []
 
     def test_pass_and_warn_mixed(self):
-        cfg = _gate_config(thresholds=[
-            _threshold("accuracy", 0.85, "gte", severity="fail"),
-            _threshold("latency", 100, "lte", severity="warn"),
-        ])
+        cfg = _gate_config(
+            thresholds=[
+                _threshold("accuracy", 0.85, "gte", severity="fail"),
+                _threshold("latency", 100, "lte", severity="warn"),
+            ]
+        )
         result = EvalGate.evaluate({"accuracy": 0.90, "latency": 200}, cfg)
         assert result.status == GateStatus.WARN
         assert result.failures == []
@@ -259,18 +268,14 @@ class TestEvalGateFromMlflow:
 
     def test_sets_mlflow_run_id(self):
         cfg = _gate_config(thresholds=[_threshold("acc", 0.8, "gte")])
-        result = EvalGate.from_mlflow_run(
-            {"acc": 0.9}, cfg, run_id="run-abc-123"
-        )
+        result = EvalGate.from_mlflow_run({"acc": 0.9}, cfg, run_id="run-abc-123")
         assert result.mlflow_run_id == "run-abc-123"
         assert result.version == "run-abc-123"
         assert result.status == GateStatus.PASS
 
     def test_passes_baseline_through(self):
         cfg = _gate_config(thresholds=[_threshold("acc", 0.8, "gte")], tolerance=0.02)
-        result = EvalGate.from_mlflow_run(
-            {"acc": 0.85}, cfg, run_id="run-1", baseline_metrics={"acc": 0.90}
-        )
+        result = EvalGate.from_mlflow_run({"acc": 0.85}, cfg, run_id="run-1", baseline_metrics={"acc": 0.90})
         assert result.mlflow_run_id == "run-1"
         assert "regressed" in result.warnings[0]
 
@@ -304,9 +309,7 @@ class TestEvalGateFormatReport:
 
     def test_report_contains_deltas(self):
         cfg = _gate_config(thresholds=[_threshold("acc", 0.8, "gte")])
-        result = EvalGate.evaluate(
-            {"acc": 0.90}, cfg, baseline_metrics={"acc": 0.85}
-        )
+        result = EvalGate.evaluate({"acc": 0.90}, cfg, baseline_metrics={"acc": 0.85})
         report = EvalGate.format_report(result)
         assert "Delta" in report
 

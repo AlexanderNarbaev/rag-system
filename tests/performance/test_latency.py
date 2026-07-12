@@ -11,7 +11,7 @@ Run with: pytest tests/performance/test_latency.py -v
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,7 +37,6 @@ for mod in _modules_to_mock:
         sys.modules[mod] = MagicMock()
 
 from proxy.app.main import app
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -175,9 +174,7 @@ class TestChatCompletionLatency:
             latencies.append(latency_ms)
 
         p95 = _compute_percentiles(latencies)["p95"]
-        assert p95 < max_latency_ms, (
-            f"p95 latency {p95:.1f}ms exceeded {max_latency_ms}ms threshold"
-        )
+        assert p95 < max_latency_ms, f"p95 latency {p95:.1f}ms exceeded {max_latency_ms}ms threshold"
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +219,7 @@ class TestStreamingFirstChunkLatency:
 
     def test_streaming_initial_chunk_is_immediate(self, client, mock_rag_pipeline):
         """StreamOptimizer's initial empty chunk should be the first data line."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "Hello"}}]}
 
@@ -263,9 +261,7 @@ class TestHealthCheckLatency:
         latency_ms = (time.perf_counter() - start) * 1000
 
         assert response.status_code == 200
-        assert latency_ms < max_latency_ms, (
-            f"Health live latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
-        )
+        assert latency_ms < max_latency_ms, f"Health live latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
 
     def test_health_live_repeated_under_100ms(self, client, mock_healthy_services):
         """10 sequential liveness probes should all be under 100ms."""
@@ -280,9 +276,7 @@ class TestHealthCheckLatency:
             latencies.append(latency_ms)
 
         p95 = _compute_percentiles(latencies)["p95"]
-        assert p95 < max_latency_ms, (
-            f"Health live p95 latency {p95:.1f}ms exceeded {max_latency_ms}ms"
-        )
+        assert p95 < max_latency_ms, f"Health live p95 latency {p95:.1f}ms exceeded {max_latency_ms}ms"
 
     def test_health_ready_under_100ms(self, client, mock_healthy_services):
         """GET /v1/health/ready should respond in < 100ms with mocked services.
@@ -296,9 +290,7 @@ class TestHealthCheckLatency:
         latency_ms = (time.perf_counter() - start) * 1000
 
         assert response.status_code == 200
-        assert latency_ms < max_latency_ms, (
-            f"Health ready latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
-        )
+        assert latency_ms < max_latency_ms, f"Health ready latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
 
     def test_health_full_under_500ms(self, client, mock_healthy_services):
         """GET /v1/health should respond in < 500ms with mocked services."""
@@ -309,9 +301,7 @@ class TestHealthCheckLatency:
         latency_ms = (time.perf_counter() - start) * 1000
 
         assert response.status_code == 200
-        assert latency_ms < max_latency_ms, (
-            f"Health full latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
-        )
+        assert latency_ms < max_latency_ms, f"Health full latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
 
 
 # ---------------------------------------------------------------------------
@@ -368,9 +358,7 @@ class TestConcurrentRequestHandling:
 
         # Each individual request should be under the per-request threshold
         for i, lat in enumerate(latencies):
-            assert lat < max_per_request_ms, (
-                f"Request {i} latency {lat:.1f}ms exceeded {max_per_request_ms}ms"
-            )
+            assert lat < max_per_request_ms, f"Request {i} latency {lat:.1f}ms exceeded {max_per_request_ms}ms"
 
     def test_10_parallel_streaming_requests(self, client, mock_rag_pipeline):
         """10 parallel streaming requests should all complete."""

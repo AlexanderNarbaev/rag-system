@@ -8,6 +8,7 @@
 - Создание индексов и уникальных ограничений
 - Очистку устаревших связей
 """
+
 import contextlib
 import logging
 import time
@@ -66,7 +67,7 @@ class Neo4jLoader:
                         self.driver.close()
                     self.driver = None
                 if attempt < self.max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(f"Retrying Neo4j connection in {delay}s...")
                     time.sleep(delay)
                 else:
@@ -101,7 +102,7 @@ class Neo4jLoader:
             except Exception as e:
                 logger.warning(f"Attempt {attempt + 1}/{self.max_retries} failed: {e}")
                 if attempt < self.max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
                     time.sleep(delay)
                 else:
@@ -258,7 +259,7 @@ class Neo4jLoader:
             except Exception as e:
                 logger.warning(f"delete_outdated_entities attempt {attempt + 1}/{self.max_retries} failed: {e}")
                 if attempt < self.max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
                     time.sleep(delay)
                 else:
@@ -290,7 +291,7 @@ class Neo4jLoader:
             except Exception as e:
                 logger.warning(f"delete_outdated_relations attempt {attempt + 1}/{self.max_retries} failed: {e}")
                 if attempt < self.max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
                     time.sleep(delay)
                 else:
@@ -324,7 +325,7 @@ class Neo4jLoader:
             except Exception as e:
                 logger.warning(f"get_graph_statistics attempt {attempt + 1}/{self.max_retries} failed: {e}")
                 if attempt < self.max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
                     time.sleep(delay)
                 else:

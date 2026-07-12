@@ -1,7 +1,6 @@
 # ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for MCP server — server.py tool/resource/prompt registration and execution."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,9 +9,7 @@ import pytest
 # Module-level import of the MCP server object.
 # We patch httpx.AsyncClient to prevent real HTTP calls during import/tool execution.
 # ---------------------------------------------------------------------------
-
 from mcp_server.server import mcp  # noqa: E402
-
 
 # ===========================================================================
 # Fixtures
@@ -26,9 +23,7 @@ def mock_httpx_response():
     def _make(json_data=None, status_code=200):
         resp = MagicMock()
         resp.status_code = status_code
-        resp.json.return_value = json_data or {
-            "choices": [{"message": {"content": "Mocked RAG answer"}}]
-        }
+        resp.json.return_value = json_data or {"choices": [{"message": {"content": "Mocked RAG answer"}}]}
         resp.text = str(json_data)
         return resp
 
@@ -269,9 +264,7 @@ class TestRagChatTool:
 
     @pytest.mark.asyncio
     async def test_rag_chat_returns_content(self, mock_httpx_client):
-        mock_client = mock_httpx_client(
-            response_data={"choices": [{"message": {"content": "RAG is a technique..."}}]}
-        )
+        mock_client = mock_httpx_client(response_data={"choices": [{"message": {"content": "RAG is a technique..."}}]})
         with patch("mcp_server.server.httpx.AsyncClient", return_value=mock_client):
             result = await mcp.call_tool("rag_chat", {"message": "What is RAG?"})
         assert result is not None
@@ -643,13 +636,7 @@ class TestToolCallRoundTrip:
     async def test_full_chat_roundtrip(self, mock_httpx_client):
         mock_client = mock_httpx_client(
             response_data={
-                "choices": [
-                    {
-                        "message": {
-                            "content": "Kubernetes is an open-source container orchestration platform."
-                        }
-                    }
-                ]
+                "choices": [{"message": {"content": "Kubernetes is an open-source container orchestration platform."}}]
             }
         )
         with patch("mcp_server.server.httpx.AsyncClient", return_value=mock_client):

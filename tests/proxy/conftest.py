@@ -21,8 +21,8 @@ def _isolate_env(monkeypatch):
     # Tests that need auth should monkeypatch AUTH_ENABLED back to True.
     monkeypatch.setenv("AUTH_ENABLED", "false")
     try:
-        import proxy.app.shared.config as _cfg
         import proxy.app.auth.jwt as _jwt
+        import proxy.app.shared.config as _cfg
 
         monkeypatch.setattr(_cfg, "AUTH_ENABLED", False)
         monkeypatch.setattr(_jwt, "AUTH_ENABLED", False)

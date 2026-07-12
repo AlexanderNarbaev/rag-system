@@ -19,6 +19,7 @@ class ArtifactRef:
 
 class ArtifactStore:
     """Storage backend for model artifacts — supports MinIO/S3 and local filesystem."""
+
     def __init__(
         self,
         endpoint: str | None = None,

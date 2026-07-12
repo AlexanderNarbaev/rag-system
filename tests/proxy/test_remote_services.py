@@ -176,8 +176,8 @@ class TestRemoteEmbeddingClient:
 
     def test_check_health_unreachable_server_graceful(self):
         """Health check with unreachable server (URLError) fails gracefully."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         from proxy.app.llm.remote_services import RemoteEmbeddingClient
 
@@ -335,8 +335,8 @@ class TestRemoteRerankerClient:
 
     def test_check_health_unreachable_server_graceful(self):
         """Reranker health check with unreachable server fails gracefully."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         from proxy.app.llm.remote_services import RemoteRerankerClient
 

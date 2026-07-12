@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import time
-from unittest.mock import patch
-
 import pytest
 
 from proxy.app.model_evolution.canary_controller import (
@@ -12,7 +9,6 @@ from proxy.app.model_evolution.canary_controller import (
     CanaryController,
     CanaryPhase,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

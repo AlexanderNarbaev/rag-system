@@ -21,6 +21,7 @@ class TrainerType(Enum):
 @dataclass
 class TrainingConfig:
     """Configuration for a training job with all hyperparameters."""
+
     trainer_type: TrainerType
     env_profile: EnvProfile = EnvProfile.DEV
     base_model: str = ""

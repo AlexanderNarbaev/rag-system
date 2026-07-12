@@ -160,7 +160,14 @@ class TestProtectedEndpointsWithAuth:
         search_results = [MagicMock()]
         search_results[0].id = "h"
         search_results[0].score = 0.95
-        search_results[0].payload = {"text": "Context", "source_type": "test", "source_id": "1", "version": "1.0", "title": "T", "doc_title": "D"}
+        search_results[0].payload = {
+            "text": "Context",
+            "source_type": "test",
+            "source_id": "1",
+            "version": "1.0",
+            "title": "T",
+            "doc_title": "D",
+        }
 
         async def mock_llm(messages, **kwargs):
             return "Authenticated response."
@@ -331,7 +338,14 @@ class TestLoginFlow:
             search_results = [MagicMock()]
             search_results[0].id = "h"
             search_results[0].score = 0.95
-            search_results[0].payload = {"text": "Ctx", "source_type": "t", "source_id": "1", "version": "1.0", "title": "T", "doc_title": "D"}
+            search_results[0].payload = {
+                "text": "Ctx",
+                "source_type": "t",
+                "source_id": "1",
+                "version": "1.0",
+                "title": "T",
+                "doc_title": "D",
+            }
 
             async def mock_llm(messages, **kwargs):
                 return "Authenticated answer."

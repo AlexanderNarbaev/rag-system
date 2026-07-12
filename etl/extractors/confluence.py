@@ -159,7 +159,7 @@ class ConfluenceExtractor:
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection Error: {e}")
                 if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(delay)
                 else:
@@ -168,7 +168,7 @@ class ConfluenceExtractor:
             except requests.exceptions.Timeout as e:
                 logger.warning(f"Timeout: {e}")
                 if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(delay)
                 else:

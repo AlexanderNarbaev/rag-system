@@ -5,34 +5,36 @@
 Создаёт коллекцию с поддержкой dense и sparse векторов,
 а также индексы и ограничения в графовой базе (опционально).
 """
-import os
-import sys
+
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 # Добавляем путь к корню проекта для импорта модулей
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-from etl.graph_builder.neo4j_loader import Neo4jLoader, NEO4J_AVAILABLE
 from proxy.app.config import (
-    QDRANT_HOST, QDRANT_PORT, COLLECTION_NAME,
-    NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, GRAPH_ENABLED
+    COLLECTION_NAME,
+    GRAPH_ENABLED,
+    NEO4J_PASSWORD,
+    NEO4J_URI,
+    NEO4J_USER,
+    QDRANT_HOST,
+    QDRANT_PORT,
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from etl.graph_builder.neo4j_loader import NEO4J_AVAILABLE, Neo4jLoader
+from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def init_qdrant(recreate: bool = False):
     """Инициализирует коллекцию Qdrant."""
     logger.info(f"Initializing Qdrant collection '{COLLECTION_NAME}' (recreate={recreate})")
-    indexer = QdrantHybridIndexer(
-        host=QDRANT_HOST,
-        port=QDRANT_PORT,
-        collection_name=COLLECTION_NAME
-    )
+    indexer = QdrantHybridIndexer(host=QDRANT_HOST, port=QDRANT_PORT, collection_name=COLLECTION_NAME)
     # Проверяем, существует ли коллекция
     exists = indexer.collection_exists()
     if exists and recreate:
@@ -58,11 +60,7 @@ def init_neo4j():
         logger.warning("Neo4j driver not installed, skipping")
         return
     logger.info("Initializing Neo4j constraints and indexes")
-    loader = Neo4jLoader(
-        uri=NEO4J_URI,
-        user=NEO4J_USER,
-        password=NEO4J_PASSWORD
-    )
+    loader = Neo4jLoader(uri=NEO4J_URI, user=NEO4J_USER, password=NEO4J_PASSWORD)
     loader.connect()
     try:
         loader.create_constraints_and_indexes()
@@ -90,7 +88,7 @@ def main():
         init_qdrant(recreate=args.qdrant_recreate)
     if not args.skip_neo4j:
         init_neo4j()
-    
+
     logger.info("Initialization complete")
 
 

@@ -4,8 +4,6 @@ Covers: claim decomposition, lightweight proxy, evaluate_nli, batch evaluation,
 cosine proxy, and NLIEvaluationResult.
 """
 
-import pytest
-
 from proxy.app.model_evolution.nli_evaluator import (
     NLIEvaluationResult,
     _compute_cosine_proxy,
@@ -15,7 +13,6 @@ from proxy.app.model_evolution.nli_evaluator import (
     evaluate_nli,
     evaluate_nli_batch,
 )
-
 
 # ---------------------------------------------------------------------------
 # NLIEvaluationResult dataclass
@@ -343,11 +340,7 @@ class TestEvaluateNLIBatch:
         ]
         result = evaluate_nli_batch(pairs, use_real_nli=False)
 
-        total = (
-            result["nli_entailment_rate"]
-            + result["nli_contradiction_rate"]
-            + result["nli_neutral_rate"]
-        )
+        total = result["nli_entailment_rate"] + result["nli_contradiction_rate"] + result["nli_neutral_rate"]
         assert abs(total - 1.0) < 1e-3
 
     def test_pair_with_empty_answer_contributes_zero(self):

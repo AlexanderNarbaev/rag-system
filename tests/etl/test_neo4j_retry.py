@@ -1,10 +1,9 @@
 # tests/etl/test_neo4j_retry.py
 """Tests for Neo4j loader retry logic: connect() and _execute_with_retry()."""
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # connect() retry tests

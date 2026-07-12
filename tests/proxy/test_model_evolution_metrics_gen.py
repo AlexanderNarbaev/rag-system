@@ -5,8 +5,6 @@ Covers: BLEU, ROUGE-L, hallucination rate, perplexity, compute_generation_metric
 
 import math
 
-import pytest
-
 from proxy.app.model_evolution.metrics_gen import (
     GenerationMetrics,
     compute_bleu,
@@ -15,7 +13,6 @@ from proxy.app.model_evolution.metrics_gen import (
     compute_perplexity,
     compute_rouge_l,
 )
-
 
 # ---------------------------------------------------------------------------
 # GenerationMetrics dataclass

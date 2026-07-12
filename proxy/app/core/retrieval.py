@@ -72,7 +72,7 @@ def initialize_retrieval() -> None:
     """Инициализирует клиенты и кэш (вызывается при старте прокси)."""
     global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
     if not QDRANT_AVAILABLE:
-        raise ImportError("qdrant-client is required")
+        raise ImportError("qdrant-client is required. Install with: pip install qdrant-client")
 
     qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
 

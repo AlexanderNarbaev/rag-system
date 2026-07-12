@@ -63,7 +63,9 @@ async def _send_completion_request(
                 response.close()
                 await session.close()
                 if "choices" not in data or not data["choices"]:
-                    raise LLMError("Invalid response format from LLM")
+                    raise LLMError(
+                        f"Invalid response format from LLM: missing 'choices' in response. Keys: {list(data.keys())}"
+                    )
                 return data
         except (TimeoutError, ClientError, LLMError) as e:
             logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")

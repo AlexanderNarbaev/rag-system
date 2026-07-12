@@ -3,14 +3,12 @@
 
 import json
 import logging
-from unittest.mock import patch
 
 import pytest
 
 from etl.extractors.confluence import ConfluenceExtractor
 from etl.extractors.gitlab import GitLabExtractor
 from etl.extractors.jira import JiraExtractor
-
 
 # ---------------------------------------------------------------------------
 # Input Validation Tests — ConfluenceExtractor

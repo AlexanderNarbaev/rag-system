@@ -86,6 +86,7 @@ class RetryPolicy:
 @dataclass
 class ToolDefinition:
     """Complete tool definition with handler, parameters, and metadata."""
+
     name: str
     description: str
     parameters: list[ToolParam] = field(default_factory=list)

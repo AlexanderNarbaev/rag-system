@@ -10,7 +10,7 @@ Run with: pytest tests/e2e/test_full_pipeline.py -v
 
 import json
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -36,7 +36,6 @@ for mod in _modules_to_mock:
         sys.modules[mod] = MagicMock()
 
 from proxy.app.main import app
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -127,8 +126,12 @@ def mock_rag_pipeline_with_context():
         ]
         mock_rerank.return_value = [0, 1]
         mock_dedup.return_value = [(chunk_a, 0.95), (chunk_b, 0.85)]
-        mock_build.return_value = "[confluence] Architecture Guide / RAG Overview (v2.0)\nRAG combines retrieval with generation."
-        mock_nonstream.return_value = "Based on the context, RAG combines retrieval with generation for accurate responses."
+        mock_build.return_value = (
+            "[confluence] Architecture Guide / RAG Overview (v2.0)\nRAG combines retrieval with generation."
+        )
+        mock_nonstream.return_value = (
+            "Based on the context, RAG combines retrieval with generation for accurate responses."
+        )
         mock_stream.return_value = iter([])
         yield {
             "hybrid_search": mock_hybrid,
@@ -345,6 +348,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_returns_sse_events(self, client, mock_rag_pipeline):
         """Streaming response returns Server-Sent Events format."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "RAG "}}]}
             yield {"id": "2", "choices": [{"delta": {"content": "is "}}]}
@@ -370,6 +374,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_ends_with_done_sentinel(self, client, mock_rag_pipeline):
         """Streaming response ends with [DONE] sentinel."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "test"}}]}
 
@@ -389,6 +394,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_includes_rag_metadata(self, client, mock_rag_pipeline):
         """Streaming response includes rag_feedback_id and rag_confidence before [DONE]."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "Answer"}}]}
 
@@ -407,7 +413,7 @@ class TestStreamingChatCompletion:
         metadata_found = False
         for line in body.split("\n"):
             if line.startswith("data: ") and "rag_feedback_id" in line:
-                data = json.loads(line[len("data: "):])
+                data = json.loads(line[len("data: ") :])
                 assert "rag_feedback_id" in data
                 assert "rag_confidence" in data
                 metadata_found = True
@@ -433,6 +439,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_content_type_is_event_stream(self, client, mock_rag_pipeline):
         """Streaming response has text/event-stream content type."""
+
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "ok"}}]}
 
@@ -677,7 +684,9 @@ class TestFullPipelineIntegration:
             assert feedback_response.status_code == 200
             assert feedback_response.json()["status"] == "ok"
 
-    def test_chat_with_retrieval_context_then_feedback_with_correction(self, client, mock_rag_pipeline_with_context, mock_feedback_logger):
+    def test_chat_with_retrieval_context_then_feedback_with_correction(
+        self, client, mock_rag_pipeline_with_context, mock_feedback_logger
+    ):
         """Full pipeline: retrieval -> generation -> negative feedback with correction."""
         # Step 1: Chat with retrieval
         chat_response = client.post(

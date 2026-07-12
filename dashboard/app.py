@@ -9,11 +9,9 @@ Usage:
     streamlit run dashboard/app.py --server.port 8501
 """
 
-import json
 import os
-import subprocess
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,11 +27,31 @@ PROJECT_ROOT = Path(__file__).parent.parent
 ENV_FILE = PROJECT_ROOT / "proxy" / ".env"
 
 # Service endpoints for health checks
+_qdrant_host = os.getenv("QDRANT_HOST", "localhost")
+_qdrant_port = os.getenv("QDRANT_PORT", "6333")
+_neo4j_host = os.getenv("NEO4J_HOST", "localhost")
+_neo4j_port = os.getenv("NEO4J_HTTP_PORT", "7474")
+_redis_host = os.getenv("REDIS_HOST", "localhost")
+_redis_port = os.getenv("REDIS_PORT", "6379")
+_llm_endpoint = os.getenv("LLM_ENDPOINT", "http://localhost:8000/v1")
+
 SERVICES = {
-    "Qdrant": {"url": f"http://{os.getenv('QDRANT_HOST', 'localhost')}:{os.getenv('QDRANT_PORT', '6333')}/collections", "method": "GET"},
-    "Neo4j": {"url": f"http://{os.getenv('NEO4J_HOST', 'localhost')}:{os.getenv('NEO4J_HTTP_PORT', '7474')}", "method": "GET"},
-    "Redis": {"url": f"http://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}", "method": "GET"},
-    "LLM": {"url": f"{os.getenv('LLM_ENDPOINT', 'http://localhost:8000/v1')}/models", "method": "GET"},
+    "Qdrant": {
+        "url": f"http://{_qdrant_host}:{_qdrant_port}/collections",
+        "method": "GET",
+    },
+    "Neo4j": {
+        "url": f"http://{_neo4j_host}:{_neo4j_port}",
+        "method": "GET",
+    },
+    "Redis": {
+        "url": f"http://{_redis_host}:{_redis_port}",
+        "method": "GET",
+    },
+    "LLM": {
+        "url": f"{_llm_endpoint}/models",
+        "method": "GET",
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -208,7 +226,7 @@ def show_system_status():
         status = health.get("status", "unknown")
 
         if status == "ok":
-            st.success(f"✅ Proxy is healthy")
+            st.success("✅ Proxy is healthy")
         elif status == "offline":
             st.error(f"❌ Proxy is offline: {health.get('error', 'Unknown error')}")
         else:

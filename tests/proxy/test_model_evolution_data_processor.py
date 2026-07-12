@@ -6,15 +6,11 @@ Covers: HITL feedback ingestion, JSONL export, train/val/test split, SLM/LLM for
 import json
 import os
 import tempfile
-from pathlib import Path
-
-import pytest
 
 from proxy.app.model_evolution.data_processor import (
     DataProcessor,
     TrainingDataset,
 )
-
 
 # ---------------------------------------------------------------------------
 # TrainingDataset dataclass
@@ -250,9 +246,7 @@ class TestSplitTrainValTest:
     def test_custom_split_ratios(self):
         processor = DataProcessor()
         data = [{"id": i} for i in range(100)]
-        train, val, test = processor.split_train_val_test(
-            data, train_ratio=0.7, val_ratio=0.2, test_ratio=0.1
-        )
+        train, val, test = processor.split_train_val_test(data, train_ratio=0.7, val_ratio=0.2, test_ratio=0.1)
 
         assert len(train) == 70
         assert len(val) == 20

@@ -10,10 +10,9 @@ Usage:
     make wizard
 """
 
-import os
-import sys
-import socket
 import re
+import socket
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -29,22 +28,28 @@ NC = "\033[0m"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def log(msg: str) -> None:
     print(f"{GREEN}[RAG]{NC} {msg}")
+
 
 def warn(msg: str) -> None:
     print(f"{YELLOW}[WARN]{NC} {msg}")
 
+
 def error(msg: str) -> None:
     print(f"{RED}[ERROR]{NC} {msg}")
 
+
 def info(msg: str) -> None:
     print(f"{BLUE}[INFO]{NC} {msg}")
+
 
 def header(msg: str) -> None:
     print(f"\n{CYAN}{BOLD}{'─' * 60}{NC}")
     print(f"{CYAN}{BOLD}  {msg}{NC}")
     print(f"{CYAN}{BOLD}{'─' * 60}{NC}\n")
+
 
 def ask(prompt: str, default: str = "", required: bool = False) -> str:
     """Ask user for input with optional default value."""
@@ -62,6 +67,7 @@ def ask(prompt: str, default: str = "", required: bool = False) -> str:
 
         return value
 
+
 def ask_bool(prompt: str, default: bool = False) -> bool:
     """Ask yes/no question."""
     hint = "Y/n" if default else "y/N"
@@ -69,6 +75,7 @@ def ask_bool(prompt: str, default: bool = False) -> bool:
     if not value:
         return default
     return value in ("y", "yes", "true", "1")
+
 
 def ask_choice(prompt: str, choices: list[str], default: str = "") -> str:
     """Ask user to choose from a list."""
@@ -89,7 +96,9 @@ def ask_choice(prompt: str, choices: list[str], default: str = "") -> str:
                 return value
         error(f"Invalid choice. Enter 1-{len(choices)}.")
 
+
 # ── Validation ────────────────────────────────────────────────────────────────
+
 
 def validate_url(url: str) -> bool:
     """Validate URL format."""
@@ -98,6 +107,7 @@ def validate_url(url: str) -> bool:
         return all([result.scheme, result.netloc])
     except Exception:
         return False
+
 
 def validate_host(host: str) -> bool:
     """Validate hostname or IP address."""
@@ -112,6 +122,7 @@ def validate_host(host: str) -> bool:
     hostname_pattern = r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$"
     return bool(re.match(hostname_pattern, host))
 
+
 def validate_port(port: str) -> bool:
     """Validate port number."""
     try:
@@ -120,7 +131,9 @@ def validate_port(port: str) -> bool:
     except ValueError:
         return False
 
+
 # ── Connectivity Tests ────────────────────────────────────────────────────────
+
 
 def test_tcp(host: str, port: int, timeout: float = 3.0) -> bool:
     """Test TCP connectivity to host:port."""
@@ -130,9 +143,11 @@ def test_tcp(host: str, port: int, timeout: float = 3.0) -> bool:
     except (OSError, socket.timeout):
         return False
 
+
 def test_http(url: str, timeout: float = 5.0) -> bool:
     """Test HTTP connectivity."""
     import urllib.request
+
     try:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -140,7 +155,9 @@ def test_http(url: str, timeout: float = 5.0) -> bool:
     except Exception:
         return False
 
+
 # ── Wizard Steps ──────────────────────────────────────────────────────────────
+
 
 def step_llm() -> dict[str, str]:
     """Configure LLM backend."""
@@ -273,6 +290,7 @@ def step_features() -> dict[str, str]:
     if ask_bool("Enable JWT authentication?", default=False):
         config["AUTH_ENABLED"] = "true"
         import secrets
+
         jwt_secret = secrets.token_urlsafe(48)
         config["JWT_SECRET"] = jwt_secret
         info(f"Generated JWT secret: {jwt_secret[:16]}...")
@@ -529,6 +547,7 @@ def generate_env(config: dict[str, str], output_path: Path) -> None:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     print()

@@ -84,8 +84,16 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("RAG context for streaming.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Hello"}, "index": 0}]}
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": " world"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Hello"}, "index": 0}],
+            }
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": " world"}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
@@ -107,7 +115,11 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Answer"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Answer"}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
@@ -132,9 +144,21 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Part1"}, "index": 0}]}
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Part2"}, "index": 0}]}
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Part3"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Part1"}, "index": 0}],
+            }
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Part2"}, "index": 0}],
+            }
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Part3"}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
@@ -151,7 +175,8 @@ class TestStreamingChatCompletion:
 
             # Filter out the [DONE], initial chunk marker, and feedback/metadata events
             data_events = [
-                e for e in events
+                e
+                for e in events
                 if "_done" not in e and "_raw" not in e and "role" not in e and "rag_feedback_id" not in e
             ]
             assert len(data_events) >= 3
@@ -164,7 +189,11 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Good"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Good"}, "index": 0}],
+            }
             yield {"id": "1", "object": "chat.completion.chunk", "choices": []}  # empty choices
             yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "End"}, "index": 0}]}
 
@@ -189,8 +218,16 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"role": "assistant"}, "index": 0}]}
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Actual content"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"role": "assistant"}, "index": 0}],
+            }
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Actual content"}, "index": 0}],
+            }
             yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {}, "index": 0}]}
 
         with (
@@ -213,7 +250,11 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Answer"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Answer"}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
@@ -239,7 +280,11 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Text"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Text"}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
@@ -264,7 +309,11 @@ class TestStreamingChatCompletion:
         """Streaming works when hybrid_search returns no results."""
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "No context available."}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "No context available."}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=[]),
@@ -286,7 +335,11 @@ class TestStreamingChatCompletion:
         search_results = [_make_scored_point("Context.")]
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Start"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Start"}, "index": 0}],
+            }
             raise RuntimeError("LLM connection lost")
 
         with (
@@ -310,7 +363,11 @@ class TestStreamingChatCompletion:
         """When hybrid_search fails during streaming, the response still completes."""
 
         async def mock_stream(*args, **kwargs):
-            yield {"id": "1", "object": "chat.completion.chunk", "choices": [{"delta": {"content": "Fallback"}, "index": 0}]}
+            yield {
+                "id": "1",
+                "object": "chat.completion.chunk",
+                "choices": [{"delta": {"content": "Fallback"}, "index": 0}],
+            }
 
         with (
             patch("proxy.app.main.hybrid_search", side_effect=Exception("Qdrant timeout")),

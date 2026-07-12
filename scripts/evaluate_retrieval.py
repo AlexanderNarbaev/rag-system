@@ -134,9 +134,7 @@ def extract_eval_pairs_from_hitl(hitl_dir: str) -> list[dict[str, Any]]:
                 if "relevant_doc_ids" in metadata:
                     relevant_docs = metadata["relevant_doc_ids"]
                 elif "chunks" in metadata:
-                    relevant_docs = [
-                        c.get("source_id", "") for c in metadata["chunks"] if c.get("source_id")
-                    ]
+                    relevant_docs = [c.get("source_id", "") for c in metadata["chunks"] if c.get("source_id")]
 
                 if relevant_docs:
                     pairs.append({"query": query, "relevant_docs": relevant_docs})
@@ -319,12 +317,8 @@ def main():
         eval_pairs = extract_eval_pairs_from_hitl(args.hitl_dir)
 
     if not eval_pairs:
-        logger.error(
-            "No evaluation pairs found. Provide --dataset or use --gen-template to create one."
-        )
-        logger.info(
-            "Tip: Use --gen-template ./data/eval_dataset.jsonl to create a template for annotation."
-        )
+        logger.error("No evaluation pairs found. Provide --dataset or use --gen-template to create one.")
+        logger.info("Tip: Use --gen-template ./data/eval_dataset.jsonl to create a template for annotation.")
         sys.exit(1)
 
     start_time = time.time()

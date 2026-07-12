@@ -153,13 +153,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not allowed:
             retry_seconds = max(1, int(retry_after) + 1)
             return Response(
-                content=json.dumps({
-                    "error": {
-                        "message": "Rate limit exceeded. Please wait before retrying.",
-                        "type": "rate_limit_error",
-                        "retry_after_seconds": retry_seconds,
+                content=json.dumps(
+                    {
+                        "error": {
+                            "message": "Rate limit exceeded. Please wait before retrying.",
+                            "type": "rate_limit_error",
+                            "retry_after_seconds": retry_seconds,
+                        }
                     }
-                }),
+                ),
                 status_code=429,
                 media_type="application/json",
                 headers={"Retry-After": str(retry_seconds)},
