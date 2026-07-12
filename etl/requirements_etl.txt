@@ -7,7 +7,7 @@ requests>=2.34.2
 beautifulsoup4>=4.12.0
 markdown>=3.5.0
 python-dotenv>=1.0.0
-pyyaml>=6.0
+pyyaml>=6.0.3
 
 # Векторная база и эмбеддинги
 qdrant-client>=1.10.0
