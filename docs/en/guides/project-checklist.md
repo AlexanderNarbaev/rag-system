@@ -1,6 +1,6 @@
 # RAG System — Comprehensive Project Checklist
 
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-07-13
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
 **Production Readiness:** 67.5/80 (84.4%)
@@ -38,7 +38,7 @@ This document is the **single source of truth** for the current state of the RAG
 | **Python** | ≥ 3.11 |
 | **Architecture** | 3-layer (ETL + Proxy + HITL) + MCP Server + Model Evolution + Agentic Tools |
 | **Git Remotes** | GitHub: `AlexanderNarbaev/rag-system`, GitVerse: `AlexandrNarbaev/rag-system` |
-| **Latest Commit** | `f9d0413` — fix: orchestrator test patches for restructured modules |
+| **Latest Commit** | `41f7741` — fix: resolve 2 ruff lint errors (F821 forward ref, E501 line length) and update roadmap |
 | **Total Python Files** | ~200+ |
 | **Total Test Files** | 106 |
 | **Total Documentation Files** | 118 (EN + RU) |

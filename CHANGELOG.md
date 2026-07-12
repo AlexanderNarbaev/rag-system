@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ETL input validation for extractors and chunkers
 - ETL WAL corruption recovery and integrity checks
 - ETL retry logic with exponential backoff for transient failures
+- Orchestrator sync calls — patched test mocks for restructured orchestrator modules
+- ToolError consolidation — unified error hierarchy across tools subsystem
+- Ruff lint errors: F821 forward reference fix, E501 line length violations
 
 ### Changed
 - Improved type hints coverage across proxy and ETL modules
@@ -31,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Testing score updated from 7.5/10 to 8.5/10 (2669 total tests, coverage improved)
 - Documentation score updated from 8.0/10 to 9.0/10 (all guides in nav, GPUStack section added)
 - Production readiness score updated from 65.5/80 (81.9%) to 67.5/80 (84.4%)
+- Roadmap updated — all 8 phases complete, future horizons documented
+- Final test count confirmed at 2669 across all test suites
 
 ## [v2.0.0] - 2026-06-26
 
