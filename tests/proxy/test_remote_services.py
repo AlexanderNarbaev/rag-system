@@ -153,6 +153,82 @@ class TestRemoteEmbeddingClient:
             # Without normalization, values should be [3.0, 4.0]
             assert result[0] == pytest.approx(3.0)
 
+    def test_check_health_slow_server_within_10s_timeout(self):
+        """Health check passes for servers responding within the 10s timeout.
+
+        Proves the timeout was raised from 5s to 10s — a server responding in
+        ~7s would fail with the old 5s timeout but passes now.
+        """
+        import urllib.request
+
+        from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
+        def mock_urlopen(req, timeout=60):
+            # Simulate slow server: succeed only if timeout >= 10
+            if timeout >= 10:
+                return MagicMock()
+            raise urllib.error.URLError("timed out")
+
+        with patch.object(urllib.request, "urlopen", side_effect=mock_urlopen):
+            client = RemoteEmbeddingClient(endpoint="http://slow-server:8080")
+            result = client._check_health()
+            assert result is True
+
+    def test_check_health_unreachable_server_graceful(self):
+        """Health check with unreachable server (URLError) fails gracefully."""
+        import urllib.request
+        import urllib.error
+
+        from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
+        with patch.object(urllib.request, "urlopen", side_effect=urllib.error.URLError("Connection refused")):
+            client = RemoteEmbeddingClient(endpoint="http://unreachable:8080")
+            result = client._check_health()
+            assert result is False
+            assert client._healthy is False
+
+    def test_check_health_includes_auth_header(self):
+        """Health check request must include Authorization header when API key is set."""
+        import urllib.request
+
+        from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
+        captured_requests = []
+
+        def mock_urlopen(req, timeout=60):
+            captured_requests.append(req)
+            return MagicMock()
+
+        with patch.object(urllib.request, "urlopen", side_effect=mock_urlopen):
+            client = RemoteEmbeddingClient(
+                endpoint="http://localhost:8080",
+                api_key="my-secret-api-key",
+            )
+            result = client._check_health()
+            assert result is True
+            assert len(captured_requests) >= 1
+            # The first request (/models) must carry the Bearer token
+            auth_header = captured_requests[0].get_header("Authorization")
+            assert auth_header == "Bearer my-secret-api-key"
+
+    def test_check_health_timeout_parameter_is_10(self):
+        """Verify that the health check passes timeout=10 to urlopen (not 5)."""
+        import urllib.request
+
+        from proxy.app.llm.remote_services import RemoteEmbeddingClient
+
+        captured_timeouts = []
+
+        def mock_urlopen(req, timeout=60):
+            captured_timeouts.append(timeout)
+            return MagicMock()
+
+        with patch.object(urllib.request, "urlopen", side_effect=mock_urlopen):
+            client = RemoteEmbeddingClient(endpoint="http://localhost:8080")
+            client._check_health()
+            assert len(captured_timeouts) >= 1
+            assert captured_timeouts[0] == 10
+
 
 class TestRemoteRerankerClient:
     """Tests for RemoteRerankerClient class."""
@@ -240,6 +316,76 @@ class TestRemoteRerankerClient:
         client = RemoteRerankerClient(endpoint="http://localhost:8080")
         client._healthy = False
         assert client._check_health() is False
+
+    def test_check_health_slow_server_within_10s_timeout(self):
+        """Reranker health check passes for servers responding within 10s timeout."""
+        import urllib.request
+
+        from proxy.app.llm.remote_services import RemoteRerankerClient
+
+        def mock_urlopen(req, timeout=60):
+            if timeout >= 10:
+                return MagicMock()
+            raise urllib.error.URLError("timed out")
+
+        with patch.object(urllib.request, "urlopen", side_effect=mock_urlopen):
+            client = RemoteRerankerClient(endpoint="http://slow-server:8080")
+            result = client._check_health()
+            assert result is True
+
+    def test_check_health_unreachable_server_graceful(self):
+        """Reranker health check with unreachable server fails gracefully."""
+        import urllib.request
+        import urllib.error
+
+        from proxy.app.llm.remote_services import RemoteRerankerClient
+
+        with patch.object(urllib.request, "urlopen", side_effect=urllib.error.URLError("Connection refused")):
+            client = RemoteRerankerClient(endpoint="http://unreachable:8080")
+            result = client._check_health()
+            assert result is False
+            assert client._healthy is False
+
+    def test_check_health_includes_auth_header(self):
+        """Reranker health check request must include Authorization header when API key is set."""
+        import urllib.request
+
+        from proxy.app.llm.remote_services import RemoteRerankerClient
+
+        captured_requests = []
+
+        def mock_urlopen(req, timeout=60):
+            captured_requests.append(req)
+            return MagicMock()
+
+        with patch.object(urllib.request, "urlopen", side_effect=mock_urlopen):
+            client = RemoteRerankerClient(
+                endpoint="http://localhost:8080",
+                api_key="reranker-secret",
+            )
+            result = client._check_health()
+            assert result is True
+            assert len(captured_requests) >= 1
+            auth_header = captured_requests[0].get_header("Authorization")
+            assert auth_header == "Bearer reranker-secret"
+
+    def test_check_health_timeout_parameter_is_10(self):
+        """Verify reranker health check passes timeout=10 to urlopen."""
+        import urllib.request
+
+        from proxy.app.llm.remote_services import RemoteRerankerClient
+
+        captured_timeouts = []
+
+        def mock_urlopen(req, timeout=60):
+            captured_timeouts.append(timeout)
+            return MagicMock()
+
+        with patch.object(urllib.request, "urlopen", side_effect=mock_urlopen):
+            client = RemoteRerankerClient(endpoint="http://localhost:8080")
+            client._check_health()
+            assert len(captured_timeouts) >= 1
+            assert captured_timeouts[0] == 10
 
     def test_predict_multiple_queries(self):
         import urllib.request

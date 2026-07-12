@@ -1,6 +1,7 @@
 """Tests for proxy/app/rate_limiter.py - token bucket rate limiter."""
 
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -226,3 +227,107 @@ class TestRateLimiterIntegration:
             # key1 should be blocked
             resp = c.get("/test", headers={"Authorization": "Bearer key1"})
             assert resp.status_code == 429
+
+
+class TestTrustedProxyCount:
+    """Tests for TRUSTED_PROXY_COUNT behavior in _extract_key."""
+
+    def _make_middleware(self):
+        """Create a RateLimitMiddleware with a mock inner app."""
+        from unittest.mock import MagicMock
+
+        from proxy.app.shared.rate_limiter import RateLimiter, RateLimitMiddleware
+
+        limiter = RateLimiter(rate_per_minute=600, burst=5)
+        return RateLimitMiddleware(app=MagicMock(), limiter=limiter)
+
+    def _make_request(self, x_forwarded_for=None, client_host="testclient"):
+        """Create a Starlette Request with optional X-Forwarded-For header."""
+        from starlette.requests import Request
+
+        headers: list[tuple[bytes, bytes]] = []
+        if x_forwarded_for is not None:
+            headers.append((b"x-forwarded-for", x_forwarded_for.encode()))
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": headers,
+            "client": (client_host, 12345),
+        }
+        return Request(scope)
+
+    @patch("proxy.app.shared.rate_limiter.TRUSTED_PROXY_COUNT", 0)
+    def test_ignores_xff_when_trusted_proxy_count_zero(self):
+        """TRUSTED_PROXY_COUNT=0 must ignore X-Forwarded-For and use client.host."""
+        middleware = self._make_middleware()
+        request = self._make_request(
+            x_forwarded_for="1.2.3.4, 5.6.7.8",
+            client_host="10.0.0.1",
+        )
+        key = middleware._extract_key(request)
+        # Should use the actual client host, not any XFF IP
+        assert key == "ip:10.0.0.1"
+
+    @patch("proxy.app.shared.rate_limiter.TRUSTED_PROXY_COUNT", 1)
+    def test_uses_rightmost_ip_when_trusted_proxy_count_one(self):
+        """TRUSTED_PROXY_COUNT=1 must use the rightmost IP from X-Forwarded-For."""
+        middleware = self._make_middleware()
+        request = self._make_request(
+            x_forwarded_for="1.2.3.4, 5.6.7.8, 10.0.0.1",
+            client_host="192.168.1.1",
+        )
+        key = middleware._extract_key(request)
+        assert key == "ip:10.0.0.1"
+
+    @patch("proxy.app.shared.rate_limiter.TRUSTED_PROXY_COUNT", 2)
+    def test_uses_second_from_right_ip_when_trusted_proxy_count_two(self):
+        """TRUSTED_PROXY_COUNT=2 must use the second-from-right IP."""
+        middleware = self._make_middleware()
+        request = self._make_request(
+            x_forwarded_for="1.2.3.4, 5.6.7.8, 10.0.0.1",
+            client_host="192.168.1.1",
+        )
+        key = middleware._extract_key(request)
+        assert key == "ip:5.6.7.8"
+
+    @patch("proxy.app.shared.rate_limiter.TRUSTED_PROXY_COUNT", 0)
+    def test_spoofed_xff_does_not_bypass_rate_limit(self):
+        """Spoofed X-Forwarded-For must NOT bypass rate limit when TRUSTED_PROXY_COUNT=0.
+
+        An attacker setting ``X-Forwarded-For: 99.99.99.99`` should still be
+        rate-limited based on the real client IP, not the spoofed one.
+        """
+        middleware = self._make_middleware()
+        request = self._make_request(
+            x_forwarded_for="99.99.99.99",
+            client_host="10.0.0.1",
+        )
+        key = middleware._extract_key(request)
+        assert key == "ip:10.0.0.1"
+        # A different spoofed XFF from the same client host must produce the same key
+        request2 = self._make_request(
+            x_forwarded_for="88.88.88.88, 77.77.77.77",
+            client_host="10.0.0.1",
+        )
+        key2 = middleware._extract_key(request2)
+        assert key2 == key  # Same real IP → same rate-limit bucket
+
+    @patch("proxy.app.shared.rate_limiter.TRUSTED_PROXY_COUNT", 1)
+    def test_single_xff_ip_with_trusted_proxy_count_one(self):
+        """Single IP in X-Forwarded-For with TRUSTED_PROXY_COUNT=1 uses that IP."""
+        middleware = self._make_middleware()
+        request = self._make_request(
+            x_forwarded_for="203.0.113.50",
+            client_host="10.0.0.1",
+        )
+        key = middleware._extract_key(request)
+        assert key == "ip:203.0.113.50"
+
+    @patch("proxy.app.shared.rate_limiter.TRUSTED_PROXY_COUNT", 0)
+    def test_no_xff_uses_client_host(self):
+        """Without X-Forwarded-For header, always uses request.client.host."""
+        middleware = self._make_middleware()
+        request = self._make_request(client_host="10.0.0.1")
+        key = middleware._extract_key(request)
+        assert key == "ip:10.0.0.1"

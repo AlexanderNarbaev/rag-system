@@ -327,6 +327,71 @@ class TestChatCompletionsStreaming:
         body = response.text
         assert "error" in body
 
+    def test_streaming_empty_choices_no_index_error(self, client, mock_rag_pipeline):
+        """Streaming chunk with empty choices[] must not raise IndexError (regression fix).
+
+        Before the fix, accessing choices[0] on an empty list caused IndexError.
+        The fix adds a guard: ``choices[0]... if choices else ""``.
+        """
+        async def mock_stream_gen(*args, **kwargs):
+            yield {"id": "1", "choices": [{"delta": {"content": "Hello"}}]}
+            yield {"id": "2", "choices": []}  # Empty choices — the fixed edge case
+            yield {"id": "3", "choices": [{"delta": {"content": " world"}}]}
+
+        mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
+        mock_rag_pipeline["hybrid_search"].return_value = []
+
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+        )
+        assert response.status_code == 200
+        body = response.text
+        assert "[DONE]" in body
+        # Content from non-empty chunks must be present in the stream
+        assert "Hello" in body
+        assert "world" in body
+
+    def test_streaming_missing_choices_key_no_error(self, client, mock_rag_pipeline):
+        """Streaming chunk missing the 'choices' key entirely must not raise."""
+        async def mock_stream_gen(*args, **kwargs):
+            yield {"id": "1", "choices": [{"delta": {"content": "test"}}]}
+            yield {"id": "2"}  # No 'choices' key at all — chunk.get("choices", []) returns []
+            yield {"id": "3", "choices": [{"delta": {"content": " ok"}}]}
+
+        mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
+        mock_rag_pipeline["hybrid_search"].return_value = []
+
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+        )
+        assert response.status_code == 200
+        body = response.text
+        assert "[DONE]" in body
+        assert "test" in body
+        assert "ok" in body
+
+    def test_streaming_choices_with_no_delta_key(self, client, mock_rag_pipeline):
+        """Streaming chunk with choices[0] missing 'delta' must not raise KeyError."""
+        async def mock_stream_gen(*args, **kwargs):
+            yield {"id": "1", "choices": [{"delta": {"content": "A"}}]}
+            yield {"id": "2", "choices": [{"index": 0}]}  # No 'delta' key
+            yield {"id": "3", "choices": [{"delta": {"content": "B"}}]}
+
+        mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
+        mock_rag_pipeline["hybrid_search"].return_value = []
+
+        response = client.post(
+            "/v1/chat/completions",
+            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+        )
+        assert response.status_code == 200
+        body = response.text
+        assert "[DONE]" in body
+        assert "A" in body
+        assert "B" in body
+
 
 class TestProcessRagQuery:
     """Tests for process_rag_query function directly."""

@@ -174,23 +174,42 @@ class JiraExtractor:
         attachment_id = attachment["id"]
         filename = attachment["filename"]
         download_url = attachment["content"]
-        # Используем сессию с аутентификацией
-        try:
-            resp = self.session.get(download_url, stream=True, timeout=60)
-            resp.raise_for_status()
-            issue_dir = self.output_dir / issue_key / "attachments"
-            issue_dir.mkdir(parents=True, exist_ok=True)
-            safe_name = "".join(c for c in filename if c.isalnum() or c in ".-_")
-            if not safe_name:
-                safe_name = f"attachment_{attachment_id}.bin"
-            file_path = issue_dir / safe_name
-            with open(file_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            return str(file_path)
-        except Exception as e:
-            logger.error(f"Failed to download attachment {attachment_id} for {issue_key}: {e}")
-            return None
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                resp = self.session.get(download_url, stream=True, timeout=60)
+                resp.raise_for_status()
+                issue_dir = self.output_dir / issue_key / "attachments"
+                issue_dir.mkdir(parents=True, exist_ok=True)
+                safe_name = "".join(c for c in filename if c.isalnum() or c in ".-_")
+                if not safe_name:
+                    safe_name = f"attachment_{attachment_id}.bin"
+                file_path = issue_dir / safe_name
+                with open(file_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                return str(file_path)
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(f"Attachment download connection error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                if attempt < max_retries:
+                    delay = 2**attempt  # 1s, 2s, 4s
+                    logger.info(f"Retrying attachment download in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Failed to download attachment {attachment_id} for {issue_key} after {max_retries + 1} attempts: {e}")
+                    return None
+            except requests.exceptions.Timeout as e:
+                logger.warning(f"Attachment download timeout (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                if attempt < max_retries:
+                    delay = 2**attempt  # 1s, 2s, 4s
+                    logger.info(f"Retrying attachment download in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Failed to download attachment {attachment_id} for {issue_key} after {max_retries + 1} attempts: {e}")
+                    return None
+            except Exception as e:
+                logger.error(f"Failed to download attachment {attachment_id} for {issue_key}: {e}")
+                return None
 
     def _extract_links_from_text(self, text: str) -> dict[str, list[str]]:
         """Извлекает ссылки из текста (описание, комментарий): URL и Jira issue ключи."""
