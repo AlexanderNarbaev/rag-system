@@ -10,7 +10,7 @@ python-dotenv>=1.0.0
 pyyaml>=6.0
 
 # Векторная база и эмбеддинги
-qdrant-client>=1.10.0
+qdrant-client>=1.18.0
 sentence-transformers>=5.6.0
 
 # NLP и извлечение сущностей
