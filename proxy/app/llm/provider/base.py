@@ -38,6 +38,7 @@ def _get_config(attr: str, default):
 
     return getattr(_pkg, attr, default)
 
+
 logger = logging.getLogger(__name__)
 
 

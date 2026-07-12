@@ -71,9 +71,7 @@ class RemoteEmbeddingClient:
                 # Fallback: try the embeddings endpoint with a minimal request
                 import json as _json
 
-                test_payload = _json.dumps(
-                    {"model": self._model, "input": ["test"], "max_tokens": 1}
-                ).encode("utf-8")
+                test_payload = _json.dumps({"model": self._model, "input": ["test"], "max_tokens": 1}).encode("utf-8")
                 req = urllib.request.Request(
                     self._embedding_url,
                     data=test_payload,

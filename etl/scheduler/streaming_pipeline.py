@@ -110,13 +110,16 @@ class StreamingETLPipeline:
     def _save_shutdown_checkpoint(self):
         """Save current progress to WAL before shutdown."""
         try:
-            self.wal.set_checkpoint("pipeline", {
-                "last_run": datetime.now(UTC).isoformat(),
-                "shutdown": True,
-                "stats": self.stats,
-                "total_chunks": sum(s["chunks"] for s in self.stats.values()),
-                "total_errors": sum(s["errors"] for s in self.stats.values()),
-            })
+            self.wal.set_checkpoint(
+                "pipeline",
+                {
+                    "last_run": datetime.now(UTC).isoformat(),
+                    "shutdown": True,
+                    "stats": self.stats,
+                    "total_chunks": sum(s["chunks"] for s in self.stats.values()),
+                    "total_errors": sum(s["errors"] for s in self.stats.values()),
+                },
+            )
             logger.info("WAL checkpoint saved — pipeline can resume from this point")
         except Exception as e:
             logger.error(f"Failed to save WAL checkpoint: {e}")

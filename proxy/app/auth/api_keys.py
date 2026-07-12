@@ -1,4 +1,5 @@
 """API Key management for user separation."""
+
 import hashlib
 import logging
 import secrets
