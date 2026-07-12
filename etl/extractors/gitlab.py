@@ -14,6 +14,7 @@
 import json
 import logging
 import os
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +52,7 @@ class GitLabExtractor:
         }
         """
         self.url = config["url"].rstrip("/")
+        self.config = config  # Store full config for retry logic
         self.token = config["token"]
         self.project_ids = config.get("project_ids")
         self.output_dir = Path(config.get("output_dir", "./raw_data/gitlab"))
@@ -97,22 +99,37 @@ class GitLabExtractor:
             json.dump(self.wal_data, f, indent=2)
 
     def _request(self, endpoint: str, params: dict = None, method: str = "GET") -> dict:
+        """Выполняет запрос к GitLab API с retry логикой и экспоненциальной задержкой."""
         url = urljoin(self.url, endpoint)
-        logger.debug(f"Requesting: {method} {url}")
-        try:
-            resp = self.session.request(method, url, params=params, timeout=self.timeout)
-            logger.debug(f"Response: {resp.status_code}")
-            resp.raise_for_status()
-            return resp.json()
-        except requests.exceptions.SSLError as e:
-            logger.error(f"SSL Error: {e}")
-            raise
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Connection Error: {e}")
-            raise
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Timeout: {e}")
-            raise
+        max_retries = self.config.get("max_retries", 3)
+        base_delay = self.config.get("retry_delay", 1)
+
+        for attempt in range(max_retries + 1):
+            try:
+                logger.debug(f"Requesting: {method} {url} (attempt {attempt + 1})")
+                resp = self.session.request(method, url, params=params, timeout=self.timeout)
+                logger.debug(f"Response: {resp.status_code}")
+                resp.raise_for_status()
+                return resp.json()
+            except requests.exceptions.SSLError as e:
+                logger.error(f"SSL Error: {e}")
+                raise
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"Connection Error: {e}")
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Повтор через {delay}с... ({attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                else:
+                    raise
+            except requests.exceptions.Timeout as e:
+                logger.error(f"Timeout: {e}")
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.info(f"Повтор через {delay}с... ({attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                else:
+                    raise
 
     def _paginated_get(self, endpoint: str, params: dict = None, per_page: int = 100) -> Iterator[dict]:
         """Пагинированный сбор всех элементов (постранично)."""

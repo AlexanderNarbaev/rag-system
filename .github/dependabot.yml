@@ -53,10 +53,3 @@ updates:
       - "dependencies"
       - "docker"
 
-  - package-ecosystem: "docker"
-    directory: "/federation"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "docker"

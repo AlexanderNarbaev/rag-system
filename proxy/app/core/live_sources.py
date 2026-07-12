@@ -139,7 +139,8 @@ class ConfluenceLiveClient(_CacheMixin):
             return cached
 
         try:
-            cql = f'text ~ "{query}"'
+            safe_query = query.replace('"', '\\"')
+            cql = f'text ~ "{safe_query}"'
             url = f"{self.base_url}/content/search"
             params = {"cql": cql, "limit": max_results, "expand": "space,body.view"}
 
@@ -238,7 +239,8 @@ class JiraLiveClient(_CacheMixin):
             return cached
 
         try:
-            jql = f'text ~ "{query}"'
+            safe_query = query.replace('"', '\\"')
+            jql = f'text ~ "{safe_query}"'
             url = f"{self.base_url}/search"
             params = {
                 "jql": jql,

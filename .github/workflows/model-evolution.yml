@@ -128,7 +128,7 @@ jobs:
           echo "dataset_files=$(ls $DATASET_DIR | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
       - name: Upload dataset artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: training-dataset
           path: ./datasets/${{ github.run_id }}-${{ github.run_attempt }}/
@@ -178,7 +178,7 @@ jobs:
           cache: pip
 
       - name: Download dataset artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: training-dataset
           path: ./datasets/
@@ -321,14 +321,14 @@ jobs:
           fi
 
       - name: Upload model artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: model-artifacts
           path: ./models/training/
           retention-days: 30
 
       - name: Upload training results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: training-results
           path: /tmp/*_result.json
@@ -350,13 +350,13 @@ jobs:
           cache: pip
 
       - name: Download model artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: model-artifacts
           path: ./models/training/
 
       - name: Download training results
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: training-results
           path: /tmp/
@@ -468,7 +468,7 @@ jobs:
           fi
 
       - name: Upload evaluation report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: evaluation-report
           path: /tmp/gate_report.txt
@@ -488,13 +488,13 @@ jobs:
           cache: pip
 
       - name: Download training results
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: training-results
           path: /tmp/
 
       - name: Download model artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: model-artifacts
           path: ./models/training/
@@ -562,7 +562,7 @@ jobs:
           "
 
       - name: Upload registry state
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: model-registry
           path: ./data/model_registry.json

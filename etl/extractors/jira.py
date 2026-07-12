@@ -132,7 +132,6 @@ class JiraExtractor:
                     time.sleep(retry_delay)
                 else:
                     raise
-            raise
 
     def _paginated_issues(self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[dict]:
         """Генератор для пагинированного получения задач."""

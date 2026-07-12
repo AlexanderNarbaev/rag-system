@@ -365,6 +365,7 @@ class MDKeyChunker:
             if chunk.parent_metadata.get("title"):
                 meta_prefix += f" > {chunk.parent_metadata['title']}"
             chunk.text = f"[{meta_prefix}]\n{chunk.text}"
+            chunk.hash = hashlib.sha256(chunk.text.encode()).hexdigest()
 
         # Биновая упаковка: группируем чанки с одинаковым semantic_key (если есть)
         packed_chunks = self._pack_by_semantic_key(chunks)

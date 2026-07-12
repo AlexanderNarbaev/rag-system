@@ -128,5 +128,4 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run mypy
-        run: mypy proxy/app/ --ignore-missing-imports --no-error-summary || true
-        continue-on-error: true
+        run: mypy proxy/app/ --ignore-missing-imports --no-error-summary

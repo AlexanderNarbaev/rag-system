@@ -18,6 +18,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -76,8 +77,13 @@ class StreamingETLPipeline:
 
         # Indexer (Qdrant)
         index_cfg = config.get("indexing", {})
+        qdrant_url = index_cfg.get("qdrant_url", "http://localhost:6333")
+        parsed = urlparse(qdrant_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6333
         self.indexer = QdrantHybridIndexer(
-            qdrant_url=index_cfg.get("qdrant_url", "http://localhost:6333"),
+            host=host,
+            port=port,
             collection_name=index_cfg.get("collection_name", "knowledge_base"),
         )
 

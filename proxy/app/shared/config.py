@@ -129,10 +129,11 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
 
 # ============ CORS ============
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
+# Default allows localhost only. For production, set explicit allowed origins.
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080")
 
 # ============ Authentication & RBAC ============
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
@@ -142,6 +143,16 @@ AUTH_VALID_USERS = os.getenv("AUTH_VALID_USERS", "{}")  # JSON dict of valid use
 # ── User Database (SQLite) ──
 USER_DB_PATH = os.getenv("USER_DB_PATH", "./data/users.db")
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
+
+# ── Auth startup validation ──
+if AUTH_ENABLED and not JWT_SECRET:
+    import warnings
+
+    warnings.warn(
+        "AUTH_ENABLED is true but JWT_SECRET is empty — "
+        "token signing will fail. Set JWT_SECRET in your environment.",
+        stacklevel=2,
+    )
 
 # ── Token Management ──
 ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))
