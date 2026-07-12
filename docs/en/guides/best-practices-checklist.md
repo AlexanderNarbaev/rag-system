@@ -1,7 +1,7 @@
 # Production Readiness Checklist
 
-**Last Updated:** 2026-06-26
-**Version:** v2.0.0 (Self-Correcting RAG)
+**Last Updated:** 2026-07-12
+**Version:** v2.0.1 (Audit-Corrected)
 
 This checklist tracks production readiness across 8 dimensions. Each item has pass/fail criteria, an automated verification command (where applicable), and remediation steps for failures. Checked items (✅) are implemented; unchecked (☐) are gaps. Partially implemented items are marked 🟡.
 
@@ -22,7 +22,9 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 1.9 | Env var validation at startup | ✅ Pass | `config.py` validates all required vars on import; invalid values cause clear error messages at startup, not runtime | `python -c "from app.config import *"` — should error clearly for missing required vars | Validation added in `config.py`: checks `LLM_MODEL_NAME` is set, `LLM_ENDPOINT` is valid URL, numeric values in range |
 | 1.10 | `.gitignore` complete | ✅ Pass | Covers `.env`, `__pycache__`, `.pytest_cache`, `*.pyc`, `dist/`, `*.egg-info/`, `.mypy_cache/` | `git ls-files --others --exclude-standard` shows no build artifacts | Add missing patterns from [gitignore.io Python template](https://gitignore.io/api/python) |
 
-**Code Quality: 9/10 (90%)**
+**Code Quality: 8.5/10 (85%)**
+
+> **Audit Note (2026-07-12):** Code Quality was previously scored 9/10 (90%). Audit found and removed dead code (stream_consumer stubs, unused imports), consolidated duplicate LLMError definitions into a single exception hierarchy. Score slightly adjusted: genuine improvements from cleanup, but mypy type hint coverage remains partial and some modules still lack complete annotations.
 
 ---
 
@@ -30,9 +32,9 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 
 | # | Criterion | Status | Pass Criteria | Verification | Remediation |
 |---|-----------|--------|---------------|-------------|-------------|
-| 2.1 | Unit tests cover all modules | ✅ Pass | Every `proxy/app/*.py` and `etl/` module has corresponding test file with >70% line coverage | `pytest --cov=proxy/app --cov=etl --cov-report=term-missing` | Write tests for uncovered modules; target 80% coverage |
+| 2.1 | Unit tests cover all modules | 🟡 Partial | Every `proxy/app/*.py` and `etl/` module has corresponding test file with >70% line coverage | `pytest --cov=proxy/app --cov=etl --cov-report=term-missing` | Audit found ~10 fake/no-op tests (just `assert True` or `pass`). 5 fake tests replaced with honest implementations. Some modules still lack meaningful coverage. Target 80% real coverage. |
 | 2.2 | Integration tests cover main flows | ✅ Pass | End-to-end flow tests for retrieval → rerank → context → generate; auth flow; feedback flow | `make test-integration` (56 tests should pass) | Add tests for error paths: LLM timeout, Qdrant unavailable, Neo4j unreachable |
-| 2.3 | Test pass rate ≥ 95% | ✅ Pass | 483/505 (96%) tests pass; 0 critical test failures blocking deployment | `make test` — check output for FAILED count | Fix 21 failing tests; investigate 1 collection error; prioritize assertion mismatches |
+| 2.3 | Test pass rate ≥ 95% | 🟡 Partial | All tests pass; 0 critical test failures blocking deployment; no fake/no-op tests inflating counts | `make test` — check output for FAILED count | Audit found ~10 fake tests that were passing trivially. 5 replaced with real implementations. Some weak assertions remain (e.g., `assert result is not None` without functional validation). Run `make test` for current pass count. |
 | 2.4 | E2E tests with real services | ✅ Pass | Test suite runs against live Qdrant + Neo4j + Redis + LLM; verifies full RAG pipeline end-to-end | `pytest tests/e2e/ -v --run-e2e` (flag gate to prevent CI runs) | Created `tests/e2e/` with docker-compose service dependencies; uses `--run-e2e` marker |
 | 2.5 | Performance benchmarks | ✅ Pass | Load test script measures p50/p95/p99 latency under 1/10/50 concurrent users; results stored for trend analysis | `python scripts/benchmark.py --concurrency 10 --requests 100` | Wrote `scripts/benchmark.py` using `locust`/`aiohttp`; benchmarks simple, procedural, and agentic queries |
 | 2.6 | Chaos/resilience testing | ✅ Pass | Fault injection tests: Qdrant down → empty results returned; Neo4j down → graph expansion skipped; Redis down → in-memory cache used; LLM timeout → graceful error | `pytest tests/chaos/ -v --run-chaos` | Wrote chaos tests using toxiproxy; verified graceful degradation without crashes |
@@ -41,7 +43,9 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 2.9 | Snapshot/data comparison tests | ☐ Fail | All 505 tests pass; 0 assertion mismatches from stale fixtures | `make test` — output should show `505 passed, 0 failed` | Fix 21 failing tests; update stale assertion values; add snapshot testing for complex outputs |
 | 2.10 | Test fixture isolation | 🟡 Partial | No test depends on state mutated by another test; fixtures use `scope="function"` by default | `pytest --random-order` (if random-order plugin installed) | Use `scope="function"` for all fixtures that mutate state; avoid module-scoped shared state |
 
-**Testing: 8.5/10 (85%)**
+**Testing: 7.5/10 (75%)**
+
+> **Audit Note (2026-07-12):** Testing was previously scored 8.5/10 (85%). Audit revealed ~10 fake/no-op tests (just `assert True` or `pass`) inflating pass counts. 5 fake tests were replaced with honest implementations. Some weak assertions remain. Score adjusted to reflect real test quality, not just quantity.
 
 ---
 
@@ -51,7 +55,7 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 |---|-----------|--------|---------------|-------------|-------------|
 | 3.1 | Sensitive data masking in logs | ✅ Pass | API keys, passwords, tokens are masked with `***` in all log output | Set `LOG_FORMAT=json`, send authenticated request, check logs for `"api_key": "***"` | Test by logging at DEBUG level with real API key; grep logs for key value |
 | 3.2 | Rate limiting per IP | ✅ Pass | After `RATE_LIMIT_PER_MINUTE` requests, 429 returned with `Retry-After` header; burst allows `RATE_LIMIT_BURST` extra | `for i in $(seq 1 100); do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/v1/models; done` | Tune `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_BURST` based on expected load; add IP allowlist for internal services |
-| 3.3 | JWT authentication | ✅ Pass | Login, token generation, verification, and refresh work end-to-end; expired tokens rejected with 401 | `curl -X POST .../v1/auth/login -d '{"username":"test","password":"test"}'` → `curl .../v1/auth/me -H "Authorization: Bearer <token>"` | Completed JWT implementation: Keycloak integration for OIDC discovery, JWKS validation; audience/issuer checks |
+| 3.3 | JWT authentication | 🟡 Partial | Login, token generation, verification, and refresh work end-to-end; expired tokens rejected with 401 | `curl -X POST .../v1/auth/login -d '{"username":"test","password":"test"}'` → `curl .../v1/auth/me -H "Authorization: Bearer <token>"` | JWT implementation works when `AUTH_ENABLED=true`, but `AUTH_ENABLED=false` by default means auth is OFF unless explicitly enabled. Default admin credentials exist in user_db.py. **CRITICAL:** Docker Compose exposes all service ports to host network. |
 | 3.4 | RBAC implementation | ✅ Pass | Document-level access control via `build_access_filter()`; source-level filtering via `filter_chunks()`; admin/viewer/editor roles enforced | Create users with different roles; verify viewer cannot access restricted documents; verify admin can access all | Extended RBAC to all endpoints; added permission checks in middleware; tested with all role combinations |
 | 3.5 | Input validation for all endpoints | ✅ Pass | All inputs validated: query length ≤ 10K chars, messages ≤ 100, non-empty content, valid JSON types for all fields | `curl -X POST .../chat/completions -d '{"model":"x","messages":[{"role":"user","content":""}]}'` → 400 | Added `InputValidator` to all endpoints; validate message content length; added JSON schema validation |
 | 3.6 | Dependency vulnerability scanning | ✅ Pass | Zero known CVEs in dependencies; scan runs on every PR | `pip-audit` or `safety check --full-report` | Run `pip-audit` in CI; created Dependabot config for automatic PRs |
@@ -59,7 +63,9 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 3.9 | Client API key validation | 🟡 Partial | Separate API key for proxy access (not the LLM key); key validated on every request; key rotation supported | Send request without `Authorization` header (when `AUTH_ENABLED=true`) → 401 | Added `PROXY_API_KEY` config; validated in middleware |
 | 3.10 | Audit logging | ✅ Pass | All auth events, admin actions, and data access logged with user ID, timestamp, and IP | Check `LOG_DIR/audit.jsonl` for entries with `user_id`, `action`, `timestamp` | Completed `audit.py` implementation; log all auth events; admin action logging |
 
-**Security: 9/10 (90%)**
+**Security: 8/10 (80%)**
+
+> **Audit Note (2026-07-12):** Security was previously scored 9/10 (90%). Audit found critical issues: `AUTH_ENABLED=false` by default (auth is OFF unless explicitly enabled), default admin credentials in user_db.py, and Docker Compose exposes all service ports (Qdrant 6333/6334, Neo4j 7474/7687, Redis 6379) to host network. JWT/RBAC implementation is solid when enabled, but the default configuration is insecure. Score adjusted to reflect default-state security posture.
 
 ---
 
@@ -88,15 +94,17 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 5.1 | Circuit breaker for external services | 🟡 Partial | Dedicated circuit breaker per service: open after 5 consecutive failures, half-open after 30s, closed after 2 successes; metrics exposed per circuit | Simulate LLM failure 5 times → circuit opens → `/v1/health` shows `llm: "circuit_open"` | Circuit breaker implemented via retry-based approach; `MAX_RETRIES=3` with exponential backoff provides similar protection |
 | 5.2 | Retry with backoff | ✅ Pass | `MAX_RETRIES=3`, `RETRY_DELAY=1.0s` (exponential: 1s, 2s, 4s); jitter added to prevent thundering herd; retryable errors: connection refused, timeout, 502, 503 | Kill LLM during request → 3 retries logged → graceful error response | Implement exponential backoff with jitter; add `Retry-After` header parsing; make retry config per service |
 | 5.3 | Graceful degradation | ✅ Pass | Neo4j down → skip graph expansion (not crash); reranker OOM → use raw hybrid scores; Redis down → in-memory cache fallback; LLM down → 503 on `/v1/chat/completions` | Stop each service individually; verify proxy continues serving with reduced functionality | Test all degradation paths automatically; add degradation state to health check response; alert on prolonged degradation |
-| 5.4 | Multi-AZ / HA deployment | ✅ Pass | At least 2 replicas of proxy, Qdrant, Neo4j, Redis in different availability zones; load balancer with health checks; failover < 30s | Kill one proxy replica → traffic routes to other replica seamlessly | Migrated to Kubernetes with Helm chart; Qdrant replication, Neo4j cluster, Redis Sentinel configured |
-| 5.5 | Automated backups | ✅ Pass | Qdrant snapshots daily, Neo4j dumps daily, Redis RDB hourly; backups stored off-host (S3/GCS); retention: 7 daily, 4 weekly, 3 monthly | `ls backup/` shows recent automated backup files; test restore: `qdrant-restore backup/snapshot-2026-06-24.snapshot` | Wrote `scripts/backup.sh`; scheduled via cron/K8s CronJob; test restore monthly |
+| 5.4 | Multi-AZ / HA deployment | 🟡 Partial | At least 2 replicas of proxy, Qdrant, Neo4j, Redis in different availability zones; load balancer with health checks; failover < 30s | Kill one proxy replica → traffic routes to other replica seamlessly | Helm chart defines replica counts and anti-affinity rules, but K8s deployment not validated against live cluster. Single-node Docker Compose is the current deployment method. HA is Planned, not production-ready. |
+| 5.5 | Automated backups | 🟡 Partial | Qdrant snapshots daily, Neo4j dumps daily, Redis RDB hourly; backups stored off-host (S3/GCS); retention: 7 daily, 4 weekly, 3 monthly | `ls backup/` shows recent automated backup files; test restore: `qdrant-restore backup/snapshot-2026-06-24.snapshot` | Backup scripts exist at `scripts/ops/` (backup_cron.sh, backup_qdrant.sh, backup_neo4j.sh, backup_redis.sh, restore_all.sh, verify_restore.sh). Scripts are present but cron scheduling and off-host storage (S3/GCS) not verified. Restore procedure not tested end-to-end. |
 | 5.6 | Disaster recovery runbook | ✅ Pass | Documented procedure for: restore from backup, rebuild indexes from ETL, failover to standby; estimated RTO < 30 min, RPO < 1h | Execute DR runbook in staging → full system recovered within 30 min | Created `docs/guides/disaster-recovery-runbook.md`; 8 scenarios with step-by-step commands |
 | 5.7 | WAL-based ETL recovery | ✅ Pass | WAL checkpoints after each source completes; resume from last checkpoint on restart; `--reset-wal` flag to restart from scratch | Run ETL, kill mid-job, restart → continues from checkpoint; `--reset-wal` → full re-index | Test recovery with corrupted WAL; add WAL integrity checks; monitor WAL size |
 | 5.8 | Startup/shutdown graceful | ✅ Pass | `lifespan` context manager initializes caches and orchestrator on startup; closes connections on shutdown; in-flight requests complete (max 30s) | `timeout 5 docker-compose stop proxy` → logs show graceful shutdown sequence | Add signal handling for SIGTERM/SIGINT; wait for in-flight requests before closing connections |
 | 5.9 | Connection pooling | ✅ Pass | Qdrant: connection pool with min=2, max=10; Neo4j: session pool with min=2, max=50; Redis: connection pool with min=5, max=20; idle timeout 300s | Monitor connections: `ss -tn | grep -E "6333|7687|6379" | wc -l` within expected ranges | Configured connection pools in Qdrant/Neo4j/Redis client initialization; added pool metrics |
-| 5.10 | Dead letter queue | ✅ Pass | Failed non-streaming requests queued for retry (max 3 retries, 1min/5min/15min intervals); failed streaming requests logged for analysis | Simulate transient LLM failure → request retried after 1 min → eventually succeeds or moves to permanent failure | Implemented Redis-backed DLQ for streaming ETL events; added retry workers; exposed DLQ metrics |
+| 5.10 | Dead letter queue | 🟡 Partial | Failed non-streaming requests queued for retry (max 3 retries, 1min/5min/15min intervals); failed streaming requests logged for analysis | Simulate transient LLM failure → request retried after 1 min → eventually succeeds or moves to permanent failure | DLQ concept referenced in docs but stream_consumer.py stubs were dead code (removed in audit). Retry logic exists in LLM router but full DLQ with Redis-backed persistence not verified end-to-end. |
 
-**Reliability: 9/10 (90%)**
+**Reliability: 8.5/10 (85%)**
+
+> **Audit Note (2026-07-12):** Reliability was previously scored 9/10 (90%). Audit found: Multi-AZ/HA claims were overstated (K8s not validated), backup scripts exist but restore not tested, DLQ stream_consumer stubs were dead code. Core reliability patterns (retry, graceful degradation, WAL recovery) are genuine. Score adjusted for unverified claims.
 
 ---
 
@@ -126,15 +134,17 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 7.1 | Docker Compose deployment | ✅ Pass | `docker-compose.yml` starts proxy + Qdrant + Redis + Neo4j + LLM backend; `docker-compose up -d` succeeds; all health checks pass | `docker-compose up -d && sleep 10 && curl http://localhost:8080/v1/health` → `{"status":"ok"}` | Add resource limits to docker-compose services; add restart policies; add healthcheck directives |
 | 7.2 | Environment-based configuration | ✅ Pass | All settings via env vars or `.env`; no hardcoded hostnames, ports, paths; config validated at import | `grep -rE "(localhost|127.0.0.1|8080|8000)" proxy/app/config.py` → only as defaults | Move all defaults to `config.py` with `os.getenv("VAR", "default")` pattern; document all vars in `api_reference.md` |
 | 7.3 | Health check integration | ✅ Pass | `/v1/health` returns component status; Docker healthcheck uses it; Kubernetes liveness/readiness probes use it | `docker inspect proxy_container | jq '.[0].State.Health.Status'` → `"healthy"` | Add Docker healthcheck to docker-compose: `test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]` |
-| 7.4 | Infrastructure as Code | 🟡 Partial | Terraform/Ansible/Pulumi defines all infrastructure: VMs, networking, DNS, storage; reproducible deployment from scratch | `terraform plan` shows no changes after initial apply | Created `infra/helm/` with K8s Helm chart; Docker Compose documented for simpler deployments |
-| 7.5 | Secrets management | 🟡 Partial | Secrets in Vault/Secrets Manager/AWS Parameter Store; `.env` files only for local dev; no secrets in git | `grep -r "password\|secret\|api_key" .env` — empty in committed `.env.example` | K8s Secrets used in production; `.env` files for local dev only; automated rotation pending |
+| 7.4 | Infrastructure as Code | 🟡 Partial | Helm chart defines K8s deployment; Docker Compose for simpler deployments; reproducible from scratch | `helm template deploy/k8s/helm/rag-system/` renders valid manifests | Helm chart exists (`deploy/k8s/helm/rag-system/`) with Chart.yaml, values.yaml, templates. However, K8s deployment is largely Planned — chart exists but has not been validated against a live cluster. Docker Compose is the actual deployment method. |
+| 7.5 | Secrets management | 🟡 Partial | Secrets in Vault/Secrets Manager/AWS Parameter Store; `.env` files only for local dev; no secrets in git | `grep -r "password\|secret\|api_key" .env` — empty in committed `.env.example` | No `.env.example` template exists. Secrets managed via `.env` file (not committed). No Vault/Secrets Manager integration. K8s Secrets referenced in Helm chart values but not validated. |
 | 7.6 | Database migrations | 🟡 Partial | Neo4j schema migrations versioned; Qdrant collection creation scripted with idempotency; migration rollback tested | `python scripts/migrate.py --target v2` → schema updated; `python scripts/migrate.py --rollback` → schema reverted | Collection init scripts with idempotency implemented; full migration framework pending |
-| 7.7 | Zero-downtime deployment | ✅ Pass | Rolling update: start new instance, wait for healthy, drain old instance; no failed requests during deploy; `WORKERS=1` constraint documented | Deploy new version → `ab -n 1000 -c 10 http://proxy/v1/health` → 0 failures during deploy | K8s rolling update with health-check gating; pre-stop hook for graceful shutdown; tested with continuous traffic |
+| 7.7 | Zero-downtime deployment | 🟡 Partial | Rolling update: start new instance, wait for healthy, drain old instance; no failed requests during deploy; `WORKERS=1` constraint documented | Deploy new version → `ab -n 1000 -c 10 http://proxy/v1/health` → 0 failures during deploy | K8s rolling update strategy defined in Helm chart but not validated against live cluster. Docker Compose deployment requires manual stop/start (downtime). `WORKERS=1` constraint documented. |
 | 7.8 | Canary/blue-green deployment | 🟡 Partial | Canary: send 5% traffic to new version for 10 min → promote to 100% if no errors; rollback if error rate increases | Deploy canary → check error rate dashboard → promote or rollback | A/B test harness implemented for pipeline variants; full canary deployment pending load balancer integration |
 | 7.9 | Makefile for common tasks | ✅ Pass | `make test`, `make lint`, `make format`, `make typecheck`, `make docker-build`, `make docker-up`, `make docker-down`, `make clean`, `make all` | `make help` shows all targets; `make all` succeeds | Added `make backup`, `make benchmark` targets |
 | 7.10 | Runbook for common incidents | ✅ Pass | Documented procedures in troubleshooting guide: streaming ETL Redis issues, webhook verification failures, warm-up timeouts, compression issues, Redis connection problems; each with symptoms, diagnosis, fix | Simulate "LLM down" or "Redis stream consumer lag" scenario → follow troubleshooting guide → system recovers | Expanded to cover all component failure scenarios; added automated health check alerting with runbook links |
 
-**Operations: 8/10 (80%)**
+**Operations: 7/10 (70%)**
+
+> **Audit Note (2026-07-12):** Operations was previously scored 8/10 (80%). Audit found: stream_consumer.py stubs were dead code (removed during audit), backup scripts exist at `scripts/ops/` but documentation referenced non-existent paths, K8s/Helm claims in 7.4/7.7 were overstated (chart exists but not validated against live cluster), zero-downtime deployment not achievable with current Docker Compose setup. Score adjusted to reflect actual operational maturity.
 
 ---
 
@@ -142,18 +152,20 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 
 | # | Criterion | Status | Pass Criteria | Verification | Remediation |
 |---|-----------|--------|---------------|-------------|-------------|
-| 8.1 | Architecture Decision Records | ✅ Pass | 10 ADRs covering all major architectural decisions; each ADR has context, decision, consequences, status | `ls docs/en/adr/ADR-*.md \| wc -l` → 10 | Keep existing ADRs updated; add new ADRs for Federated RAG and future features |
+| 8.1 | Architecture Decision Records | ✅ Pass | 14 ADRs covering all major architectural decisions; each ADR has context, decision, consequences, status | `ls docs/en/adr/ADR-*.md \| wc -l` → 14 | Keep existing ADRs updated; add new ADRs for Federated RAG and future features |
 | 8.2 | C4 architecture diagrams | ✅ Pass | 4 diagram levels: System Context (L1), Container (L2), Proxy Components (L3), ETL Components (L3); available as SVG + Excalidraw source | `ls docs/en/diagrams/c4-*.svg | wc -l` → ≥ 4 | Add Component diagram for MCP Server; add Dynamic diagram for query processing sequence |
 | 8.3 | README with quick start | ✅ Pass | README.md covers: project description, quick start (docker-compose), API overview, tech stack, development commands, links to docs | Check `README.md` has all sections | Keep version badge and test count badge current; add architecture diagram thumbnail |
-| 8.4 | AGENTS.md | ✅ Pass | Covers: identity, language, current state, architecture, project structure, tech stack, constraints, development commands | `cat AGENTS.md` has all sections | Update version and test counts in AGENTS.md; keep in sync with README |
+| 8.4 | AGENTS.md | 🟡 Partial | Covers: identity, language, current state, architecture, project structure, tech stack, constraints, development commands | `cat AGENTS.md` has all sections | Audit found ~80% of claims were inflated (wrong test counts, non-existent files, inaccurate scores). Fixed major inaccuracies; remaining claims should be verified against actual code. Keep in sync with README. |
 | 8.5 | Performance guide | ✅ Pass | Covers: HNSW tuning, quantization strategies, caching hierarchy, monitoring setup, resilience patterns, token optimization | `wc -l docs/en/guides/performance-quality.md` → > 300 lines | Add benchmark results section; add performance troubleshooting; add scaling guide for > 1M documents |
 | 8.6 | Design guides (7+) | ✅ Pass | Guides for: extensibility, RBAC, knowledge graph, deployment, operations, integration, troubleshooting | `ls docs/en/guides/*.md | wc -l` → ≥ 11 | Add guides: chunking strategy, evaluation methodology, security architecture |
 | 8.7 | RAG maturity assessment | ✅ Pass | 5-level model with detailed criteria, self-assessment checklist, scoring methodology, migration paths, current system status | `wc -l docs/en/guides/rag-maturity-assessment.md` → > 400 lines | Keep assessment current; update scores as capabilities are added; add quarterly review date |
 | 8.8 | Development roadmap | ✅ Pass | Version history (v0.1 → current), planned features per version, milestones, estimated dates | `wc -l docs/en/guides/roadmap.md` → > 100 lines | Update roadmap with v0.4 completion status; add v0.5 and v1.0 plans |
 | 8.9 | API reference | ✅ Pass | Full schemas for all 8 endpoints; curl + Python + TypeScript examples; error codes with remediation; rate limiting docs; auth flow docs | `wc -l docs/en/api_reference.md` → > 600 lines | Add OpenAPI/Swagger export; keep examples tested and current |
-| 8.10 | Changelog | ✅ Pass | `CHANGELOG.md` with entries per version: added, changed, deprecated, removed, fixed, security; follows Keep a Changelog format | `cat CHANGELOG.md | head -20` → version entries present | Created `CHANGELOG.md` with v0.1 through v1.0 entries; backfilled from git history |
+| 8.10 | Changelog | 🟡 Partial | `CHANGELOG.md` with entries per version: added, changed, deprecated, removed, fixed, security; follows Keep a Changelog format | `cat CHANGELOG.md | head -20` → version entries present | CHANGELOG.md did not exist (claim was false). Created minimal CHANGELOG with v1.0 and v2.0 entries. Backfill from git history incomplete; Unreleased section tracks audit fixes. |
 
-**Documentation: 10/10 (100%)**
+**Documentation: 8/10 (80%)**
+
+> **Audit Note (2026-07-12):** Documentation was previously scored 10/10 (100%). Audit revealed CHANGELOG.md did not exist (8.10 was a false claim), AGENTS.md contained ~80% inflated/incorrect claims (8.4), and several guide files contained inaccurate scores and non-existent file references. Scores adjusted downward to reflect reality after corrections.
 
 ---
 
@@ -163,32 +175,32 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 
 | Dimension | Score | Max | % Ready | Trend |
 |-----------|-------|-----|---------|-------|
-| 1. Code Quality | 9.0 | 10 | 90% | Improving |
-| 2. Testing | 8.5 | 10 | 85% | Improving |
-| 3. Security | 9.0 | 10 | 90% | Stable |
+| 1. Code Quality | 8.5 | 10 | 85% | Improving |
+| 2. Testing | 7.5 | 10 | 75% | Needs Work |
+| 3. Security | 8.0 | 10 | 80% | Needs Work |
 | 4. Observability | 8.5 | 10 | 85% | Improving |
-| 5. Reliability | 9.0 | 10 | 90% | Improving |
+| 5. Reliability | 8.5 | 10 | 85% | Improving |
 | 6. Performance | 9.5 | 10 | 95% | Strong |
-| 7. Operations | 8.0 | 10 | 80% | Improving |
-| 8. Documentation | 10.0 | 10 | 100% | Strong |
-| **Overall** | **71.5** | **80** | **89%** | — |
+| 7. Operations | 7.0 | 10 | 70% | Needs Work |
+| 8. Documentation | 8.0 | 10 | 80% | Improving |
+| **Overall** | **65.5** | **80** | **81.9%** | — |
 
 ### Radar View
 
 ```
-         Documentation (100%)
+         Documentation (80%)
                 ▲
                /|\
               / | \
              /  |  \
         Ops /   |   \ Performance
-      (80%)/    |    \(95%)
+      (70%)/    |    \(95%)
            \    |    /
    Reliability\  |  /Code Quality
-        (90%)   \ | /  (90%)
+        (85%)   \ | /  (85%)
                  \|/
           Security───Testing
-           (90%)    (85%)
+           (80%)    (75%)
                 |
            Observability
                (85%)
@@ -213,7 +225,7 @@ This checklist tracks production readiness across 8 dimensions. Each item has pa
 | 31 | Integrated LLMLingua compression | Performance | Medium | Done |
 | 32 | Integrated LongContextReorder | Performance | Medium | Done |
 
-**Target for v2.0: Achieved — 71.5/80 (89%) across all dimensions, 94% readiness.**
+**Target for v2.0: Achieved — 65.5/80 (81.9%) across all dimensions, 82% readiness.**
 
 ---
 
@@ -274,6 +286,8 @@ echo "=== Results: $PASS passed, $FAIL failed, $WARN warnings ==="
 2. **Per-version review:** Before tagging a release, manually verify all criteria marked with ✅ or 🟡.
 3. **Gap prioritization:** Focus on Critical impact items first, then High, then Medium.
 4. **Remediation tracking:** Create a GitHub issue for each failing criterion. Link to this checklist.
-5. **Score trending:** Track the overall score (`44.5/80`) over time. Target +5 points per minor version.
+5. **Score trending:** Track the overall score (`65.5/80`) over time. Target +5 points per minor version.
 
-**Target for v2.0: Achieved — 75/80 (94%) across all dimensions, production readiness at 94%.**
+**Target for v2.0: Achieved — 65.5/80 (81.9%) across all dimensions, production readiness at 82%.**
+
+> **Audit Correction (2026-07-12):** Previous version claimed 75/80 (94%) which was inflated. Honest score after audit: 65.5/80 (81.9%). Key gaps: testing quality (fake tests), security defaults (AUTH_ENABLED=false), operations maturity (K8s unvalidated, backup docs inaccurate), reliability claims (HA/backup/DLQ unverified), documentation accuracy (CHANGELOG missing, AGENTS.md inflated).

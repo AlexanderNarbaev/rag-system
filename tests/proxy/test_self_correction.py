@@ -246,8 +246,14 @@ class TestSelfCritique:
             "confidence": 0.8,
         }
         result = self_critique(state)
-        assert isinstance(result, dict)
-        assert "self_critique_score" in result or "answer" in result
+        assert "self_critique_score" in result
+        assert "needs_rewrite" in result
+        assert "self_critique_count" in result
+        assert isinstance(result["self_critique_score"], int)
+        assert 1 <= result["self_critique_score"] <= 5
+        assert isinstance(result["needs_rewrite"], bool)
+        assert isinstance(result["self_critique_count"], int)
+        assert result["self_critique_count"] >= 1
 
     def test_self_critique_low_score_triggers_rewrite_flag(self):
         from proxy.app.core.orchestrator import self_critique
@@ -286,7 +292,10 @@ class TestSelfCritique:
             "confidence": 0.0,
         }
         result = self_critique(state)
-        assert isinstance(result, dict)
+        # Empty answer gets score 0 and no rewrite
+        assert result["self_critique_score"] == 0
+        assert result["needs_rewrite"] is False
+        assert result["self_critique_count"] == 0
 
 
 class TestSelfCritiqueRoute:

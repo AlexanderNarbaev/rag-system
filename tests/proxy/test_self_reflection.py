@@ -20,7 +20,10 @@ class TestSelfReflectionNode:
         with patch("proxy.app.llm.slm._call_slm_sync", return_value="FULLY_SUPPORTED"):
             with patch("proxy.app.shared.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
-                assert isinstance(result, dict)
+                # FULLY_SUPPORTED answer should not trigger re-retrieval
+                assert result["needs_reflection"] is False
+                assert result["reflection_count"] == 1
+                assert "reflection_gaps" not in result
 
     def test_reflection_identifies_gaps(self):
         from proxy.app.core.orchestrator import self_reflection
@@ -37,7 +40,10 @@ class TestSelfReflectionNode:
         ):
             with patch("proxy.app.shared.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
-                assert isinstance(result, dict)
+                # PARTIALLY_SUPPORTED should trigger re-retrieval
+                assert result["needs_reflection"] is True
+                assert result["reflection_count"] == 1
+                assert "release date" in result["reflection_gaps"].lower()
 
     def test_reflection_stops_at_max_depth(self):
         from proxy.app.core.orchestrator import self_reflection
@@ -66,8 +72,9 @@ class TestSelfReflectionNode:
         with patch("proxy.app.llm.slm._call_slm_sync", side_effect=Exception("SLM error")):
             with patch("proxy.app.shared.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
-                assert isinstance(result, dict)
-                assert result.get("needs_reflection") is False
+                # SLM failure should gracefully accept the answer
+                assert result["needs_reflection"] is False
+                assert result["reflection_count"] == 1
 
     def test_reflection_empty_answer(self):
         from proxy.app.core.orchestrator import self_reflection
@@ -80,8 +87,9 @@ class TestSelfReflectionNode:
             "reflection_count": 0,
         }
         result = self_reflection(state)
-        assert isinstance(result, dict)
-        assert result.get("needs_reflection") is False
+        # Empty answer should not trigger reflection
+        assert result["needs_reflection"] is False
+        assert result["reflection_count"] == 0
 
     def test_reflection_multi_hop_verification(self):
         from proxy.app.core.orchestrator import self_reflection
@@ -96,7 +104,10 @@ class TestSelfReflectionNode:
         with patch("proxy.app.llm.slm._call_slm_sync", return_value="FULLY_SUPPORTED"):
             with patch("proxy.app.shared.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)
-                assert isinstance(result, dict)
+                # Multi-hop answer fully supported → no re-retrieval needed
+                assert result["needs_reflection"] is False
+                assert result["reflection_count"] == 1
+                assert "reflection_gaps" not in result
 
 
 class TestSelfReflectionRoute:
@@ -134,10 +145,14 @@ class TestCRAGEvaluator:
         from proxy.app.core.confidence import evaluate_retrieval_quality
 
         chunks = [
-            {"text": "Docker uses containers for application deployment and scaling.", "score": 0.95},
+            {"text": "How does Docker deployment work with containers and scaling?"},
         ]
         report = evaluate_retrieval_quality("How does Docker deployment work?", chunks)
-        assert report.correct_count >= 0
+        assert report.total_count == 1
+        # High keyword overlap → classified as correct
+        assert report.correct_count == 1
+        assert report.incorrect_count == 0
+        assert report.correct_rate == 1.0
 
     def test_evaluate_classifies_incorrect_chunks(self):
         from proxy.app.core.confidence import evaluate_retrieval_quality
@@ -146,7 +161,9 @@ class TestCRAGEvaluator:
             {"text": "Football is a popular sport played worldwide.", "score": 0.1},
         ]
         report = evaluate_retrieval_quality("What is Docker containerization?", chunks)
-        assert report.incorrect_count >= 0
+        assert report.incorrect_count == 1
+        assert report.correct_count == 0
+        assert report.total_count == 1
 
     def test_evaluate_empty_chunks(self):
         from proxy.app.core.confidence import evaluate_retrieval_quality
@@ -163,6 +180,8 @@ class TestCRAGEvaluator:
         ]
         report = evaluate_retrieval_quality("What is Docker?", chunks)
         assert isinstance(report.recommendations, list)
+        assert len(report.recommendations) > 0
+        assert all(isinstance(r, str) for r in report.recommendations)
 
     def test_evaluate_score_thresholds(self):
         from proxy.app.core.confidence import _score_chunk_relevance
@@ -230,3 +249,7 @@ class TestVerifyAnswerClaims:
         assert isinstance(report.supported_claims, list)
         assert isinstance(report.unsupported_claims, list)
         assert isinstance(report.verification_rate, float)
+        assert 0.0 <= report.verification_rate <= 1.0
+        assert report.total_claims == len(report.supported_claims) + len(report.unsupported_claims)
+        assert all(isinstance(c, str) for c in report.supported_claims)
+        assert all(isinstance(c, str) for c in report.unsupported_claims)

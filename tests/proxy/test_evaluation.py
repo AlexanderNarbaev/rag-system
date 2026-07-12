@@ -150,6 +150,17 @@ class TestCrossLingualBenchmarks:
 
         result = evaluate_cross_lingual_retrieval(("en", "de"))
         assert isinstance(result, dict)
+        assert "source_lang" in result
+        assert "target_lang" in result
+        assert "monolingual" in result
+        assert "cross_lingual" in result
+        assert "comparison" in result
+        assert "num_queries" in result
+        assert result["source_lang"] == "en"
+        assert result["target_lang"] == "de"
+        assert isinstance(result["monolingual"], dict)
+        assert isinstance(result["cross_lingual"], dict)
+        assert isinstance(result["comparison"], dict)
 
     def test_evaluate_cross_lingual_has_required_keys(self):
         from proxy.app.core.evaluation import evaluate_cross_lingual_retrieval
@@ -207,7 +218,10 @@ class TestCrossLingualBenchmarks:
 
         results = run_cross_lingual_benchmark()
         assert isinstance(results, list)
+        assert len(results) == 5  # en->de, en->fr, en->zh, ru->en, ru->de
         for r in results:
             assert "lang_pair" in r
             assert "monolingual" in r
             assert "cross_lingual" in r
+            assert isinstance(r["lang_pair"], str)
+            assert "->" in r["lang_pair"]

@@ -92,10 +92,18 @@ class TestQueryEnhancer:
 
     def test_enhance_returns_all_keys(self):
         result = self.enhancer.enhance("How to deploy microservices?")
+        # Check all expected keys exist
         assert "hyde_query" in result
         assert "variants" in result
         assert "sub_queries" in result
         assert "metadata_filters" in result
+        # Check types and content
+        assert isinstance(result["hyde_query"], str)
+        assert "How to deploy microservices?" in result["hyde_query"]
         assert isinstance(result["variants"], list)
+        assert len(result["variants"]) > 0
+        assert all(isinstance(v, str) and len(v) > 0 for v in result["variants"])
         assert isinstance(result["sub_queries"], list)
+        assert len(result["sub_queries"]) > 0
+        assert all(isinstance(sq, str) and len(sq) > 0 for sq in result["sub_queries"])
         assert isinstance(result["metadata_filters"], dict)
