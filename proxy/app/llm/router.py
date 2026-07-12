@@ -20,14 +20,9 @@ import aiohttp
 from aiohttp import ClientError, ClientTimeout
 
 from proxy.app.shared.config import LLM_API_KEY, LLM_ENDPOINT, LLM_MODEL_NAME, MAX_RETRIES, REQUEST_TIMEOUT, RETRY_DELAY
+from proxy.app.shared.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
-
-
-class LLMError(Exception):
-    """Исключение при вызове LLM."""
-
-    pass
 
 
 async def _send_completion_request(

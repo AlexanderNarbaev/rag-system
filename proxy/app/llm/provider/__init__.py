@@ -6,7 +6,6 @@ Re-exports all public symbols for backward compatibility with
 """
 
 from proxy.app.llm.provider.base import (
-    LLMError,
     MultiProviderRouter,
     ProviderAdapter,
     ProviderType,
@@ -35,6 +34,7 @@ from proxy.app.shared.config import (  # noqa: F401 — re-export for test patch
     REQUEST_TIMEOUT,
     RETRY_DELAY,
 )
+from proxy.app.shared.exceptions import LLMError
 from proxy.app.tools.definition import ToolCall, ToolDefinition, ToolResult
 
 __all__ = [

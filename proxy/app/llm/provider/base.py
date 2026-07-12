@@ -29,6 +29,7 @@ from proxy.app.shared.config import (
 from proxy.app.shared.config import (
     RETRY_DELAY as _DEFAULT_RETRY_DELAY,
 )
+from proxy.app.shared.exceptions import LLMError
 from proxy.app.tools.definition import ToolCall, ToolDefinition, ToolResult
 
 
@@ -106,12 +107,6 @@ class ProviderAdapter:
     def headers(self) -> dict[str, str]:
         """HTTP headers for the provider."""
         raise NotImplementedError
-
-
-class LLMError(Exception):
-    """Exception raised on LLM call failure."""
-
-    pass
 
 
 class MultiProviderRouter:

@@ -219,19 +219,6 @@ HALLUCINATION_CHECK_ENABLED = os.getenv("HALLUCINATION_CHECK_ENABLED", "false").
 # ============ Self-Enrichment ============
 ENRICHMENT_ENABLED = os.getenv("ENRICHMENT_ENABLED", "false").lower() == "true"
 
-# ============ Multi-Modal RAG ============
-MULTI_MODAL_ENABLED = os.getenv("MULTI_MODAL_ENABLED", "true").lower() == "true"
-COLBERT_ENABLED = os.getenv("COLBERT_ENABLED", "true").lower() == "true"
-IMAGE_MODEL = os.getenv("IMAGE_MODEL", "clip-ViT-B-32")
-IMAGE_EXTRACTION_ENABLED = os.getenv("IMAGE_EXTRACTION_ENABLED", "false").lower() == "true"
-AST_LANGUAGES = os.getenv("AST_LANGUAGES", "python,javascript,java").split(",")
-TABLE_EXTRACTION_ENABLED = os.getenv("TABLE_EXTRACTION_ENABLED", "false").lower() == "true"
-CODE_CHUNKING_ENABLED = os.getenv("CODE_CHUNKING_ENABLED", "false").lower() == "true"
-COLD_STORAGE_MAX_VERSIONS = int(os.getenv("COLD_STORAGE_MAX_VERSIONS", "5"))
-
-# ============ Reranker Fine-Tuning ============
-RERANKER_FT_ENABLED = os.getenv("RERANKER_FT_ENABLED", "false").lower() == "true"
-
 # ============ Token Optimizer ============
 TOKEN_OPTIMIZER_ENABLED = os.getenv("TOKEN_OPTIMIZER_ENABLED", "true").lower() == "true"
 
@@ -243,9 +230,6 @@ PREFIX_CACHING_ENABLED = os.getenv("PREFIX_CACHING_ENABLED", "false").lower() ==
 
 # ============ Retrieval Evaluation ============
 EVAL_DATASET_PATH = os.getenv("EVAL_DATASET_PATH", "./data/eval_dataset.json")
-
-# ============ Dependency Scanning ============
-DEPENDENCY_SCAN_ENABLED = os.getenv("DEPENDENCY_SCAN_ENABLED", "false").lower() == "true"
 
 # ============ Admin Alerts ============
 ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
