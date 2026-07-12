@@ -49,7 +49,7 @@ class RemoteEmbeddingClient:
         self._healthy = True
 
     def _check_health(self) -> bool:
-        """Quick connectivity check (non-blocking).
+        """Quick connectivity check.
 
         Uses GET to /models endpoint which is more widely supported than HEAD.
         Falls back to checking the embeddings endpoint directly.
@@ -64,14 +64,14 @@ class RemoteEmbeddingClient:
             req = urllib.request.Request(models_url)
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
-            urllib.request.urlopen(req, timeout=5)  # nosec B310
+            urllib.request.urlopen(req, timeout=10)  # nosec B310
             return True
         except Exception:
             try:
                 # Fallback: try the embeddings endpoint with a minimal request
                 import json as _json
 
-                test_payload = _json.dumps({"model": self._model, "input": ["test"], "max_tokens": 1}).encode("utf-8")
+                test_payload = _json.dumps({"model": self._model, "input": ["test"]}).encode("utf-8")
                 req = urllib.request.Request(
                     self._embedding_url,
                     data=test_payload,
@@ -79,9 +79,10 @@ class RemoteEmbeddingClient:
                 )
                 if self._api_key:
                     req.add_header("Authorization", f"Bearer {self._api_key}")
-                urllib.request.urlopen(req, timeout=5)  # nosec B310
+                urllib.request.urlopen(req, timeout=10)  # nosec B310
                 return True
-            except Exception:
+            except Exception as e:
+                logger.warning("Embedder health check failed for %s: %s", self._endpoint, e)
                 self._healthy = False
                 return False
 
@@ -175,7 +176,7 @@ class RemoteRerankerClient:
         self._healthy = True
 
     def _check_health(self) -> bool:
-        """Quick connectivity check (non-blocking).
+        """Quick connectivity check.
 
         Uses a minimal rerank request to verify the service is reachable.
         """
@@ -201,9 +202,10 @@ class RemoteRerankerClient:
             )
             if self._api_key:
                 req.add_header("Authorization", f"Bearer {self._api_key}")
-            urllib.request.urlopen(req, timeout=5)  # nosec B310
+            urllib.request.urlopen(req, timeout=10)  # nosec B310
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning("Reranker health check failed for %s: %s", self._endpoint, e)
             self._healthy = False
             return False
 
