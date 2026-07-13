@@ -10,6 +10,7 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+      - "security"
       - "proxy"
 
   - package-ecosystem: "pip"
@@ -19,6 +20,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+      - "security"
       - "etl"
 
   - package-ecosystem: "pip"
@@ -28,6 +30,7 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+      - "security"
 
   - package-ecosystem: "github-actions"
     directory: "/"

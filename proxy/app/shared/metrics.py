@@ -92,6 +92,100 @@ rag_compression_ratio = Gauge(
     "Context compression ratio (compressed / original tokens)",
 )
 
+# ── RAG-specific detailed metrics ──
+
+RAG_REQUEST_COUNT = Counter(
+    "rag_request_total",
+    "Total RAG requests",
+    ["method", "status", "has_context"],
+)
+
+RAG_LATENCY = Histogram(
+    "rag_rag_latency_seconds",
+    "RAG request latency",
+    ["operation"],
+    buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+)
+
+RAG_RETRIEVAL_SCORES = Histogram(
+    "rag_retrieval_scores",
+    "Distribution of retrieval scores",
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+RAG_CACHE_HITS = Counter(
+    "rag_cache_hits_total_v2",
+    "Cache hit count",
+    ["cache_type"],
+)
+
+RAG_LLM_TOKENS = Counter(
+    "rag_llm_tokens_total",
+    "LLM token usage",
+    ["direction"],  # prompt, completion
+)
+
+RAG_CONFIDENCE = Histogram(
+    "rag_confidence_score",
+    "RAG confidence scores",
+    buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+)
+
+RAG_HALLUCINATION_DETECTED = Counter(
+    "rag_hallucination_detected_total",
+    "Hallucination detection events",
+)
+
+RAG_NEGATIVE_REJECTION = Counter(
+    "rag_negative_rejection_total",
+    "Negative rejection events (refused to answer)",
+)
+
+
+# ── Helper functions ──
+
+
+def record_rag_request(
+    method: str, status: str, has_context: bool, duration: float
+) -> None:
+    """Record RAG request metrics."""
+    RAG_REQUEST_COUNT.labels(
+        method=method, status=status, has_context=str(has_context)
+    ).inc()
+    RAG_LATENCY.labels(operation="total").observe(duration)
+
+
+def record_retrieval(score: float, duration: float) -> None:
+    """Record retrieval metrics."""
+    RAG_RETRIEVAL_SCORES.observe(score)
+    RAG_LATENCY.labels(operation="retrieval").observe(duration)
+
+
+def record_cache_hit(cache_type: str) -> None:
+    """Record cache hit."""
+    RAG_CACHE_HITS.labels(cache_type=cache_type).inc()
+
+
+def record_llm_tokens(prompt_tokens: int, completion_tokens: int) -> None:
+    """Record LLM token usage."""
+    RAG_LLM_TOKENS.labels(direction="prompt").inc(prompt_tokens)
+    RAG_LLM_TOKENS.labels(direction="completion").inc(completion_tokens)
+
+
+def record_confidence(score: float) -> None:
+    """Record confidence score."""
+    RAG_CONFIDENCE.observe(score)
+
+
+def record_hallucination() -> None:
+    """Record hallucination detection."""
+    RAG_HALLUCINATION_DETECTED.inc()
+
+
+def record_negative_rejection() -> None:
+    """Record negative rejection."""
+    RAG_NEGATIVE_REJECTION.inc()
+
 
 def init_metrics() -> None:
     global _initialized

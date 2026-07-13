@@ -273,9 +273,9 @@ class TestChatCompletionWithRAGContext:
         )
         assert response.status_code == 200
 
-    def test_chat_with_multi_turn_conversation(self, client, mock_rag_pipeline):
+    def test_chat_with_multi_turn_conversation(self, client, mock_rag_pipeline_with_context):
         """Multi-turn conversation with system + assistant + user messages."""
-        mock_rag_pipeline["non_stream_completion"].return_value = "Follow-up answer"
+        mock_rag_pipeline_with_context["non_stream_completion"].return_value = "Follow-up answer"
         response = client.post(
             "/v1/chat/completions",
             json={

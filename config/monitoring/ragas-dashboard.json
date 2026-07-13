@@ -1,0 +1,95 @@
+{
+  "dashboard": {
+    "title": "RAG Quality Dashboard",
+    "description": "Monitoring RAG system quality metrics",
+    "panels": [
+      {
+        "title": "RAGAS Scores Over Time",
+        "type": "timeseries",
+        "metrics": [
+          "rag_faithfulness_score",
+          "rag_answer_relevance_score",
+          "rag_context_relevance_score"
+        ],
+        "thresholds": {
+          "warning": 0.7,
+          "critical": 0.5
+        }
+      },
+      {
+        "title": "Retrieval Score Distribution",
+        "type": "histogram",
+        "metric": "rag_retrieval_scores",
+        "buckets": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+      },
+      {
+        "title": "Request Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "metrics": [
+          "rag_request_duration_seconds"
+        ],
+        "aggregations": ["p50", "p95", "p99"]
+      },
+      {
+        "title": "Negative Rejection Rate",
+        "type": "gauge",
+        "metric": "rag_negative_rejection_total",
+        "formula": "rate(rag_negative_rejection_total[5m]) / rate(rag_request_total[5m])",
+        "thresholds": {
+          "warning": 0.1,
+          "critical": 0.2
+        }
+      },
+      {
+        "title": "Hallucination Detection Rate",
+        "type": "gauge",
+        "metric": "rag_hallucination_detected_total",
+        "formula": "rate(rag_hallucination_detected_total[5m]) / rate(rag_request_total[5m])",
+        "thresholds": {
+          "warning": 0.05,
+          "critical": 0.1
+        }
+      },
+      {
+        "title": "Cache Hit Rate",
+        "type": "gauge",
+        "metric": "rag_cache_hits_total",
+        "formula": "rate(rag_cache_hits_total[5m]) / rate(rag_request_total[5m])"
+      },
+      {
+        "title": "LLM Token Usage",
+        "type": "timeseries",
+        "metrics": [
+          "rag_llm_tokens_total"
+        ],
+        "labels": ["direction"]
+      }
+    ],
+    "alerts": [
+      {
+        "name": "High Negative Rejection Rate",
+        "condition": "rate(rag_negative_rejection_total[5m]) / rate(rag_request_total[5m]) > 0.2",
+        "severity": "warning",
+        "message": "More than 20% of requests are being rejected due to insufficient data"
+      },
+      {
+        "name": "High Hallucination Rate",
+        "condition": "rate(rag_hallucination_detected_total[5m]) / rate(rag_request_total[5m]) > 0.1",
+        "severity": "critical",
+        "message": "More than 10% of responses contain hallucinations"
+      },
+      {
+        "name": "Low RAGAS Faithfulness",
+        "condition": "avg(rag_faithfulness_score) < 0.7",
+        "severity": "warning",
+        "message": "Average faithfulness score dropped below 0.7"
+      },
+      {
+        "name": "High Latency",
+        "condition": "histogram_quantile(0.95, rag_request_duration_seconds_bucket) > 5",
+        "severity": "warning",
+        "message": "p95 latency exceeds 5 seconds"
+      }
+    ]
+  }
+}
