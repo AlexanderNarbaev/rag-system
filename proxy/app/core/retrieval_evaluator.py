@@ -141,7 +141,9 @@ class RetrievalEvaluator:
 
         return cleaned
 
-    def evaluate_and_act(self, query: str, retrieved_chunks: list[dict[str, Any]]) -> tuple[float, str, list[dict[str, Any]]]:
+    def evaluate_and_act(
+        self, query: str, retrieved_chunks: list[dict[str, Any]]
+    ) -> tuple[float, str, list[dict[str, Any]]]:
         """
         Combined: evaluate quality, get action, and optionally clean chunks.
         Returns (confidence, action, processed_chunks).

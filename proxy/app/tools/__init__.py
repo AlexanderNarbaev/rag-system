@@ -52,9 +52,6 @@ from .definition import (
 from .definition import (
     ToolDefinition as NewToolDefinition,
 )
-from .errors import (
-    ToolError as ToolErrorBase,  # noqa: F401  # re-export (aliased for backward compat)
-)
 from .definition import (
     ToolParam as ToolParam,  # noqa: F401  # re-export
 )
@@ -69,6 +66,9 @@ from .errors import (
 )
 from .errors import (
     ToolError as ToolError,  # noqa: F401  # re-export
+)
+from .errors import (
+    ToolError as ToolErrorBase,  # noqa: F401  # re-export (aliased for backward compat)
 )
 from .errors import (
     ToolExecutionError as ToolExecutionError,  # noqa: F401  # re-export

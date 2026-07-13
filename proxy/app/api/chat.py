@@ -331,7 +331,9 @@ async def chat_completions(
                     user_context=user,
                     top_k_override=request.rag_top_k,
                 )
-                async for chunk in _main.stream_completion(messages_for_llm, request.temperature or 0.2, request.max_tokens or 4096):  # type: ignore[attr-defined,arg-type]
+                async for chunk in _main.stream_completion(  # type: ignore[attr-defined,arg-type]
+                    messages_for_llm, request.temperature or 0.2, request.max_tokens or 4096
+                ):
                     choices = chunk.get("choices", [])
                     delta_content = choices[0].get("delta", {}).get("content", "") if choices else ""
                     if delta_content:

@@ -195,7 +195,11 @@ async def log_interaction(
 
 
 def log_feedback_sync(
-    request_id: str, feedback_type: str, comment: str | None = None, corrected_response: str | None = None, expert_id: str | None = None
+    request_id: str,
+    feedback_type: str,
+    comment: str | None = None,
+    corrected_response: str | None = None,
+    expert_id: str | None = None,
 ) -> None:
     """Синхронная запись фидбека (например, из дашборда)."""
     logger = get_logger()

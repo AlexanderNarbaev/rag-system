@@ -235,7 +235,12 @@ class AuditLogger:
         self._write_event(event)
 
     def log_auth(
-        self, user_id: str | None, action: str, success: bool, details: dict[str, Any] | None = None, client_ip: str = "unknown"
+        self,
+        user_id: str | None,
+        action: str,
+        success: bool,
+        details: dict[str, Any] | None = None,
+        client_ip: str = "unknown",
     ) -> None:
         """Log authentication events."""
         event = AuditEvent(
