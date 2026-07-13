@@ -153,7 +153,10 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
         from proxy.app.core.orchestrator import get_orchestrator
 
         orchestrator = get_orchestrator()
-        logger.info("LangGraph orchestrator initialized")
+        if orchestrator is not None:
+            logger.info("LangGraph orchestrator initialized")
+        else:
+            logger.warning("LangGraph not available — agentic orchestration disabled")
     # Tool discovery from all providers
     if TOOLS_ENABLED:
         registry = get_enhanced_registry()

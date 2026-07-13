@@ -82,6 +82,11 @@ def _route_after_generate(state: RAGState) -> str:
 
 def build_rag_graph() -> StateGraph:
     """Создаёт и компилирует граф RAG с tool-calling поддержкой."""
+    if not LANGGRAPH_AVAILABLE or StateGraph is None:
+        raise RuntimeError(
+            "LangGraph is not installed. Install with: pip install langgraph. "
+            "Or set USE_LANGGRAPH=false to disable agentic orchestration."
+        )
     builder = StateGraph(RAGState)
 
     # Добавляем узлы
@@ -183,8 +188,10 @@ class RAGOrchestrator:
 _orchestrator = None
 
 
-def get_orchestrator() -> RAGOrchestrator:
+def get_orchestrator() -> RAGOrchestrator | None:
     global _orchestrator
+    if not LANGGRAPH_AVAILABLE:
+        return None
     if _orchestrator is None:
         _orchestrator = RAGOrchestrator()
     return _orchestrator
