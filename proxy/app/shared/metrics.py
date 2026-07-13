@@ -93,12 +93,12 @@ rag_compression_ratio = Gauge(
 )
 
 
-def init_metrics():
+def init_metrics() -> None:
     global _initialized
     _initialized = True
 
 
-def metrics_endpoint():
+def metrics_endpoint() -> Response:
     """Returns Prometheus-formatted metrics."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
