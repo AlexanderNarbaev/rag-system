@@ -3,7 +3,7 @@
 """
 Главный оркестратор ETL-пайплайна для RAG-системы.
 Запускает все этапы:
-1. Extract: Confluence, Jira, GitLab
+1. Extract: Confluence, Jira, GitLab (параллельно, с graceful degradation)
 2. Chunking: семантическая нарезка документов
 3. Graph: извлечение сущностей и отношений (опционально)
 4. Index: индексация в Qdrant (гибридная, с версионированием)
@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -58,8 +59,7 @@ def run_extract_confluence(config: dict, wal: WALManager) -> Path:
     """Запускает выгрузку Confluence, возвращает директорию с сырыми данными."""
     logger.info("=== Starting Confluence extraction ===")
     confluence_config = config.get("confluence", {})
-    # Добавляем WAL параметры
-    confluence_config["wal_file"] = str(wal.wal_path)  # используем единый WAL
+    confluence_config["wal_file"] = str(wal.wal_path)
     confluence_config["incremental"] = True
     extractor = ConfluenceExtractor(confluence_config)
     extractor.run()
@@ -73,7 +73,6 @@ def run_extract_jira(config: dict, wal: WALManager) -> Path:
     """Запускает выгрузку Jira."""
     logger.info("=== Starting Jira extraction ===")
     jira_config = config.get("jira", {})
-    # Инкрементальный режим через WAL
     last_run = wal.get_last_run(PIPELINE_JIRA)
     if last_run and not jira_config.get("since_date"):
         jira_config["since_date"] = last_run
@@ -82,7 +81,6 @@ def run_extract_jira(config: dict, wal: WALManager) -> Path:
     jira_config["wal_file"] = str(wal.wal_path)
     extractor = JiraExtractor(jira_config)
     extractor.run()
-    # Обновляем WAL
     wal.update_last_run(PIPELINE_JIRA)
     output_dir = Path(jira_config.get("output_dir", "./raw_data/jira"))
     return output_dir
@@ -105,133 +103,148 @@ def run_extract_gitlab(config: dict, wal: WALManager) -> Path:
     return output_dir
 
 
+def _run_extractor_safe(name: str, extract_fn, config: dict, wal: WALManager) -> tuple[str, Path | None, str | None]:
+    """Запускает экстрактор с обработкой ошибок. Возвращает (name, output_dir, error)."""
+    try:
+        output_dir = extract_fn(config, wal)
+        return (name, output_dir, None)
+    except Exception as e:
+        logger.error(f"Extractor '{name}' failed: {e}", exc_info=True)
+        return (name, None, str(e))
+
+
 def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
     """
     Собирает все извлечённые документы из директорий extractors.
-    Ожидает структуру:
-      - для Confluence: <page_id>/page.json
-      - для Jira: <issue_key>/issue.json
-      - для GitLab: <project_id>/commits.json, merge_requests.json, files/*.txt
-    Возвращает список документов с полями: id, source_type, title, content (html/markdown), metadata.
+    Обрабатывает отсутствующие директории gracefully (Extractor мог не запуститься).
     """
     documents = []
-    # Confluence
-    for conflu_dir in extract_dirs[0].glob("*"):
-        if not conflu_dir.is_dir():
+    source_names = ["confluence", "jira", "gitlab"]
+
+    for source_dir, source_name in zip(extract_dirs, source_names, strict=False):
+        if not source_dir.exists():
+            logger.warning(f"Directory for {source_name} does not exist: {source_dir} — skipping")
             continue
-        page_file = conflu_dir / "page.json"
-        if page_file.exists():
-            with open(page_file, encoding="utf-8") as f:
-                data = json.load(f)
-            documents.append(
-                {
-                    "id": f"confluence_{data['id']}",
-                    "source_type": "confluence",
-                    "title": data.get("title", ""),
-                    "content": data.get("body_view_html", "") or data.get("body_storage_raw", ""),
-                    "content_type": "html",
-                    "metadata": {
-                        "version": str(data.get("version", "")),
-                        "space": data.get("space", ""),
-                        "created_at": data.get("created_at", ""),
-                        "updated_at": data.get("updated_at", ""),
-                        "url": f"{conflu_dir.name}",
-                    },
-                }
-            )
-    # Jira
-    for jira_dir in extract_dirs[1].glob("*"):
-        if not jira_dir.is_dir():
-            continue
-        issue_file = jira_dir / "issue.json"
-        if issue_file.exists():
-            with open(issue_file, encoding="utf-8") as f:
-                data = json.load(f)
-            # Формируем контент из описания и комментариев
-            content = data.get("description", "")
-            for comment in data.get("comments", []):
-                content += f"\n\nComment by {comment['author']}: {comment['body']}"
-            documents.append(
-                {
-                    "id": f"jira_{data['key']}",
-                    "source_type": "jira",
-                    "title": data.get("summary", ""),
-                    "content": content,
-                    "content_type": "html",  # Jira description может быть HTML
-                    "metadata": {
-                        "key": data["key"],
-                        "status": data.get("status", ""),
-                        "priority": data.get("priority", ""),
-                        "assignee": data.get("assignee", ""),
-                        "created": data.get("created", ""),
-                        "updated": data.get("updated", ""),
-                    },
-                }
-            )
-    # GitLab: коммиты, MR, файлы
-    for gitlab_dir in extract_dirs[2].glob("*"):
-        if not gitlab_dir.is_dir():
-            continue
-        commits_file = gitlab_dir / "commits.json"
-        if commits_file.exists():
-            with open(commits_file, encoding="utf-8") as f:
-                commits = json.load(f)
-            for commit in commits[:100]:  # ограничим для примера
-                content = commit.get("message", "")
-                # Добавим diff кратко
-                for diff in commit.get("diff", [])[:5]:
-                    content += f"\n{diff.get('new_path', '')}: {diff.get('diff', '')[:200]}"
-                documents.append(
-                    {
-                        "id": f"gitlab_commit_{commit['id']}",
-                        "source_type": "gitlab_commit",
-                        "title": commit.get("title", commit["id"][:8]),
-                        "content": content,
-                        "content_type": "markdown",
-                        "metadata": {
-                            "sha": commit["id"],
-                            "author": commit.get("author_name", ""),
-                            "date": commit.get("created_at", ""),
-                        },
-                    }
-                )
-        mr_file = gitlab_dir / "merge_requests.json"
-        if mr_file.exists():
-            with open(mr_file, encoding="utf-8") as f:
-                mrs = json.load(f)
-            for mr in mrs:
-                content = mr.get("title", "") + "\n" + mr.get("description", "")
-                for disc in mr.get("discussions", []):
-                    for note in disc.get("notes", []):
-                        content += f"\n{note['author']}: {note['body']}"
-                documents.append(
-                    {
-                        "id": f"gitlab_mr_{mr['iid']}",
-                        "source_type": "gitlab_merge_request",
-                        "title": mr.get("title", ""),
-                        "content": content,
-                        "content_type": "markdown",
-                        "metadata": {
-                            "iid": mr["iid"],
-                            "state": mr.get("state", ""),
-                            "author": mr.get("author", {}).get("username", ""),
-                        },
-                    }
-                )
-        files_dir = gitlab_dir / "files"
-        if files_dir.exists():
-            for code_file in files_dir.glob("*.txt"):
-                content = code_file.read_text(encoding="utf-8")
-                documents.append(
-                    {
-                        "id": f"gitlab_file_{code_file.stem}",
-                        "source_type": "gitlab_code",
-                        "title": code_file.stem,
-                        "content": content,
-                        "content_type": "plaintext",
-                        "metadata": {"path": code_file.stem},
-                    }
-                )
+        logger.info(f"Collecting documents from {source_name}: {source_dir}")
+
+        if source_name == "confluence":
+            for conflu_dir in source_dir.glob("*"):
+                if not conflu_dir.is_dir():
+                    continue
+                page_file = conflu_dir / "page.json"
+                if page_file.exists():
+                    with open(page_file, encoding="utf-8") as f:
+                        data = json.load(f)
+                    documents.append(
+                        {
+                            "id": f"confluence_{data['id']}",
+                            "source_type": "confluence",
+                            "title": data.get("title", ""),
+                            "content": data.get("body_view_html", "") or data.get("body_storage_raw", ""),
+                            "content_type": "html",
+                            "metadata": {
+                                "version": str(data.get("version", "")),
+                                "space": data.get("space", ""),
+                                "created_at": data.get("created_at", ""),
+                                "updated_at": data.get("updated_at", ""),
+                                "url": f"{conflu_dir.name}",
+                            },
+                        }
+                    )
+
+        elif source_name == "jira":
+            for jira_dir in source_dir.glob("*"):
+                if not jira_dir.is_dir():
+                    continue
+                issue_file = jira_dir / "issue.json"
+                if issue_file.exists():
+                    with open(issue_file, encoding="utf-8") as f:
+                        data = json.load(f)
+                    content = data.get("description", "")
+                    for comment in data.get("comments", []):
+                        content += f"\n\nComment by {comment['author']}: {comment['body']}"
+                    documents.append(
+                        {
+                            "id": f"jira_{data['key']}",
+                            "source_type": "jira",
+                            "title": data.get("summary", ""),
+                            "content": content,
+                            "content_type": "html",
+                            "metadata": {
+                                "key": data["key"],
+                                "status": data.get("status", ""),
+                                "priority": data.get("priority", ""),
+                                "assignee": data.get("assignee", ""),
+                                "created": data.get("created", ""),
+                                "updated": data.get("updated", ""),
+                            },
+                        }
+                    )
+
+        elif source_name == "gitlab":
+            for gitlab_dir in source_dir.glob("*"):
+                if not gitlab_dir.is_dir():
+                    continue
+                commits_file = gitlab_dir / "commits.json"
+                if commits_file.exists():
+                    with open(commits_file, encoding="utf-8") as f:
+                        commits = json.load(f)
+                    for commit in commits[:100]:
+                        content = commit.get("message", "")
+                        for diff in commit.get("diff", [])[:5]:
+                            content += f"\n{diff.get('new_path', '')}: {diff.get('diff', '')[:200]}"
+                        documents.append(
+                            {
+                                "id": f"gitlab_commit_{commit['id']}",
+                                "source_type": "gitlab_commit",
+                                "title": commit.get("title", commit["id"][:8]),
+                                "content": content,
+                                "content_type": "markdown",
+                                "metadata": {
+                                    "sha": commit["id"],
+                                    "author": commit.get("author_name", ""),
+                                    "date": commit.get("created_at", ""),
+                                },
+                            }
+                        )
+                mr_file = gitlab_dir / "merge_requests.json"
+                if mr_file.exists():
+                    with open(mr_file, encoding="utf-8") as f:
+                        mrs = json.load(f)
+                    for mr in mrs:
+                        content = mr.get("title", "") + "\n" + mr.get("description", "")
+                        for disc in mr.get("discussions", []):
+                            for note in disc.get("notes", []):
+                                content += f"\n{note['author']}: {note['body']}"
+                        documents.append(
+                            {
+                                "id": f"gitlab_mr_{mr['iid']}",
+                                "source_type": "gitlab_merge_request",
+                                "title": mr.get("title", ""),
+                                "content": content,
+                                "content_type": "markdown",
+                                "metadata": {
+                                    "iid": mr["iid"],
+                                    "state": mr.get("state", ""),
+                                    "author": mr.get("author", {}).get("username", ""),
+                                },
+                            }
+                        )
+                files_dir = gitlab_dir / "files"
+                if files_dir.exists():
+                    for code_file in files_dir.glob("*.txt"):
+                        content = code_file.read_text(encoding="utf-8")
+                        documents.append(
+                            {
+                                "id": f"gitlab_file_{code_file.stem}",
+                                "source_type": "gitlab_code",
+                                "title": code_file.stem,
+                                "content": content,
+                                "content_type": "plaintext",
+                                "metadata": {"path": code_file.stem},
+                            }
+                        )
+
     return documents
 
 
@@ -410,12 +423,60 @@ def main():
         wal.reset_all()
         logger.info("WAL has been reset")
 
-    # 1. Извлечение
+    # 1. Извлечение (параллельно с graceful degradation)
     extract_dirs = []
     if not args.skip_extract:
-        extract_dirs.append(run_extract_confluence(config, wal))
-        extract_dirs.append(run_extract_jira(config, wal))
-        extract_dirs.append(run_extract_gitlab(config, wal))
+        # Определяем какие экстракторы запускать
+        extractors_to_run = []
+        if config.get("confluence", {}).get("url"):
+            extractors_to_run.append(("confluence", run_extract_confluence))
+        if config.get("jira", {}).get("url"):
+            extractors_to_run.append(("jira", run_extract_jira))
+        if config.get("gitlab", {}).get("url"):
+            extractors_to_run.append(("gitlab", run_extract_gitlab))
+
+        if not extractors_to_run:
+            logger.warning("No extractors configured (confluence/jira/gitlab URLs missing)")
+        else:
+            names = [e[0] for e in extractors_to_run]
+            logger.info(
+                f"Starting {len(extractors_to_run)} extractors in parallel: {names}"
+            )
+            failed_extractors = []
+            default_dirs = {
+                "confluence": Path(config.get("confluence", {}).get("output_dir", "./raw_data/confluence")),
+                "jira": Path(config.get("jira", {}).get("output_dir", "./raw_data/jira")),
+                "gitlab": Path(config.get("gitlab", {}).get("output_dir", "./raw_data/gitlab")),
+            }
+
+            with ThreadPoolExecutor(max_workers=len(extractors_to_run), thread_name_prefix="etl") as pool:
+                futures = {
+                    pool.submit(_run_extractor_safe, name, fn, config, wal): name
+                    for name, fn in extractors_to_run
+                }
+                for future in as_completed(futures):
+                    name, output_dir, error = future.result()
+                    if error:
+                        failed_extractors.append((name, error))
+                        logger.warning(f"Extractor '{name}' failed — continuing with other extractors")
+                        extract_dirs.append(default_dirs[name])
+                    else:
+                        extract_dirs.append(output_dir)
+
+            if failed_extractors:
+                failed_names = [f[0] for f in failed_extractors]
+                logger.warning(
+                    f"=== {len(failed_extractors)} extractor(s) failed: {failed_names} ==="
+                )
+                for name, err in failed_extractors:
+                    logger.warning(f"  {name}: {err}")
+            if len(failed_extractors) == len(extractors_to_run):
+                logger.error("All extractors failed — pipeline cannot continue")
+                sys.exit(1)
+            succeeded = len(extractors_to_run) - len(failed_extractors)
+            logger.info(
+                f"Extraction completed: {succeeded}/{len(extractors_to_run)} succeeded"
+            )
     else:
         # Используем уже существующие директории из конфига
         extract_dirs = [
