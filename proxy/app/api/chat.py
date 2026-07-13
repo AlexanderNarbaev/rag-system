@@ -9,6 +9,8 @@ import json
 import logging
 import os
 import time
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -70,7 +72,7 @@ class ChatCompletionResponse(BaseModel):
     usage: dict[str, int] = Field(default={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
     rag_feedback_id: str | None = None
     rag_confidence: float | None = None
-    rag_sources: list[dict] | None = None
+    rag_sources: list[dict[str, Any]] | None = None
     ragas_scores: dict[str, float] | None = None
 
 
@@ -117,7 +119,7 @@ class StreamOptimizer:
         self.initial_chunk_sent = True
         return 'data: {"role":"initial_chunk"}\n\n'
 
-    def format_chunk(self, chunk: dict) -> str:
+    def format_chunk(self, chunk: dict[str, Any]) -> str:
         """Format a single chunk as an SSE event."""
         return f"data: {json.dumps(chunk)}\n\n"
 
@@ -132,12 +134,12 @@ def generate_request_id() -> str:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/v1/chat/completions")
+@router.post("/v1/chat/completions", response_model=None)
 async def chat_completions(
     request: ChatCompletionRequest,
     raw_request: Request,
     user: UserContext = Depends(get_auth_context),  # noqa: B008
-):
+) -> ChatCompletionResponse | StreamingResponse:
     """Main chat endpoint (OpenAI compatible)."""
     # Deferred imports from main.py to preserve test mock compatibility
     import proxy.app.main as _main
@@ -168,11 +170,11 @@ async def chat_completions(
         raise HTTPException(status_code=400, detail="No user message found")
 
     # Extract version from query
-    version = request.rag_version or _main.extract_version_from_query(user_query)
+    version = request.rag_version or _main.extract_version_from_query(user_query)  # type: ignore[attr-defined]
 
     # Log incoming request
     client_ip = raw_request.client.host if raw_request.client else "unknown"
-    if _main.LOG_REQUESTS:
+    if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
         role_info = ",".join(user.roles) if user.is_authenticated else "anonymous"
         safe_query = InputValidator.sanitize_for_log(user_query[:100])
         logger.info(
@@ -187,9 +189,9 @@ async def chat_completions(
         rag_context, _, _, sources, _ = await _main.process_rag_query(
             user_query=user_query,
             version=version,
-            force_refresh=request.rag_force_refresh,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
+            force_refresh=request.rag_force_refresh or False,
+            temperature=request.temperature or 0.2,
+            max_tokens=request.max_tokens or 4096,
             stream=True,
             other_messages=other_messages,
             user_context=user,
@@ -223,7 +225,7 @@ async def chat_completions(
         return skip_response
 
     # LangGraph orchestrator path
-    if _main.USE_LANGGRAPH and _main.orchestrator:
+    if _main.USE_LANGGRAPH and _main.orchestrator:  # type: ignore[attr-defined]
         final_response = await _main.orchestrator.ainvoke(
             {
                 "query": user_query,
@@ -238,7 +240,7 @@ async def chat_completions(
         else:
             response_text = final_response["answer"]
             context = final_response.get("context", "")
-            orchestrator_sources: list[dict] = []
+            orchestrator_sources: list[dict[str, Any]] = []
             from proxy.app.core.context import compute_chunk_hash
 
             for chunk, score in final_response.get("reranked_chunks", []):
@@ -296,7 +298,7 @@ async def chat_completions(
                     feedback_id=feedback_id,
                     client_ip=client_ip,
                 )
-            if _main.LOG_REQUESTS:
+            if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
                 from proxy.app.core.hitl import log_interaction
 
                 await log_interaction(
@@ -311,7 +313,7 @@ async def chat_completions(
     # Standard RAG pipeline
     if request.stream:
 
-        async def event_generator():
+        async def event_generator() -> AsyncIterator[str]:
             accumulated_answer = []
             optimizer = StreamOptimizer()
             try:
@@ -321,15 +323,15 @@ async def chat_completions(
                 rag_context, messages_for_llm, _, _, _ = await _main.process_rag_query(
                     user_query=user_query,
                     version=version,
-                    force_refresh=request.rag_force_refresh,
-                    temperature=request.temperature,
-                    max_tokens=request.max_tokens,
+                    force_refresh=request.rag_force_refresh or False,
+                    temperature=request.temperature or 0.2,
+                    max_tokens=request.max_tokens or 4096,
                     stream=True,
                     other_messages=other_messages,
                     user_context=user,
                     top_k_override=request.rag_top_k,
                 )
-                async for chunk in _main.stream_completion(messages_for_llm, request.temperature, request.max_tokens):
+                async for chunk in _main.stream_completion(messages_for_llm, request.temperature or 0.2, request.max_tokens or 4096):  # type: ignore[attr-defined,arg-type]
                     choices = chunk.get("choices", [])
                     delta_content = choices[0].get("delta", {}).get("content", "") if choices else ""
                     if delta_content:
@@ -372,22 +374,27 @@ async def chat_completions(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     else:
         # Non-streaming
-        response_text, rag_context, from_cache, sources, ragas_scores = await _main.process_rag_query(
+        _rag_result = await _main.process_rag_query(
             user_query=user_query,
             version=version,
-            force_refresh=request.rag_force_refresh,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
+            force_refresh=request.rag_force_refresh or False,
+            temperature=request.temperature or 0.2,
+            max_tokens=request.max_tokens or 4096,
             stream=False,
             other_messages=other_messages,
             user_context=user,
             top_k_override=request.rag_top_k,
         )
+        response_text = str(_rag_result[0])
+        rag_ctx: str = str(_rag_result[1])
+        from_cache = _rag_result[2]
+        sources = _rag_result[3]
+        ragas_scores = _rag_result[4]
         from proxy.app.core.confidence import compute_confidence
         from proxy.app.core.hitl import generate_feedback_id
 
         feedback_id = generate_feedback_id()
-        confidence = compute_confidence(query=user_query, context=rag_context, answer=response_text)
+        confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text)
         completion = ChatCompletionResponse(
             id=request_id,
             created=int(time.time()),
@@ -428,7 +435,7 @@ async def chat_completions(
                 feedback_id=feedback_id,
                 client_ip=client_ip,
             )
-        if _main.LOG_REQUESTS:
+        if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
             from proxy.app.core.hitl import log_interaction
 
             await log_interaction(

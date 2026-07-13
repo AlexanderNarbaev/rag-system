@@ -9,12 +9,12 @@ Uses boto3 (S3-compatible API) for MinIO access.
 """
 
 import logging
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 try:
-    import boto3  # type: ignore[import-untyped]
-    from botocore.config import Config as BotoConfig  # type: ignore[import-untyped]
-    from botocore.exceptions import ClientError, EndpointConnectionError  # type: ignore[import-untyped]
+    import boto3
+    from botocore.config import Config as BotoConfig
+    from botocore.exceptions import ClientError, EndpointConnectionError
 
     HAS_BOTO3 = True
 except ImportError:
@@ -119,7 +119,7 @@ class MinioClient:
         """
         self._ensure_bucket()
         client = self._get_client()
-        extra_args: dict = {"ContentType": content_type}
+        extra_args: dict[str, Any] = {"ContentType": content_type}
         if metadata:
             extra_args["Metadata"] = metadata
         try:
@@ -147,7 +147,7 @@ class MinioClient:
         client = self._get_client()
         try:
             response = client.get_object(Bucket=self._bucket, Key=object_name)
-            data = response["Body"].read()
+            data: bytes = response["Body"].read()
             logger.info("Downloaded '%s' from bucket '%s'", object_name, self._bucket)
             return data
         except ClientError as exc:
@@ -162,7 +162,7 @@ class MinioClient:
                 component="minio",
             ) from exc
 
-    def list_files(self, prefix: str = "") -> list[dict]:
+    def list_files(self, prefix: str = "") -> list[dict[str, Any]]:
         """List files in the bucket, optionally filtered by prefix.
 
         Args:
@@ -177,7 +177,7 @@ class MinioClient:
         client = self._get_client()
         try:
             paginator = client.get_paginator("list_objects_v2")
-            results: list[dict] = []
+            results: list[dict[str, Any]] = []
             for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
                 for obj in page.get("Contents", []):
                     results.append(
@@ -214,7 +214,7 @@ class MinioClient:
                 component="minio",
             ) from exc
 
-    def get_file_metadata(self, object_name: str) -> dict:
+    def get_file_metadata(self, object_name: str) -> dict[str, Any]:
         """Get metadata for a file without downloading it.
 
         Args:
@@ -268,7 +268,7 @@ class MinioClient:
         """
         client = self._get_client()
         try:
-            url = client.generate_presigned_url(
+            url: str = client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": self._bucket, "Key": object_name},
                 ExpiresIn=expiration,

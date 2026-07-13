@@ -47,7 +47,8 @@ class MetricThreshold:
         comparator = self._COMPARATORS.get(self.comparison)
         if comparator is None:
             raise ValueError(f"Unknown comparison {self.comparison!r}")
-        return comparator(value, self.threshold)
+        result: bool = comparator(value, self.threshold)
+        return result
 
 
 @dataclass
@@ -228,8 +229,8 @@ class EvalGate:
             lines.append("Thresholds")
             lines.append("-" * 60)
             for t in result.thresholds:
-                value = result.metrics.get(t.metric_name)
-                passed = t.evaluate(value) if value is not None else None
+                metric_value: float | None = result.metrics.get(t.metric_name)
+                passed: bool | None = t.evaluate(metric_value) if metric_value is not None else None
                 status_mark = "PASS" if passed else ("FAIL" if passed is False else "N/A")
                 lines.append(f"  {t.metric_name} {t.comparison} {t.threshold} [{status_mark}] ({t.severity})")
 

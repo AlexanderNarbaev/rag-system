@@ -67,7 +67,8 @@ class OpenAIAdapter(ProviderAdapter):
         if data_str == "[DONE]":
             return {"_done": True}
         try:
-            return json.loads(data_str)
+            result: dict[str, Any] = json.loads(data_str)
+            return result
         except json.JSONDecodeError:
             return None
 

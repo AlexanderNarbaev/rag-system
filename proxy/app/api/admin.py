@@ -7,6 +7,7 @@ import threading
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -108,9 +109,9 @@ class _CanaryState:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._models: dict[str, dict] = {}
+        self._models: dict[str, dict[str, Any]] = {}
 
-    def set_split(self, model_name: str, traffic_split: float) -> dict:
+    def set_split(self, model_name: str, traffic_split: float) -> dict[str, Any]:
         with self._lock:
             if model_name not in self._models:
                 self._models[model_name] = {
@@ -129,7 +130,7 @@ class _CanaryState:
                 entry["phase"] = "idle"
             return dict(entry)
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         with self._lock:
             result: dict[str, dict[str, float | str | None]] = {}
             for name, entry in self._models.items():
@@ -145,9 +146,9 @@ class _TrainingJobStore:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._jobs: dict[str, dict] = {}
+        self._jobs: dict[str, dict[str, Any]] = {}
 
-    def create(self, trainer_type: str, config: dict) -> str:
+    def create(self, trainer_type: str, config: dict[str, Any]) -> str:
         job_id = f"train-{uuid.uuid4().hex[:12]}"
         with self._lock:
             self._jobs[job_id] = {
@@ -162,11 +163,11 @@ class _TrainingJobStore:
             }
         return job_id
 
-    def get(self, job_id: str) -> dict | None:
+    def get(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
             return self._jobs.get(job_id)
 
-    def update(self, job_id: str, **kwargs) -> None:
+    def update(self, job_id: str, **kwargs: Any) -> None:
         with self._lock:
             if job_id in self._jobs:
                 self._jobs[job_id].update(kwargs)
@@ -175,18 +176,18 @@ class _TrainingJobStore:
 _training_jobs = _TrainingJobStore()
 
 
-def _get_model_registry():
+def _get_model_registry() -> Any:
     """Get model registry instance. Tests mock at proxy.app.main._get_model_registry."""
     from proxy.app.model_evolution.model_registry import ModelRegistry
 
     return ModelRegistry()
 
 
-def _get_model_registry_from_main():
+def _get_model_registry_from_main() -> Any:
     """Get the _get_model_registry callable from main module for test mock compatibility."""
     import proxy.app.main as _main
 
-    return _main._get_model_registry()
+    return _main._get_model_registry()  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +198,7 @@ def _get_model_registry_from_main():
 @router.post("/v1/admin/warmup")
 async def admin_warmup(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> JSONResponse:
     """Trigger model warm-up (admin only).
 
     Runs embedder, reranker, and LLM warmup to pre-load models into memory.
@@ -222,7 +223,7 @@ async def admin_warmup(
 async def admin_models_train(
     request: TrainRequest,
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> TrainResponse:
     """Trigger a model training job (admin only).
 
     Launches an async training job and returns immediately with a job_id.
@@ -340,7 +341,7 @@ async def admin_models_train(
 async def admin_models_status(
     job_id: str,
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> JSONResponse:
     """Check training job status (admin only)."""
     job = _training_jobs.get(job_id)
     if job is None:
@@ -351,7 +352,7 @@ async def admin_models_status(
 @router.get("/v1/admin/models")
 async def admin_models_list(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> JSONResponse:
     """List all registered models with versions and stages (admin only)."""
     registry = _get_model_registry_from_main()
     models_data = {}
@@ -378,7 +379,7 @@ async def admin_models_list(
 async def admin_models_promote(
     request: PromoteRequest,
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> PromoteResponse:
     """Promote a model version through staging -> canary -> production (admin only)."""
     registry = _get_model_registry_from_main()
     try:
@@ -402,7 +403,7 @@ async def admin_models_promote(
 async def admin_models_rollback(
     request: RollbackRequest,
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> RollbackResponse:
     """Rollback to previous production version (admin only)."""
     registry = _get_model_registry_from_main()
     try:
@@ -433,7 +434,7 @@ async def admin_models_rollback(
 async def admin_models_evaluate(
     request: EvaluateRequest,
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> EvaluateResponse:
     """Run eval gate on model metrics (admin only).
 
     Default thresholds: accuracy >= 0.90, weighted_f1 >= 0.85, mrr >= 0.70.
@@ -492,7 +493,7 @@ async def admin_models_evaluate(
 async def admin_models_canary_split(
     request: CanarySplitRequest,
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> CanarySplitResponse:
     """Set canary traffic split for a model (admin only).
 
     Sets the fraction of traffic routed to the canary version.
@@ -509,7 +510,7 @@ async def admin_models_canary_split(
 @router.get("/v1/admin/models/canary/status")
 async def admin_models_canary_status(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
-):
+) -> JSONResponse:
     """Get current canary deployment status and metrics (admin only)."""
     status = _canary_state.get_status()
     return JSONResponse(status_code=200, content=status)

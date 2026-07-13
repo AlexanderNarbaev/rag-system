@@ -3,13 +3,14 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
 class TrainingDataset:
-    slm_data: list[dict] = field(default_factory=list)
-    llm_data: list[dict] = field(default_factory=list)
-    reranker_data: list[dict] = field(default_factory=list)
+    slm_data: list[dict[str, Any]] = field(default_factory=list)
+    llm_data: list[dict[str, Any]] = field(default_factory=list)
+    reranker_data: list[dict[str, Any]] = field(default_factory=list)
 
 
 class DataProcessor:
@@ -72,12 +73,12 @@ class DataProcessor:
 
     def split_train_val_test(
         self,
-        data: list[dict],
+        data: list[dict[str, Any]],
         train_ratio: float = 0.8,
         val_ratio: float = 0.1,
         test_ratio: float = 0.1,
         seed: int = 42,
-    ) -> tuple[list[dict], list[dict], list[dict]]:
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         import random
 
         rng = random.Random(seed)
@@ -88,10 +89,10 @@ class DataProcessor:
         val_end = train_end + int(n * val_ratio)
         return shuffled[:train_end], shuffled[train_end:val_end], shuffled[val_end:]
 
-    def format_for_slm(self, data: list[dict]) -> list[dict]:
+    def format_for_slm(self, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [{"text": d["query"], "label": d.get("intent", "")} for d in data]
 
-    def format_for_llm(self, data: list[dict]) -> list[dict]:
+    def format_for_llm(self, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [
             {
                 "messages": [
@@ -102,7 +103,7 @@ class DataProcessor:
             for d in data
         ]
 
-    def _save_jsonl(self, path: Path, data: list[dict]) -> None:
+    def _save_jsonl(self, path: Path, data: list[dict[str, Any]]) -> None:
         with open(path, "w") as f:
             for item in data:
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")

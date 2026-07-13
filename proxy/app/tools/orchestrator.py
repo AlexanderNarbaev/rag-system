@@ -191,11 +191,11 @@ class ParallelExecutor:
             coros = []
             level_order: list[str] = []
             for name in level:
-                tc = name_to_call.get(name)
-                if tc is None:
+                tool_call: ToolCall | None = name_to_call.get(name)
+                if tool_call is None:
                     continue
                 level_order.append(name)
-                coros.append(self._execute_with_semaphore(tc, registry, context))
+                coros.append(self._execute_with_semaphore(tool_call, registry, context))
 
             if not coros:
                 continue
@@ -286,7 +286,7 @@ def _compute_backoff(retry_policy: Any, attempt: int) -> float:
     if retry_policy is None:
         return 0.0
 
-    base = retry_policy.initial_delay_seconds
+    base: float = retry_policy.initial_delay_seconds
     strategy = getattr(retry_policy, "backoff", "exponential")
 
     if strategy == "constant":

@@ -8,6 +8,7 @@ import asyncio
 import json
 import time
 from collections.abc import Callable
+from typing import Any
 
 from fastapi import FastAPI
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -119,7 +120,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Returns 429 with Retry-After header when limit is exceeded.
     """
 
-    def __init__(self, app, limiter: RateLimiter):
+    def __init__(self, app: Any, limiter: RateLimiter):
         super().__init__(app)
         self._limiter = limiter
 
@@ -143,7 +144,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 client_host = ips[idx]
         return f"ip:{client_host}"
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Enforce rate limits on incoming requests.
 
         Returns 429 with Retry-After header when limit is exceeded.
@@ -153,7 +154,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if not allowed:
             retry_seconds = max(1, int(retry_after) + 1)
             return Response(
-                content=json.dumps(
+            content=json.dumps(
                     {
                         "error": {
                             "message": "Rate limit exceeded. Please wait before retrying.",
@@ -166,7 +167,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 media_type="application/json",
                 headers={"Retry-After": str(retry_seconds)},
             )
-        response = await call_next(request)
+        response: Response = await call_next(request)
         return response
 
 

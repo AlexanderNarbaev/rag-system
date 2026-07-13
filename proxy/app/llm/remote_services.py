@@ -151,7 +151,7 @@ class RemoteEmbeddingClient:
 
         return vecs[0] if single else vecs
 
-    def encode_sparse(self, text: str) -> dict | None:
+    def encode_sparse(self, text: str) -> dict[str, Any] | None:
         """Remote services typically don't support sparse vectors.
 
         Returns None to signal 'not supported' — caller should use dense-only.
@@ -291,7 +291,7 @@ class RemoteRerankerClient:
         return self._max_length
 
     @max_length.setter
-    def max_length(self, value: int):
+    def max_length(self, value: int) -> None:
         self._max_length = value
 
 

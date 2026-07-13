@@ -9,6 +9,7 @@ Reference: "Precise Zero-Shot Dense Retrieval without Relevance Labels"
 """
 
 import logging
+from typing import Any
 
 from proxy.app.core.retrieval import embedder, hybrid_search
 from proxy.app.llm.slm import _call_slm_sync
@@ -71,7 +72,7 @@ def embed_hypothetical(hypothesis: str) -> list[float]:
     try:
         vec = embedder.encode(hypothesis, normalize_embeddings=True).tolist()
         logger.debug(f"HyDE embedded hypothesis: {len(vec)}-dim")
-        return vec
+        return [float(x) for x in vec]
     except Exception as e:
         logger.warning(f"HyDE embedding failed: {e}")
         return []
@@ -81,7 +82,7 @@ def hyde_search(
     query: str,
     version: str | None = None,
     top_k: int | None = None,
-) -> list:
+) -> list[Any]:
     """Full HyDE pipeline: generate hypothetical answer, embed it, search Qdrant.
 
     Args:
@@ -112,7 +113,7 @@ def hyde_search(
 
         # Use the hypothetical embedding for dense search
         # We bypass the normal hybrid_search flow to use our custom embedding
-        from proxy.app.core.retrieval import COLLECTION_NAME, qdrant_client
+        from proxy.app.core.retrieval import COLLECTION_NAME, qdrant_client  # type: ignore[attr-defined]
 
         if qdrant_client is None:
             from proxy.app.core.retrieval import initialize_retrieval
@@ -126,12 +127,13 @@ def hyde_search(
             return hybrid_search(query=query, version=version, top_k=top_k)
 
         # Build version filter if needed
-        filter_conditions = []
+        filter_conditions: list[Any] = []
         if version:
             filter_conditions.append(models.FieldCondition(key="version", match=models.MatchValue(value=version)))
         q_filter = models.Filter(must=filter_conditions) if filter_conditions else None
 
         # Dense search with hypothetical embedding
+        assert qdrant_client is not None, "qdrant_client must be initialized"
         response = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
             query=hyp_vec,

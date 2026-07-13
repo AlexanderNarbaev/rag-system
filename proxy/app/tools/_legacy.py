@@ -42,7 +42,7 @@ class ToolResult:
 class ToolRegistry:
     """Registry for tool definitions with register/unregister/lookup."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools: dict[str, ToolDefinition] = {}
 
     def register(self, tool: ToolDefinition) -> None:
@@ -197,11 +197,11 @@ def get_tool_registry() -> ToolRegistry:
     """Get or create the global tool registry with built-in tools."""
     import sys
 
-    from . import TOOLS_ENABLED
+    from . import TOOLS_ENABLED  # type: ignore[attr-defined]
 
     _tools_pkg = sys.modules[__package__]
     if _tools_pkg._global_registry is None:
-        _tools_pkg._global_registry = ToolRegistry()
+        _tools_pkg._global_registry = ToolRegistry()  # type: ignore[attr-defined]
         if TOOLS_ENABLED:
             _tools_pkg._global_registry.register(
                 ToolDefinition(
@@ -252,4 +252,4 @@ def get_tool_registry() -> ToolRegistry:
                     category="metadata",
                 )
             )
-    return _tools_pkg._global_registry
+    return _tools_pkg._global_registry  # type: ignore[no-any-return]

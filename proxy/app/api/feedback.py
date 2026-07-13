@@ -34,7 +34,7 @@ async def submit_feedback(
     request: FeedbackRequest,
     raw_request: Request,
     user: UserContext = Depends(require_role(Role.EXPERT)),  # noqa: B008
-):
+) -> FeedbackResponse:
     """Submit feedback on a RAG response."""
     from proxy.app.core.hitl import FeedbackType, get_logger
 

@@ -12,6 +12,7 @@ and falls through to local auth.
 """
 
 import logging
+from typing import Any
 
 from proxy.app.auth.user_db import get_user_db
 from proxy.app.shared.config import (
@@ -24,7 +25,7 @@ from proxy.app.shared.config import (
 logger = logging.getLogger(__name__)
 
 
-async def authenticate_ldap(username: str, password: str) -> dict | None:
+async def authenticate_ldap(username: str, password: str) -> dict[str, Any] | None:
     """Authenticate a user against LDAP/AD.
 
     On successful bind:
@@ -81,7 +82,7 @@ def _build_user_dn(username: str) -> str:
     return dn
 
 
-async def _sync_ldap_user(username: str) -> dict:
+async def _sync_ldap_user(username: str) -> dict[str, Any]:
     """Ensure a local user record exists for an LDAP-authenticated user.
 
     Returns the user dict from the local database.

@@ -7,6 +7,7 @@ methods for OpenAI, Anthropic, and JSON Schema.
 
 from __future__ import annotations
 
+import builtins
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -46,12 +47,12 @@ class ToolParam:
     """Single tool parameter definition with type, description, and validation."""
 
     name: str
-    type: type | str
+    type: builtins.type | str
     description: str = ""
     required: bool = True
     default: Any = _UNSET
     enum: list[str] | None = None
-    items_type: type | str | None = None
+    items_type: builtins.type | str | None = None
 
     def to_json_schema_property(self) -> dict[str, Any]:
         json_type = _TYPE_MAP.get(self.type, "string")

@@ -40,7 +40,7 @@ def _register_metric(metric_cls: Any, name: str, documentation: str, labelnames:
     # Check if metric name is already registered via any collector
     for collector in list(registry._collector_to_names):  # noqa: SLF001
         try:
-            existing_names = registry._get_names(collector)  # noqa: SLF001
+            existing_names = registry._get_names(collector)  # type: ignore[no-untyped-call]  # noqa: SLF001
         except Exception:
             continue
         if name in existing_names and isinstance(collector, metric_cls):

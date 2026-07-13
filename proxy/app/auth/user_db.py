@@ -19,6 +19,7 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import bcrypt
 
@@ -82,7 +83,7 @@ class UserDatabase:
         self._db_path = db_path
         self._initialized = False
 
-    async def _ensure_db(self):
+    async def _ensure_db(self) -> None:
         """Lazy initialization: create directory, execute schema, migrate legacy users."""
         if self._initialized:
             return
@@ -105,7 +106,7 @@ class UserDatabase:
         self._initialized = True
         logger.info("User database initialized at %s", self._db_path)
 
-    async def _migrate_legacy_users(self):
+    async def _migrate_legacy_users(self) -> None:
         """Import users from AUTH_VALID_USERS JSON env var into SQLite.
 
         Only runs if the users table is empty and AUTH_VALID_USERS is set.
@@ -175,7 +176,7 @@ class UserDatabase:
         groups: list[str] | None = None,
         access_level: str = "user",
         namespace: str = "",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a new user with bcrypt-hashed password.
 
         Returns:
@@ -208,14 +209,14 @@ class UserDatabase:
         logger.info("User created: %s (id=%s)", username, user_id)
         return {"user_id": user_id, "username": username, "created_at": now}
 
-    async def get_user(self, user_id: str) -> dict | None:
+    async def get_user(self, user_id: str) -> dict[str, Any] | None:
         """Get user by ID."""
         await self._ensure_db()
         cursor = await self._conn.execute("SELECT * FROM users WHERE id = ? AND is_active = 1", (user_id,))
         row = await cursor.fetchone()
         return self._row_to_dict(row) if row else None
 
-    async def get_user_by_username(self, username: str) -> dict | None:
+    async def get_user_by_username(self, username: str) -> dict[str, Any] | None:
         """Get user by username (case-insensitive)."""
         await self._ensure_db()
         cursor = await self._conn.execute(
@@ -225,7 +226,7 @@ class UserDatabase:
         row = await cursor.fetchone()
         return self._row_to_dict(row) if row else None
 
-    async def verify_password(self, username: str, password: str) -> dict | None:
+    async def verify_password(self, username: str, password: str) -> dict[str, Any] | None:
         """Verify password for a user. Returns user dict or None."""
         user = await self.get_user_by_username(username)
         if not user:
@@ -236,7 +237,7 @@ class UserDatabase:
             return user
         return None
 
-    async def update_user(self, user_id: str, **fields) -> bool:
+    async def update_user(self, user_id: str, **fields: Any) -> bool:
         """Update user fields. Returns True if updated."""
         await self._ensure_db()
 
@@ -269,7 +270,7 @@ class UserDatabase:
         await self._conn.commit()
         return cursor.rowcount > 0
 
-    async def list_users(self, limit: int = 100, offset: int = 0) -> list[dict]:
+    async def list_users(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         """List active users."""
         await self._ensure_db()
         cursor = await self._conn.execute(
@@ -301,7 +302,7 @@ class UserDatabase:
         await self._conn.commit()
         return token_id
 
-    async def consume_refresh_token(self, raw_token: str) -> dict | None:
+    async def consume_refresh_token(self, raw_token: str) -> dict[str, Any] | None:
         """Validate and consume a refresh token. Returns user dict or None."""
         await self._ensure_db()
 
@@ -360,7 +361,7 @@ class UserDatabase:
         row = await cursor.fetchone()
         return row is not None
 
-    async def _cleanup_blacklist(self):
+    async def _cleanup_blacklist(self) -> None:
         """Remove expired blacklist entries. Limit total entries."""
         now = datetime.now(UTC).isoformat()
 
@@ -383,7 +384,7 @@ class UserDatabase:
 
     # ── Cleanup ──────────────────────────────────────────────────────────────
 
-    async def cleanup_expired(self):
+    async def cleanup_expired(self) -> None:
         """Periodic cleanup of expired refresh tokens."""
         await self._ensure_db()
         now = datetime.now(UTC).isoformat()
@@ -391,7 +392,7 @@ class UserDatabase:
         await self._conn.execute("DELETE FROM refresh_tokens WHERE expires_at < ?", (now,))
         await self._conn.commit()
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the database connection."""
         if hasattr(self, "_conn") and self._conn:
             await self._conn.close()
@@ -400,7 +401,7 @@ class UserDatabase:
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _row_to_dict(row) -> dict:
+    def _row_to_dict(row: Any) -> dict[str, Any]:
         """Convert a SQLite row to a dict with parsed JSON fields."""
         columns = [
             "id",

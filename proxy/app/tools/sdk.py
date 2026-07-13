@@ -11,8 +11,9 @@ from __future__ import annotations
 import inspect
 import types
 import typing
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, Union, cast, get_args, get_origin
 
 from .definition import (
     _UNSET,
@@ -40,7 +41,7 @@ def _unwrap_annotated(typ: type) -> type:
     if origin is Annotated:
         args = get_args(typ)
         if args:
-            return args[0]
+            return cast(type, args[0])
     return typ
 
 
@@ -86,7 +87,7 @@ def _extract_items_type(typ: type) -> type | None:
     if origin is list:
         args = get_args(typ)
         if args:
-            return args[0]
+            return cast(type, args[0])
     return None
 
 
@@ -107,7 +108,7 @@ def _is_tool_context(typ: type) -> bool:
         return False
 
 
-def json_schema_from_func(func: typing.Callable) -> dict[str, Any]:
+def json_schema_from_func(func: Callable[..., Any]) -> dict[str, Any]:
     """Generate JSON Schema from Python function type hints.
 
     Mapping:
@@ -207,7 +208,7 @@ def tool(
     retry_policy: RetryPolicy | None = None,
     visibility: ToolVisibility = ToolVisibility.PUBLIC,
     depends_on: list[str] | None = None,
-):
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to register a function as a tool.
 
     Usage::
@@ -224,7 +225,7 @@ def tool(
     - The decorated function remains callable as normal
     """
 
-    def decorator(func: typing.Callable) -> typing.Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         tool_name = name or func.__name__
         tool_description = description or ""
         if not tool_description and func.__doc__:
@@ -312,8 +313,8 @@ class ToolBuilder:
         self._name = name
         self._description: str = ""
         self._parameters: list[ToolParam] = []
-        self._handler: typing.Callable | None = None
-        self._async_handler: typing.Callable | None = None
+        self._handler: Callable[..., Any] | None = None
+        self._async_handler: Callable[..., Any] | None = None
         self._category: str = "general"
         self._tags: list[str] = []
         self._timeout: float = 30.0
@@ -348,11 +349,11 @@ class ToolBuilder:
         )
         return self
 
-    def with_handler(self, handler: typing.Callable) -> ToolBuilder:
+    def with_handler(self, handler: Callable[..., Any]) -> ToolBuilder:
         self._handler = handler
         return self
 
-    def with_async_handler(self, handler: typing.Callable) -> ToolBuilder:
+    def with_async_handler(self, handler: Callable[..., Any]) -> ToolBuilder:
         self._async_handler = handler
         return self
 

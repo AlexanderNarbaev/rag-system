@@ -20,6 +20,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from math import exp
+from typing import Any, cast
 
 import numpy as np
 
@@ -192,12 +193,13 @@ def _compute_dense_embedding(text: str) -> list[float]:
         if cached is not None:
             # Cache may return already-parsed list or raw JSON string
             if isinstance(cached, list):
-                return cached
+                return cast(list[float], cached)
             try:
-                return json.loads(cached)
+                return cast(list[float], json.loads(cached))
             except (json.JSONDecodeError, TypeError):
-                return cached
-    vec = embedder.encode(text, normalize_embeddings=True).tolist()
+                return cast(list[float], cached)
+    assert embedder is not None, "embedder must be initialized"
+    vec: list[float] = embedder.encode(text, normalize_embeddings=True).tolist()
     if cache_manager:
         cache_manager.set_sync(cache_key, json.dumps(vec), ttl=3600)
     _embedding_cache.set(text, vec)
@@ -209,19 +211,19 @@ def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
     Вычисляет sparse вектор через bge-m3 (если поддерживается).
     Возвращает SparseVector или None.
     """
-    if hasattr(embedder, "encode_sparse"):
+    if embedder is not None and hasattr(embedder, "encode_sparse"):
         sparse = embedder.encode_sparse(text)
         if isinstance(sparse, dict) and "indices" in sparse and "values" in sparse:
             return models.SparseVector(indices=sparse["indices"], values=sparse["values"])
     return None
 
 
-def reciprocal_rank_fusion(results_dense: list, results_sparse: list, k: int = 60) -> list:
+def reciprocal_rank_fusion(results_dense: list[Any], results_sparse: list[Any], k: int = 60) -> list[Any]:
     """
     RRF слияние двух списков результатов (каждый элемент должен иметь .id и .score).
     Возвращает объединённый список, отсортированный по RRF-скорy.
     """
-    scores = {}
+    scores: dict[Any, float] = {}
     for rank, hit in enumerate(results_dense, start=1):
         scores[hit.id] = scores.get(hit.id, 0) + 1.0 / (k + rank)
     for rank, hit in enumerate(results_sparse, start=1):
@@ -234,7 +236,7 @@ def reciprocal_rank_fusion(results_dense: list, results_sparse: list, k: int = 6
     return [all_results[hid] for hid in sorted_ids if hid in all_results]
 
 
-def knee_point_pruning(results: list, sensitivity: float = 0.5) -> list:
+def knee_point_pruning(results: list[Any], sensitivity: float = 0.5) -> list[Any]:
     """
     Dynamic top-k using knee-point detection on score curve.
 
@@ -283,21 +285,21 @@ def knee_point_pruning(results: list, sensitivity: float = 0.5) -> list:
         dist = np.linalg.norm(point - proj_point)
         distances.append(dist)
 
-    distances = np.array(distances)
+    dist_arr = np.array(distances)
 
     # Apply sensitivity: scale distances
-    distances = distances * (1 + sensitivity)
+    dist_arr = dist_arr * (1 + sensitivity)
 
     # Knee point is where distance is maximum
-    knee_idx = np.argmax(distances)
+    knee_idx_raw = int(np.argmax(dist_arr))
 
     # Ensure minimum 2 results
-    knee_idx = max(knee_idx, 1)
+    knee_idx = max(knee_idx_raw, 1)
 
     return results[: knee_idx + 1]
 
 
-def filter_results_by_score(results: list) -> tuple[list, str]:
+def filter_results_by_score(results: list[Any]) -> tuple[list[Any], str]:
     """
     Two-level score filtering: strong vs borderline sources.
 
@@ -331,7 +333,7 @@ def hybrid_search(
     top_k: int = 50,
     namespace: str | None = None,
     lang: str | None = None,
-) -> list:
+) -> list[Any]:
     """
     Гибридный поиск в Qdrant: dense + sparse.
     Фильтрация по версии и namespace (для мультитенантности).
@@ -360,14 +362,16 @@ def hybrid_search(
     if namespace:
         filter_conditions.append(models.FieldCondition(key="namespace", match=models.MatchValue(value=namespace)))
 
-    q_filter = models.Filter(must=filter_conditions) if filter_conditions else None
+    q_filter = models.Filter(must=list(filter_conditions)) if filter_conditions else None
 
     # Dense поиск
     dense_vec = _compute_dense_embedding(query)
-    if _get_cb:
+    assert qdrant_client is not None, "qdrant_client must be initialized"
+    _qc = qdrant_client
+    if _get_cb is not None:
         try:
             dense_response = _get_cb("qdrant").call_sync(
-                lambda: qdrant_client.query_points(
+                lambda: _qc.query_points(
                     collection_name=COLLECTION_NAME,
                     query=dense_vec,
                     using="dense",
@@ -381,7 +385,7 @@ def hybrid_search(
             logger.warning("Qdrant circuit breaker OPEN — returning empty dense results")
             dense_results = []
     else:
-        dense_response = qdrant_client.query_points(
+        dense_response = _qc.query_points(
             collection_name=COLLECTION_NAME,
             query=dense_vec,
             using="dense",
@@ -395,10 +399,10 @@ def hybrid_search(
     sparse_vec = _compute_sparse_embedding(query)
     sparse_results = []
     if sparse_vec is not None:
-        if _get_cb:
+        if _get_cb is not None:
             try:
                 sparse_response = _get_cb("qdrant").call_sync(
-                    lambda: qdrant_client.query_points(
+                    lambda: _qc.query_points(
                         collection_name=COLLECTION_NAME,
                         query=sparse_vec,
                         using="sparse",
@@ -411,7 +415,7 @@ def hybrid_search(
             except CircuitBreakerOpenError:
                 logger.warning("Qdrant circuit breaker OPEN — returning empty sparse results")
         else:
-            sparse_response = qdrant_client.query_points(
+            sparse_response = _qc.query_points(
                 collection_name=COLLECTION_NAME,
                 query=sparse_vec,
                 using="sparse",
@@ -506,7 +510,7 @@ class MultiHopGraphExplorer:
         self,
         start_entities: list[str],
         entity_map: dict[str, list[str]],
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Multi-hop traversal from start entities.
 
@@ -518,7 +522,7 @@ class MultiHopGraphExplorer:
         if not start_entities or not entity_map:
             return []
 
-        visited = set() if self.cycle_detection else None
+        visited: set[str] | None = set() if self.cycle_detection else None
         all_paths = []
 
         for entity in start_entities:
@@ -534,7 +538,7 @@ class MultiHopGraphExplorer:
         start: str,
         entity_map: dict[str, list[str]],
         visited: set[str] | None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """BFS traversal from start entity."""
         from collections import deque
 
@@ -602,7 +606,7 @@ class MultiHopGraphExplorer:
 
         return connectivity_score * length_penalty
 
-    def format_context(self, paths: list[dict]) -> str:
+    def format_context(self, paths: list[dict[str, Any]]) -> str:
         """Format multi-hop paths as context for LLM."""
         if not paths:
             return ""
@@ -718,14 +722,14 @@ class GlobalSearch:
     Uses community summaries instead of individual chunks.
     """
 
-    def __init__(self, community_summaries: list[dict] | None = None):
+    def __init__(self, community_summaries: list[dict[str, Any]] | None = None):
         self.community_summaries = community_summaries or []
 
     def search(
         self,
         query: str,
         top_k: int = 5,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Search across community summaries for global answers.
 
@@ -760,7 +764,7 @@ class GlobalSearch:
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
 
-    def format_context(self, results: list[dict]) -> str:
+    def format_context(self, results: list[dict[str, Any]]) -> str:
         """Format global search results as context for LLM."""
         if not results:
             return ""
@@ -798,7 +802,7 @@ def _parse_timestamp(value: str | int | float | None) -> float | None:
         return None
 
 
-def apply_time_decay(chunks: list[dict], decay_days: int = 180) -> list[dict]:
+def apply_time_decay(chunks: list[dict[str, Any]], decay_days: int = 180) -> list[dict[str, Any]]:
     """Boost scores for newer chunks, decay older ones.
 
     Uses exponential decay: boost = exp(-age_days / decay_days).
@@ -833,7 +837,8 @@ def apply_time_decay(chunks: list[dict], decay_days: int = 180) -> list[dict]:
 # Утилита для проверки доступности Qdrant
 def check_qdrant_health() -> bool:
     try:
-        qdrant_client.get_collections()
+        if qdrant_client is not None:
+            qdrant_client.get_collections()
         return True
     except Exception:
         return False

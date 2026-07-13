@@ -120,7 +120,7 @@ def _check_login_rate_limit(identifier: str) -> None:
 
 
 @router.post("/v1/auth/register", response_model=RegisterResponse, status_code=201)
-async def auth_register(request: RegisterRequest, raw_request: Request):
+async def auth_register(request: RegisterRequest, raw_request: Request) -> RegisterResponse:
     """Register a new user account.
 
     Stores user with bcrypt-hashed password in SQLite.
@@ -153,7 +153,7 @@ async def auth_register(request: RegisterRequest, raw_request: Request):
 
 
 @router.post("/v1/auth/login", response_model=LoginResponse)
-async def auth_login(request: LoginRequest, raw_request: Request):
+async def auth_login(request: LoginRequest, raw_request: Request) -> LoginResponse:
     """Authenticate user and return a token pair (access + refresh).
 
     Checks against SQLite user database (with bcrypt password verification).
@@ -208,7 +208,7 @@ async def auth_login(request: LoginRequest, raw_request: Request):
 
 
 @router.post("/v1/auth/refresh", response_model=RefreshResponse)
-async def auth_refresh(request: RefreshRequest):
+async def auth_refresh(request: RefreshRequest) -> RefreshResponse:
     """Exchange a refresh token (or valid access token) for a new token pair.
 
     Backward-compatible: tries refresh token first. Falls back to validating
@@ -254,7 +254,7 @@ async def auth_refresh(request: RefreshRequest):
 async def auth_logout(
     request: LogoutRequest,
     user: UserContext = Depends(get_optional_auth_context),  # noqa: B008
-):
+) -> LogoutResponse:
     """Logout: revoke refresh tokens and optionally blacklist the current access token.
 
     When all_sessions=true, revokes all refresh tokens for the authenticated user.
@@ -274,7 +274,7 @@ async def auth_logout(
 
 
 @router.get("/v1/auth/me", response_model=UserInfoResponse)
-async def auth_me(user: UserContext = Depends(get_auth_context)):  # noqa: B008
+async def auth_me(user: UserContext = Depends(get_auth_context)) -> UserInfoResponse:  # noqa: B008
     """Return the current authenticated user's context."""
     return UserInfoResponse(
         user_id=user.user_id,

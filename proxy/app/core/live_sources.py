@@ -93,7 +93,7 @@ class GitLabFile:
 class _CacheMixin:
     """In-memory TTL cache for live source responses."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: dict[str, tuple[Any, float]] = {}
 
     def _get_from_cache(self, key: str) -> Any | None:
@@ -116,7 +116,7 @@ class _CacheMixin:
 class ConfluenceLiveClient(_CacheMixin):
     """REST API client for Confluence with caching and graceful degradation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.base_url = CONFLUENCE_API_URL.rstrip("/") if CONFLUENCE_API_URL else ""
         self.headers: dict[str, str] = {}
@@ -136,13 +136,13 @@ class ConfluenceLiveClient(_CacheMixin):
         cache_key = f"conf_search:{query}:{max_results}"
         cached = self._get_from_cache(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         try:
             safe_query = query.replace('"', '\\"')
             cql = f'text ~ "{safe_query}"'
             url = f"{self.base_url}/content/search"
-            params = {"cql": cql, "limit": max_results, "expand": "space,body.view"}
+            params: dict[str, str | int] = {"cql": cql, "limit": max_results, "expand": "space,body.view"}
 
             timeout = ClientTimeout(total=LIVE_REQUEST_TIMEOUT)
             async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:  # noqa: SIM117
@@ -179,7 +179,7 @@ class ConfluenceLiveClient(_CacheMixin):
         cache_key = f"conf_page:{page_id}"
         cached = self._get_from_cache(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         try:
             url = f"{self.base_url}/content/{page_id}"
@@ -215,7 +215,7 @@ class ConfluenceLiveClient(_CacheMixin):
 class JiraLiveClient(_CacheMixin):
     """REST API client for Jira with caching and graceful degradation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.base_url = JIRA_API_URL.rstrip("/") if JIRA_API_URL else ""
         self.headers: dict[str, str] = {}
@@ -236,13 +236,13 @@ class JiraLiveClient(_CacheMixin):
         cache_key = f"jira_search:{query}:{max_results}"
         cached = self._get_from_cache(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         try:
             safe_query = query.replace('"', '\\"')
             jql = f'text ~ "{safe_query}"'
             url = f"{self.base_url}/search"
-            params = {
+            params: dict[str, str | int] = {
                 "jql": jql,
                 "maxResults": max_results,
                 "fields": "summary,description,status,priority,assignee,issuetype",
@@ -285,7 +285,7 @@ class JiraLiveClient(_CacheMixin):
         cache_key = f"jira_issue:{issue_key}"
         cached = self._get_from_cache(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         try:
             url = f"{self.base_url}/issue/{issue_key}"
@@ -323,7 +323,7 @@ class JiraLiveClient(_CacheMixin):
 class GitLabLiveClient(_CacheMixin):
     """REST API client for GitLab with caching and graceful degradation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.base_url = GITLAB_API_URL.rstrip("/") if GITLAB_API_URL else ""
         self.headers: dict[str, str] = {}
@@ -343,11 +343,11 @@ class GitLabLiveClient(_CacheMixin):
         cache_key = f"gl_search:{query}:{max_results}"
         cached = self._get_from_cache(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         try:
             url = f"{self.base_url}/projects"
-            params = {"search": query, "per_page": max_results, "order_by": "name"}
+            params: dict[str, str | int] = {"search": query, "per_page": max_results, "order_by": "name"}
 
             timeout = ClientTimeout(total=LIVE_REQUEST_TIMEOUT)
             async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:  # noqa: SIM117
@@ -380,7 +380,7 @@ class GitLabLiveClient(_CacheMixin):
         cache_key = f"gl_file:{project_id}:{file_path}:{ref}"
         cached = self._get_from_cache(cache_key)
         if cached is not None:
-            return cached
+            return cached  # type: ignore[no-any-return]
 
         try:
             encoded_path = file_path.replace("/", "%2F")

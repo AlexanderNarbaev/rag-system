@@ -258,9 +258,9 @@ def evaluate_cross_lingual_retrieval(
     try:
         from proxy.app.core.retrieval import hybrid_search
 
-        def _id_from_hit(hit) -> str:
+        def _id_from_hit(hit: Any) -> str:
             try:
-                return hit.payload.get("semantic_key", hit.payload.get("hash", str(hit.id)))
+                return str(hit.payload.get("semantic_key", hit.payload.get("hash", str(hit.id))))
             except Exception:
                 return str(hit.id)
 
@@ -306,7 +306,7 @@ def evaluate_cross_lingual_retrieval(
     }
 
 
-def run_cross_lingual_benchmark() -> list[dict]:
+def run_cross_lingual_benchmark() -> list[dict[str, Any]]:
     """Run cross-lingual benchmarks for all supported language pairs.
 
     Compares monolingual vs cross-lingual retrieval performance

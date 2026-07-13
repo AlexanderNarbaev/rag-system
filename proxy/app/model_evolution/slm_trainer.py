@@ -35,7 +35,7 @@ except ImportError:
     _TORCH_AVAILABLE = False
 
 try:
-    from transformers import (  # type: ignore[import-untyped]
+    from transformers import (
         AutoModelForSequenceClassification,
         AutoTokenizer,
         Trainer,
@@ -45,13 +45,13 @@ try:
     _TRANSFORMERS_AVAILABLE = True
 except ImportError:
     AutoTokenizer = None  # type: ignore[assignment,misc]
-    AutoModelForSequenceClassification = None  # type: ignore[assignment]
-    Trainer = None  # type: ignore[assignment]
-    TrainingArguments = None  # type: ignore[assignment]
+    AutoModelForSequenceClassification = None  # type: ignore[assignment,misc]
+    Trainer = None  # type: ignore[assignment,misc]
+    TrainingArguments = None  # type: ignore[assignment,misc]
     _TRANSFORMERS_AVAILABLE = False
 
 try:
-    from peft import (  # type: ignore[import-untyped]
+    from peft import (
         LoraConfig,
         TaskType,
         get_peft_model,
@@ -59,9 +59,9 @@ try:
 
     _PEFT_AVAILABLE = True
 except ImportError:
-    LoraConfig = None  # type: ignore[assignment,misc]
-    TaskType = None  # type: ignore[assignment]
-    get_peft_model = None  # type: ignore[assignment]
+    LoraConfig = None
+    TaskType = None
+    get_peft_model = None
     _PEFT_AVAILABLE = False
 
 
@@ -79,7 +79,7 @@ INTENT_TO_ID: dict[str, int] = {label: i for i, label in enumerate(INTENT_LABELS
 ID_TO_INTENT: dict[int, str] = {i: label for label, i in INTENT_TO_ID.items()}
 
 
-class IntentDataset(torch.utils.data.Dataset if _TORCH_AVAILABLE else object):  # type: ignore[name-defined]
+class IntentDataset(torch.utils.data.Dataset if _TORCH_AVAILABLE else object):  # type: ignore[misc]
     """PyTorch Dataset for intent classification from query → intent_label pairs."""
 
     def __init__(self, data: list[dict[str, str]], tokenizer: Any, max_length: int = 512):
@@ -168,7 +168,7 @@ class SLMTrainer(TrainerBase):
                 args=training_args,
                 train_dataset=self._load_dataset("train", tokenizer, config),
                 eval_dataset=self._load_dataset("eval", tokenizer, config),
-                tokenizer=tokenizer,
+                tokenizer=tokenizer,  # type: ignore[call-arg]
             )
 
             trainer.train()
@@ -240,9 +240,9 @@ class SLMTrainer(TrainerBase):
         base_model = getattr(model, "name_or_path", None)
         if base_model is None:
             base_model = getattr(model, "config", None)
-            if hasattr(base_model, "name_or_path"):
+            if base_model is not None and hasattr(base_model, "name_or_path"):
                 base_model = base_model.name_or_path
-            elif hasattr(base_model, "_name_or_path"):
+            elif base_model is not None and hasattr(base_model, "_name_or_path"):
                 base_model = base_model._name_or_path
         config_data = {
             "model_type": "slm_intent_classifier",

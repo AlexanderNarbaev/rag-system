@@ -166,7 +166,7 @@ def verify_token(token: str) -> UserContext:
     try:
         payload = jwt.decode(
             token,
-            key=key,
+            key=key or "",
             algorithms=algorithms,
             options={"verify_exp": True},
         )
@@ -196,7 +196,7 @@ def get_user_from_token(token: str) -> UserContext | None:
     try:
         payload = jwt.decode(
             token,
-            key=key,
+            key=key or "",
             algorithms=algorithms,
             options={"verify_exp": True},
         )
@@ -349,10 +349,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
     Skips /v1/auth/login and /v1/health even when auth is enabled.
     """
 
-    async def dispatch(self, request: StarletteRequest, call_next: Callable) -> Response:
+    async def dispatch(self, request: StarletteRequest, call_next: Callable[[StarletteRequest], Any]) -> Response:
         if not AUTH_ENABLED:
             request.state.user_context = UserContext.anonymous()
-            return await call_next(request)
+            response: Response = await call_next(request)
+            return response
 
         path = request.url.path
 
@@ -374,7 +375,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         if path in _PUBLIC_PATHS or path.rstrip("/") in _PUBLIC_PATHS:
             request.state.user_context = UserContext.anonymous()
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Require auth for /v1/* endpoints
         if path.startswith("/v1/"):
@@ -402,11 +404,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 )
 
             request.state.user_context = user_ctx
-            return await call_next(request)
+            response = await call_next(request)
+            return response
 
         # Non-v1 routes pass through
         request.state.user_context = UserContext.anonymous()
-        return await call_next(request)
+        response = await call_next(request)
+        return response
 
 
 # ---------------------------------------------------------------------------
@@ -414,12 +418,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 
 # Cached JWKS keys when fetched from Keycloak
-_jwks_cache: dict | None = None
+_jwks_cache: dict[str, Any] | None = None
 _jwks_cache_ts: float = 0.0
 _JWKS_CACHE_TTL = 3600  # 1 hour
 
 
-def _fetch_jwks_oidc() -> dict | None:
+def _fetch_jwks_oidc() -> dict[str, Any] | None:
     """Fetch JWKS from Keycloak OIDC discovery endpoint.
 
     Returns the JWKS dict or None if unavailable (air-gapped fallback).
@@ -440,16 +444,17 @@ def _fetch_jwks_oidc() -> dict | None:
 
         jwks_url = f"{KEYCLOAK_URL.rstrip('/')}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs"
         with urllib.request.urlopen(jwks_url, timeout=5) as resp:
-            _jwks_cache = json.loads(resp.read())
+            jwks_data: dict[str, Any] = json.loads(resp.read())
+            _jwks_cache = jwks_data
             _jwks_cache_ts = now
-            logger.info(f"JWKS fetched from Keycloak: {len(_jwks_cache.get('keys', []))} keys")
+            logger.info(f"JWKS fetched from Keycloak: {len(jwks_data.get('keys', []))} keys")
             return _jwks_cache
     except Exception as e:
         logger.warning(f"Failed to fetch JWKS from Keycloak: {e}")
         return None
 
 
-def _get_keycloak_verify_key(kid: str | None = None) -> str | None:
+def _get_keycloak_verify_key(kid: str | None = None) -> Any:
     """Get the public key for a given key ID from Keycloak JWKS.
 
     Falls back to JWT_PUBLIC_KEY if JWKS is unavailable.
@@ -472,7 +477,7 @@ def _get_keycloak_verify_key(kid: str | None = None) -> str | None:
     return None
 
 
-def _pem_from_jwk(jwk: dict) -> str | None:
+def _pem_from_jwk(jwk: dict[str, Any]) -> Any:
     """Convert a JWK RSA public key to PEM format."""
     try:
         from jwt.algorithms import RSAAlgorithm
@@ -513,7 +518,7 @@ def create_mock_token(
 # ---------------------------------------------------------------------------
 
 
-async def create_token_pair(user: dict) -> dict:
+async def create_token_pair(user: dict[str, Any]) -> dict[str, Any]:
     """Create an access + refresh token pair for a user.
 
     Returns:
@@ -561,7 +566,7 @@ async def create_token_pair(user: dict) -> dict:
     }
 
 
-async def verify_refresh_token(refresh_token: str) -> dict | None:
+async def verify_refresh_token(refresh_token: str) -> dict[str, Any] | None:
     """Validate a refresh token and return the user dict.
 
     Consumes the refresh token (one-time use).
@@ -582,7 +587,7 @@ async def blacklist_access_token(token: str) -> None:
         # Decode without expiry check to get JTI even for expired tokens
         payload = jwt.decode(
             token,
-            key=key,
+            key=key or "",
             algorithms=algorithms,
             options={"verify_exp": False},
         )

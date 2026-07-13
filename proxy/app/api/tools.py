@@ -2,6 +2,7 @@
 """Tool discovery endpoints — list and inspect registered tools."""
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -30,13 +31,13 @@ async def list_tools(
     tag: str | None = None,
     provider: str | None = None,
     user: UserContext = Depends(get_optional_auth_context),  # noqa: B008
-):
+) -> dict[str, Any]:
     """List available tools with optional filters. RBAC: visibility-filtered by user role."""
     # Deferred import — tests mock at proxy.app.main.get_enhanced_registry
     import proxy.app.main as _main
 
-    registry = _main.get_enhanced_registry()
-    user_role = _main._highest_role_from_user(user)
+    registry = _main.get_enhanced_registry()  # type: ignore[attr-defined]
+    user_role = _main._highest_role_from_user(user)  # type: ignore[attr-defined]
     tags = [tag] if tag else None
     tools = registry.list_tools(
         category=category,
@@ -65,15 +66,15 @@ async def list_tools(
 async def get_tool(
     name: str,
     user: UserContext = Depends(get_optional_auth_context),  # noqa: B008
-):
+) -> dict[str, Any]:
     """Get a single tool's details by name. Never exposes handler code."""
     import proxy.app.main as _main
 
-    registry = _main.get_enhanced_registry()
+    registry = _main.get_enhanced_registry()  # type: ignore[attr-defined]
     tool = registry.get_tool(name)
     if tool is None:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found")
-    user_role = _main._highest_role_from_user(user)
+    user_role = _main._highest_role_from_user(user)  # type: ignore[attr-defined]
     visible = registry.list_tools(visibility_filter=user_role or "read_only")
     if tool not in visible:
         raise HTTPException(status_code=403, detail="Tool not visible to your role")

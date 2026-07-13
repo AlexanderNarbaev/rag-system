@@ -90,7 +90,7 @@ class LLMTrainer(TrainerBase):
 
     # ── Training ───────────────────────────────────────────────────────────
 
-    def train(self, training_data: list[dict[str, Any]]) -> TrainingJob:
+    def train(self, training_data: list[dict[str, Any]]) -> TrainingJob:  # type: ignore[override]
         prepared = self.prepare_data(training_data)
         if not prepared:
             raise TrainingError("No training data provided after preparation")
@@ -145,7 +145,7 @@ class LLMTrainer(TrainerBase):
             torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
         )
 
-        bnb_config = BitsAndBytesConfig(
+        bnb_config = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
             load_in_4bit=self.config.load_in_4bit,
             bnb_4bit_compute_dtype=getattr(torch, self.config.bnb_4bit_compute_dtype, torch.float16),
             bnb_4bit_use_double_quant=True,
@@ -190,7 +190,7 @@ class LLMTrainer(TrainerBase):
             logging_steps=self.config.logging_steps,
             save_steps=self.config.save_steps,
             eval_steps=self.config.eval_steps,
-            evaluation_strategy="steps",
+            eval_strategy="steps",
             save_strategy="steps",
             load_best_model_at_end=True,
             fp16=torch.cuda.is_available(),
@@ -203,7 +203,7 @@ class LLMTrainer(TrainerBase):
             model=model,
             args=training_args,
             train_dataset=tokenized,
-            tokenizer=tokenizer,
+            tokenizer=tokenizer,  # type: ignore[call-arg]
         )
 
         trainer.train()
@@ -248,14 +248,14 @@ class LLMTrainer(TrainerBase):
         )
         encodings["labels"] = encodings["input_ids"].clone()
 
-        class _TokenizedDataset(torch.utils.data.Dataset):
-            def __init__(self, encs):
+        class _TokenizedDataset(torch.utils.data.Dataset[Any]):
+            def __init__(self, encs: dict[str, Any]) -> None:
                 self._encs = encs
 
-            def __len__(self):
+            def __len__(self) -> int:
                 return len(self._encs["input_ids"])
 
-            def __getitem__(self, idx):
+            def __getitem__(self, idx: int) -> dict[str, Any]:
                 return {k: v[idx] for k, v in self._encs.items()}
 
         return _TokenizedDataset(encodings)
@@ -275,7 +275,7 @@ class LLMTrainer(TrainerBase):
 
     # ── Evaluation ─────────────────────────────────────────────────────────
 
-    def evaluate(self, eval_data: list[dict[str, Any]]) -> dict[str, float]:
+    def evaluate(self, eval_data: list[dict[str, Any]], model: Any = None) -> dict[str, float]:  # type: ignore[override]
         """Compute evaluation metrics on held-out data.
 
         In CPU/mock mode, returns placeholder metrics.
@@ -301,7 +301,7 @@ class LLMTrainer(TrainerBase):
 
     # ── Adapter persistence ────────────────────────────────────────────────
 
-    def save_adapter(self, output_path: Any) -> str:
+    def save_adapter(self, output_path: Any, model: Any = None) -> str:  # type: ignore[override]
         """Save LoRA adapter configuration and (mock) weights to disk.
 
         For CPU/mock training, generates a minimal adapter_config.json and a

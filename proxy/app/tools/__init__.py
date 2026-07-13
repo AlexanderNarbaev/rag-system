@@ -11,6 +11,8 @@ use ``from proxy.app.tools.definition import ToolDefinition``.
 
 from __future__ import annotations
 
+from typing import Any
+
 from proxy.app.shared.config import TOOLS_ENABLED
 
 from ._legacy import (
@@ -50,8 +52,8 @@ from .definition import (
 from .definition import (
     ToolDefinition as NewToolDefinition,
 )
-from .definition import (
-    ToolErrorBase as ToolErrorBase,  # noqa: F401  # re-export
+from .errors import (
+    ToolError as ToolErrorBase,  # noqa: F401  # re-export (aliased for backward compat)
 )
 from .definition import (
     ToolParam as ToolParam,  # noqa: F401  # re-export
@@ -105,7 +107,7 @@ class EnhancedToolRegistry:
     (to_openai, to_anthropic).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools: dict[str, NewToolDefinition] = {}
 
     def register(self, tool: NewToolDefinition) -> None:
@@ -126,10 +128,10 @@ class EnhancedToolRegistry:
     def get_all(self) -> list[NewToolDefinition]:
         return list(self._tools.values())
 
-    def get_all_openai(self) -> list[dict]:
+    def get_all_openai(self) -> list[dict[str, Any]]:
         return [t.to_openai_format() for t in self._tools.values()]
 
-    def get_all_anthropic(self) -> list[dict]:
+    def get_all_anthropic(self) -> list[dict[str, Any]]:
         return [t.to_anthropic_format() for t in self._tools.values()]
 
 
@@ -217,7 +219,7 @@ def _ensure_registries() -> tuple[ToolRegistry, EnhancedToolRegistry]:
     """
     import sys
 
-    pkg = sys.modules[__package__]  # type: ignore[index]
+    pkg = sys.modules[__package__]
 
     legacy = getattr(pkg, "_global_registry", None)
     enhanced = getattr(pkg, "_enhanced_registry", None)
@@ -229,8 +231,8 @@ def _ensure_registries() -> tuple[ToolRegistry, EnhancedToolRegistry]:
         if TOOLS_ENABLED:
             _register_builtin_tools(legacy_registry=legacy, enhanced_registry=enhanced)
 
-        pkg._global_registry = legacy  # type: ignore[union-attr]
-        pkg._enhanced_registry = enhanced  # type: ignore[union-attr]
+        pkg._global_registry = legacy  # type: ignore[attr-defined]
+        pkg._enhanced_registry = enhanced  # type: ignore[attr-defined]
 
     return legacy, enhanced
 
@@ -257,7 +259,7 @@ def get_enhanced_registry() -> EnhancedToolRegistry:
     return enhanced
 
 
-def format_tools_for_llm(tools: list) -> list[dict]:
+def format_tools_for_llm(tools: list[Any]) -> list[dict[str, Any]]:
     """Convert tool definitions to OpenAI function calling format.
 
     Handles both old-style ToolDefinition (from _legacy, with

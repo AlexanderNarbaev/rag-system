@@ -16,7 +16,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
@@ -39,7 +39,7 @@ class NLIEvaluationResult:
     entailed_claims: int
     contradicted_claims: int
     neutral_claims: int
-    per_claim_scores: list[dict] = field(default_factory=list)
+    per_claim_scores: list[dict[str, Any]] = field(default_factory=list)
 
     def as_metrics(self) -> dict[str, float]:
         return {
@@ -53,7 +53,7 @@ class NLIEvaluationResult:
 def _load_nli_model(
     model_name: str = "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
     device: str = "cpu",
-):
+) -> tuple[Any, Any]:
     global _NLI_MODEL, _NLI_TOKENIZER, _NLI_MODEL_LOADED, _NLI_LOAD_ERROR
 
     if _NLI_MODEL_LOADED:
@@ -228,7 +228,7 @@ def evaluate_nli(
     entailed = 0
     contradicted = 0
     neutral = 0
-    per_claim: list[dict] = []
+    per_claim: list[dict[str, Any]] = []
 
     for claim in claims:
         if use_real_nli:

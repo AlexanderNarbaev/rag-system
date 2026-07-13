@@ -92,7 +92,7 @@ def _call_reranker_safe(pairs: list[tuple[str, str]]) -> list[float]:
         return [0.5] * len(pairs)
 
     _circuit_breaker_available = False
-    _circuit_breaker_error = Exception
+    _circuit_breaker_error: type[Exception] = Exception
 
     try:
         from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError, get_breaker

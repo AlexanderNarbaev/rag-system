@@ -157,7 +157,7 @@ class EnhancedToolRegistry:
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools: dict[str, ToolDefinition] = {}
         self._provider_tools: dict[str, set[str]] = {}
 
@@ -331,7 +331,7 @@ class EnhancedToolRegistry:
             if tool.async_handler is not None:
                 content = await tool.async_handler(**params)
             else:
-                content = tool.handler(**params)  # type: ignore[misc]
+                content = tool.handler(**params)
 
             if not isinstance(content, str):
                 content = str(content)

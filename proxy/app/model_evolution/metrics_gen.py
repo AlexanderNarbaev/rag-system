@@ -1,6 +1,7 @@
 """Generation evaluation metrics: BLEU, ROUGE-L, BertScore, hallucination rate."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -13,14 +14,14 @@ class GenerationMetrics:
     bertscore_f1: float | None = None
     hallucination_rate: float = 0.0
     perplexity: float | None = None
-    extra: dict = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def compute_bleu(
     references: list[str],
     hypotheses: list[str],
     max_n: int = 4,
-) -> dict:
+) -> dict[str, float]:
     import math
     from collections import Counter
 
@@ -70,7 +71,7 @@ def _lcs_len(a: list[str], b: list[str]) -> int:
 def compute_rouge_l(
     references: list[str],
     hypotheses: list[str],
-) -> dict:
+) -> dict[str, float]:
     precisions = []
     recalls = []
     for ref, hyp in zip(references, hypotheses, strict=False):
@@ -91,7 +92,7 @@ def compute_bertscore(
     references: list[str],
     hypotheses: list[str],
     model: str = "bert-base-uncased",
-) -> dict:
+) -> dict[str, float]:
     try:
         from bert_score import score
 

@@ -12,12 +12,13 @@ Implements:
 
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 # Approximate BPE token boundaries — common multi-character units
-def _tokenize_words(text: str) -> list:
+def _tokenize_words(text: str) -> list[str]:
     """Split text into word-like and punctuation tokens (approximating subword tokenizer input)."""
     return re.findall(r"\w+|[^\w\s]", text)
 
@@ -48,7 +49,7 @@ class TokenOptimizer:
         word_estimate = max(1, int(word_tokens * 1.3))
         return max(1, int(char_estimate * 0.4 + word_estimate * 0.6))
 
-    def compress_context(self, chunks: list[dict], max_tokens: int, strategy: str = "relevance") -> str:
+    def compress_context(self, chunks: list[dict[str, Any]], max_tokens: int, strategy: str = "relevance") -> str:
         """
         Compress context using the specified strategy.
 
@@ -73,7 +74,7 @@ class TokenOptimizer:
             logger.warning(f"Unknown compression strategy '{strategy}', falling back to relevance")
             return self._compress_relevance(chunks, max_tokens)
 
-    def _compress_relevance(self, chunks: list[dict], max_tokens: int) -> str:
+    def _compress_relevance(self, chunks: list[dict[str, Any]], max_tokens: int) -> str:
         """Keep top chunks, truncate each to fit token budget."""
         token_budget = max_tokens
         parts = []
@@ -94,7 +95,7 @@ class TokenOptimizer:
 
         return "\n\n".join(parts)
 
-    def _compress_proposition(self, chunks: list[dict], max_tokens: int) -> str:
+    def _compress_proposition(self, chunks: list[dict[str, Any]], max_tokens: int) -> str:
         """Convert each chunk to atomic fact-like sentences, then assemble."""
         propositions = []
         for chunk in chunks:
@@ -114,7 +115,7 @@ class TokenOptimizer:
             result = candidate
         return result.strip()
 
-    def _compress_summary(self, chunks: list[dict], max_tokens: int) -> str:
+    def _compress_summary(self, chunks: list[dict[str, Any]], max_tokens: int) -> str:
         """Keep first N sentences of each chunk, stop at budget."""
         parts = []
         used = 0
@@ -137,7 +138,7 @@ class TokenOptimizer:
 
         return "\n\n".join(parts)
 
-    def _compress_hierarchical(self, chunks: list[dict], max_tokens: int) -> str:
+    def _compress_hierarchical(self, chunks: list[dict[str, Any]], max_tokens: int) -> str:
         """
         Tiered detail:
         - Top-3 chunks: full text
@@ -248,7 +249,7 @@ class TokenOptimizer:
             "response": response,
         }
 
-    def surround_chunks(self, chunks: list[dict], nearby_count: int = 2) -> list[dict]:
+    def surround_chunks(self, chunks: list[dict[str, Any]], nearby_count: int = 2) -> list[dict[str, Any]]:
         """
         Expand chunks with surrounding context from the same document.
         For chunks sharing the same source_id, returns nearby neighbors.
@@ -258,7 +259,7 @@ class TokenOptimizer:
         if not chunks or nearby_count <= 0:
             return list(chunks) if chunks else []
 
-        source_groups: dict[str, list[dict]] = {}
+        source_groups: dict[str, list[dict[str, Any]]] = {}
         for chunk in chunks:
             source_id = chunk.get("source_id", "unknown")
             source_groups.setdefault(source_id, []).append(chunk)
@@ -292,7 +293,7 @@ class TokenOptimizer:
 
         return expanded
 
-    def enrich_chunk_headers(self, chunk: dict, doc_context: dict) -> dict:
+    def enrich_chunk_headers(self, chunk: dict[str, Any], doc_context: dict[str, Any]) -> dict[str, Any]:
         """
         Add document-level context as chunk header.
         Modifies chunk in place (text gets a header prefix) and returns it.
@@ -366,7 +367,7 @@ class TokenOptimizer:
         if not words:
             return text
 
-        word_freq = {}
+        word_freq: dict[str, int] = {}
         for w in words:
             word_freq[w] = word_freq.get(w, 0) + 1
         total = len(words)
@@ -415,7 +416,7 @@ class TokenOptimizer:
         if not words:
             return text
 
-        word_freq = {}
+        word_freq: dict[str, int] = {}
         for w in words:
             word_freq[w] = word_freq.get(w, 0) + 1
         total = len(words)

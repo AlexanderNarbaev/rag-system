@@ -46,7 +46,7 @@ class InteractionLogger:
     Сохраняет: запрос, контекст, ответ, временные метки, метаданные.
     """
 
-    def __init__(self, log_dir: Path = None):
+    def __init__(self, log_dir: Path | None = None) -> None:
         self.log_dir = Path(log_dir or LOG_DIR or "./logs/hitl")
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.interactions_file = self.log_dir / "interactions.jsonl"
@@ -92,10 +92,10 @@ class InteractionLogger:
         user_query: str,
         context: str,
         response: str,
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
         user_feedback: FeedbackType | None = None,
         corrected_response: str | None = None,
-    ):
+    ) -> None:
         """
         Записывает одно взаимодействие в JSON Lines файл.
         """
@@ -127,7 +127,7 @@ class InteractionLogger:
         comment: str | None = None,
         corrected_response: str | None = None,
         expert_id: str | None = None,
-    ):
+    ) -> None:
         """
         Записывает обратную связь от пользователя или эксперта.
         """
@@ -147,7 +147,7 @@ class InteractionLogger:
         except Exception as e:
             logger.error(f"Failed to log feedback: {e}")
 
-    def get_interactions(self, limit: int = 100) -> list[dict]:
+    def get_interactions(self, limit: int = 100) -> list[dict[str, Any]]:
         """Читает последние взаимодействия (обратный порядок)."""
         interactions = []
         try:
@@ -173,8 +173,8 @@ def get_logger() -> InteractionLogger:
 
 # Упрощённые функции для вызова из main.py
 async def log_interaction(
-    request_id: str, user_query: str, context: str, response: str, metadata: dict[str, Any] = None
-):
+    request_id: str, user_query: str, context: str, response: str, metadata: dict[str, Any] | None = None
+) -> None:
     """
     Асинхронная обёртка для логирования (неблокирующая).
     """
@@ -195,8 +195,8 @@ async def log_interaction(
 
 
 def log_feedback_sync(
-    request_id: str, feedback_type: str, comment: str = None, corrected_response: str = None, expert_id: str = None
-):
+    request_id: str, feedback_type: str, comment: str | None = None, corrected_response: str | None = None, expert_id: str | None = None
+) -> None:
     """Синхронная запись фидбека (например, из дашборда)."""
     logger = get_logger()
     logger.log_feedback(
@@ -209,7 +209,7 @@ def log_feedback_sync(
 
 
 # Функция для экспорта датасета для fine-tuning
-def export_training_dataset(output_path: Path, min_length: int = 50, use_processor: bool = False):
+def export_training_dataset(output_path: Path, min_length: int = 50, use_processor: bool = False) -> None:
     """
     Экспортирует пары (вопрос, ответ) из взаимодействий, у которых есть положительная обратная связь
     или исправленные ответы, в формат для fine-tuning.
@@ -220,8 +220,8 @@ def export_training_dataset(output_path: Path, min_length: int = 50, use_process
     if use_processor:
         from proxy.app.model_evolution.data_processor import DataProcessor
 
-        processor = DataProcessor(logger_instance=get_logger())
-        processor.export_training_dataset(output_path)
+        processor = DataProcessor()
+        processor.export_training_dataset(str(output_path))
         return
 
     interaction_logger = get_logger()
@@ -240,7 +240,7 @@ def export_training_dataset(output_path: Path, min_length: int = 50, use_process
     logger.info(f"Exported {len(training_pairs)} training pairs to {output_path}")
 
 
-def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingual: bool = False):
+def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingual: bool = False) -> None:
     """
     Экспортирует пары (query, intent) из логов взаимодействий
     в формат JSONL для обучения классификатора интентов.
@@ -276,13 +276,13 @@ def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingua
 
 if __name__ == "__main__":
     # Пример использования
-    logger = get_logger()
-    logger.log_interaction(
+    interaction_logger = get_logger()
+    interaction_logger.log_interaction(
         request_id="test123",
         user_query="Как настроить CI/CD?",
         context="Контекст из документации...",
         response="Для настройки CI/CD создайте файл .gitlab-ci.yml",
         metadata={"model": os.getenv("LLM_MODEL_NAME", "default"), "version": "latest"},
     )
-    logger.log_feedback("test123", FeedbackType.POSITIVE, comment="Отличный ответ!")
+    interaction_logger.log_feedback("test123", FeedbackType.POSITIVE, comment="Отличный ответ!")
     export_training_dataset(Path("./training_dataset.jsonl"))

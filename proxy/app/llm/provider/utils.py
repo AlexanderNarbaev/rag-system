@@ -21,7 +21,7 @@ def get_router() -> MultiProviderRouter:
         _router = None  # Sync with package level
     if _router is None:
         _router = MultiProviderRouter()
-        _pkg._router = _router  # Sync back to package level
+        _pkg._router = _router  # type: ignore[attr-defined]  # Sync back to package level
     return _router
 
 

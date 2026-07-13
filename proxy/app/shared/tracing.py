@@ -32,7 +32,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 try:
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 except ImportError:
-    OTLPSpanExporter = None  # type: ignore[assignment,misc]
+    OTLPSpanExporter = None
 
 from proxy.app.shared.config import (
     OTEL_BATCH_TIMEOUT,

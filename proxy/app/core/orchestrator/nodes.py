@@ -15,56 +15,56 @@ from proxy.app.shared.config import (
 logger = logging.getLogger(__name__)
 
 
-def _get_hybrid_search():
+def _get_hybrid_search() -> Any:
     """Lazy import to allow test patching at orchestrator level."""
-    from proxy.app.core.orchestrator import hybrid_search
+    from proxy.app.core.orchestrator import hybrid_search  # type: ignore[attr-defined]
 
     return hybrid_search
 
 
-def _get_rerank_chunks():
+def _get_rerank_chunks() -> Any:
     """Lazy import to allow test patching at orchestrator level."""
-    from proxy.app.core.orchestrator import rerank_chunks
+    from proxy.app.core.orchestrator import rerank_chunks  # type: ignore[attr-defined]
 
     return rerank_chunks
 
 
-def _get_non_stream_completion():
+def _get_non_stream_completion() -> Any:
     """Lazy import to allow test patching at orchestrator level."""
-    from proxy.app.core.orchestrator import non_stream_completion
+    from proxy.app.core.orchestrator import non_stream_completion  # type: ignore[attr-defined]
 
     return non_stream_completion
 
 
-def _get_non_stream_completion_sync():
+def _get_non_stream_completion_sync() -> Any:
     """Lazy import of sync variant for non-async graph nodes."""
-    from proxy.app.core.orchestrator import non_stream_completion_sync
+    from proxy.app.core.orchestrator import non_stream_completion_sync  # type: ignore[attr-defined]
 
     return non_stream_completion_sync
 
 
-def _get_deduplicate_chunks():
+def _get_deduplicate_chunks() -> Any:
     """Lazy import to allow test patching at orchestrator level."""
     from proxy.app.core.context import deduplicate_chunks
 
     return deduplicate_chunks
 
 
-def _get_build_context():
+def _get_build_context() -> Any:
     """Lazy import to allow test patching at orchestrator level."""
     from proxy.app.core.context import build_context
 
     return build_context
 
 
-def _get_apply_time_decay():
+def _get_apply_time_decay() -> Any:
     """Lazy import for apply_time_decay."""
     from proxy.app.core.retrieval import apply_time_decay
 
     return apply_time_decay
 
 
-def _get_graph_expand_query():
+def _get_graph_expand_query() -> Any:
     """Lazy import for graph_expand_query."""
     from proxy.app.core.retrieval import graph_expand_query
 
@@ -267,7 +267,7 @@ def generate(state: dict[str, Any]) -> dict[str, Any]:
     return {"answer": answer}
 
 
-def check_confidence(state: dict) -> dict:
+def check_confidence(state: dict[str, Any]) -> dict[str, Any]:
     """Check confidence of generated answer and decide if escalation needed."""
     from proxy.app.core.confidence import compute_confidence
     from proxy.app.shared.config import (
@@ -311,7 +311,7 @@ def check_confidence(state: dict) -> dict:
     }
 
 
-def self_critique(state: dict) -> dict:
+def self_critique(state: dict[str, Any]) -> dict[str, Any]:
     """Rate the generated answer's usefulness and suggest improvement.
 
     Uses SLM to score the answer 1-5 on usefulness.
@@ -378,7 +378,7 @@ def self_critique(state: dict) -> dict:
         }
 
 
-def self_reflection(state: dict) -> dict:
+def self_reflection(state: dict[str, Any]) -> dict[str, Any]:
     """Evaluate answer quality: is the answer fully supported by the context?
 
     Uses SLM to reflect on whether the generated answer is grounded in the

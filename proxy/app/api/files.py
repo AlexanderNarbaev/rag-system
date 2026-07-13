@@ -56,7 +56,7 @@ def _get_minio_client() -> MinioClient:
     """Dependency: return a MinIO client instance."""
     if not HAS_MINIO:
         raise HTTPException(status_code=503, detail="MinIO not available. Install boto3: pip install boto3")
-    return MinioClient()  # type: ignore[misc]
+    return MinioClient()
 
 
 # ── Response Models ────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ async def upload_file(
     file: UploadFile,
     user: UserContext = Depends(require_role(Role.USER)),  # noqa: B008
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
-):
+) -> FileUploadResponse:
     """Upload a file to MinIO storage.
 
     The file is stored with a UUID-based key under the ``uploads/`` prefix.
@@ -171,7 +171,7 @@ async def list_files(
     prefix: str = "",
     user: UserContext = Depends(require_role(Role.USER)),  # noqa: B008
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
-):
+) -> FileListResponse:
     """List uploaded files.
 
     Args:
@@ -202,7 +202,7 @@ async def download_file(
     file_id: str,
     user: UserContext = Depends(require_role(Role.USER)),  # noqa: B008
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
-):
+) -> StreamingResponse:
     """Download a file from storage.
 
     Returns the file content as a streaming response.
@@ -239,7 +239,7 @@ async def get_presigned_url(
     expiration: int = 3600,
     user: UserContext = Depends(require_role(Role.USER)),  # noqa: B008
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
-):
+) -> PresignedUrlResponse:
     """Generate a presigned download URL for a file.
 
     Args:
@@ -274,7 +274,7 @@ async def get_file_metadata(
     file_id: str,
     user: UserContext = Depends(require_role(Role.USER)),  # noqa: B008
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
-):
+) -> FileMetadata:
     """Get metadata for a specific file."""
     try:
         meta = minio.get_file_metadata(file_id)
@@ -298,7 +298,7 @@ async def delete_file(
     file_id: str,
     user: UserContext = Depends(require_role(Role.EXPERT)),  # noqa: B008
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
-):
+) -> FileDeleteResponse:
     """Delete a file from storage.
 
     Requires EXPERT role or above.

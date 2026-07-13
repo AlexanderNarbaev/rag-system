@@ -206,7 +206,7 @@ class OpenAPIDiscovery:
         if servers and isinstance(servers, list):
             first = servers[0]
             if isinstance(first, dict):
-                return first.get("url", fallback)
+                return str(first.get("url", fallback))
 
         # Swagger 2: schemes + host + basePath
         if "swagger" in spec:
@@ -347,6 +347,6 @@ class OpenAPIProvider:
         try:
             from proxy.app.shared.config import TOOLS_OPENAPI_SPECS
 
-            return list(TOOLS_OPENAPI_SPECS) if TOOLS_OPENAPI_SPECS else []
+            return list(TOOLS_OPENAPI_SPECS) if TOOLS_OPENAPI_SPECS else []  # type: ignore[arg-type]
         except ImportError:
             return []

@@ -5,14 +5,15 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
 class RunInfo:
     run_id: str
     experiment_name: str
-    params: dict = field(default_factory=dict)
-    metrics: dict = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
     artifacts: list[str] = field(default_factory=list)
     status: str = "running"
     start_time: float = 0.0
@@ -61,11 +62,11 @@ class ExperimentTracker:
 
         return run
 
-    def log_params(self, params: dict) -> None:
+    def log_params(self, params: dict[str, Any]) -> None:
         if self._current_run:
             self._current_run.params.update(params)
 
-    def log_metrics(self, metrics: dict, step: int | None = None) -> None:
+    def log_metrics(self, metrics: dict[str, Any], step: int | None = None) -> None:
         if self._current_run:
             for k, v in metrics.items():
                 self._current_run.metrics.setdefault(k, []).append({"step": step or 0, "value": v})

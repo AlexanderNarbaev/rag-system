@@ -25,6 +25,7 @@ import logging
 import os
 import signal
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -107,7 +108,7 @@ token_optimizer = TokenOptimizer()
 retrieval_evaluator = RetrievalEvaluator()
 
 shutting_down = False
-_active_requests: set[asyncio.Task] = set()
+_active_requests: set[asyncio.Task[None]] = set()
 
 # Default TTL for cached responses (1 hour)
 DEFAULT_CACHE_TTL_SECONDS = 3600
@@ -119,7 +120,7 @@ DEFAULT_CACHE_TTL_SECONDS = 3600
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):  # type: ignore[type-arg]
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifecycle: initialize and clean up resources.
 
     Initializes cache, orchestrator, tools, and warm-up on startup.
@@ -167,8 +168,8 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
             try:
                 from proxy.app.tools.declarative import DeclarativeProvider
 
-                provider = DeclarativeProvider()
-                discovered = await provider.discover()
+                declarative_provider: Any = DeclarativeProvider()
+                discovered = await declarative_provider.discover()
                 for tool in discovered:
                     registry.register(tool)
                 logger.info("Startup: loaded %d tools from declarative provider", len(discovered))
@@ -180,8 +181,8 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
             try:
                 from proxy.app.tools.openapi import OpenAPIProvider
 
-                provider = OpenAPIProvider()
-                discovered = await provider.discover()
+                openapi_provider: Any = OpenAPIProvider()
+                discovered = await openapi_provider.discover()
                 for tool in discovered:
                     registry.register(tool)
                 logger.info("Startup: loaded %d tools from OpenAPI provider", len(discovered))
@@ -201,7 +202,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             try:
-                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_initiate_shutdown(s)))
+                loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_initiate_shutdown(s)))  # type: ignore[misc]
             except (NotImplementedError, RuntimeError, ValueError):
                 logger.info(f"Signal handler for {sig.name} skipped (not supported in this environment)")
         logger.info("Graceful shutdown handlers registered")
@@ -251,7 +252,7 @@ async def process_rag_query(
     temperature: float = 0.2,
     max_tokens: int = 4096,
     stream: bool = False,
-    other_messages: list[dict] | None = None,
+    other_messages: list[dict[str, Any]] | None = None,
     user_context: UserContext | None = None,
     top_k_override: int | None = None,
 ) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]], dict[str, float]]:
@@ -317,8 +318,8 @@ async def process_rag_query(
     except Exception as e:
         logger.warning(f"Hybrid search failed (degraded mode): {e}")
         search_results = None
-    sources: list[dict] = []
-    chunks_for_eval: list[dict] = []
+    sources: list[dict[str, Any]] = []
+    chunks_for_eval: list[dict[str, Any]] = []
     if not search_results:
         context = ""
         chunks_metadata = []

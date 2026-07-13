@@ -36,9 +36,9 @@ logger = logging.getLogger(__name__)
 
 TOOLS_DECLARATIVE_DIR: str = os.getenv("TOOLS_DECLARATIVE_DIR", "./tools_declarative")
 
-_VAR_PATTERN: re.Pattern = re.compile(r"\{\{(\w+(?:\.\w+)*)\}\}")
+_VAR_PATTERN: re.Pattern[str] = re.compile(r"\{\{(\w+(?:\.\w+)*)\}\}")
 
-_SHELL_METACHAR_PATTERN: re.Pattern = re.compile(r"[;&|`$()]")
+_SHELL_METACHAR_PATTERN: re.Pattern[str] = re.compile(r"[;&|`$()]")
 
 
 def _interpolate_variables(
@@ -53,7 +53,7 @@ def _interpolate_variables(
     Unresolved placeholders are left as-is.
     """
 
-    def _replacer(match: re.Match) -> str:
+    def _replacer(match: re.Match[str]) -> str:
         key = match.group(1)
         parts = key.split(".", 1)
         if parts[0] == "CONTEXT" and len(parts) == 2:
@@ -66,7 +66,7 @@ def _interpolate_variables(
             return env_vars[key]
         return f"{{{{{key}}}}}"
 
-    return _VAR_PATTERN.sub(_replacer, template)
+    return str(_VAR_PATTERN.sub(_replacer, template))
 
 
 def _has_metacharacters(value: str) -> bool:

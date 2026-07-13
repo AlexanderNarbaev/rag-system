@@ -10,7 +10,7 @@ router = APIRouter(tags=["widget"])
 
 
 @router.get("/v1/widget")
-async def serve_widget():
+async def serve_widget() -> HTMLResponse:
     """Serve the embeddable RAG chat widget HTML page.
 
     The widget connects to /v1/chat/completions via SSE streaming.
@@ -23,7 +23,7 @@ async def serve_widget():
 
 
 @router.get("/v1/widget.js")
-async def serve_widget_js():
+async def serve_widget_js() -> Response:
     """Serve the standalone RAG chat widget JavaScript.
 
     Can be embedded in any page:

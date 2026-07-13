@@ -38,8 +38,8 @@ class FLAREController:
 
     def __init__(
         self,
-        search_fn: Callable | None = None,
-        rerank_fn: Callable | None = None,
+        search_fn: Callable[..., Any] | None = None,
+        rerank_fn: Callable[..., Any] | None = None,
         confidence_threshold: float = 0.5,
         max_retrievals: int = 3,
     ):
@@ -88,7 +88,7 @@ class FLAREController:
         self,
         query: str,
         initial_context: list[str],
-        generate_fn: Callable | None = None,
+        generate_fn: Callable[..., Any] | None = None,
         max_tokens: int = 1000,
     ) -> dict[str, Any]:
         """

@@ -55,7 +55,7 @@ ROLE_ACCESS: dict[str, list[str]] = {
 
 def _role_allowed_levels(user_context: UserContext) -> list[str]:
     """Return the list of access levels the user is allowed to see based on their roles."""
-    allowed: set = set()
+    allowed: set[str] = set()
     for role in user_context.roles:
         allowed.update(ROLE_ACCESS.get(role, []))
     if not allowed:

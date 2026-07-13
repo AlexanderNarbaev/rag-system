@@ -8,6 +8,7 @@ Low grounding scores may indicate hallucination.
 """
 
 import logging
+from typing import Any
 
 import numpy as np
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 _embedder = None
 
 
-def _get_embedder():
+def _get_embedder() -> Any:
     global _embedder
     if _embedder is None:
         try:

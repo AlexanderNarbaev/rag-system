@@ -11,6 +11,7 @@ Evaluates the quality of retrieved chunks and triggers corrective actions:
 
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class RetrievalEvaluator:
     MEDIUM_THRESHOLD = 0.4
     LOW_THRESHOLD = 0.2
 
-    def evaluate_quality(self, query: str, retrieved_chunks: list[dict]) -> float:
+    def evaluate_quality(self, query: str, retrieved_chunks: list[dict[str, Any]]) -> float:
         """
         Return confidence score 0.0-1.0 based on:
         - Average similarity scores (if present)
@@ -59,7 +60,7 @@ class RetrievalEvaluator:
 
         return min(1.0, max(0.0, confidence))
 
-    def _compute_text_overlap_scores(self, query: str, chunks: list[dict]) -> list[float]:
+    def _compute_text_overlap_scores(self, query: str, chunks: list[dict[str, Any]]) -> list[float]:
         """Fallback: compute simple Jaccard-like overlap between query and chunk text."""
         query_tokens = set(re.findall(r"\w+", query.lower()))
         if not query_tokens:
@@ -98,7 +99,7 @@ class RetrievalEvaluator:
         else:
             return "FALLBACK"
 
-    def decompose_chunks(self, chunks: list[dict]) -> list[dict]:
+    def decompose_chunks(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Decompose-then-recompose: filter noise, keep key information.
         Removes chunks with very low scores and near-duplicate content.
@@ -140,7 +141,7 @@ class RetrievalEvaluator:
 
         return cleaned
 
-    def evaluate_and_act(self, query: str, retrieved_chunks: list[dict]) -> tuple[float, str, list[dict]]:
+    def evaluate_and_act(self, query: str, retrieved_chunks: list[dict[str, Any]]) -> tuple[float, str, list[dict[str, Any]]]:
         """
         Combined: evaluate quality, get action, and optionally clean chunks.
         Returns (confidence, action, processed_chunks).

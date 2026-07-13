@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from proxy.app.model_evolution.env_profile import EnvProfile, get_preset
 
@@ -154,7 +154,7 @@ class TrainerRegistry:
         """Get the trainer class for a given type. Raises KeyError if not found."""
         if trainer_type not in self._registry:  # type: ignore[attr-defined]
             raise KeyError(f"No trainer registered for type: {trainer_type}")
-        return self._registry[trainer_type]  # type: ignore[attr-defined]
+        return cast(type[TrainerBase], self._registry[trainer_type])  # type: ignore[attr-defined]
 
     def list_types(self) -> list[TrainerType]:
         """Return all registered trainer types."""

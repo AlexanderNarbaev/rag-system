@@ -3,6 +3,7 @@
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -15,13 +16,14 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/v1/health")
-async def health():
+async def health() -> JSONResponse:
     """Check proxy and dependency health."""
-    status = {"status": "ok", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
+    status: dict[str, Any] = {"status": "ok", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
     try:
         from proxy.app.core.retrieval import qdrant_client
 
-        qdrant_client.get_collections()
+        if qdrant_client is not None:
+            qdrant_client.get_collections()
         status["components"]["qdrant"] = "ok"
     except Exception as e:
         status["components"]["qdrant"] = f"error: {str(e)}"
@@ -41,19 +43,20 @@ async def health():
 
 
 @router.get("/v1/health/live")
-async def health_live():
+async def health_live() -> JSONResponse:
     """Liveness probe — returns 200 if the process is alive."""
     return JSONResponse(status_code=200, content={"status": "alive", "timestamp": datetime.now(UTC).isoformat()})
 
 
 @router.get("/v1/health/ready")
-async def health_ready():
+async def health_ready() -> JSONResponse:
     """Readiness probe — checks Qdrant and LLM connectivity."""
-    status = {"status": "ready", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
+    status: dict[str, Any] = {"status": "ready", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
     try:
         from proxy.app.core.retrieval import qdrant_client
 
-        qdrant_client.get_collections()
+        if qdrant_client is not None:
+            qdrant_client.get_collections()
         status["components"]["qdrant"] = "ok"
     except Exception:
         status["components"]["qdrant"] = "unavailable"

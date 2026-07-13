@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 class WorkingMemoryStore:
     """Working memory with TTL, backed by Redis or in-memory."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, tuple[Any, float]] = {}
 
     def _now(self) -> float:
         return time.monotonic()
 
-    def remember(self, key: str, value: Any, ttl: float = 300):
+    def remember(self, key: str, value: Any, ttl: float = 300) -> None:
         self._store[key] = (value, self._now() + ttl)
 
     def recall(self, key: str) -> Any | None:
@@ -38,7 +38,7 @@ class WorkingMemoryStore:
             return None
         return value
 
-    def forget(self, key: str):
+    def forget(self, key: str) -> None:
         self._store.pop(key, None)
 
     def get_all_for_context(self, max_tokens: int = 500) -> str:
@@ -53,7 +53,7 @@ class WorkingMemoryStore:
             result = result[: max_tokens * 4] + "..."
         return result
 
-    def _clean_expired(self):
+    def _clean_expired(self) -> None:
         now = self._now()
         expired = [k for k, (_, exp) in self._store.items() if now > exp]
         for k in expired:
@@ -72,7 +72,7 @@ class ConversationMemory:
         self._summaries: list[str] = []
         self._max_turns_stored = max_turns_stored
 
-    def add_turn(self, role: str, content: str, metadata: dict | None = None):
+    def add_turn(self, role: str, content: str, metadata: dict[str, Any] | None = None) -> None:
         self._turns.append(
             {
                 "role": role,
@@ -94,7 +94,7 @@ class ConversationMemory:
             result = result[: max_tokens * 4] + "..."
         return result
 
-    def summarize_older_turns(self, keep_recent: int = 5):
+    def summarize_older_turns(self, keep_recent: int = 5) -> None:
         if len(self._turns) <= keep_recent:
             return
         older = self._turns[:-keep_recent]
@@ -108,7 +108,7 @@ class ConversationMemory:
     def get_summaries(self) -> list[str]:
         return list(self._summaries)
 
-    def clear(self):
+    def clear(self) -> None:
         self._turns.clear()
         self._summaries.clear()
 
@@ -119,7 +119,7 @@ class ConversationMemory:
 class QueryCache:
     """Semantic query cache: returns cached response for similar queries."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: dict[str, tuple[str, float]] = {}
         self._embeddings: dict[str, list[float]] = {}
 
@@ -131,7 +131,8 @@ class QueryCache:
         norm_b = sum(x * x for x in b) ** 0.5
         if norm_a == 0 or norm_b == 0:
             return 0.0
-        return dot / (norm_a * norm_b)
+        result: float = dot / (norm_a * norm_b)
+        return result
 
     def _hash_embedding(self, embedding: list[float]) -> str:
         raw = json.dumps([round(x, 6) for x in embedding]).encode()
@@ -155,12 +156,12 @@ class QueryCache:
             return self._cache[best_key][0]
         return None
 
-    def store(self, query_embedding: list[float], response: str, ttl: float = 3600):
+    def store(self, query_embedding: list[float], response: str, ttl: float = 3600) -> None:
         key = self._hash_embedding(query_embedding)
         self._embeddings[key] = query_embedding
         self._cache[key] = (response, time.monotonic() + ttl)
 
-    def clear(self):
+    def clear(self) -> None:
         self._cache.clear()
         self._embeddings.clear()
 
@@ -171,12 +172,12 @@ class QueryCache:
 class MemoryManager:
     """Multi-tier memory system for RAG."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.working_memory = WorkingMemoryStore()
         self.conversation_memory = ConversationMemory()
         self.query_cache = QueryCache()
 
-    def add_turn(self, role: str, content: str, metadata: dict | None = None):
+    def add_turn(self, role: str, content: str, metadata: dict[str, Any] | None = None) -> None:
         self.conversation_memory.add_turn(role, content, metadata)
 
     def get_full_context(self, max_turns: int = 10, max_tokens: int = 2000) -> str:

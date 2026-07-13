@@ -9,6 +9,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ def compute_hallucination_rate(answers: list[str], contexts: list[str]) -> float
     return round(total_hallucinated / total_claims, 3)
 
 
-def run_hallucination_benchmark(eval_dataset: list[dict]) -> dict:
+def run_hallucination_benchmark(eval_dataset: list[dict[str, Any]]) -> dict[str, Any]:
     if not eval_dataset:
         return {
             "hallucination_rate": 0.0,

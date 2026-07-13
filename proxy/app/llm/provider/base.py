@@ -33,7 +33,7 @@ from proxy.app.shared.exceptions import LLMError
 from proxy.app.tools.definition import ToolCall, ToolDefinition, ToolResult
 
 
-def _get_config(attr: str, default):
+def _get_config(attr: str, default: Any) -> Any:
     """Get config value, checking provider package level first for test monkeypatching."""
     import proxy.app.llm.provider as _pkg
 
@@ -191,7 +191,7 @@ class MultiProviderRouter:
                 raise _CBOE("LLM backend circuit breaker is OPEN")
         except ImportError:
             pass
-        except _CBOE:  # type: ignore[name-defined]
+        except _CBOE:
             raise
 
         # Resolve adapter for this request
@@ -293,7 +293,7 @@ class MultiProviderRouter:
         provider_type: str | None = None,
     ) -> dict[str, Any]:
         """Non-streaming completion with provider translation."""
-        return await self._send_request(
+        result: dict[str, Any] = await self._send_request(
             messages,
             temperature,
             max_tokens,
@@ -302,6 +302,7 @@ class MultiProviderRouter:
             tool_results=tool_results,
             provider_type=provider_type,
         )
+        return result
 
     async def non_stream_completion_text(
         self,

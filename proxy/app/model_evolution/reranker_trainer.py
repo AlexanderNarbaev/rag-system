@@ -38,7 +38,7 @@ except ImportError:
     _TORCH_AVAILABLE = False
 
 try:
-    from transformers import (  # type: ignore[import-untyped]
+    from transformers import (
         AutoModelForSequenceClassification,
         AutoTokenizer,
         Trainer,
@@ -48,13 +48,13 @@ try:
     _TRANSFORMERS_AVAILABLE = True
 except ImportError:
     AutoTokenizer = None  # type: ignore[assignment,misc]
-    AutoModelForSequenceClassification = None  # type: ignore[assignment]
-    Trainer = None  # type: ignore[assignment]
-    TrainingArguments = None  # type: ignore[assignment]
+    AutoModelForSequenceClassification = None  # type: ignore[assignment,misc]
+    Trainer = None  # type: ignore[assignment,misc]
+    TrainingArguments = None  # type: ignore[assignment,misc]
     _TRANSFORMERS_AVAILABLE = False
 
 try:
-    from peft import (  # type: ignore[import-untyped]
+    from peft import (
         LoraConfig,
         TaskType,
         get_peft_model,
@@ -62,9 +62,9 @@ try:
 
     _PEFT_AVAILABLE = True
 except ImportError:
-    LoraConfig = None  # type: ignore[assignment,misc]
-    TaskType = None  # type: ignore[assignment]
-    get_peft_model = None  # type: ignore[assignment]
+    LoraConfig = None
+    TaskType = None
+    get_peft_model = None
     _PEFT_AVAILABLE = False
 
 try:
@@ -72,7 +72,7 @@ try:
 
     CROSS_ENCODER_AVAILABLE = True
 except ImportError:
-    CrossEncoder = None  # type: ignore[assignment,misc]
+    CrossEncoder = None  # type: ignore[misc]
     CROSS_ENCODER_AVAILABLE = False
 
 RERANKER_LORA_R = 4
@@ -80,7 +80,7 @@ RERANKER_LORA_ALPHA = 8
 RERANKER_LORA_DROPOUT = 0.05
 
 
-class RerankerDataset(torch.utils.data.Dataset if _TORCH_AVAILABLE else object):  # type: ignore[name-defined]
+class RerankerDataset(torch.utils.data.Dataset if _TORCH_AVAILABLE else object):  # type: ignore[misc]
     """PyTorch Dataset for reranker training from (query, chunk_text, score) triples."""
 
     def __init__(self, pairs: list[tuple[str, str, float]], tokenizer: Any, max_length: int = 512):
@@ -191,7 +191,7 @@ class RerankerTrainer(TrainerBase):
             args=training_args,
             train_dataset=train_data,
             eval_dataset=eval_data,
-            tokenizer=tokenizer,
+            tokenizer=tokenizer,  # type: ignore[call-arg]
         )
 
         trainer.train()
@@ -263,9 +263,9 @@ class RerankerTrainer(TrainerBase):
         base_model = getattr(model, "name_or_path", None)
         if base_model is None:
             base_model = getattr(model, "config", None)
-            if hasattr(base_model, "name_or_path"):
+            if base_model is not None and hasattr(base_model, "name_or_path"):
                 base_model = base_model.name_or_path
-            elif hasattr(base_model, "_name_or_path"):
+            elif base_model is not None and hasattr(base_model, "_name_or_path"):
                 base_model = base_model._name_or_path
         config_data = {
             "model_type": "reranker_cross_encoder",
@@ -339,7 +339,7 @@ class RerankerTrainer(TrainerBase):
         output_dir = config.output_dir if config else TrainingConfig(trainer_type=TrainerType.RERANKER).output_dir
         dataset_file = Path(output_dir) / filename
         if dataset_file.exists():
-            return json.loads(dataset_file.read_text())
+            return json.loads(dataset_file.read_text())  # type: ignore[no-any-return]
         return [("how to install docker", "Docker installation guide", 1.0)]
 
     def _extract_metrics(self, raw_metrics: dict[str, Any]) -> dict[str, float]:

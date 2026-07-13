@@ -10,6 +10,7 @@ Roles (hierarchical, higher inherits lower):
 
 import os
 from enum import StrEnum
+from typing import Any
 
 from fastapi import Depends, HTTPException
 
@@ -82,7 +83,7 @@ def has_permission(user: UserContext, action: str) -> bool:
     return ROLE_RANK.get(user_role, 0) >= ROLE_RANK.get(required_role, 0)
 
 
-def require_role(required_role: Role):
+def require_role(required_role: Role) -> Any:
     """FastAPI dependency factory — returns a dependency that checks the user's role.
 
     Usage:

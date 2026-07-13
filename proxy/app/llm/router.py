@@ -110,7 +110,7 @@ async def non_stream_completion(
     """
     data = await _send_completion_request(messages, temperature, max_tokens, stream=False, retry=MAX_RETRIES)
     try:
-        content = data["choices"][0]["message"]["content"]
+        content: str = data["choices"][0]["message"]["content"]
         return content
     except (KeyError, IndexError) as e:
         logger.error(f"Unexpected LLM response structure: {data}")
@@ -131,7 +131,7 @@ def non_stream_completion_sync(messages: list[dict[str, str]], temperature: floa
 # Пример использования (для самопроверки, требует запущенного LLM сервера)
 if __name__ == "__main__":
 
-    async def test():
+    async def test() -> None:
         messages = [{"role": "user", "content": "Привет, как дела?"}]
         # Не-потоковый тест
         resp = await non_stream_completion(messages)

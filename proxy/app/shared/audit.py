@@ -8,6 +8,7 @@ import logging
 import os
 import time
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 logger = logging.getLogger("rag-proxy.audit")
 
@@ -23,12 +24,12 @@ class AuditEvent:
     client_ip: str
     endpoint: str
     request_hash: str
-    details: dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
     duration_ms: float | None = None
     tokens_used: int | None = None
     result_status: str = "unknown"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         return {k: v for k, v in data.items() if v is not None}
 
@@ -44,7 +45,7 @@ class AuditLogger:
         os.makedirs(log_dir, exist_ok=True)
         self._audit_file = os.path.join(log_dir, "audit.jsonl")
 
-    def _write_event(self, event: AuditEvent):
+    def _write_event(self, event: AuditEvent) -> None:
         """Write an audit event to the JSONL file."""
         try:
             with open(self._audit_file, "a", encoding="utf-8") as f:
@@ -72,8 +73,8 @@ class AuditLogger:
         client_ip: str = "unknown",
         endpoint: str = "/v1/chat/completions",
         result_status: str = "success",
-        metadata: dict | None = None,
-    ):
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Log a query event."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
@@ -95,7 +96,7 @@ class AuditLogger:
         )
         self._write_event(event)
 
-    def log_access_denied(self, user_id: str | None, resource: str, reason: str, client_ip: str = "unknown"):
+    def log_access_denied(self, user_id: str | None, resource: str, reason: str, client_ip: str = "unknown") -> None:
         """Log an access denied event."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
@@ -115,7 +116,7 @@ class AuditLogger:
 
     def log_config_change(
         self, user_id: str | None, key: str, old_value: str, new_value: str, client_ip: str = "unknown"
-    ):
+    ) -> None:
         """Log configuration changes (values masked)."""
 
         def mask_val(v: str) -> str:
@@ -147,10 +148,10 @@ class AuditLogger:
         error_type: str,
         error_msg: str,
         stack_trace: str | None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
         client_ip: str = "unknown",
         endpoint: str = "unknown",
-    ):
+    ) -> None:
         """Log error events."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
@@ -182,8 +183,8 @@ class AuditLogger:
         confidence: float | None = None,
         feedback_id: str | None = None,
         client_ip: str = "unknown",
-        metadata: dict | None = None,
-    ):
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """Log detailed per-request trace with retrieval and observability metadata.
 
         Includes:
@@ -234,8 +235,8 @@ class AuditLogger:
         self._write_event(event)
 
     def log_auth(
-        self, user_id: str | None, action: str, success: bool, details: dict | None = None, client_ip: str = "unknown"
-    ):
+        self, user_id: str | None, action: str, success: bool, details: dict[str, Any] | None = None, client_ip: str = "unknown"
+    ) -> None:
         """Log authentication events."""
         event = AuditEvent(
             event_id=self._generate_event_id(),
@@ -259,9 +260,9 @@ class AuditLogger:
         user_id: str | None = None,
         limit: int = 100,
         start_time: str | None = None,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Read audit log with filters."""
-        results = []
+        results: list[dict[str, Any]] = []
         if not os.path.exists(self._audit_file):
             return results
 
@@ -373,11 +374,11 @@ class AuditLogger:
 class RequestTracker:
     """Tracks request lifecycle: start -> processing -> complete."""
 
-    def __init__(self):
-        self._active: dict[str, dict] = {}
+    def __init__(self) -> None:
+        self._active: dict[str, dict[str, Any]] = {}
         self._lock = None  # not async-safe; use in single-worker context
 
-    def start(self, request_id: str, metadata: dict | None = None):
+    def start(self, request_id: str, metadata: dict[str, Any] | None = None) -> None:
         """Record the start of a request."""
         self._active[request_id] = {
             "start_time": time.monotonic(),
@@ -385,7 +386,7 @@ class RequestTracker:
             "status": "processing",
         }
 
-    def complete(self, request_id: str, status: str = "success", tokens: int = 0) -> dict | None:
+    def complete(self, request_id: str, status: str = "success", tokens: int = 0) -> dict[str, Any] | None:
         """Record the completion of a request. Returns duration info or None."""
         entry = self._active.pop(request_id, None)
         if entry is None:

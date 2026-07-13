@@ -271,7 +271,7 @@ class AdapterManager:
     - Expose Prometheus metrics per adapter
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._adapters: dict[str, ModelAdapter] = {}
         self._watchers: dict[str, HotReloadWatcher] = {}
         self._lock = threading.RLock()

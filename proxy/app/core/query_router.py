@@ -13,7 +13,7 @@ Expected impact: 40-60% latency reduction for simple queries.
 
 import logging
 import re
-from typing import Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class QueryComplexityRouter:
     def get_retrieval_params(
         self,
         complexity: Literal["direct", "single", "multi"],
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Get retrieval parameters for the complexity level.
 

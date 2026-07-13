@@ -31,7 +31,7 @@ async def enrich_from_feedback(feedback_request: Any) -> bool:
     return await _index_chunk(chunk)
 
 
-def extract_qa_pair(feedback_request: Any, interaction: dict) -> dict | None:
+def extract_qa_pair(feedback_request: Any, interaction: dict[str, Any]) -> dict[str, Any] | None:
     """Extract a Q&A pair from feedback + original interaction."""
     query = interaction.get("query", "")
     response = interaction.get("response", "")
@@ -50,7 +50,7 @@ def extract_qa_pair(feedback_request: Any, interaction: dict) -> dict | None:
     }
 
 
-def chunk_qa_pair(qa: dict) -> dict | None:
+def chunk_qa_pair(qa: dict[str, Any]) -> dict[str, Any] | None:
     """Convert a Q&A pair into a chunk for indexing."""
     text = f"Q: {qa['question']}\nA: {qa['answer']}"
     chunk_id = hashlib.sha256(text.encode()).hexdigest()
@@ -68,7 +68,7 @@ def chunk_qa_pair(qa: dict) -> dict | None:
     }
 
 
-async def _index_chunk(chunk: dict) -> bool:
+async def _index_chunk(chunk: dict[str, Any]) -> bool:
     """Index a chunk in Qdrant. Returns True on success."""
     try:
         from qdrant_client import QdrantClient
@@ -99,7 +99,7 @@ async def _index_chunk(chunk: dict) -> bool:
         return False
 
 
-def _find_interaction(feedback_id: str) -> dict | None:
+def _find_interaction(feedback_id: str) -> dict[str, Any] | None:
     """Find the original interaction by feedback_id in the interaction log."""
     log_path = Path("logs/interactions.jsonl")
     if not log_path.exists():
@@ -109,7 +109,7 @@ def _find_interaction(feedback_id: str) -> dict | None:
         for line in log_path.read_text().strip().split("\n"):
             if not line.strip():
                 continue
-            entry = json.loads(line)
+            entry: dict[str, Any] = json.loads(line)
             if entry.get("feedback_id") == feedback_id or entry.get("request_id") == feedback_id:
                 return entry
     except Exception as e:

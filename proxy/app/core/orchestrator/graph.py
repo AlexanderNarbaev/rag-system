@@ -11,9 +11,9 @@ try:
     LANGGRAPH_AVAILABLE = True
 except ImportError:
     LANGGRAPH_AVAILABLE = False
-    END = None  # type: ignore[assignment]
-    MemorySaver = None  # type: ignore[assignment,misc]
-    StateGraph = None  # type: ignore[assignment,misc]
+    END = "END"
+    MemorySaver = None
+    StateGraph = None
 
 from proxy.app.core.orchestrator.nodes import (
     build_context_node,
@@ -55,14 +55,14 @@ class RAGState(TypedDict):
     tools_enabled: bool
 
 
-def _self_critique_route(state: dict) -> str:
+def _self_critique_route(state: dict[str, Any]) -> str:
     """Route after self-critique: rewrite if needed, otherwise done."""
     if state.get("needs_rewrite"):
         return "rewrite"
     return "done"
 
 
-def _self_reflection_route(state: dict) -> str:
+def _self_reflection_route(state: dict[str, Any]) -> str:
     """Route after self-reflection: re-retrieve if gaps found, otherwise done."""
     if state.get("needs_reflection"):
         return "retrieve"
@@ -80,7 +80,7 @@ def _route_after_generate(state: RAGState) -> str:
     return "reflect"
 
 
-def build_rag_graph() -> StateGraph:
+def build_rag_graph() -> Any:
     """Создаёт и компилирует граф RAG с tool-calling поддержкой."""
     if not LANGGRAPH_AVAILABLE or StateGraph is None:
         raise RuntimeError(
@@ -171,17 +171,21 @@ def build_rag_graph() -> StateGraph:
 class RAGOrchestrator:
     """Обёртка над скомпилированным графом."""
 
-    def __init__(self, checkpointer=None):
+    def __init__(self, checkpointer: Any = None) -> None:
         self.builder = build_rag_graph()
-        self.graph = self.builder.compile(checkpointer=checkpointer or MemorySaver())
+        if checkpointer is None and MemorySaver is not None:
+            checkpointer = MemorySaver()
+        self.graph = self.builder.compile(checkpointer=checkpointer)
 
     async def ainvoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Асинхронный вызов графа."""
-        return await self.graph.ainvoke(inputs)
+        result: dict[str, Any] = await self.graph.ainvoke(inputs)
+        return result
 
     def invoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Синхронный вызов графа."""
-        return self.graph.invoke(inputs)
+        result: dict[str, Any] = self.graph.invoke(inputs)
+        return result
 
 
 # Функция для получения экземпляра оркестратора (синглтон)

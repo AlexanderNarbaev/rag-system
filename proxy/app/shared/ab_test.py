@@ -13,7 +13,7 @@ import os
 import random
 from dataclasses import dataclass, field
 from statistics import mean, stdev
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from proxy.app.model_evolution.canary_controller import CanaryController
@@ -27,7 +27,7 @@ class ABVariant:
     """A single A/B test variant with config, metrics, and trial tracking."""
 
     name: str
-    config: dict
+    config: dict[str, Any]
     weight: float = 1.0
     trials: int = 0
     metrics: dict[str, list[float]] = field(default_factory=dict)
@@ -38,7 +38,7 @@ class ABVariant:
     def record_trial(self) -> None:
         self.trials += 1
 
-    def metric_stats(self, metric_name: str) -> dict:
+    def metric_stats(self, metric_name: str) -> dict[str, Any]:
         values = self.metrics.get(metric_name, [])
         if not values:
             return {"count": 0}
@@ -79,7 +79,7 @@ class ABTest:
     def variants(self) -> list[ABVariant]:
         return list(self._variants.values())
 
-    def register(self, name: str, config: dict, weight: float = 1.0) -> ABVariant:
+    def register(self, name: str, config: dict[str, Any], weight: float = 1.0) -> ABVariant:
         if name in self._variants:
             raise ValueError(f"Variant '{name}' already registered in test '{self.name}'")
         variant = ABVariant(name=name, config=config, weight=weight)
@@ -108,7 +108,7 @@ class ABTest:
         for key, value in metrics.items():
             variant.record(key, value)
 
-    def compare(self, metric_name: str, variant_a: str, variant_b: str) -> dict:
+    def compare(self, metric_name: str, variant_a: str, variant_b: str) -> dict[str, Any]:
         va = self._variants.get(variant_a)
         vb = self._variants.get(variant_b)
         if va is None or vb is None:
@@ -143,13 +143,13 @@ class ABTest:
 
     def is_significant(self, metric_name: str, variant_a: str, variant_b: str, threshold: float = 0.05) -> bool:
         comparison = self.compare(metric_name, variant_a, variant_b)
-        p_value = comparison.get("p_value")
+        p_value: float | None = comparison.get("p_value")
         if p_value is None:
             return False
-        return p_value < threshold
+        return bool(p_value < threshold)
 
-    def get_report(self) -> dict:
-        report: dict = {
+    def get_report(self) -> dict[str, Any]:
+        report: dict[str, Any] = {
             "name": self.name,
             "variants": [],
             "total_trials": sum(v.trials for v in self._variants.values()),

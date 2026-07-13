@@ -29,6 +29,7 @@ import subprocess
 import threading
 import time
 from enum import Enum
+from typing import Any
 
 import requests
 
@@ -107,7 +108,7 @@ class LocalSLMClient:
         self._threads = threads
         self._port = port
         self._startup_timeout = startup_timeout
-        self._process: subprocess.Popen | None = None
+        self._process: subprocess.Popen[Any] | None = None
         self._lock = threading.Lock()
 
     @property
@@ -222,7 +223,7 @@ class LocalSLMClient:
         url = f"{self.endpoint}/chat/completions"
         headers = {"Content-Type": "application/json"}
 
-        payload = {
+        payload: dict[str, Any] = {
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -231,8 +232,8 @@ class LocalSLMClient:
         try:
             resp = requests.post(url, json=payload, headers=headers, timeout=30)
             resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+            data: dict[str, Any] = resp.json()
+            return str(data["choices"][0]["message"]["content"]).strip()
         except requests.RequestException as e:
             logger.error("Local SLM request failed: %s", e)
             # If the server process died, reset so next call restarts it.
@@ -353,7 +354,7 @@ def _call_slm_sync(prompt: str, max_tokens: int = 256, temperature: float = 0.1)
     if SLM_API_KEY:
         headers["Authorization"] = f"Bearer {SLM_API_KEY}"
 
-    payload = {
+    payload: dict[str, Any] = {
         "model": SLM_MODEL_NAME,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
@@ -363,8 +364,8 @@ def _call_slm_sync(prompt: str, max_tokens: int = 256, temperature: float = 0.1)
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=10)
         resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"].strip()
+        data: dict[str, Any] = resp.json()
+        return str(data["choices"][0]["message"]["content"]).strip()
     except Exception as e:
         logger.error(f"SLM call failed: {e}")
         return ""

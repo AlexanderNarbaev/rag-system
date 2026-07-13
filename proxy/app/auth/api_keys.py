@@ -23,7 +23,7 @@ class ApiKey:
 class ApiKeyManager:
     """Manages API keys for user separation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._keys: dict[str, ApiKey] = {}
         self._key_to_user: dict[str, str] = {}  # key_hash -> user_id
 

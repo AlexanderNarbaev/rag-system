@@ -5,7 +5,7 @@ Re-exports all public symbols for backward compatibility with
 ``from proxy.app.core.orchestrator import ...`` imports.
 """
 
-from proxy.app.core.orchestrator.graph import (
+from proxy.app.core.orchestrator.graph import (  # type: ignore[attr-defined]
     END,
     LANGGRAPH_AVAILABLE,
     MemorySaver,
