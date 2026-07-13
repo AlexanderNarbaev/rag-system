@@ -258,6 +258,119 @@ def hybrid_rerank(
     return combined
 
 
+class TwoStageReranker:
+    """
+    Two-stage reranking for optimal latency/quality tradeoff.
+
+    Stage 1: Fast embedding-based scoring (30-50ms)
+    Stage 2: Cross-encoder scoring (150-400ms) on top-K from stage 1
+
+    Based on: https://habr.com/ru/articles/1024696/
+
+    Usage:
+        reranker = TwoStageReranker(
+            fast_model="BAAI/bge-small-en-v1.5",
+            cross_encoder_model="cross-encoder/ms-marco-MiniLM-L-6-v2"
+        )
+        results = reranker.rerank(query, documents, final_top_k=5)
+    """
+
+    def __init__(
+        self,
+        fast_model: str = None,
+        cross_encoder_model: str = None,
+        fast_top_k: int = 20,
+        final_top_k: int = 5,
+    ):
+        self.fast_model = fast_model
+        self.cross_encoder_model = cross_encoder_model
+        self.fast_top_k = fast_top_k
+        self.final_top_k = final_top_k
+        self._fast_encoder = None
+        self._cross_encoder = None
+
+    def _get_fast_encoder(self):
+        """Lazy-load fast embedding model."""
+        if self._fast_encoder is None and self.fast_model:
+            try:
+                from sentence_transformers import SentenceTransformer
+
+                self._fast_encoder = SentenceTransformer(self.fast_model)
+                logger.info(f"Loaded fast encoder: {self.fast_model}")
+            except Exception as e:
+                logger.warning(f"Failed to load fast encoder: {e}")
+        return self._fast_encoder
+
+    def fast_score(self, query: str, documents: list[str]) -> list[float]:
+        """
+        Stage 1: Fast embedding-based scoring.
+        Uses cosine similarity between query and document embeddings.
+        """
+        encoder = self._get_fast_encoder()
+        if encoder is None:
+            # Fallback: return uniform scores
+            return [0.5] * len(documents)
+
+        try:
+            query_emb = encoder.encode(query, normalize_embeddings=True)
+            doc_embs = encoder.encode(documents, normalize_embeddings=True)
+
+            # Cosine similarity
+            import numpy as np
+
+            scores = np.dot(doc_embs, query_emb).tolist()
+            return scores
+        except Exception as e:
+            logger.warning(f"Fast scoring failed: {e}")
+            return [0.5] * len(documents)
+
+    def cross_encoder_score(self, query: str, documents: list[str]) -> list[float]:
+        """Stage 2: Cross-encoder scoring (slow but accurate)."""
+        return rerank_chunks(query, documents, top_k=len(documents))
+
+    def rerank(
+        self,
+        query: str,
+        documents: list[dict],
+        text_key: str = "text",
+    ) -> list[dict]:
+        """
+        Two-stage reranking:
+        1. Fast embed scoring → select top fast_top_k
+        2. Cross-encoder scoring → select final_top_k
+        """
+        if not documents:
+            return []
+
+        # Stage 1: Fast scoring
+        texts = [doc.get(text_key, "") for doc in documents]
+        fast_scores = self.fast_score(query, texts)
+
+        # Sort by fast score and take top K
+        scored_docs = list(zip(documents, fast_scores, strict=False))
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+        top_fast = scored_docs[: self.fast_top_k]
+
+        # Stage 2: Cross-encoder scoring
+        fast_top_texts = [doc.get(text_key, "") for doc, _ in top_fast]
+        cross_scores = self.cross_encoder_score(query, fast_top_texts)
+
+        # Combine scores (weighted)
+        results = []
+        for i, (doc, fast_score) in enumerate(top_fast):
+            cross_score = cross_scores[i] if i < len(cross_scores) else 0.0
+            # Weighted combination: 20% fast + 80% cross-encoder
+            combined_score = 0.2 * fast_score + 0.8 * cross_score
+            doc["fast_score"] = fast_score
+            doc["cross_score"] = cross_score
+            doc["score"] = combined_score
+            results.append(doc)
+
+        # Sort by combined score
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[: self.final_top_k]
+
+
 # Если кэш-менеджер не был инициализирован, создаём заглушку
 if cache_manager is None:
     cache_manager = CacheManager(use_redis=False)

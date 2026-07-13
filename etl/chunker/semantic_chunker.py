@@ -450,6 +450,259 @@ class MDKeyChunker:
         return packed
 
 
+class AdaptiveChunker:
+    """
+    Adaptive chunking that adjusts chunk size based on document structure.
+
+    Strategy:
+    - Headers/sections: chunk by section (natural boundaries)
+    - Code blocks: keep together (don't split)
+    - Tables: keep together
+    - Long paragraphs: split at sentence boundaries
+    - Short paragraphs: combine with neighbors
+
+    Based on research: optimal chunk size 500-1500 chars with 10-20% overlap.
+    """
+
+    def __init__(
+        self,
+        min_chunk_size: int = 200,
+        max_chunk_size: int = 2000,
+        target_chunk_size: int = 800,
+        overlap_ratio: float = 0.15,
+    ):
+        self.min_chunk_size = min_chunk_size
+        self.max_chunk_size = max_chunk_size
+        self.target_chunk_size = target_chunk_size
+        self.overlap_ratio = overlap_ratio
+
+    def _detect_structure(self, text: str) -> list[dict]:
+        """
+        Detect document structure: headers, code blocks, tables, paragraphs.
+        Returns list of structural elements.
+        """
+        elements = []
+        lines = text.split("\n")
+        current_pos = 0
+
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+
+            # Header detection
+            if re.match(r"^#{1,6}\s+", line):
+                level_match = re.match(r"^(#{1,6})", line)
+                elements.append(
+                    {
+                        "type": "header",
+                        "level": len(level_match.group(1)) if level_match else 1,
+                        "text": line,
+                        "start": current_pos,
+                        "end": current_pos + len(line) + 1,
+                    }
+                )
+
+            # Code block detection
+            elif line.strip().startswith("```"):
+                # Find closing ```
+                code_lines = [line]
+                i += 1
+                while i < len(lines) and not lines[i].strip().startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    code_lines.append(lines[i])
+                code_text = "\n".join(code_lines)
+                elements.append(
+                    {
+                        "type": "code",
+                        "text": code_text,
+                        "start": current_pos,
+                        "end": current_pos + len(code_text) + 1,
+                    }
+                )
+
+            # Table detection
+            elif "|" in line and i + 1 < len(lines) and "---" in lines[i + 1]:
+                table_lines = [line]
+                i += 1
+                while i < len(lines) and "|" in lines[i]:
+                    table_lines.append(lines[i])
+                    i += 1
+                table_text = "\n".join(table_lines)
+                elements.append(
+                    {
+                        "type": "table",
+                        "text": table_text,
+                        "start": current_pos,
+                        "end": current_pos + len(table_text) + 1,
+                    }
+                )
+                i -= 1  # Will be incremented at end of loop
+
+            # Regular paragraph
+            elif line.strip():
+                elements.append(
+                    {
+                        "type": "paragraph",
+                        "text": line,
+                        "start": current_pos,
+                        "end": current_pos + len(line) + 1,
+                    }
+                )
+
+            current_pos += len(line) + 1
+            i += 1
+
+        return elements
+
+    def _merge_small_elements(self, elements: list[dict]) -> list[dict]:
+        """Merge small adjacent elements to reach target chunk size."""
+        if not elements:
+            return []
+
+        merged = []
+        current_chunk = elements[0].copy()
+
+        for elem in elements[1:]:
+            # Don't merge headers with previous content
+            if elem["type"] == "header":
+                if len(current_chunk["text"]) >= self.min_chunk_size:
+                    merged.append(current_chunk)
+                current_chunk = elem.copy()
+                continue
+
+            # Don't merge code blocks
+            if elem["type"] == "code" or current_chunk["type"] == "code":
+                if len(current_chunk["text"]) >= self.min_chunk_size:
+                    merged.append(current_chunk)
+                current_chunk = elem.copy()
+                continue
+
+            # Merge if combined size is under target
+            combined_size = len(current_chunk["text"]) + len(elem["text"])
+            if combined_size <= self.target_chunk_size:
+                current_chunk["text"] += "\n" + elem["text"]
+                current_chunk["end"] = elem["end"]
+            else:
+                if len(current_chunk["text"]) >= self.min_chunk_size:
+                    merged.append(current_chunk)
+                current_chunk = elem.copy()
+
+        if current_chunk:
+            merged.append(current_chunk)
+
+        return merged
+
+    def _split_large_chunks(self, elements: list[dict]) -> list[dict]:
+        """Split chunks that exceed max_chunk_size at sentence boundaries."""
+        result = []
+        for elem in elements:
+            if len(elem["text"]) <= self.max_chunk_size:
+                result.append(elem)
+                continue
+
+            # Split at sentence boundaries
+            sentences = re.split(r"(?<=[.!?])\s+", elem["text"])
+            current_chunk = ""
+
+            for sentence in sentences:
+                if len(current_chunk) + len(sentence) > self.target_chunk_size:
+                    if current_chunk:
+                        result.append(
+                            {
+                                "type": elem["type"],
+                                "text": current_chunk.strip(),
+                                "start": elem["start"],
+                                "end": elem["start"] + len(current_chunk),
+                            }
+                        )
+                    current_chunk = sentence
+                else:
+                    current_chunk += " " + sentence if current_chunk else sentence
+
+            if current_chunk:
+                result.append(
+                    {
+                        "type": elem["type"],
+                        "text": current_chunk.strip(),
+                        "start": elem["start"],
+                        "end": elem["start"] + len(current_chunk),
+                    }
+                )
+
+        return result
+
+    def _apply_overlap(self, chunks: list[dict]) -> list[dict]:
+        """Apply overlap between consecutive chunks for context continuity."""
+        if self.overlap_ratio <= 0 or len(chunks) <= 1:
+            return chunks
+
+        overlapped = []
+        for i, chunk in enumerate(chunks):
+            if i > 0:
+                overlap_chars = int(len(chunks[i - 1]["text"]) * self.overlap_ratio)
+                overlap_text = chunks[i - 1]["text"][-overlap_chars:]
+                chunk["text"] = f"[previous context: ...{overlap_text}]\n\n{chunk['text']}"
+            overlapped.append(chunk)
+
+        return overlapped
+
+    def chunk(self, text: str) -> list[dict]:
+        """
+        Adaptive chunking: detect structure, merge small, split large.
+
+        Returns list of chunks with:
+        - text: chunk content
+        - type: structural type (header, code, table, paragraph)
+        - start/end: position in original text
+        """
+        # Step 1: Detect structure
+        elements = self._detect_structure(text)
+
+        # Step 2: Merge small elements
+        merged = self._merge_small_elements(elements)
+
+        # Step 3: Split large chunks
+        final = self._split_large_chunks(merged)
+
+        # Step 4: Apply overlap
+        final = self._apply_overlap(final)
+
+        return final
+
+    def chunk_markdown(self, markdown_text: str, source_metadata: dict[str, Any] | None = None) -> list[Chunk]:
+        """
+        Chunk markdown text and return Chunk objects compatible with the pipeline.
+
+        :param markdown_text: Raw markdown text
+        :param source_metadata: Optional metadata dict with source_type, doc_title, etc.
+        :return: List of Chunk objects
+        """
+        if source_metadata is None:
+            source_metadata = {}
+
+        raw_chunks = self.chunk(markdown_text)
+        chunks: list[Chunk] = []
+
+        for i, raw in enumerate(raw_chunks):
+            text = raw["text"]
+            chunk = Chunk(
+                text=text,
+                hash=hashlib.sha256(text.encode()).hexdigest(),
+                title=raw.get("type", "paragraph"),
+                source_type=source_metadata.get("source_type", ""),
+                source_id=source_metadata.get("source_id", ""),
+                version=source_metadata.get("version", ""),
+                doc_title=source_metadata.get("doc_title", ""),
+                position=i,
+                tokens_approx=len(text) // 4,  # Rough token estimate
+            )
+            chunks.append(chunk)
+
+        return chunks
+
+
 # Утилита для сохранения чанков в JSON (для последующей индексации)
 def save_chunks_to_json(chunks: list[Chunk], output_path: Path):
     """Сохраняет список чанков в JSON-файл."""

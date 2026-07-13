@@ -145,13 +145,9 @@ RAG_NEGATIVE_REJECTION = Counter(
 # ── Helper functions ──
 
 
-def record_rag_request(
-    method: str, status: str, has_context: bool, duration: float
-) -> None:
+def record_rag_request(method: str, status: str, has_context: bool, duration: float) -> None:
     """Record RAG request metrics."""
-    RAG_REQUEST_COUNT.labels(
-        method=method, status=status, has_context=str(has_context)
-    ).inc()
+    RAG_REQUEST_COUNT.labels(method=method, status=status, has_context=str(has_context)).inc()
     RAG_LATENCY.labels(operation="total").observe(duration)
 
 

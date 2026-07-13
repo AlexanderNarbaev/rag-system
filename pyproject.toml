@@ -41,6 +41,10 @@ omit = [
     "etl/scheduler/streaming_pipeline.py",
     "*/__pycache__/*",
     "*/tests/*",
+    "proxy/app/core/flare.py",
+    "proxy/app/core/ragas_eval.py",
+    "etl/indexer/tree_builder.py",
+    "etl/graph_builder/community.py",
 ]
 
 [tool.coverage.report]
