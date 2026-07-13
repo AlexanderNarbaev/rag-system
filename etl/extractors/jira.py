@@ -364,10 +364,7 @@ class JiraExtractor:
             "reporter": reporter,
             "project_key": project_key,
             "labels": labels,
-            "components": [
-                {"id": c.get("id"), "name": c.get("name", "")}
-                for c in fields.get("components", [])
-            ],
+            "components": [{"id": c.get("id"), "name": c.get("name", "")} for c in fields.get("components", [])],
             "sprints": sprints,
             "comments": comments,
             "changelog": changelog_entries,

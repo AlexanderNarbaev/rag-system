@@ -17,18 +17,62 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Common stop words excluded from keyword overlap calculations
-_STOP_WORDS = frozenset({
-    'what', 'is', 'the', 'a', 'an', 'how', 'why', 'when', 'where',
-    'who', 'which', 'do', 'does', 'can', 'could', 'should', 'would', 'will',
-    'of', 'to', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'it', 'its',
-    'be', 'are', 'was', 'were', 'been', 'being', 'have', 'has', 'had',
-    'this', 'that', 'these', 'those', 'and', 'or', 'but', 'not', 'no',
-})
+_STOP_WORDS = frozenset(
+    {
+        "what",
+        "is",
+        "the",
+        "a",
+        "an",
+        "how",
+        "why",
+        "when",
+        "where",
+        "who",
+        "which",
+        "do",
+        "does",
+        "can",
+        "could",
+        "should",
+        "would",
+        "will",
+        "of",
+        "to",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "it",
+        "its",
+        "be",
+        "are",
+        "was",
+        "were",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "this",
+        "that",
+        "these",
+        "those",
+        "and",
+        "or",
+        "but",
+        "not",
+        "no",
+    }
+)
 
 
 def _tokenize(text: str) -> set[str]:
     """Lowercase, strip punctuation, and return non-stop-word tokens."""
-    words = re.findall(r'[a-z0-9]+', text.lower())
+    words = re.findall(r"[a-z0-9]+", text.lower())
     return {w for w in words if w not in _STOP_WORDS and len(w) > 1}
 
 
@@ -43,7 +87,7 @@ def compute_faithfulness(answer: str, context: str, llm_client: Any = None) -> f
         return 0.0
 
     # Extract claims from answer (simple sentence-based)
-    claims = [s.strip() for s in answer.split('.') if s.strip() and len(s.strip()) > 10]
+    claims = [s.strip() for s in answer.split(".") if s.strip() and len(s.strip()) > 10]
 
     if not claims:
         return 1.0  # No claims to verify
@@ -116,15 +160,16 @@ def evaluate_rag_response(
     Compute all RAGAS metrics for a RAG response.
     Returns dict with metric names and scores.
     """
-    context_text = ' '.join(contexts)
+    context_text = " ".join(contexts)
 
     return {
-        'faithfulness': compute_faithfulness(answer, context_text),
-        'answer_relevance': compute_answer_relevance(question, answer),
-        'context_relevance': compute_context_relevance(question, contexts),
-        'overall': (
-            compute_faithfulness(answer, context_text) +
-            compute_answer_relevance(question, answer) +
-            compute_context_relevance(question, contexts)
-        ) / 3
+        "faithfulness": compute_faithfulness(answer, context_text),
+        "answer_relevance": compute_answer_relevance(question, answer),
+        "context_relevance": compute_context_relevance(question, contexts),
+        "overall": (
+            compute_faithfulness(answer, context_text)
+            + compute_answer_relevance(question, answer)
+            + compute_context_relevance(question, contexts)
+        )
+        / 3,
     }

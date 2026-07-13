@@ -137,7 +137,7 @@ class RaptorTreeBuilder:
             current_level_nodes = new_level_nodes
             level += 1
 
-        logger.info(f"Built RAPTOR tree: {len(tree)} nodes, {level-1} levels")
+        logger.info(f"Built RAPTOR tree: {len(tree)} nodes, {level - 1} levels")
         return tree
 
     def get_summaries_at_level(self, tree: dict[str, TreeNode], level: int) -> list[str]:

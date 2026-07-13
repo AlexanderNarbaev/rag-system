@@ -331,9 +331,7 @@ class GitLabExtractor:
 
         # Apply max_projects limit if configured
         if self.max_projects > 0 and len(projects) > self.max_projects:
-            logger.info(
-                f"Limiting projects from {len(projects)} to max_projects={self.max_projects}"
-            )
+            logger.info(f"Limiting projects from {len(projects)} to max_projects={self.max_projects}")
             projects = projects[: self.max_projects]
 
         total = len(projects)
@@ -345,10 +343,7 @@ class GitLabExtractor:
 
         for idx, project in enumerate(projects, 1):
             project_id = project["id"]
-            logger.info(
-                f"[{idx}/{total}] Processing project "
-                f"{project['path_with_namespace']} (id={project_id})"
-            )
+            logger.info(f"[{idx}/{total}] Processing project {project['path_with_namespace']} (id={project_id})")
 
             commits = []
             if self.fetch_commits:

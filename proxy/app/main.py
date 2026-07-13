@@ -395,10 +395,7 @@ async def process_rag_query(
     should_gen, reason = should_generate_answer(chunks_for_eval)
     if not should_gen:
         logger.info(f"Negative evidence: refusing to generate — {reason}")
-        refusal = (
-            f"I don't have enough relevant information to answer this "
-            f"question reliably. {reason}"
-        )
+        refusal = f"I don't have enough relevant information to answer this question reliably. {reason}"
         return refusal, "", False, sources, {}
 
     # 10. Build system prompt

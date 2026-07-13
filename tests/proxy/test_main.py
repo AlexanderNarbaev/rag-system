@@ -444,7 +444,12 @@ class TestProcessRagQuery:
                 stream=False,
             )
             # Negative rejection: should return refusal instead of LLM answer
-            assert "don't have enough" in result.lower() or "insufficient" in result.lower() or "no relevant" in result.lower() or result == "Answer from LLM"
+            assert (
+                "don't have enough" in result.lower()
+                or "insufficient" in result.lower()
+                or "no relevant" in result.lower()
+                or result == "Answer from LLM"
+            )
             assert from_cache is False
 
     @pytest.mark.asyncio

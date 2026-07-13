@@ -237,9 +237,7 @@ def filter_results_by_score(results: list) -> tuple[list, str]:
         return [], "insufficient"
 
     strong = [r for r in results if r.score >= STRONG_SCORE_THRESHOLD]
-    borderline = [
-        r for r in results if BORDERLINE_SCORE_THRESHOLD <= r.score < STRONG_SCORE_THRESHOLD
-    ]
+    borderline = [r for r in results if BORDERLINE_SCORE_THRESHOLD <= r.score < STRONG_SCORE_THRESHOLD]
 
     if len(strong) >= MIN_STRONG_SOURCES:
         # Good quality — use strong + some borderline

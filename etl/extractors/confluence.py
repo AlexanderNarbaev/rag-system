@@ -396,11 +396,9 @@ class ConfluenceExtractor:
         # Итоговый объект
         # RBAC metadata: author from current version, contributors from all versions
         author = page.get("version", {}).get("by", {}).get("displayName", "")
-        contributors = list({
-            v.get("by", {}).get("displayName", "")
-            for v in versions
-            if v.get("by", {}).get("displayName")
-        })
+        contributors = list(
+            {v.get("by", {}).get("displayName", "") for v in versions if v.get("by", {}).get("displayName")}
+        )
         space_key = page.get("space", {}).get("key", "")
 
         # Labels and restrictions (may not be available in all Confluence versions)

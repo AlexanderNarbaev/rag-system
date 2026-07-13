@@ -390,10 +390,7 @@ class TestNegativeRejectionIntegration:
         # Simulate the refusal message construction from main.py lines 397-400
         should_gen, reason = should_generate_answer([])
         if not should_gen:
-            refusal = (
-                f"I don't have enough relevant information to answer this "
-                f"question reliably. {reason}"
-            )
+            refusal = f"I don't have enough relevant information to answer this question reliably. {reason}"
             assert "I don't have enough" in refusal
             assert "No relevant documents" in refusal
 
@@ -405,10 +402,7 @@ class TestNegativeRejectionIntegration:
         ]
         should_gen, reason = should_generate_answer(chunks)
         if not should_gen:
-            refusal = (
-                f"I don't have enough relevant information to answer this "
-                f"question reliably. {reason}"
-            )
+            refusal = f"I don't have enough relevant information to answer this question reliably. {reason}"
             assert "insufficient" in refusal.lower() or "no sufficiently" in refusal.lower()
 
 

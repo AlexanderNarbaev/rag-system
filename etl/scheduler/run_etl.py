@@ -492,9 +492,7 @@ def main():
             logger.warning("No extractors configured (confluence/jira/gitlab URLs missing)")
         else:
             names = [e[0] for e in extractors_to_run]
-            logger.info(
-                f"Starting {len(extractors_to_run)} extractors in parallel: {names}"
-            )
+            logger.info(f"Starting {len(extractors_to_run)} extractors in parallel: {names}")
             failed_extractors = []
             default_dirs = {
                 "confluence": Path(config.get("confluence", {}).get("output_dir", "./raw_data/confluence")),
@@ -504,8 +502,7 @@ def main():
 
             with ThreadPoolExecutor(max_workers=len(extractors_to_run), thread_name_prefix="etl") as pool:
                 futures = {
-                    pool.submit(_run_extractor_safe, name, fn, config, wal): name
-                    for name, fn in extractors_to_run
+                    pool.submit(_run_extractor_safe, name, fn, config, wal): name for name, fn in extractors_to_run
                 }
                 for future in as_completed(futures):
                     if _shutdown_requested:
@@ -522,18 +519,14 @@ def main():
 
             if failed_extractors:
                 failed_names = [f[0] for f in failed_extractors]
-                logger.warning(
-                    f"=== {len(failed_extractors)} extractor(s) failed: {failed_names} ==="
-                )
+                logger.warning(f"=== {len(failed_extractors)} extractor(s) failed: {failed_names} ===")
                 for name, err in failed_extractors:
                     logger.warning(f"  {name}: {err}")
             if len(failed_extractors) == len(extractors_to_run):
                 logger.error("All extractors failed — pipeline cannot continue")
                 sys.exit(1)
             succeeded = len(extractors_to_run) - len(failed_extractors)
-            logger.info(
-                f"Extraction completed: {succeeded}/{len(extractors_to_run)} succeeded"
-            )
+            logger.info(f"Extraction completed: {succeeded}/{len(extractors_to_run)} succeeded")
     else:
         # Используем уже существующие директории из конфига
         extract_dirs = [

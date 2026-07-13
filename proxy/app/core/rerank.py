@@ -247,10 +247,7 @@ def hybrid_rerank(
     # Combine scores
     combined = []
     for i, doc in enumerate(documents):
-        final_score = (
-            colbert_weight * colbert_scores[i]
-            + cross_encoder_weight * cross_scores[i]
-        )
+        final_score = colbert_weight * colbert_scores[i] + cross_encoder_weight * cross_scores[i]
         doc["score"] = final_score
         doc["colbert_score"] = colbert_scores[i]
         doc["cross_encoder_score"] = cross_scores[i]

@@ -59,7 +59,7 @@ class TestEvaluateRagResponse:
         scores = evaluate_rag_response(
             question="What is Python?",
             answer="Python is a programming language",
-            contexts=["Python is a high-level programming language"]
+            contexts=["Python is a high-level programming language"],
         )
         assert "faithfulness" in scores
         assert "answer_relevance" in scores

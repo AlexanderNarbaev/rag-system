@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Community:
     """A community in the knowledge graph."""
+
     id: str
     level: int
     members: list[str]  # Entity IDs
@@ -165,14 +166,16 @@ class CommunityDetector:
 
         data = []
         for comm in communities:
-            data.append({
-                "id": comm.id,
-                "level": comm.level,
-                "members": comm.members,
-                "summary": comm.summary,
-                "key_entities": comm.key_entities,
-                "metadata": comm.metadata,
-            })
+            data.append(
+                {
+                    "id": comm.id,
+                    "level": comm.level,
+                    "members": comm.members,
+                    "summary": comm.summary,
+                    "key_entities": comm.key_entities,
+                    "metadata": comm.metadata,
+                }
+            )
 
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
