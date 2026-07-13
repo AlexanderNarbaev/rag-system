@@ -94,6 +94,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 # ============ Агентная оркестрация (LangGraph) ============
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
+
+# ── Adaptive routing (opt-in) ──
+ADAPTIVE_ROUTING_ENABLED = os.getenv("ADAPTIVE_ROUTING_ENABLED", "false").lower() == "true"
 MAX_RETRIEVAL_LOOPS = int(os.getenv("MAX_RETRIEVAL_LOOPS", "3"))
 
 # ============ Граф знаний (Neo4j) ============

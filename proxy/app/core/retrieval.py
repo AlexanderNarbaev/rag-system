@@ -181,7 +181,12 @@ def initialize_retrieval() -> None:
 def _compute_dense_embedding(text: str) -> list[float]:
     """Вычисляет dense вектор с кэшированием."""
     cache_key = f"embed:{hashlib.md5(text.encode()).hexdigest()}"
-    # Проверяем кэш
+    # Check embedding cache first
+    cached_embedding = _embedding_cache.get(text)
+    if cached_embedding is not None:
+        return cached_embedding
+
+    # Check Redis/in-memory cache
     if cache_manager:
         cached = cache_manager.get_sync(cache_key)
         if cached is not None:
@@ -195,6 +200,7 @@ def _compute_dense_embedding(text: str) -> list[float]:
     vec = embedder.encode(text, normalize_embeddings=True).tolist()
     if cache_manager:
         cache_manager.set_sync(cache_key, json.dumps(vec), ttl=3600)
+    _embedding_cache.set(text, vec)
     return vec
 
 

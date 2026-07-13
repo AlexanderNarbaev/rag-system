@@ -288,7 +288,30 @@ async def process_rag_query(
             logger.info(f"Cache hit for query: {user_query[:50]}...")
             return cached, "", True, [], {}
 
-    # 2. Hybrid search
+    # 2. Adaptive query routing (opt-in via config)
+    from proxy.app.shared.config import ADAPTIVE_ROUTING_ENABLED
+
+    if ADAPTIVE_ROUTING_ENABLED:
+        from proxy.app.core.query_router import get_query_router
+
+        router = get_query_router()
+        complexity = router.classify(user_query)
+        routing_params = router.get_retrieval_params(complexity)
+        logger.debug(f"Query classified as '{complexity}': {user_query[:50]}...")
+
+        if not routing_params["retrieve"]:
+            # Simple query — no retrieval needed
+            logger.info(f"Skipping retrieval for 'direct' query: {user_query[:50]}...")
+            messages = [{"role": "system", "content": "You are a helpful assistant. Answer briefly and directly."}]
+            if other_messages:
+                for msg in other_messages:
+                    if msg.get("role") != "system":
+                        messages.append(msg)
+            messages.append({"role": "user", "content": user_query})
+            response_text = await non_stream_completion(messages, temperature=temperature, max_tokens=max_tokens)
+            return response_text, "", False, [], {}
+
+    # 3. Hybrid search
     try:
         search_results = hybrid_search(query=user_query, version=version, top_k=top_k_override or MAX_CHUNKS_RETRIEVAL)
     except Exception as e:
@@ -452,6 +475,18 @@ async def process_rag_query(
         response_text = await non_stream_completion(messages_for_llm, temperature=temperature, max_tokens=max_tokens)
         if cache_manager and not force_refresh:
             await cache_manager.set(cache_key, response_text, ttl=DEFAULT_CACHE_TTL_SECONDS)
+
+        # 11.5 Self-critique verification
+        from proxy.app.core.confidence import self_critique_answer
+
+        is_valid, critique_score, critique_reason = await self_critique_answer(
+            query=user_query,
+            context=context,
+            answer=response_text,
+        )
+        if not is_valid:
+            logger.warning(f"Self-critique failed: {critique_reason} (score={critique_score:.1f})")
+            # Low confidence answers get flagged in metadata
 
         # 12. Compute RAGAS evaluation scores
         ragas_scores: dict[str, float] = {}
