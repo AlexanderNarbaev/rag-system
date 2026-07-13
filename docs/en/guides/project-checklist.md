@@ -439,7 +439,7 @@ This document is the **single source of truth** for the current state of the RAG
 
 | # | Gap | Impact | Effort | Status |
 |---|-----|--------|--------|--------|
-| 4 | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High | 🟡 Open |
+| 4 | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High | 🟡 Partial (20 pairs + eval script) |
 | 5 | Mypy strict mode not passing | Type safety gaps | Medium | 🟡 Open |
 | 6 | HTTPS/TLS not fully automated | Manual cert setup | Medium | 🟡 Open |
 | 7 | Secrets rotation automation | Manual rotation only | Medium | 🟡 Open |
@@ -567,7 +567,7 @@ make deploy-prod          # Deploy production
 | Wave | Status | Items | Details |
 |------|--------|-------|---------|
 | Wave 1 — Quick Wins | ✅ COMPLETE | 4/4 | RQ-01 Self-critique, RQ-02 CRAG wiring, RQ-03 Embedding cache, RQ-04 Text-to-Cypher |
-| Wave 2 — Quality & Routing | ✅ COMPLETE | 2/4 | RQ-05 Adaptive routing ✅, DOC-02 Docs ✅, EVAL-01 deferred, QUAL-01 partial |
+| Wave 2 — Quality & Routing | ✅ COMPLETE | 2/4 | RQ-05 Adaptive routing ✅, DOC-02 Docs ✅, EVAL-01 partial, QUAL-01 partial |
 | Wave 3 — GraphRAG | ✅ COMPLETE | 2/2 | GRPH-01 Global search mode, GRPH-02 Multi-hop reasoning |
 | Wave 4 — Deferred | ⏭️ Backlog | 0/3 | SEC-04, SEC-05, INFRA-01 → S4-2026 |
 
@@ -583,7 +583,7 @@ make deploy-prod          # Deploy production
 | ID | Task | Status |
 |----|------|--------|
 | RQ-05 | Adaptive query routing | ✅ DONE (opt-in flag) |
-| EVAL-01 | Retrieval evaluation dataset | 🟡 DEFERRED (HIGH effort) |
+| EVAL-01 | Retrieval evaluation dataset | 🟡 PARTIAL (20 pairs + eval script) |
 | QUAL-01 | Mypy strict mode | 🟡 PARTIAL (3 files fixed) |
 | DOC-02 | Document new features | ✅ DONE |
 
