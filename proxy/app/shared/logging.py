@@ -140,7 +140,7 @@ def setup_logging(level: int | None = None) -> logging.Handler:
     return handler
 
 
-def set_log_level(module_name: str, level: int):
+def set_log_level(module_name: str, level: int) -> None:
     """Set log level for a specific module."""
     logger = logging.getLogger(module_name)
     logger.setLevel(level)

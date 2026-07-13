@@ -73,9 +73,9 @@ class InputValidator:
         return True
 
     @staticmethod
-    def sanitize_headers(headers: dict) -> dict:
+    def sanitize_headers(headers: dict[str, Any]) -> dict[str, Any]:
         """Sanitize HTTP headers dictionary for safe logging."""
-        safe = {}
+        safe: dict[str, Any] = {}
         sensitive_header_keys = {"authorization", "cookie", "x-api-key", "x-auth-token", "set-cookie"}
         for key, value in headers.items():
             if key.lower() in sensitive_header_keys:
@@ -112,12 +112,12 @@ class SecretsManager:
         return SecretsManager.hash_secret(secret) == hashed
 
     @staticmethod
-    def mask_in_response(data: dict) -> dict:
+    def mask_in_response(data: dict[str, Any]) -> dict[str, Any]:
         """Mask sensitive fields in response data (deep copy)."""
         if not isinstance(data, dict):
             return data
         sensitive_keys = {"api_key", "password", "secret", "token", "private_key"}
-        result = {}
+        result: dict[str, Any] = {}
         for key, value in data.items():
             key_lower = key.lower()
             if isinstance(value, dict):
@@ -187,7 +187,7 @@ class DependencyScanner:
     }
 
     @staticmethod
-    def parse_requirements_line(line: str) -> tuple | None:
+    def parse_requirements_line(line: str) -> tuple[str, str] | None:
         """Parse a requirements.txt line into (package, version)."""
         line = line.strip()
         if not line or line.startswith("#") or line.startswith("-"):
