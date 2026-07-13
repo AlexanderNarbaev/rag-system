@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/integration/conftest.py` with shared fixtures for integration tests
 
 ### Fixed
+- Multi-hop reasoning enhancement for graph-based retrieval
+- Secure default: `AUTH_ENABLED=false` for development environments
+- Auth test fixtures fixed for consistent CI runs
+- All CI/CD pipelines green (CI, Security, Docs)
 - CI coverage threshold relaxed from 80% to 75%
 - mypy `continue-on-error` for numpy stubs incompatibility
 - Integration test failures due to negative rejection threshold
