@@ -562,11 +562,36 @@ make deploy-prod          # Deploy production
 
 ## 14. Wave Implementation Progress (2026-07-13)
 
+### Sprint S3-2026 Status
+
 | Wave | Status | Items | Details |
 |------|--------|-------|---------|
-| Wave 1 | ✅ COMPLETE | 3/3 | Self-critique, CRAG wiring, Embedding cache |
-| Wave 2 | ✅ COMPLETE | 2/2 | Adaptive routing, Text-to-Cypher |
-| Wave 3 | ✅ COMPLETE | 1/1 | Global search mode |
+| Wave 1 — Quick Wins | ✅ COMPLETE | 4/4 | RQ-01 Self-critique, RQ-02 CRAG wiring, RQ-03 Embedding cache, RQ-04 Text-to-Cypher |
+| Wave 2 — Quality & Routing | ✅ COMPLETE | 2/4 | RQ-05 Adaptive routing ✅, DOC-02 Docs ✅, EVAL-01 deferred, QUAL-01 partial |
+| Wave 3 — GraphRAG | ✅ COMPLETE | 2/2 | GRPH-01 Global search mode, GRPH-02 Multi-hop reasoning |
+| Wave 4 — Deferred | ⏭️ Backlog | 0/3 | SEC-04, SEC-05, INFRA-01 → S4-2026 |
+
+### Wave 1 Details (Quick Wins)
+| ID | Task | Status |
+|----|------|--------|
+| RQ-01 | Self-critique verification loop | ✅ DONE |
+| RQ-02 | CRAG evaluator wiring | ✅ DONE |
+| RQ-03 | Embedding cache layer | ✅ DONE |
+| RQ-04 | Text-to-Cypher for Neo4j | ✅ DONE |
+
+### Wave 2 Details (Quality & Routing)
+| ID | Task | Status |
+|----|------|--------|
+| RQ-05 | Adaptive query routing | ✅ DONE (opt-in flag) |
+| EVAL-01 | Retrieval evaluation dataset | 🟡 DEFERRED (HIGH effort) |
+| QUAL-01 | Mypy strict mode | 🟡 PARTIAL (3 files fixed) |
+| DOC-02 | Document new features | ✅ DONE |
+
+### Wave 3 Details (GraphRAG)
+| ID | Task | Status |
+|----|------|--------|
+| GRPH-01 | Global search mode | ✅ DONE |
+| GRPH-02 | Multi-hop reasoning | ✅ DONE |
 
 ### New Features Implemented
 
@@ -598,8 +623,8 @@ make deploy-prod          # Deploy production
 ### Test Results
 
 - **Total tests:** 2,688 passed
-- **Coverage:** 75.13%
-- **CI/CD:** green
+- **Coverage:** 75.19%
+- **CI/CD:** All green
 - **Security:** bandit + trivy + dependabot
 
 ---

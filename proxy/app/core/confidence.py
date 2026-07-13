@@ -320,7 +320,7 @@ def _score_chunk_relevance(query: str, chunk_text: str) -> float:
     return min(1.0, combined)
 
 
-def evaluate_retrieval_quality(query: str, chunks: list[dict]) -> RetrievalQualityReport:
+def evaluate_retrieval_quality(query: str, chunks: list[dict[str, Any]]) -> RetrievalQualityReport:
     """Evaluate retrieval quality: score each chunk, classify, return report.
 
     CRAG-style classification:
@@ -547,7 +547,7 @@ async def self_critique_answer(
 # ── Negative Evidence Handling ──
 
 
-def should_generate_answer(chunks: list[dict], min_strong_sources: int = 2) -> tuple[bool, str]:
+def should_generate_answer(chunks: list[dict[str, Any]], min_strong_sources: int = 2) -> tuple[bool, str]:
     """Determine if we should generate an answer based on retrieval quality.
 
     Returns (should_generate, reason).
