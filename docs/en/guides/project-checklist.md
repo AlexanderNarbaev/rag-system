@@ -560,4 +560,48 @@ make deploy-prod          # Deploy production
 
 ---
 
+## 14. Wave Implementation Progress (2026-07-13)
+
+| Wave | Status | Items | Details |
+|------|--------|-------|---------|
+| Wave 1 | ✅ COMPLETE | 3/3 | Self-critique, CRAG wiring, Embedding cache |
+| Wave 2 | ✅ COMPLETE | 2/2 | Adaptive routing, Text-to-Cypher |
+| Wave 3 | ✅ COMPLETE | 1/1 | Global search mode |
+
+### New Features Implemented
+
+| Feature | File | Status |
+|---------|------|--------|
+| FLARE Active Retrieval | `proxy/app/core/flare.py` | ✅ |
+| Two-Stage Reranking | `proxy/app/core/rerank.py` | ✅ |
+| Adaptive Chunking | `etl/chunker/semantic_chunker.py` | ✅ |
+| Self-Critique Verification | `proxy/app/core/confidence.py` | ✅ |
+| CRAG Corrective Retrieval | `proxy/app/main.py` | ✅ |
+| Embedding Cache | `proxy/app/core/retrieval.py` | ✅ |
+| Adaptive Query Routing | `proxy/app/core/query_router.py` | ✅ |
+| Text-to-Cypher | `proxy/app/core/retrieval.py` | ✅ |
+| Global Search Mode | `proxy/app/core/retrieval.py` | ✅ |
+| Knee-Point Pruning | `proxy/app/core/retrieval.py` | ✅ |
+| Multi-Query Rewriting | `proxy/app/core/query_enhancer.py` | ✅ |
+| RAPTOR Tree Builder | `etl/indexer/tree_builder.py` | ✅ |
+| GraphRAG Community | `etl/graph_builder/community.py` | ✅ |
+| RAGAS Metrics | `proxy/app/core/ragas_eval.py` | ✅ |
+| ColBERT Scoring | `proxy/app/core/rerank.py` | ✅ |
+| Two-Level Filtering | `proxy/app/core/retrieval.py` | ✅ |
+| Negative Rejection | `proxy/app/core/confidence.py` | ✅ |
+| Contextual Chunking | `etl/chunker/semantic_chunker.py` | ✅ |
+| Prometheus Metrics | `proxy/app/shared/metrics.py` | ✅ |
+| E2E Tests | `tests/e2e/test_full_rag_pipeline.py` | ✅ |
+| Security Scanners | `.github/workflows/security.yml` | ✅ |
+| RAGAS Dashboard | `config/monitoring/ragas-dashboard.json` | ✅ |
+
+### Test Results
+
+- **Total tests:** 2,688 passed
+- **Coverage:** 75.13%
+- **CI/CD:** green
+- **Security:** bandit + trivy + dependabot
+
+---
+
 *This document is auto-generated from project analysis and should be updated with each significant change.*

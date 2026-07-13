@@ -558,6 +558,79 @@ class CypherQueryGenerator:
 _cypher_generator = CypherQueryGenerator()
 
 
+class GlobalSearch:
+    """
+    Global search using community summaries for corpus-wide questions.
+
+    Based on: Microsoft GraphRAG (arxiv:2404.16130)
+
+    For questions like:
+    - "What are the main topics in the knowledge base?"
+    - "Summarize all projects related to AI"
+    - "What are the common patterns across documents?"
+
+    Uses community summaries instead of individual chunks.
+    """
+
+    def __init__(self, community_summaries: list[dict] | None = None):
+        self.community_summaries = community_summaries or []
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> list[dict]:
+        """
+        Search across community summaries for global answers.
+
+        Returns list of relevant community summaries.
+        """
+        if not self.community_summaries:
+            return []
+
+        # Score communities by keyword overlap
+        query_words = set(query.lower().split())
+        scored = []
+
+        for community in self.community_summaries:
+            summary = community.get("summary", "")
+            summary_words = set(summary.lower().split())
+
+            # Calculate overlap
+            overlap = len(query_words & summary_words)
+            if overlap > 0:
+                score = overlap / max(len(query_words), 1)
+                scored.append(
+                    {
+                        "community_id": community.get("id", ""),
+                        "summary": summary,
+                        "key_entities": community.get("key_entities", []),
+                        "score": score,
+                        "members": community.get("members", []),
+                    }
+                )
+
+        # Sort by score
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:top_k]
+
+    def format_context(self, results: list[dict]) -> str:
+        """Format global search results as context for LLM."""
+        if not results:
+            return ""
+
+        context_parts = []
+        for i, result in enumerate(results, 1):
+            entities = ", ".join(result.get("key_entities", [])[:5])
+            context_parts.append(f"[Community {i}] {result['summary']}\nKey entities: {entities}")
+
+        return "\n\n".join(context_parts)
+
+
+# Global search instance
+_global_search = GlobalSearch()
+
+
 # Если нужен синхронный доступ к кэшу, добавим методы в CacheManager
 # Для совместимости с уже написанным кодом, добавим синхронные обёртки
 if cache_manager is None:
