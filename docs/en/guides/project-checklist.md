@@ -457,7 +457,7 @@ This document is the **single source of truth** for the current state of the RAG
 | 14 | OpenAPI/Swagger export for API | Developer experience | Low | ✅ Fixed (/docs, /redoc, /openapi.json) |
 | 15 | C4 diagram for MCP Server | Documentation completeness | Low | ✅ Fixed (c4-mcp-server.excalidraw) |
 | 16 | Component diagram for Model Evolution | Documentation completeness | Low | ✅ Fixed (c4-model-evolution.excalidraw) |
-| 17 | Quarterly RAG maturity review cadence | Process | Low | 🟡 Open |
+| 17 | Quarterly RAG maturity review cadence | Process | Low | ✅ Fixed (quarterly-review-cadence.md) |
 
 ### Audit Remediation Log (2026-07-12)
 

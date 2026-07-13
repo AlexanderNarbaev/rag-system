@@ -100,7 +100,7 @@ class QueryEnhancer:
         ]
         sub_queries = [query]
         for delim in delimiters:
-            new_parts = []
+            new_parts: list[str] = []
             for sq in sub_queries:
                 parts = re.split(delim, sq, flags=re.IGNORECASE)
                 new_parts.extend(p.strip() for p in parts if p.strip())
@@ -219,10 +219,10 @@ def generate_query_variants(query: str, num_variants: int = 3) -> list[str]:
 
 def multi_query_search(
     query: str,
-    search_fn: Callable,
+    search_fn: Callable[..., Any],
     num_variants: int = 3,
     top_k: int = 10,
-) -> list:
+) -> list[dict[str, Any]]:
     """
     Search with multiple query variants and fuse results with RRF.
 
@@ -234,7 +234,7 @@ def multi_query_search(
     variants = generate_query_variants(query, num_variants)
     logger.info("Multi-query: generated %d variants: %s", len(variants), variants)
 
-    all_results: list[list] = []
+    all_results: list[list[dict[str, Any]]] = []
     for variant in variants:
         try:
             results = search_fn(query=variant, top_k=top_k)

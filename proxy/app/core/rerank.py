@@ -46,8 +46,8 @@ FEEDBACK_LOG_DIR = os.getenv("FEEDBACK_LOG_DIR", "./logs/feedback")
 FT_MODEL_DIR = os.getenv("FT_MODEL_DIR", "./models/reranker_ft")
 
 # Глобальные объекты
-reranker = None
-cache_manager = None
+reranker: Any = None
+cache_manager: "CacheManager | None" = None
 
 
 def initialize_reranker() -> None:
@@ -82,25 +82,37 @@ def _truncate_text(text: str, max_tokens: int | None = None) -> str:
     return text
 
 
-def _call_reranker_safe(pairs: list[tuple[str, str]]) -> "list[float]":  # type: ignore[no-untyped-def]
+def _call_reranker_safe(pairs: list[tuple[str, str]]) -> list[float]:
     """Call reranker.predict() with circuit breaker protection.
 
     When the circuit breaker is open, returns neutral scores (0.5) for all pairs
     to allow graceful degradation of the ranking pipeline.
     """
-    try:
-        from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError
-        from proxy.app.shared.circuit_breaker import get_breaker as _get_cb
-
-        return _get_cb("reranker").call_sync(lambda: reranker.predict(pairs))
-    except ImportError:
-        pass  # circuit_breaker module not available — direct call
-    except CircuitBreakerOpenError:
-        logger.warning("Reranker circuit breaker OPEN — returning neutral scores")
+    if reranker is None:
         return [0.5] * len(pairs)
 
+    _circuit_breaker_available = False
+    _circuit_breaker_error = Exception
+
+    try:
+        from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError, get_breaker
+
+        _circuit_breaker_available = True
+        _circuit_breaker_error = CircuitBreakerOpenError
+    except ImportError:
+        pass
+
+    if _circuit_breaker_available:
+        try:
+            result: list[float] = get_breaker("reranker").call_sync(lambda: reranker.predict(pairs))
+            return result
+        except _circuit_breaker_error:
+            logger.warning("Reranker circuit breaker OPEN — returning neutral scores")
+            return [0.5] * len(pairs)
+
     # Fallback: direct call without circuit breaker
-    return reranker.predict(pairs)
+    result = reranker.predict(pairs)
+    return result
 
 
 def _get_cache_key(query: str, chunk_text: str) -> str:
@@ -132,8 +144,9 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
     pairs = [(query, chunk) for chunk in truncated_chunks]
 
     # Получение скоров с кэшированием
-    scores = []
+    scores: list[float] = []
     if use_cache and cache_manager:
+        all_cached = True
         for _i, (q, c) in enumerate(pairs):
             cache_key = _get_cache_key(q, c)
             cached = cache_manager.get_sync(cache_key)
@@ -141,9 +154,9 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
                 scores.append(float(cached))
             else:
                 # Если нет в кэше, будем вычислять пачкой
-                scores = None
+                all_cached = False
                 break
-        if scores is None:
+        if not all_cached:
             # Вычисляем скоры для всех пар, где нет кэша
             # Для простоты вычисляем все заново, но можно вычислить только отсутствующие
             scores = _call_reranker_safe(pairs)
@@ -174,15 +187,17 @@ def rerank_chunks_with_scores(
         initialize_reranker()
     truncated = [_truncate_text(ch) for ch in chunks]
     pairs = [(query, truncated[i]) for i in indices]
-    scores = reranker.predict(pairs)
-    return list(zip(indices, scores.tolist(), strict=False))
+    if reranker is None:
+        return list(zip(indices, [0.0] * len(indices), strict=False))
+    scores_arr = reranker.predict(pairs)
+    return list(zip(indices, scores_arr.tolist(), strict=False))
 
 
 def cosine_similarity_single(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
-    dot_product = sum(x * y for x, y in zip(a, b, strict=False))
-    norm_a = sum(x * x for x in a) ** 0.5
-    norm_b = sum(x * x for x in b) ** 0.5
+    dot_product: float = sum(x * y for x, y in zip(a, b, strict=False))
+    norm_a: float = sum(x * x for x in a) ** 0.5
+    norm_b: float = sum(x * x for x in b) ** 0.5
 
     if norm_a == 0 or norm_b == 0:
         return 0.0
@@ -215,10 +230,10 @@ def colbert_score(query_tokens: list[list[float]], doc_tokens: list[list[float]]
 
 def hybrid_rerank(
     query: str,
-    documents: list[dict],
+    documents: list[dict[str, Any]],
     colbert_weight: float = 0.3,
     cross_encoder_weight: float = 0.7,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Two-stage reranking:
     1. ColBERT late interaction (fast, token-level)
@@ -277,8 +292,8 @@ class TwoStageReranker:
 
     def __init__(
         self,
-        fast_model: str = None,
-        cross_encoder_model: str = None,
+        fast_model: str | None = None,
+        cross_encoder_model: str | None = None,
         fast_top_k: int = 20,
         final_top_k: int = 5,
     ):
@@ -286,10 +301,10 @@ class TwoStageReranker:
         self.cross_encoder_model = cross_encoder_model
         self.fast_top_k = fast_top_k
         self.final_top_k = final_top_k
-        self._fast_encoder = None
-        self._cross_encoder = None
+        self._fast_encoder: Any = None
+        self._cross_encoder: Any = None
 
-    def _get_fast_encoder(self):
+    def _get_fast_encoder(self) -> Any:
         """Lazy-load fast embedding model."""
         if self._fast_encoder is None and self.fast_model:
             try:
@@ -318,7 +333,7 @@ class TwoStageReranker:
             # Cosine similarity
             import numpy as np
 
-            scores = np.dot(doc_embs, query_emb).tolist()
+            scores: list[float] = np.dot(doc_embs, query_emb).tolist()
             return scores
         except Exception as e:
             logger.warning(f"Fast scoring failed: {e}")
@@ -326,14 +341,15 @@ class TwoStageReranker:
 
     def cross_encoder_score(self, query: str, documents: list[str]) -> list[float]:
         """Stage 2: Cross-encoder scoring (slow but accurate)."""
-        return rerank_chunks(query, documents, top_k=len(documents))
+        indices = rerank_chunks(query, documents, top_k=len(documents))
+        return [float(i) for i in indices]
 
     def rerank(
         self,
         query: str,
-        documents: list[dict],
+        documents: list[dict[str, Any]],
         text_key: str = "text",
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Two-stage reranking:
         1. Fast embed scoring → select top fast_top_k
@@ -544,7 +560,7 @@ if __name__ == "__main__":
     import sys
 
     sys.path.insert(0, ".")
-    from proxy.app.shared.config import set_test_config
+    from proxy.app.shared.config import set_test_config  # type: ignore[attr-defined]
 
     set_test_config()
 
