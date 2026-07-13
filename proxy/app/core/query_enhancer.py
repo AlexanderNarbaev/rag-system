@@ -7,11 +7,15 @@ Supports:
 - Multi-query expansion: generate query variants for fusion retrieval
 - Complex query decomposition: break complex queries into sub-queries
 - Metadata filter extraction: extract structured filters from natural language
+- Multi-query rewriting with RRF fusion (Rewrite-Retrieve-Read pattern)
 """
 
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
+
+from proxy.app.core.retrieval import reciprocal_rank_fusion
 
 logger = logging.getLogger(__name__)
 
@@ -124,3 +128,85 @@ class QueryEnhancer:
             "sub_queries": self.decompose_complex_query(query),
             "metadata_filters": self.extract_metadata_filters(query),
         }
+
+
+def generate_query_variants(query: str, num_variants: int = 3) -> list[str]:
+    """
+    Generate multiple query formulations for better retrieval.
+
+    Based on: Rewrite-Retrieve-Read (arxiv:2305.14283)
+
+    Strategies:
+    1. Original query
+    2. Formal/technical version
+    3. Simplified version
+    4. Question form (if not already)
+    5. Keyword extraction
+    """
+    variants = [query]  # Always include original
+
+    # Strategy 1: Add context prefix
+    if not query.startswith(("what", "how", "why", "when", "where", "who")):
+        variants.append(f"explain {query}")
+
+    # Strategy 2: Extract key terms (remove stop words)
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "as", "into", "through", "during",
+        "before", "after", "above", "below", "between", "out", "off", "over",
+        "under", "again", "further", "then", "once",
+    }
+    words = query.lower().split()
+    keywords = [w for w in words if w not in stop_words and len(w) > 2]
+    if keywords:
+        variants.append(" ".join(keywords))
+
+    # Strategy 3: Question form
+    if not query.endswith("?"):
+        variants.append(f"{query}?")
+
+    # Strategy 4: Rephrase
+    variants.append(f"what is {query}")
+
+    return variants[: num_variants + 1]  # +1 for original
+
+
+def multi_query_search(
+    query: str,
+    search_fn: Callable,
+    num_variants: int = 3,
+    top_k: int = 10,
+) -> list:
+    """
+    Search with multiple query variants and fuse results with RRF.
+
+    Chains pairwise RRF fusions when more than two result sets are present,
+    since ``reciprocal_rank_fusion`` accepts exactly two lists.
+
+    Based on: Multi-Query RAG pattern.
+    """
+    variants = generate_query_variants(query, num_variants)
+    logger.info("Multi-query: generated %d variants: %s", len(variants), variants)
+
+    all_results: list[list] = []
+    for variant in variants:
+        try:
+            results = search_fn(query=variant, top_k=top_k)
+            all_results.append(results)
+        except Exception as e:
+            logger.warning("Search failed for variant '%s': %s", variant, e)
+
+    if not all_results:
+        return []
+
+    if len(all_results) == 1:
+        return all_results[0]
+
+    # Chain pairwise RRF: fuse first two, then fuse result with next, etc.
+    fused = reciprocal_rank_fusion(all_results[0], all_results[1])
+    for result_set in all_results[2:]:
+        fused = reciprocal_rank_fusion(fused, result_set)
+
+    return fused[:top_k]

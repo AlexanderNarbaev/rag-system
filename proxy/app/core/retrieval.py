@@ -20,6 +20,8 @@ import logging
 from datetime import datetime, timezone
 from math import exp
 
+import numpy as np
+
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.http import models
@@ -48,6 +50,10 @@ logger = logging.getLogger(__name__)
 STRONG_SCORE_THRESHOLD = 0.32
 BORDERLINE_SCORE_THRESHOLD = 0.25
 MIN_STRONG_SOURCES = 2
+
+# Knee-point pruning settings (from DRAG with KNEE research)
+USE_KNEE_POINT_PRUNING = True
+KNEE_SENSITIVITY = 0.5  # 0=keep all, 1=aggressive pruning
 
 # Глобальные объекты (инициализируются при старте)
 qdrant_client = None
@@ -154,6 +160,69 @@ def reciprocal_rank_fusion(results_dense: list, results_sparse: list, k: int = 6
     all_results = {hit.id: hit for hit in results_dense}
     all_results.update({hit.id: hit for hit in results_sparse})
     return [all_results[hid] for hid in sorted_ids if hid in all_results]
+
+
+def knee_point_pruning(results: list, sensitivity: float = 0.5) -> list:
+    """
+    Dynamic top-k using knee-point detection on score curve.
+
+    Finds the optimal cutoff point where score drops significantly.
+    Based on DRAG with KNEE research: https://habr.com/ru/articles/1016438/
+
+    Args:
+        results: List of results with 'score' field, sorted by score desc
+        sensitivity: 0-1, how aggressively to prune (0=keep all, 1=standard knee)
+
+    Returns:
+        Pruned results up to the knee point
+    """
+    if len(results) <= 2:
+        return results
+
+    scores = np.array([r.score for r in results])
+    n = len(scores)
+
+    # Normalize scores to 0-1
+    if scores.max() == scores.min():
+        return results[: max(2, int(n * sensitivity))]
+
+    y_norm = (scores - scores.min()) / (scores.max() - scores.min())
+    x_norm = np.linspace(0, 1, n)
+
+    # Line from first to last point
+    p1 = np.array([x_norm[0], y_norm[0]])
+    p2 = np.array([x_norm[-1], y_norm[-1]])
+    line_vec = p2 - p1
+    line_len = np.linalg.norm(line_vec)
+
+    if line_len == 0:
+        return results[: max(2, int(n * sensitivity))]
+
+    line_unit = line_vec / line_len
+
+    # Distance of each point from the line
+    distances = []
+    for i in range(n):
+        point = np.array([x_norm[i], y_norm[i]])
+        vec_to_point = point - p1
+        # Project onto line, find perpendicular distance
+        proj_length = np.dot(vec_to_point, line_unit)
+        proj_point = p1 + proj_length * line_unit
+        dist = np.linalg.norm(point - proj_point)
+        distances.append(dist)
+
+    distances = np.array(distances)
+
+    # Apply sensitivity: scale distances
+    distances = distances * (1 + sensitivity)
+
+    # Knee point is where distance is maximum
+    knee_idx = np.argmax(distances)
+
+    # Ensure minimum 2 results
+    knee_idx = max(knee_idx, 1)
+
+    return results[: knee_idx + 1]
 
 
 def filter_results_by_score(results: list) -> tuple[list, str]:
@@ -292,6 +361,12 @@ def hybrid_search(
     filtered_results, quality = filter_results_by_score(combined_results)
     if quality == "insufficient":
         logger.warning(f"No relevant sources found for query: {query[:50]}...")
+
+    # Apply knee-point pruning if enabled
+    if USE_KNEE_POINT_PRUNING and len(filtered_results) > 5:
+        filtered_results = knee_point_pruning(filtered_results, sensitivity=KNEE_SENSITIVITY)
+        logger.debug(f"Knee-point pruning: kept {len(filtered_results)} results")
+
     return filtered_results
 
 
