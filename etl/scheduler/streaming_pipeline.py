@@ -70,7 +70,7 @@ class StreamingETLPipeline:
         # Chunker
         chunk_cfg = config.get("chunking", {})
         self.chunker = SemanticChunker(
-            max_tokens=chunk_cfg.get("max_tokens", 8000),
+            max_tokens=chunk_cfg.get("max_tokens", 1500),
             overlap_tokens=chunk_cfg.get("overlap_tokens", 200),
             min_chunk_tokens=chunk_cfg.get("min_chunk_tokens", 100),
         )

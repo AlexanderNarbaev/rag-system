@@ -444,3 +444,41 @@ def verify_answer_claims(answer: str, context: str) -> VerificationReport:
         unsupported_claims=unsupported,
         total_claims=len(claims),
     )
+
+
+# ── Negative Evidence Handling ──
+
+
+def should_generate_answer(chunks: list[dict], min_strong_sources: int = 2) -> tuple[bool, str]:
+    """Determine if we should generate an answer based on retrieval quality.
+
+    Returns (should_generate, reason).
+
+    If False, the system should return a "data insufficient" response instead of generating.
+    This prevents hallucination when retrieval quality is too low to support a reliable answer.
+
+    Args:
+        chunks: List of chunk dicts with at least a 'score' key.
+        min_strong_sources: Minimum number of chunks with score >= 0.32 required.
+
+    Returns:
+        Tuple of (should_generate: bool, reason: str).
+    """
+    if not chunks:
+        return False, "No relevant documents found in knowledge base"
+
+    # Check score distribution
+    scores = [c.get("score", 0) for c in chunks]
+    strong_count = sum(1 for s in scores if s >= 0.32)
+
+    if strong_count < min_strong_sources:
+        if strong_count > 0:
+            return False, (
+                f"Only {strong_count} relevant source(s) found "
+                f"(need {min_strong_sources}). "
+                f"Insufficient data for reliable answer."
+            )
+        else:
+            return False, "No sufficiently relevant sources found. Cannot provide reliable answer."
+
+    return True, "Sufficient relevant sources found"

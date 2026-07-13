@@ -44,6 +44,11 @@ from proxy.app.shared.config import (
 
 logger = logging.getLogger(__name__)
 
+# Two-level score filtering thresholds (from DRAG research)
+STRONG_SCORE_THRESHOLD = 0.32
+BORDERLINE_SCORE_THRESHOLD = 0.25
+MIN_STRONG_SOURCES = 2
+
 # Глобальные объекты (инициализируются при старте)
 qdrant_client = None
 embedder = None
@@ -151,6 +156,36 @@ def reciprocal_rank_fusion(results_dense: list, results_sparse: list, k: int = 6
     return [all_results[hid] for hid in sorted_ids if hid in all_results]
 
 
+def filter_results_by_score(results: list) -> tuple[list, str]:
+    """
+    Two-level score filtering: strong vs borderline sources.
+
+    Returns (filtered_results, quality_level) where quality_level is
+    'strong', 'borderline', or 'insufficient'.
+    If insufficient, caller should NOT generate an answer.
+    """
+    if not results:
+        return [], "insufficient"
+
+    strong = [r for r in results if r.score >= STRONG_SCORE_THRESHOLD]
+    borderline = [
+        r for r in results if BORDERLINE_SCORE_THRESHOLD <= r.score < STRONG_SCORE_THRESHOLD
+    ]
+
+    if len(strong) >= MIN_STRONG_SOURCES:
+        # Good quality — use strong + some borderline
+        return strong + borderline[:2], "strong"
+    elif strong:
+        # Some strong sources but not enough
+        return strong + borderline[:1], "borderline"
+    elif borderline:
+        # Only borderline sources
+        return borderline[:3], "borderline"
+    else:
+        # No relevant sources
+        return [], "insufficient"
+
+
 def hybrid_search(
     query: str,
     version: str | None = None,
@@ -249,10 +284,15 @@ def hybrid_search(
 
     # Слияние
     if sparse_results:
-        fused = reciprocal_rank_fusion(dense_results, sparse_results)
-        return fused[:top_k]
+        combined_results = reciprocal_rank_fusion(dense_results, sparse_results)[:top_k]
     else:
-        return dense_results
+        combined_results = dense_results
+
+    # Apply two-level score filtering
+    filtered_results, quality = filter_results_by_score(combined_results)
+    if quality == "insufficient":
+        logger.warning(f"No relevant sources found for query: {query[:50]}...")
+    return filtered_results
 
 
 def graph_expand_query(query: str, max_entities: int = 5) -> str:

@@ -550,7 +550,7 @@ def main():
     if not args.skip_chunk:
         chunker_config = config.get("chunking", {})
         base_chunker = SemanticChunker(
-            max_tokens=chunker_config.get("max_tokens", 8000),
+            max_tokens=chunker_config.get("max_tokens", 1500),
             overlap_tokens=chunker_config.get("overlap_tokens", 200),
             min_chunk_tokens=chunker_config.get("min_chunk_tokens", 100),
         )

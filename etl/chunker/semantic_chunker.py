@@ -62,10 +62,13 @@ class SemanticChunker:
     заголовки (h1-h3), абзацы, списки, таблицы. Поддерживает HTML и Markdown.
     """
 
-    def __init__(self, max_tokens: int = 8000, overlap_tokens: int = 200, min_chunk_tokens: int = 100):
+    def __init__(self, max_tokens: int = 1500, overlap_tokens: int = 200, min_chunk_tokens: int = 100):
         """
         :param max_tokens: максимальное количество токенов в чанке (для эмбеддера)
+                           Research-backed optimal: 1500 tokens (~6000 chars) for retrieval quality.
+                           See: https://habr.com/ru/articles/1029740/
         :param overlap_tokens: перекрытие между чанками (токены)
+                               200 tokens (~800 chars, ~13% overlap) for context continuity.
         :param min_chunk_tokens: минимальный размер чанка, иначе объединяется со следующим
         """
         self.max_tokens = max_tokens

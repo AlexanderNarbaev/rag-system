@@ -38,6 +38,7 @@ from proxy.app.auth import (
     AuthMiddleware,
     UserContext,
 )
+from proxy.app.core.confidence import should_generate_answer
 from proxy.app.core.context import (  # noqa: F401 — re-export for test patching
     build_context,
     deduplicate_chunks,
@@ -294,6 +295,7 @@ async def process_rag_query(
         logger.warning(f"Hybrid search failed (degraded mode): {e}")
         search_results = None
     sources: list[dict] = []
+    chunks_for_eval: list[dict] = []
     if not search_results:
         context = ""
         chunks_metadata = []
@@ -388,7 +390,17 @@ async def process_rag_query(
                     f"context={budget['context_total']}, response={budget['response']}"
                 )
 
-    # 9. Build system prompt
+    # 9. Negative evidence check — refuse to hallucinate if retrieval is insufficient
+    should_gen, reason = should_generate_answer(chunks_for_eval)
+    if not should_gen:
+        logger.info(f"Negative evidence: refusing to generate — {reason}")
+        refusal = (
+            f"I don't have enough relevant information to answer this "
+            f"question reliably. {reason}"
+        )
+        return refusal, "", False, sources
+
+    # 10. Build system prompt
     system_prompt = (
         "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
         "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
@@ -402,7 +414,7 @@ async def process_rag_query(
     # Add the user query as the final message
     messages_for_llm.append({"role": "user", "content": user_query})
 
-    # 10. LLM call
+    # 11. LLM call
     if stream:
         return context, messages_for_llm, False, sources
     else:

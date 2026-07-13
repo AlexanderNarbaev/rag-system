@@ -162,7 +162,7 @@ class TestSemanticChunkerApplyOverlap:
 
 class TestSemanticChunkerChunkHtml:
     def test_chunk_html_simple(self):
-        chunker = SemanticChunker(max_tokens=8000)
+        chunker = SemanticChunker(max_tokens=1500)
         html = "<h1>Title</h1><p>Some content here.</p><p>More content.</p>"
         metadata = {"source_type": "wiki", "doc_title": "Test Doc"}
         chunks = chunker.chunk_html(html, metadata)
@@ -182,7 +182,7 @@ class TestSemanticChunkerChunkHtml:
 
 class TestSemanticChunkerChunkMarkdown:
     def test_chunk_markdown_simple(self):
-        chunker = SemanticChunker(max_tokens=8000)
+        chunker = SemanticChunker(max_tokens=1500)
         md = "# Hello\n\nThis is a paragraph.\n\n## Sub\n\nMore text."
         metadata = {"source_type": "gitlab"}
         chunks = chunker.chunk_markdown(md, metadata)
