@@ -419,7 +419,7 @@ class TestTokenValidation:
 
         with (
             patch("proxy.app.auth.jwt._get_verify_key", return_value="wrong-secret"),
-            pytest.raises(Exception),
+            pytest.raises(Exception, match="Invalid token"),
         ):
             verify_token(token)
 

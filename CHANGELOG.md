@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance test suite expanded to 12 tests (was 2) covering load testing and benchmarks
 - GPUStack section added to deployment documentation
 - All documentation guides properly linked in navigation
+- `tests/etl/conftest.py` with shared fixtures for ETL tests
+- `tests/integration/conftest.py` with shared fixtures for integration tests
 
 ### Fixed
 - Removed dead code (stream_consumer stubs, LLMError duplication)
@@ -27,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Orchestrator sync calls — patched test mocks for restructured orchestrator modules
 - ToolError consolidation — unified error hierarchy across tools subsystem
 - Ruff lint errors: F821 forward reference fix, E501 line length violations
+- **CRITICAL: Cache sync methods** — `asyncio.run()` cannot be called from a running event loop. Fixed `InMemoryCache` to use direct dict access (no asyncio needed) and `RedisCache` to use sync Redis client for sync operations
+- **CRITICAL: Double JSON parsing** — `_compute_dense_embedding()` was calling `json.loads()` on already-parsed cache values, causing "JSON object must be str, not list" error
+- Lint errors: N803 argument naming, B017 blind exception assertions
 
 ### Changed
 - Improved type hints coverage across proxy and ETL modules
@@ -36,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness score updated from 65.5/80 (81.9%) to 67.5/80 (84.4%)
 - Roadmap updated — all 8 phases complete, future horizons documented
 - Final test count confirmed at 2669 across all test suites
+- Removed `model_evolution` from coverage omit list — now tracked honestly (coverage drops to 77.6% from masked 80%+)
 
 ## [v2.0.0] - 2026-06-26
 

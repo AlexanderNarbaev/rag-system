@@ -16,13 +16,13 @@ class TestNeo4jConnectRetry:
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
     @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
     @patch("etl.graph_builder.neo4j_loader.time.sleep")
-    def test_connect_retries_on_transient_failure_then_succeeds(self, mock_sleep, MockGD):
+    def test_connect_retries_on_transient_failure_then_succeeds(self, mock_sleep, mock_gd):
         """First attempt fails with a transient error, second attempt succeeds."""
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
         mock_driver = MagicMock()
         # First call raises transient error, second succeeds
-        MockGD.driver.side_effect = [
+        mock_gd.driver.side_effect = [
             Exception("ServiceUnavailable: Connection refused"),
             mock_driver,
         ]
@@ -31,7 +31,7 @@ class TestNeo4jConnectRetry:
         loader.connect()
 
         assert loader.driver is mock_driver
-        assert MockGD.driver.call_count == 2
+        assert mock_gd.driver.call_count == 2
         mock_driver.verify_connectivity.assert_called_once()
         # Should have slept with exponential backoff (2^0 * base_delay=2 => 2s)
         mock_sleep.assert_called_once_with(2)
@@ -39,11 +39,11 @@ class TestNeo4jConnectRetry:
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
     @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
     @patch("etl.graph_builder.neo4j_loader.time.sleep")
-    def test_connect_fails_after_max_retries(self, mock_sleep, MockGD):
+    def test_connect_fails_after_max_retries(self, mock_sleep, mock_gd):
         """All attempts fail → should raise after max_retries exhausted."""
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
-        MockGD.driver.side_effect = Exception("ServiceUnavailable")
+        mock_gd.driver.side_effect = Exception("ServiceUnavailable")
 
         loader = Neo4jLoader(uri="bolt://localhost:7687", user="neo4j", password="pass", max_retries=3)
 
@@ -51,7 +51,7 @@ class TestNeo4jConnectRetry:
             loader.connect()
 
         # Should have tried 3 times (max_retries=3)
-        assert MockGD.driver.call_count == 3
+        assert mock_gd.driver.call_count == 3
         # Should have slept 2 times (not after last attempt)
         assert mock_sleep.call_count == 2
         # Exponential backoff: 2s, 4s
@@ -60,24 +60,24 @@ class TestNeo4jConnectRetry:
 
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
     @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
-    def test_connect_succeeds_on_first_try(self, MockGD):
+    def test_connect_succeeds_on_first_try(self, mock_gd):
         """No failures → connect succeeds immediately, no retries."""
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
         mock_driver = MagicMock()
-        MockGD.driver.return_value = mock_driver
+        mock_gd.driver.return_value = mock_driver
 
         loader = Neo4jLoader(uri="bolt://localhost:7687", user="neo4j", password="pass", max_retries=3)
         loader.connect()
 
         assert loader.driver is mock_driver
-        assert MockGD.driver.call_count == 1
+        assert mock_gd.driver.call_count == 1
         mock_driver.verify_connectivity.assert_called_once()
 
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
     @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
     @patch("etl.graph_builder.neo4j_loader.time.sleep")
-    def test_connect_cleans_up_driver_on_failure(self, mock_sleep, MockGD):
+    def test_connect_cleans_up_driver_on_failure(self, mock_sleep, mock_gd):
         """Failed driver should be closed and set to None before retry."""
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
@@ -86,7 +86,7 @@ class TestNeo4jConnectRetry:
         # First driver fails during verify_connectivity
         mock_driver_1.verify_connectivity.side_effect = Exception("Auth error")
         # Second driver succeeds
-        MockGD.driver.side_effect = [mock_driver_1, mock_driver_2]
+        mock_gd.driver.side_effect = [mock_driver_1, mock_driver_2]
 
         loader = Neo4jLoader(uri="bolt://localhost:7687", user="neo4j", password="pass", max_retries=3)
         loader.connect()
@@ -98,11 +98,11 @@ class TestNeo4jConnectRetry:
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
     @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
     @patch("etl.graph_builder.neo4j_loader.time.sleep")
-    def test_connect_exponential_backoff_timing(self, mock_sleep, MockGD):
+    def test_connect_exponential_backoff_timing(self, mock_sleep, mock_gd):
         """Verify exponential backoff: 2s, 4s, 8s for 5 retries."""
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
-        MockGD.driver.side_effect = Exception("Transient")
+        mock_gd.driver.side_effect = Exception("Transient")
 
         loader = Neo4jLoader(uri="bolt://localhost:7687", user="neo4j", password="pass", max_retries=5)
 
@@ -185,7 +185,7 @@ class TestExecuteWithRetryAdvanced:
         loader.driver = MagicMock()
         loader.driver.session.return_value = mock_session
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Transient"):
             loader._execute_with_retry("MATCH (n) RETURN n")
 
         expected_calls = [call(1), call(2)]  # 2^0*1, 2^1*1

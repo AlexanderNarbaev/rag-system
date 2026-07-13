@@ -38,7 +38,6 @@ markers = [
 source = ["proxy", "etl"]
 omit = [
     "proxy/app/static/*",
-    "proxy/app/model_evolution/*",
     "etl/scheduler/streaming_pipeline.py",
     "*/__pycache__/*",
     "*/tests/*",

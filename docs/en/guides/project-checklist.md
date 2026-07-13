@@ -424,13 +424,15 @@ This document is the **single source of truth** for the current state of the RAG
 > Production readiness score updated from 71.5/80 (89%) to 65.5/80 (81.9%) — honest assessment.
 > **Test Suite Update (2026-07-13):** Model evolution (277 tests) and MCP server (56 tests) now tested.
 > Production readiness updated to 67.5/80 (84.4%).
+> **Cache Fix (2026-07-13):** Fixed critical asyncio.run() bug in cache sync methods and double JSON parsing in retrieval.
+> Coverage now honest at 77.6% (model_evolution no longer excluded). conftest.py files created for ETL and integration tests.
 
 ### 🔴 Critical (Blocking)
 
 | # | Gap | Impact | Effort | Status |
 |---|-----|--------|--------|--------|
 | 1 | No tests for `model_evolution/` (13 modules) | Untested fine-tuning pipeline | High | ✅ Fixed (277 tests) |
-| 2 | `model_evolution` excluded from coverage tracking | Risk masked | Low | 🟡 Open (coverage config update needed) |
+| 2 | `model_evolution` excluded from coverage tracking | Risk masked | Low | ✅ Fixed (coverage now 77.6% honest) |
 | 3 | No tests for MCP Server | Untested IDE integration | Medium | ✅ Fixed (56 tests) |
 
 ### 🟡 Important (Non-blocking)
@@ -443,8 +445,8 @@ This document is the **single source of truth** for the current state of the RAG
 | 7 | Secrets rotation automation | Manual rotation only | Medium | 🟡 Open |
 | 8 | Database migration framework | Ad-hoc migrations | Medium | 🟡 Open |
 | 9 | CHANGELOG.md | Release tracking | Low | ✅ Fixed |
-| 10 | `tests/etl/conftest.py` missing | ETL test isolation | Low | 🟡 Open |
-| 11 | `tests/integration/conftest.py` missing | Integration test fixtures | Low | 🟡 Open |
+| 10 | `tests/etl/conftest.py` missing | ETL test isolation | Low | ✅ Fixed |
+| 11 | `tests/integration/conftest.py` missing | Integration test fixtures | Low | ✅ Fixed |
 | 12 | ADR-008 (Java migration) still "Proposed" | Decision pending | Low | 🟡 Open |
 | 13 | AGENTS.md project structure | Doc inconsistency | Low | ✅ Fixed |
 

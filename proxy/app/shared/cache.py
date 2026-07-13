@@ -39,7 +39,8 @@ class InMemoryCache:
     def _is_expired(self, expire_ts: float) -> bool:
         return expire_ts < datetime.now(UTC).timestamp()
 
-    async def get(self, key: str) -> Any | None:
+    def _get_value(self, key: str) -> Any | None:
+        """Internal sync get — used by both async and sync interfaces."""
         if key not in self._store:
             return None
         value, expire_ts = self._store[key]
@@ -48,10 +49,17 @@ class InMemoryCache:
             return None
         return value
 
-    async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
+    def _set_value(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        """Internal sync set — used by both async and sync interfaces."""
         expire_ts = datetime.now(UTC).timestamp() + ttl
         self._store[key] = (value, expire_ts)
         return True
+
+    async def get(self, key: str) -> Any | None:
+        return self._get_value(key)
+
+    async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        return self._set_value(key, value, ttl)
 
     async def delete(self, key: str) -> bool:
         if key in self._store:
@@ -62,38 +70,21 @@ class InMemoryCache:
     async def clear(self) -> None:
         self._store.clear()
 
-    # Синхронные методы для совместимости
+    # Синхронные методы — InMemoryCache не требует asyncio (данные в памяти)
     def get_sync(self, key: str) -> Any | None:
-        try:
-            _loop = asyncio.get_running_loop()
-            # Если уже в асинхронном контексте, создаём задачу
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self.get(key))
-                return future.result()
-        except RuntimeError:
-            # Нет запущенного цикла – запускаем свой
-            return asyncio.run(self.get(key))
+        return self._get_value(key)
 
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        try:
-            _loop = asyncio.get_running_loop()
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self.set(key, value, ttl))
-                return future.result()
-        except RuntimeError:
-            return asyncio.run(self.set(key, value, ttl))
+        return self._set_value(key, value, ttl)
 
 
 class RedisCache:
-    """Redis-based cache with async interface."""
+    """Redis-based cache with async and sync interfaces."""
 
     def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
         self._client = None
+        self._sync_client = None
 
     async def _get_client(self) -> Any:
         if self._client is None:
@@ -111,6 +102,22 @@ class RedisCache:
                 logger.error(f"Failed to connect to Redis: {e}")
                 raise
         return self._client
+
+    def _get_sync_client(self) -> Any:
+        """Get or create a sync Redis client for sync operations."""
+        if self._sync_client is None:
+            try:
+                import redis as sync_redis
+
+                self._sync_client = sync_redis.from_url(self.redis_url, decode_responses=True)
+                self._sync_client.ping()
+            except ImportError:
+                logger.error("redis not installed. Install: pip install redis")
+                raise
+            except Exception as e:
+                logger.error("Failed to create sync Redis client: %s", e)
+                raise
+        return self._sync_client
 
     async def get(self, key: str) -> Any | None:
         client = await self._get_client()
@@ -138,33 +145,39 @@ class RedisCache:
         client = await self._get_client()
         await client.flushdb()
 
-    # Синхронные обёртки (используют run_until_complete)
+    # Синхронные обёртки — используют отдельный sync Redis клиент
     def get_sync(self, key: str) -> Any | None:
         try:
-            _loop = asyncio.get_running_loop()
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self.get(key))
-                return future.result()
-        except RuntimeError:
-            return asyncio.run(self.get(key))
+            client = self._get_sync_client()
+            value = client.get(key)
+            if value is None:
+                return None
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+        except Exception as e:
+            logger.debug("Redis get_sync failed: %s", e)
+            return None
 
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
         try:
-            _loop = asyncio.get_running_loop()
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, self.set(key, value, ttl))
-                return future.result()
-        except RuntimeError:
-            return asyncio.run(self.set(key, value, ttl))
+            client = self._get_sync_client()
+            if not isinstance(value, str):
+                value = json.dumps(value, ensure_ascii=False)
+            client.setex(key, ttl, value)
+            return True
+        except Exception as e:
+            logger.debug("Redis set_sync failed: %s", e)
+            return False
 
     async def close(self) -> None:
         if self._client:
             await self._client.close()
             self._client = None
+        if self._sync_client:
+            self._sync_client.close()
+            self._sync_client = None
 
 
 class CacheManager:
