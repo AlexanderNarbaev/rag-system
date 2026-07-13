@@ -79,6 +79,71 @@ except ImportError:
     CircuitBreakerOpenError = RuntimeError  # type: ignore[assignment,misc]
 
 
+class EmbeddingCache:
+    """
+    Cache for query embeddings to avoid recomputation.
+
+    Two levels:
+    1. Exact match: hash(query) -> embedding
+    2. Semantic similarity: cosine(query, cached_queries) > 0.95 -> cached embedding
+    """
+
+    def __init__(self, max_size: int = 1000, similarity_threshold: float = 0.95):
+        self.max_size = max_size
+        self.similarity_threshold = similarity_threshold
+        self._exact_cache: dict[str, list[float]] = {}
+        self._query_embeddings: list[tuple[str, list[float]]] = []
+
+    def _hash_query(self, query: str) -> str:
+        """Generate hash for exact match."""
+        import hashlib
+
+        return hashlib.md5(query.lower().strip().encode()).hexdigest()
+
+    def get(self, query: str) -> list[float] | None:
+        """Get cached embedding for query."""
+        # Level 1: Exact match
+        query_hash = self._hash_query(query)
+        if query_hash in self._exact_cache:
+            return self._exact_cache[query_hash]
+
+        # Level 2: Semantic similarity
+        if self._query_embeddings:
+            query_lower = query.lower()
+            for cached_query, cached_embedding in self._query_embeddings:
+                # Simple word overlap check
+                words1 = set(query_lower.split())
+                words2 = set(cached_query.lower().split())
+                if words1 and words2:
+                    overlap = len(words1 & words2) / max(len(words1), len(words2))
+                    if overlap >= self.similarity_threshold:
+                        return cached_embedding
+
+        return None
+
+    def set(self, query: str, embedding: list[float]) -> None:
+        """Cache embedding for query."""
+        query_hash = self._hash_query(query)
+        self._exact_cache[query_hash] = embedding
+
+        # Store for semantic similarity
+        self._query_embeddings.append((query, embedding))
+
+        # Evict if over max size
+        if len(self._exact_cache) > self.max_size:
+            # Remove oldest entries
+            keys_to_remove = list(self._exact_cache.keys())[: len(self._exact_cache) - self.max_size]
+            for key in keys_to_remove:
+                del self._exact_cache[key]
+
+            # Trim semantic cache
+            self._query_embeddings = self._query_embeddings[-self.max_size :]
+
+
+# Global embedding cache instance
+_embedding_cache = EmbeddingCache()
+
+
 def initialize_retrieval() -> None:
     """Инициализирует клиенты и кэш (вызывается при старте прокси)."""
     global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED

@@ -363,6 +363,39 @@ async def process_rag_query(
             )
             logger.info(f"Retrieval quality: confidence={confidence:.3f}, action={action}")
 
+            # CRAG-style corrective retrieval
+            if action == "REWRITE":
+                logger.info("CRAG: Triggering query rewrite due to low retrieval quality")
+                # Rewrite query and re-retrieve
+                rewritten_query = f"More specific: {user_query}"
+                try:
+                    additional_results = hybrid_search(
+                        query=rewritten_query,
+                        version=version,
+                        top_k=top_k_override or MAX_CHUNKS_RETRIEVAL,
+                    )
+                    if additional_results:
+                        # Merge with original results
+                        search_results = list(search_results) + list(additional_results)
+                        logger.info(f"CRAG: Added {len(additional_results)} results from rewritten query")
+                except Exception as e:
+                    logger.warning(f"CRAG rewrite failed: {e}")
+
+            elif action == "EXPAND":
+                logger.info("CRAG: Triggering context expansion")
+                # Try broader search
+                try:
+                    expanded_results = hybrid_search(
+                        query=user_query,
+                        version=None,  # Remove version filter
+                        top_k=(top_k_override or MAX_CHUNKS_RETRIEVAL) * 2,
+                    )
+                    if expanded_results:
+                        search_results = list(search_results) + list(expanded_results)
+                        logger.info(f"CRAG: Added {len(expanded_results)} expanded results")
+                except Exception as e:
+                    logger.warning(f"CRAG expansion failed: {e}")
+
             if action == "FALLBACK":
                 context = ""
                 chunks_metadata = []

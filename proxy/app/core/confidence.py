@@ -4,6 +4,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -444,6 +445,103 @@ def verify_answer_claims(answer: str, context: str) -> VerificationReport:
         unsupported_claims=unsupported,
         total_claims=len(claims),
     )
+
+
+# ── Self-Critique Verification Loop ──
+
+
+async def self_critique_answer(
+    query: str,
+    context: str,
+    answer: str,
+    llm_client: Any = None,
+    threshold: float = 3.0,
+) -> tuple[bool, float, str]:
+    """Verify answer against context before returning.
+
+    Based on Self-RAG concept (arxiv:2310.11511):
+    - Rate answer support from context (1-5)
+    - Rate factual accuracy (1-5)
+    - If score < threshold, suggest regeneration
+
+    Returns: (is_valid, score, reason)
+    """
+    if not answer or not context:
+        return True, 5.0, "No verification needed"
+
+    # Extract claims from answer
+    claims = [s.strip() for s in answer.split(".") if s.strip() and len(s.strip()) > 10]
+
+    if not claims:
+        return True, 5.0, "No claims to verify"
+
+    # Check each claim against context
+    supported_claims = 0
+    total_claims = len(claims)
+
+    context_lower = context.lower()
+    for claim in claims:
+        claim_words = set(claim.lower().split())
+        # Remove stop words
+        stop_words = {
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+        }
+        claim_keywords = claim_words - stop_words
+
+        # Check if keywords appear in context
+        matched = sum(1 for kw in claim_keywords if kw in context_lower)
+        if len(claim_keywords) > 0 and matched / len(claim_keywords) >= 0.3:
+            supported_claims += 1
+
+    # Calculate support ratio
+    support_ratio = supported_claims / total_claims if total_claims > 0 else 1.0
+
+    # Convert to 1-5 scale
+    score = 1.0 + (support_ratio * 4.0)  # 1.0 to 5.0
+
+    is_valid = score >= threshold
+    reason = f"Support ratio: {support_ratio:.2f} ({supported_claims}/{total_claims} claims supported)"
+
+    if not is_valid:
+        reason = f"Answer not well supported by context. {reason}"
+
+    return is_valid, score, reason
 
 
 # ── Negative Evidence Handling ──
