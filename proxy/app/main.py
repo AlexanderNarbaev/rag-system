@@ -339,17 +339,18 @@ async def process_rag_query(
             # 5. Build source citations
             from proxy.app.core.context import compute_chunk_hash
 
-            for chunk, score in unique_chunks:
-                sources.append(
-                    {
-                        "chunk_id": compute_chunk_hash(chunk),
-                        "source": chunk.get("source_type", "unknown"),
-                        "title": chunk.get("title", "") or chunk.get("doc_title", ""),
-                        "version": chunk.get("version", "unknown"),
-                        "relevance": round(score, 4),
-                        "text_preview": chunk.get("text", "")[:200],
-                    }
-                )
+            if unique_chunks:
+                for chunk, score in unique_chunks:
+                    sources.append(
+                        {
+                            "chunk_id": compute_chunk_hash(chunk),
+                            "source": chunk.get("source_type", "unknown"),
+                            "title": chunk.get("title", "") or chunk.get("doc_title", ""),
+                            "version": chunk.get("version", "unknown"),
+                            "relevance": round(score, 4),
+                            "text_preview": chunk.get("text", "")[:200],
+                        }
+                    )
 
             # 6. Retrieval quality evaluation (CRAG-style)
             chunks_for_eval = []
