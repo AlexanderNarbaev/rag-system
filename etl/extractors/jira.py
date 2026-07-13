@@ -58,9 +58,9 @@ class JiraExtractor:
             raise ValueError("JiraExtractor: 'url' is required and must not be empty")
         if not url.startswith(("http://", "https://")):
             raise ValueError(f"JiraExtractor: 'url' must start with http:// or https://, got: {url}")
-        token = config.get("token", "")
+        token = config.get("api_key") or config.get("token", "")
         if not token or not token.strip():
-            raise ValueError("JiraExtractor: 'token' is required and must not be empty")
+            raise ValueError("JiraExtractor: 'token' or 'api_key' is required and must not be empty")
 
         self.url = url.rstrip("/")
         self.config = config  # Store full config for retry logic
@@ -342,6 +342,9 @@ class JiraExtractor:
         # Подзадачи (subtasks)
         subtasks = [{"key": st["key"], "summary": st["fields"].get("summary", "")} for st in fields.get("subtasks", [])]
 
+        # RBAC metadata
+        project_key = fields.get("project", {}).get("key", "")
+
         # Извлечение ссылок из описания
         description_links = self._extract_links_from_text(description)
 
@@ -353,12 +356,18 @@ class JiraExtractor:
             "status": status,
             "priority": priority,
             "issuetype": issuetype,
+            "issue_type": issuetype,
             "created": created,
             "updated": updated,
             "resolution": resolution,
             "assignee": assignee,
             "reporter": reporter,
+            "project_key": project_key,
             "labels": labels,
+            "components": [
+                {"id": c.get("id"), "name": c.get("name", "")}
+                for c in fields.get("components", [])
+            ],
             "sprints": sprints,
             "comments": comments,
             "changelog": changelog_entries,

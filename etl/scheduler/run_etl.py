@@ -16,12 +16,28 @@ import argparse
 import json
 import logging
 import os
+import signal
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+# Глобальный флаг для graceful shutdown
+_shutdown_requested = False
+
+
+def _signal_handler(signum: int, frame: Any) -> None:
+    """Обработчик SIGINT/SIGTERM для graceful shutdown."""
+    global _shutdown_requested
+    _shutdown_requested = True
+    logger.warning(f"Received signal {signum}, shutting down gracefully...")
+
+
+# Регистрируем обработчики сигналов
+signal.signal(signal.SIGINT, _signal_handler)
+signal.signal(signal.SIGTERM, _signal_handler)
 
 # Добавляем корень проекта в PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -145,6 +161,12 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
                             "metadata": {
                                 "version": str(data.get("version", "")),
                                 "space": data.get("space", ""),
+                                "space_key": data.get("space_key", ""),
+                                "page_id": data.get("id", ""),
+                                "author": data.get("author", ""),
+                                "contributors": data.get("contributors", []),
+                                "labels": data.get("labels", []),
+                                "restrictions": data.get("restrictions", {}),
                                 "created_at": data.get("created_at", ""),
                                 "updated_at": data.get("updated_at", ""),
                                 "url": f"{conflu_dir.name}",
@@ -175,6 +197,11 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
                                 "status": data.get("status", ""),
                                 "priority": data.get("priority", ""),
                                 "assignee": data.get("assignee", ""),
+                                "reporter": data.get("reporter", ""),
+                                "project_key": data.get("project_key", ""),
+                                "issue_type": data.get("issue_type", ""),
+                                "labels": data.get("labels", []),
+                                "components": data.get("components", []),
                                 "created": data.get("created", ""),
                                 "updated": data.get("updated", ""),
                             },
@@ -185,6 +212,15 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
             for gitlab_dir in source_dir.glob("*"):
                 if not gitlab_dir.is_dir():
                     continue
+                # Load project-level RBAC metadata if available
+                project_info: dict = {}
+                project_file = gitlab_dir / "project.json"
+                if project_file.exists():
+                    with open(project_file, encoding="utf-8") as f:
+                        project_info = json.load(f)
+                project_id = project_info.get("id", gitlab_dir.name)
+                namespace = project_info.get("namespace", {}).get("full_path", "")
+                visibility = project_info.get("visibility", "")
                 commits_file = gitlab_dir / "commits.json"
                 if commits_file.exists():
                     with open(commits_file, encoding="utf-8") as f:
@@ -204,6 +240,9 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
                                     "sha": commit["id"],
                                     "author": commit.get("author_name", ""),
                                     "date": commit.get("created_at", ""),
+                                    "project_id": project_id,
+                                    "namespace": namespace,
+                                    "visibility": visibility,
                                 },
                             }
                         )
@@ -227,6 +266,9 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
                                     "iid": mr["iid"],
                                     "state": mr.get("state", ""),
                                     "author": mr.get("author", {}).get("username", ""),
+                                    "project_id": project_id,
+                                    "namespace": namespace,
+                                    "visibility": visibility,
                                 },
                             }
                         )
@@ -241,7 +283,12 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict]:
                                 "title": code_file.stem,
                                 "content": content,
                                 "content_type": "plaintext",
-                                "metadata": {"path": code_file.stem},
+                                "metadata": {
+                                    "path": code_file.stem,
+                                    "project_id": project_id,
+                                    "namespace": namespace,
+                                    "visibility": visibility,
+                                },
                             }
                         )
 
@@ -252,7 +299,10 @@ def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path)
     """Выполняет семантический чанкинг всех документов и сохраняет чанки в JSON."""
     output_dir.mkdir(parents=True, exist_ok=True)
     all_chunks = []
-    for doc in documents:
+    for i, doc in enumerate(documents):
+        if _shutdown_requested:
+            logger.warning(f"Shutdown requested, stopping chunking at document {i}/{len(documents)}")
+            break
         source_metadata = {
             "source_type": doc["source_type"],
             "source_id": doc["id"],
@@ -319,7 +369,10 @@ def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager)
         doc_chunks[doc_id].append(ch)
     total_added = 0
     total_deleted = 0
-    for doc_id, doc_chunks_list in doc_chunks.items():
+    for i, (doc_id, doc_chunks_list) in enumerate(doc_chunks.items()):
+        if _shutdown_requested:
+            logger.warning(f"Shutdown requested, stopping indexing at document {i}/{len(doc_chunks)}")
+            break
         added, deleted = live_lake.sync_document(doc_id, doc_chunks_list)
         total_added += added
         total_deleted += deleted
@@ -455,6 +508,10 @@ def main():
                     for name, fn in extractors_to_run
                 }
                 for future in as_completed(futures):
+                    if _shutdown_requested:
+                        logger.warning("Shutdown requested, cancelling remaining extractors...")
+                        pool.shutdown(wait=False, cancel_futures=True)
+                        break
                     name, output_dir, error = future.result()
                     if error:
                         failed_extractors.append((name, error))

@@ -58,9 +58,9 @@ class ConfluenceExtractor:
             raise ValueError("ConfluenceExtractor: 'url' is required and must not be empty")
         if not url.startswith(("http://", "https://")):
             raise ValueError(f"ConfluenceExtractor: 'url' must start with http:// or https://, got: {url}")
-        token = config.get("token", "")
+        token = config.get("api_key") or config.get("token", "")
         if not token or not token.strip():
-            raise ValueError("ConfluenceExtractor: 'token' is required and must not be empty")
+            raise ValueError("ConfluenceExtractor: 'token' or 'api_key' is required and must not be empty")
 
         self.url = url.rstrip("/")
         self.config = config  # Store full config for retry logic
@@ -394,11 +394,29 @@ class ConfluenceExtractor:
                 macros.append({"name": macro_name, "parameters": macro_params, "raw_html": str(macro)})
 
         # Итоговый объект
+        # RBAC metadata: author from current version, contributors from all versions
+        author = page.get("version", {}).get("by", {}).get("displayName", "")
+        contributors = list({
+            v.get("by", {}).get("displayName", "")
+            for v in versions
+            if v.get("by", {}).get("displayName")
+        })
+        space_key = page.get("space", {}).get("key", "")
+
+        # Labels and restrictions (may not be available in all Confluence versions)
+        labels = page.get("metadata", {}).get("labels", [])
+        restrictions = page.get("metadata", {}).get("restrictions", {})
+
         page_data = {
             "id": page_id,
             "title": title,
             "space": space,
+            "space_key": space_key,
             "version": version_number,
+            "author": author,
+            "contributors": contributors,
+            "labels": labels,
+            "restrictions": restrictions,
             "created_at": created,
             "updated_at": updated,
             "body_storage_raw": body_storage,

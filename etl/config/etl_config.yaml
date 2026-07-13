@@ -19,7 +19,8 @@ wal:
 confluence:
   url: "https://confluence.internal.company.com"
   username: ""                             # оставьте пустым для Bearer token auth
-  token: "your_personal_access_token"      # Bearer токен (или пароль с username)
+  token: "your_token_here"                 # Bearer токен (или пароль с username)
+  api_key: "your_api_key_here"             # API-ключ (если используется вместо Bearer)
   verify_ssl: false                        # false для самоподписанных сертификатов
   ca_bundle: ""                            # путь к корпоративному CA bundle (e.g. /etc/ssl/certs/company.pem)
   space_keys:                              # список ключей пространств (None = все)
@@ -36,7 +37,8 @@ confluence:
 jira:
   url: "https://jira.internal.company.com"
   username: ""                             # оставьте пустым для Bearer token auth
-  token: "your_api_token"                  # Bearer токен (или пароль с username)
+  token: "your_token_here"                 # Bearer токен (или пароль с username)
+  api_key: "your_api_key_here"             # API-ключ (если используется вместо Bearer)
   verify_ssl: false                        # false для самоподписанных сертификатов
   ca_bundle: ""                            # путь к корпоративному CA bundle
   jql: "project in (DEV, OPS) ORDER BY updated DESC"
@@ -50,7 +52,8 @@ jira:
 # GitLab (Self-Hosted)
 gitlab:
   url: "https://gitlab.internal.company.com"
-  token: "your_personal_access_token"
+  token: "your_token_here"
+  api_key: "your_api_key_here"             # API-ключ (если используется вместо Bearer)
   verify_ssl: false                        # false для самоподписанных сертификатов
   ca_bundle: ""                            # путь к корпоративному CA bundle
   project_ids: null                        # null = все проекты, либо список [1,2,3]
@@ -65,23 +68,52 @@ gitlab:
   file_paths_filter:                       # фильтр файлов для индексации кода
     - "*.py"
     - "*.md"
+    - "*.rst"
     - "Dockerfile"
     - "*.yaml"
     - "*.yml"
+    - "*.json"
+    - "*.toml"
+    - "*.cfg"
+    - "*.ini"
+    - "*.sh"
+    - "*.bash"
     - "*.sql"
+    - "*.graphql"
+    - "*.proto"
+    - "*.tf"                              # Terraform
+    - "*.hcl"                             # HCL configs
+  file_paths_exclude:                      # исключения (не индексировать)
+    - "*.java"
+    - "*.kt"
+    - "*.kts"
+    - "*.class"
+    - "*.jar"
+    - "*.war"
+    - "*.pyc"
+    - "__pycache__/*"
+    - "node_modules/*"
+    - ".git/*"
+    - "*.min.js"
+    - "*.min.css"
+    - "vendor/*"
+    - "target/*"                          # Maven/Gradle build dir
+    - "build/*"
+    - ".gradle/*"
 
 # Удалённые ML-сервисы (GPUStack / vLLM / llama.cpp)
 remote_services:
+  api_key: "your_api_key_here"             # API-ключ для доступа к ML-сервисам
   embedder:
-    url: "http://10.25.156.101/v1/embeddings"
+    url: "http://your-embedder-host:8080/v1/embeddings"
     model: "bge-m3"
     timeout: 30
   reranker:
-    url: "http://10.25.156.101/v1/rerank"
+    url: "http://your-reranker-host:8080/v1/rerank"
     model: "bge-reranker-v2-m3"
     timeout: 30
   llm:
-    url: "http://10.25.156.101/v1/chat/completions"
+    url: "http://your-llm-host:8080/v1/chat/completions"
     model: ""                              # оставить пустым для auto-detect
     timeout: 120
 
@@ -142,7 +174,7 @@ graph:
     enabled: false
     uri: "bolt://localhost:7687"
     user: "neo4j"
-    password: "your_neo4j_password"
+    password: "your_password_here"
     database: "neo4j"
 
 # SSL / TLS — корпоративные сертификаты

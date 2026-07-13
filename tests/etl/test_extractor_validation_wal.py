@@ -74,7 +74,7 @@ class TestConfluenceInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             ConfluenceExtractor(config)
 
     def test_whitespace_only_token_raises_value_error(self, tmp_path):
@@ -84,7 +84,7 @@ class TestConfluenceInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             ConfluenceExtractor(config)
 
     def test_missing_token_raises_value_error(self, tmp_path):
@@ -93,7 +93,7 @@ class TestConfluenceInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             ConfluenceExtractor(config)
 
     def test_valid_http_url_does_not_raise(self, tmp_path):
@@ -181,7 +181,7 @@ class TestJiraInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             JiraExtractor(config)
 
     def test_whitespace_only_token_raises_value_error(self, tmp_path):
@@ -191,7 +191,7 @@ class TestJiraInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             JiraExtractor(config)
 
     def test_missing_token_raises_value_error(self, tmp_path):
@@ -200,7 +200,7 @@ class TestJiraInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             JiraExtractor(config)
 
     def test_valid_http_url_does_not_raise(self, tmp_path):
@@ -288,7 +288,7 @@ class TestGitLabInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             GitLabExtractor(config)
 
     def test_whitespace_only_token_raises_value_error(self, tmp_path):
@@ -298,7 +298,7 @@ class TestGitLabInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             GitLabExtractor(config)
 
     def test_missing_token_raises_value_error(self, tmp_path):
@@ -307,7 +307,7 @@ class TestGitLabInputValidation:
             "output_dir": str(tmp_path / "out"),
             "wal_file": str(tmp_path / "wal" / "w.json"),
         }
-        with pytest.raises(ValueError, match="'token' is required"):
+        with pytest.raises(ValueError, match="'token' or 'api_key' is required"):
             GitLabExtractor(config)
 
     def test_valid_http_url_does_not_raise(self, tmp_path):

@@ -36,10 +36,12 @@ class GitLabExtractor:
         """
         config: {
             "url": "https://gitlab.internal.company.com",
-            "token": "personal_access_token",
-            "verify_ssl": true,                  # false для самоподписанных сертификатов
-            "ca_bundle": "",                     # путь к корпоративному CA bundle
-            "project_ids": None,
+            "token": "personal_access_token",      # or use "api_key" as alternative
+            "api_key": "",                          # alternative to "token"
+            "verify_ssl": true,                     # false для самоподписанных сертификатов
+            "ca_bundle": "",                        # путь к корпоративному CA bundle
+            "project_ids": None,                    # None/empty → fetch ALL accessible projects
+            "max_projects": 0,                      # limit total projects (0 = no limit)
             "output_dir": "./raw_data/gitlab",
             "wal_file": "./wal/gitlab_wal.json",
             "incremental": True,
@@ -48,7 +50,8 @@ class GitLabExtractor:
             "fetch_merge_requests": True,
             "max_commits_per_project": 0,
             "since_date": None,
-            "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml"]
+            "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml"],
+            "file_paths_exclude": ["*.java", "*.kt", "*.class", "node_modules/*"],
         }
         """
         # Input validation
@@ -57,13 +60,14 @@ class GitLabExtractor:
             raise ValueError("GitLabExtractor: 'url' is required and must not be empty")
         if not url.startswith(("http://", "https://")):
             raise ValueError(f"GitLabExtractor: 'url' must start with http:// or https://, got: {url}")
-        token = config.get("token", "")
+        # Support api_key as alternative to token
+        token = config.get("token") or config.get("api_key") or ""
         if not token or not token.strip():
-            raise ValueError("GitLabExtractor: 'token' is required and must not be empty")
+            raise ValueError("GitLabExtractor: 'token' or 'api_key' is required and must not be empty")
 
         self.url = url.rstrip("/")
         self.config = config  # Store full config for retry logic
-        self.token = config["token"]
+        self.token = token
         self.project_ids = config.get("project_ids")
         self.output_dir = Path(config.get("output_dir", "./raw_data/gitlab"))
         self.wal_path = Path(config.get("wal_file", "./wal/gitlab_wal.json"))
@@ -74,6 +78,8 @@ class GitLabExtractor:
         self.max_commits_per_project = config.get("max_commits_per_project", 0)
         self.since_date = config.get("since_date")
         self.file_paths_filter = config.get("file_paths_filter", [])
+        self.file_paths_exclude = config.get("file_paths_exclude", [])
+        self.max_projects = config.get("max_projects", 0)
         self.branch = config.get("branch", "main")  # Branch to fetch files from
 
         # Timeout configuration
@@ -168,7 +174,10 @@ class GitLabExtractor:
                 projects.append(proj)
             return projects
         else:
-            return list(self._paginated_get("/api/v4/projects", {"simple": True}))
+            logger.info("Fetching ALL projects from GitLab (project_ids is empty)...")
+            projects = list(self._paginated_get("/api/v4/projects", {"simple": True}))
+            logger.info(f"Fetched {len(projects)} project(s) from GitLab API")
+            return projects
 
     def get_commits(self, project_id: int, since: str = None) -> list[dict]:
         """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
@@ -319,10 +328,27 @@ class GitLabExtractor:
     def run(self):
         """Основной процесс выгрузки по всем проектам."""
         projects = self.get_projects()
-        logger.info(f"Found {len(projects)} projects")
-        for project in projects:
+
+        # Apply max_projects limit if configured
+        if self.max_projects > 0 and len(projects) > self.max_projects:
+            logger.info(
+                f"Limiting projects from {len(projects)} to max_projects={self.max_projects}"
+            )
+            projects = projects[: self.max_projects]
+
+        total = len(projects)
+        logger.info(f"Found {total} project(s) to process")
+        if not self.project_ids:
+            logger.info("project_ids not set — fetched ALL accessible projects from GitLab")
+        else:
+            logger.info(f"Processing configured project_ids: {self.project_ids}")
+
+        for idx, project in enumerate(projects, 1):
             project_id = project["id"]
-            logger.info(f"Processing project {project['path_with_namespace']} (id={project_id})")
+            logger.info(
+                f"[{idx}/{total}] Processing project "
+                f"{project['path_with_namespace']} (id={project_id})"
+            )
 
             commits = []
             if self.fetch_commits:
@@ -368,7 +394,17 @@ class GitLabExtractor:
         logger.info("GitLab extraction finished.")
 
     def _matches_filter(self, path: str) -> bool:
-        """Проверяет, подходит ли путь файла под фильтр (простое окончание или точное совпадение)."""
+        """Проверяет, подходит ли путь файла под фильтр и не исключён ли он."""
+        # Check exclusions first
+        if self.file_paths_exclude:
+            for pattern in self.file_paths_exclude:
+                if pattern.startswith("*.") and path.endswith(pattern[1:]):
+                    return False
+                if pattern.endswith("/*") and path.startswith(pattern[:-2] + "/"):
+                    return False
+                if pattern in path:
+                    return False
+        # Then check inclusion filter
         if not self.file_paths_filter:
             return True
         for pattern in self.file_paths_filter:
@@ -384,7 +420,8 @@ if __name__ == "__main__":
     config_example = {
         "url": os.getenv("GITLAB_URL", "https://gitlab.example.com"),
         "token": os.getenv("GITLAB_TOKEN", "your_token"),
-        "project_ids": None,  # или [1,2]
+        "project_ids": None,  # None → fetch ALL accessible projects; or [1, 2, 3]
+        "max_projects": 0,  # 0 = no limit
         "output_dir": "./raw_data/gitlab",
         "wal_file": "./wal/gitlab_wal.json",
         "incremental": True,
@@ -394,6 +431,7 @@ if __name__ == "__main__":
         "max_commits_per_project": 500,
         "since_date": "2025-01-01T00:00:00Z",
         "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml", "*.yml"],
+        "file_paths_exclude": ["*.java", "*.kt", "*.class", "node_modules/*"],
     }
     extractor = GitLabExtractor(config_example)
     extractor.run()
