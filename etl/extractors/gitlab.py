@@ -74,6 +74,7 @@ class GitLabExtractor:
         self.max_commits_per_project = config.get("max_commits_per_project", 0)
         self.since_date = config.get("since_date")
         self.file_paths_filter = config.get("file_paths_filter", [])
+        self.branch = config.get("branch", "main")  # Branch to fetch files from
 
         # Timeout configuration
         self.connect_timeout = config.get("connect_timeout", 10)
@@ -354,7 +355,7 @@ class GitLabExtractor:
                             # Проверяем, соответствует ли путь фильтру (упрощённо по расширению)
                             path = item["path"]
                             if self._matches_filter(path):
-                                content = self.get_file_content(project_id, path, ref="main")
+                                content = self.get_file_content(project_id, path, ref=self.branch)
                                 if content:
                                     files_data.append({"path": path, "content": content, "sha": item["id"]})
                     logger.info(f"  Retrieved {len(files_data)} files from repository")

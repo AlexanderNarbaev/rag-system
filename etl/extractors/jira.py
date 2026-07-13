@@ -372,25 +372,19 @@ class JiraExtractor:
 
     def _build_jql(self) -> str:
         """Формирует JQL с учётом инкрементального режима."""
-        jql = self.base_jql
+        jql = self.base_jql or "ORDER BY updated DESC"
         last_run = self.wal_data.get("last_run")
         if self.incremental and (last_run or self.since_date):
             last = self.since_date or last_run
-            # Добавляем условие updated >= last (но нужно аккуратно с ORDER BY)
-            # Если в базовом JQL уже есть updated, заменяем или добавляем
             updated_condition = f"updated >= '{last}'"
             if "updated" in jql:
-                # Простейшее: предполагаем, что updated встречается в виде updated > ... или updated >= ...
                 import re
 
                 if re.search(r"updated\s*[<>=]", jql):
                     logger.warning("Base JQL already has updated condition. Incremental may overlap.")
                     return f"({jql}) AND {updated_condition}"
             else:
-                if jql.strip():  # noqa: SIM108
-                    jql = f"({jql}) AND {updated_condition}"
-                else:
-                    jql = updated_condition
+                jql = f"({jql}) AND {updated_condition}" if jql.strip() else updated_condition
         return jql
 
     def run(self):

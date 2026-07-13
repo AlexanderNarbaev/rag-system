@@ -56,6 +56,7 @@ gitlab:
   project_ids: null                        # null = все проекты, либо список [1,2,3]
   output_dir: "./raw_data/gitlab"
   incremental: true
+  branch: "main"                           # ветка для извлечения файлов (main, dev, master и т.д.)
   fetch_commits: true
   fetch_files: true
   fetch_merge_requests: true
@@ -68,6 +69,21 @@ gitlab:
     - "*.yaml"
     - "*.yml"
     - "*.sql"
+
+# Удалённые ML-сервисы (GPUStack / vLLM / llama.cpp)
+remote_services:
+  embedder:
+    url: "http://10.25.156.101/v1/embeddings"
+    model: "bge-m3"
+    timeout: 30
+  reranker:
+    url: "http://10.25.156.101/v1/rerank"
+    model: "bge-reranker-v2-m3"
+    timeout: 30
+  llm:
+    url: "http://10.25.156.101/v1/chat/completions"
+    model: ""                              # оставить пустым для auto-detect
+    timeout: 120
 
 # Семантический чанкинг
 chunking:
