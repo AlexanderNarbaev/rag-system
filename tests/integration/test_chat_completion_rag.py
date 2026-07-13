@@ -245,6 +245,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "RAG context for multi-turn.", "source_type": "confluence"},
+                {"text": "Hybrid search combines vectors.", "source_type": "confluence"},
             ]
         )
 
@@ -256,7 +257,7 @@ class TestChatCompletionRAGPipeline:
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
-            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1]),
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
@@ -342,6 +343,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "RAG is a powerful technique for LLMs.", "source_type": "confluence", "title": "RAG Guide"},
+                {"text": "RAG combines retrieval with generation.", "source_type": "confluence", "title": "Overview"},
             ]
         )
 
@@ -353,7 +355,7 @@ class TestChatCompletionRAGPipeline:
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
-            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1]),
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
