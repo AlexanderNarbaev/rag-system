@@ -192,26 +192,30 @@ def hybrid_search(
     dense_vec = _compute_dense_embedding(query)
     if _get_cb:
         try:
-            dense_results = _get_cb("qdrant").call_sync(
-                lambda: qdrant_client.search(
+            dense_response = _get_cb("qdrant").call_sync(
+                lambda: qdrant_client.query_points(
                     collection_name=COLLECTION_NAME,
-                    query_vector=("dense", dense_vec),
+                    query=dense_vec,
+                    using="dense",
                     limit=top_k,
                     query_filter=q_filter,
                     with_payload=True,
                 )
             )
+            dense_results = dense_response.points
         except CircuitBreakerOpenError:
             logger.warning("Qdrant circuit breaker OPEN — returning empty dense results")
             dense_results = []
     else:
-        dense_results = qdrant_client.search(
+        dense_response = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=("dense", dense_vec),
+            query=dense_vec,
+            using="dense",
             limit=top_k,
             query_filter=q_filter,
             with_payload=True,
         )
+        dense_results = dense_response.points
 
     # Sparse поиск (если поддерживается)
     sparse_vec = _compute_sparse_embedding(query)
@@ -219,25 +223,29 @@ def hybrid_search(
     if sparse_vec is not None:
         if _get_cb:
             try:
-                sparse_results = _get_cb("qdrant").call_sync(
-                    lambda: qdrant_client.search(
+                sparse_response = _get_cb("qdrant").call_sync(
+                    lambda: qdrant_client.query_points(
                         collection_name=COLLECTION_NAME,
-                        query_vector=("sparse", sparse_vec),
+                        query=sparse_vec,
+                        using="sparse",
                         limit=top_k,
                         query_filter=q_filter,
                         with_payload=True,
                     )
                 )
+                sparse_results = sparse_response.points
             except CircuitBreakerOpenError:
                 logger.warning("Qdrant circuit breaker OPEN — returning empty sparse results")
         else:
-            sparse_results = qdrant_client.search(
+            sparse_response = qdrant_client.query_points(
                 collection_name=COLLECTION_NAME,
-                query_vector=("sparse", sparse_vec),
+                query=sparse_vec,
+                using="sparse",
                 limit=top_k,
                 query_filter=q_filter,
                 with_payload=True,
             )
+            sparse_results = sparse_response.points
 
     # Слияние
     if sparse_results:

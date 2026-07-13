@@ -248,7 +248,8 @@ class GitLabExtractor:
         """Инкрементальная проверка: обрабатывать коммит, если он новый или изменился."""
         if not self.incremental:
             return True
-        project_wal = self.wal_data["projects"].get(str(project_id), {})
+        projects = self.wal_data.get("projects", {})
+        project_wal = projects.get(str(project_id), {})
         last_commit = project_wal.get("last_commit_sha")
         if not last_commit:
             return True
@@ -260,6 +261,8 @@ class GitLabExtractor:
         return True
 
     def _update_wal_commit(self, project_id: int, last_commit_sha: str, last_commit_date: str):
+        if "projects" not in self.wal_data:
+            self.wal_data["projects"] = {}
         if str(project_id) not in self.wal_data["projects"]:
             self.wal_data["projects"][str(project_id)] = {}
         self.wal_data["projects"][str(project_id)]["last_commit_sha"] = last_commit_sha

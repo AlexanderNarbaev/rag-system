@@ -132,13 +132,15 @@ def hyde_search(
         q_filter = models.Filter(must=filter_conditions) if filter_conditions else None
 
         # Dense search with hypothetical embedding
-        results = qdrant_client.search(
+        response = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=("dense", hyp_vec),
+            query=hyp_vec,
+            using="dense",
             limit=top_k,
             query_filter=q_filter,
             with_payload=True,
         )
+        results = response.points
 
         logger.info(f"HyDE search returned {len(results)} chunks for query: '{query[:60]}...'")
         return results

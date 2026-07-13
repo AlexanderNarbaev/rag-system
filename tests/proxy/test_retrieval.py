@@ -98,7 +98,9 @@ class TestHybridSearch:
             patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1, 0.2]),
             patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=None),
         ):
-            mock_qdrant.search.return_value = mock_dense
+            mock_response = MagicMock()
+            mock_response.points = mock_dense
+            mock_qdrant.query_points.return_value = mock_response
             result = hybrid_search("test query")
             assert len(result) == 1
             assert result[0].id == "id1"
@@ -113,7 +115,11 @@ class TestHybridSearch:
             patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1, 0.2]),
             patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=MagicMock()),
         ):
-            mock_qdrant.search.side_effect = [mock_dense, mock_sparse]
+            mock_dense_response = MagicMock()
+            mock_dense_response.points = mock_dense
+            mock_sparse_response = MagicMock()
+            mock_sparse_response.points = mock_sparse
+            mock_qdrant.query_points.side_effect = [mock_dense_response, mock_sparse_response]
             result = hybrid_search("test query")
             assert len(result) == 2
 
@@ -126,7 +132,9 @@ class TestHybridSearch:
             patch("proxy.app.core.retrieval._compute_dense_embedding", return_value=[0.1]),
             patch("proxy.app.core.retrieval._compute_sparse_embedding", return_value=None),
         ):
-            mock_qdrant.search.return_value = mock_dense
+            mock_response = MagicMock()
+            mock_response.points = mock_dense
+            mock_qdrant.query_points.return_value = mock_response
             result = hybrid_search("query", version="2.0", top_k=10)
             assert result == mock_dense
 
@@ -143,7 +151,9 @@ class TestHybridSearch:
             import proxy.app.core.retrieval as ret_mod
 
             ret_mod.qdrant_client = MagicMock()
-            ret_mod.qdrant_client.search.return_value = []
+            mock_response = MagicMock()
+            mock_response.points = []
+            ret_mod.qdrant_client.query_points.return_value = mock_response
             ret_mod.embedder = MagicMock()
             result = hybrid_search("query")
             assert result == []

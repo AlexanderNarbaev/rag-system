@@ -85,7 +85,9 @@ class TestHydeSearch:
 
         # Patch qdrant_client to prevent direct search path from using stale mocks
         mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = [mock_hit]
+        mock_response = MagicMock()
+        mock_response.points = [mock_hit]
+        mock_qdrant.query_points.return_value = mock_response
         with patch("proxy.app.core.hyde._call_slm_sync", return_value="A hypothetical answer about documents."):
             with patch("proxy.app.core.hyde.HYDE_ENABLED", True):
                 with patch("proxy.app.core.retrieval.qdrant_client", mock_qdrant):
@@ -105,7 +107,9 @@ class TestHydeSearch:
         mock_search.return_value = [mock_hit]
 
         mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = [mock_hit]
+        mock_response = MagicMock()
+        mock_response.points = [mock_hit]
+        mock_qdrant.query_points.return_value = mock_response
         with patch("proxy.app.core.hyde._call_slm_sync", side_effect=Exception("SLM error")):
             with patch("proxy.app.core.hyde.HYDE_ENABLED", True):
                 with patch("proxy.app.core.retrieval.qdrant_client", mock_qdrant):
@@ -121,7 +125,7 @@ class TestHydeSearch:
         mock_search.side_effect = Exception("Qdrant down")
 
         mock_qdrant = MagicMock()
-        mock_qdrant.search.side_effect = Exception("Qdrant down")
+        mock_qdrant.query_points.side_effect = Exception("Qdrant down")
         with patch("proxy.app.core.hyde._call_slm_sync", return_value="Hypothesis"):
             with patch("proxy.app.core.hyde.HYDE_ENABLED", True):
                 with patch("proxy.app.core.retrieval.qdrant_client", mock_qdrant):
@@ -141,7 +145,9 @@ class TestHydeSearch:
         mock_search.return_value = [mock_hit]
 
         mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = [mock_hit]
+        mock_response = MagicMock()
+        mock_response.points = [mock_hit]
+        mock_qdrant.query_points.return_value = mock_response
         with patch("proxy.app.core.hyde.HYDE_ENABLED", False):
             with patch("proxy.app.core.retrieval.qdrant_client", mock_qdrant):
                 result = hyde_search("Query")
@@ -161,7 +167,9 @@ class TestHydeSearch:
         mock_search.return_value = [mock_hit]
 
         mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = [mock_hit]
+        mock_response = MagicMock()
+        mock_response.points = [mock_hit]
+        mock_qdrant.query_points.return_value = mock_response
         with patch("proxy.app.core.hyde._call_slm_sync", return_value="Versioned answer"):
             with patch("proxy.app.core.hyde.HYDE_ENABLED", True):
                 with patch("proxy.app.core.retrieval.qdrant_client", mock_qdrant):

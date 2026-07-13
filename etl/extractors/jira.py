@@ -373,8 +373,9 @@ class JiraExtractor:
     def _build_jql(self) -> str:
         """Формирует JQL с учётом инкрементального режима."""
         jql = self.base_jql
-        if self.incremental and (self.wal_data["last_run"] or self.since_date):
-            last = self.since_date or self.wal_data["last_run"]
+        last_run = self.wal_data.get("last_run")
+        if self.incremental and (last_run or self.since_date):
+            last = self.since_date or last_run
             # Добавляем условие updated >= last (но нужно аккуратно с ORDER BY)
             # Если в базовом JQL уже есть updated, заменяем или добавляем
             updated_condition = f"updated >= '{last}'"
