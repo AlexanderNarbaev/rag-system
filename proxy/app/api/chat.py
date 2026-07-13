@@ -71,6 +71,7 @@ class ChatCompletionResponse(BaseModel):
     rag_feedback_id: str | None = None
     rag_confidence: float | None = None
     rag_sources: list[dict] | None = None
+    ragas_scores: dict[str, float] | None = None
 
 
 class ModelInfo(BaseModel):
@@ -183,7 +184,7 @@ async def chat_completions(
 
     # Federation: skip LLM generation, return chunks only
     if request.rag_skip_generation:
-        rag_context, _, _, sources = await _main.process_rag_query(
+        rag_context, _, _, sources, _ = await _main.process_rag_query(
             user_query=user_query,
             version=version,
             force_refresh=request.rag_force_refresh,
@@ -317,7 +318,7 @@ async def chat_completions(
                 initial = optimizer.initial_chunk()
                 if initial:
                     yield initial
-                rag_context, messages_for_llm, _, _ = await _main.process_rag_query(
+                rag_context, messages_for_llm, _, _, _ = await _main.process_rag_query(
                     user_query=user_query,
                     version=version,
                     force_refresh=request.rag_force_refresh,
@@ -371,7 +372,7 @@ async def chat_completions(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     else:
         # Non-streaming
-        response_text, rag_context, from_cache, sources = await _main.process_rag_query(
+        response_text, rag_context, from_cache, sources, ragas_scores = await _main.process_rag_query(
             user_query=user_query,
             version=version,
             force_refresh=request.rag_force_refresh,
@@ -399,6 +400,7 @@ async def chat_completions(
             rag_feedback_id=feedback_id,
             rag_confidence=confidence.score,
             rag_sources=sources,
+            ragas_scores=ragas_scores or None,
         )
         duration_ms = (time.time() - start_time) * 1000
         _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)

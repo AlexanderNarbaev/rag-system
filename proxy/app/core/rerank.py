@@ -178,6 +178,89 @@ def rerank_chunks_with_scores(
     return list(zip(indices, scores.tolist(), strict=False))
 
 
+def cosine_similarity_single(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot_product = sum(x * y for x, y in zip(a, b, strict=False))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+
+    return dot_product / (norm_a * norm_b)
+
+
+def colbert_score(query_tokens: list[list[float]], doc_tokens: list[list[float]]) -> float:
+    """
+    Compute ColBERT late interaction score.
+    Each query token attends to all document tokens, takes max, then sums.
+
+    This is faster than cross-encoder and more accurate than bi-encoder.
+    Based on: ColBERTv2 (Stanford 2022)
+    """
+    if not query_tokens or not doc_tokens:
+        return 0.0
+
+    total_score = 0.0
+    for q_token in query_tokens:
+        max_sim = 0.0
+        for d_token in doc_tokens:
+            # Cosine similarity between token embeddings
+            sim = cosine_similarity_single(q_token, d_token)
+            max_sim = max(max_sim, sim)
+        total_score += max_sim
+
+    return total_score / len(query_tokens)
+
+
+def hybrid_rerank(
+    query: str,
+    documents: list[dict],
+    colbert_weight: float = 0.3,
+    cross_encoder_weight: float = 0.7,
+) -> list[dict]:
+    """
+    Two-stage reranking:
+    1. ColBERT late interaction (fast, token-level)
+    2. Cross-encoder (precise, semantic-level)
+
+    Combines scores with configurable weights.
+    """
+    if not documents:
+        return []
+
+    # Stage 1: ColBERT scores (if token embeddings available)
+    colbert_scores = []
+    for doc in documents:
+        if "colbert_tokens" in doc.get("metadata", {}):
+            score = colbert_score(
+                doc["metadata"]["query_tokens"],
+                doc["metadata"]["colbert_tokens"],
+            )
+            colbert_scores.append(score)
+        else:
+            colbert_scores.append(0.0)
+
+    # Stage 2: Cross-encoder scores
+    cross_scores = rerank_chunks(query, [d["text"] for d in documents])
+
+    # Combine scores
+    combined = []
+    for i, doc in enumerate(documents):
+        final_score = (
+            colbert_weight * colbert_scores[i]
+            + cross_encoder_weight * cross_scores[i]
+        )
+        doc["score"] = final_score
+        doc["colbert_score"] = colbert_scores[i]
+        doc["cross_encoder_score"] = cross_scores[i]
+        combined.append(doc)
+
+    # Sort by combined score
+    combined.sort(key=lambda x: x["score"], reverse=True)
+    return combined
+
+
 # Если кэш-менеджер не был инициализирован, создаём заглушку
 if cache_manager is None:
     cache_manager = CacheManager(use_redis=False)

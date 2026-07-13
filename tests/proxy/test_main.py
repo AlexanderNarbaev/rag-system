@@ -405,7 +405,7 @@ class TestProcessRagQuery:
         mock_cache.get = AsyncMock(return_value="Cached response")
 
         with patch("proxy.app.main.cache_manager", mock_cache), patch("proxy.app.main.hybrid_search") as mock_search:
-            result, context, from_cache, sources = await process_rag_query(
+            result, context, from_cache, sources, ragas_scores = await process_rag_query(
                 user_query="test query",
                 version=None,
                 force_refresh=False,
@@ -414,6 +414,7 @@ class TestProcessRagQuery:
             assert result == "Cached response"
             assert from_cache is True
             assert sources == []
+            assert ragas_scores == {}
             mock_search.assert_not_called()
 
     @pytest.mark.asyncio
@@ -423,13 +424,14 @@ class TestProcessRagQuery:
             patch("proxy.app.main.hybrid_search", return_value=[]),
             patch("proxy.app.main.non_stream_completion", return_value="Answer from LLM"),
         ):
-            result, context, from_cache, sources = await process_rag_query(
+            result, context, from_cache, sources, ragas_scores = await process_rag_query(
                 user_query="test",
                 stream=False,
             )
             assert result == "Answer from LLM"
             assert from_cache is False
             assert sources == []
+            assert ragas_scores == {}
 
     @pytest.mark.asyncio
     async def test_streaming_returns_context_and_messages(self):
@@ -447,7 +449,7 @@ class TestProcessRagQuery:
             patch("proxy.app.main.build_context", return_value="Built context"),
         ):
             mock_dedup.return_value = [({"text": "chunk text"}, 0.95)]
-            context, messages, _, sources = await process_rag_query(
+            context, messages, _, sources, _ = await process_rag_query(
                 user_query="test",
                 stream=True,
             )

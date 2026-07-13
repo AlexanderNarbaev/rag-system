@@ -254,7 +254,7 @@ async def process_rag_query(
     other_messages: list[dict] | None = None,
     user_context: UserContext | None = None,
     top_k_override: int | None = None,
-) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]]]:
+) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]], dict[str, float]]:
     """
     Core RAG pipeline: search → filter → rerank → dedup → context → LLM.
 
@@ -286,7 +286,7 @@ async def process_rag_query(
         cached = await cache_manager.get(cache_key)
         if cached:
             logger.info(f"Cache hit for query: {user_query[:50]}...")
-            return cached, "", True, []
+            return cached, "", True, [], {}
 
     # 2. Hybrid search
     try:
@@ -398,7 +398,7 @@ async def process_rag_query(
             f"I don't have enough relevant information to answer this "
             f"question reliably. {reason}"
         )
-        return refusal, "", False, sources
+        return refusal, "", False, sources, {}
 
     # 10. Build system prompt
     system_prompt = (
@@ -416,12 +416,26 @@ async def process_rag_query(
 
     # 11. LLM call
     if stream:
-        return context, messages_for_llm, False, sources
+        return context, messages_for_llm, False, sources, {}
     else:
         response_text = await non_stream_completion(messages_for_llm, temperature=temperature, max_tokens=max_tokens)
         if cache_manager and not force_refresh:
             await cache_manager.set(cache_key, response_text, ttl=DEFAULT_CACHE_TTL_SECONDS)
-        return response_text, context, False, sources
+
+        # 12. Compute RAGAS evaluation scores
+        ragas_scores: dict[str, float] = {}
+        if chunks_for_eval:
+            from proxy.app.core.ragas_eval import evaluate_rag_response
+
+            context_texts = [c.get("text", "") for c in chunks_for_eval]
+            ragas_scores = evaluate_rag_response(
+                question=user_query,
+                answer=response_text,
+                contexts=context_texts,
+            )
+            logger.info(f"RAGAS scores: {ragas_scores}")
+
+        return response_text, context, False, sources, ragas_scores
 
 
 # ---------------------------------------------------------------------------
