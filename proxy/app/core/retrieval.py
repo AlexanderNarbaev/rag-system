@@ -17,6 +17,7 @@ for nearest-neighbor search with version filtering.
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from math import exp
 
@@ -470,6 +471,91 @@ def graph_expand_query(query: str, max_entities: int = 5) -> str:
     if context_lines:
         return "Связанные сущности из графа знаний:\n" + "\n".join(context_lines)
     return ""
+
+
+class CypherQueryGenerator:
+    """
+    Generate Cypher queries from natural language for Neo4j.
+
+    Converts entity-based queries into graph traversals.
+
+    Usage:
+        generator = CypherQueryGenerator()
+        cypher = generator.generate("What projects does John work on?")
+        # Returns: "MATCH (p:Person {name: 'John'})-[:WORKS_ON]->(proj:Project) RETURN proj"
+    """
+
+    # Common query patterns
+    PATTERNS = [
+        {
+            "pattern": r"what (?:projects?|repos?|repositories?) (?:does|do) (\w+) work on",
+            "template": (
+                "MATCH (p:Person {{name: '{entity}'}})-[:WORKS_ON]->(proj:Project) RETURN proj.name, proj.description"
+            ),
+        },
+        {
+            "pattern": r"who (?:works?|worked?) on (\w+)",
+            "template": "MATCH (p:Person)-[:WORKS_ON]->(proj:Project {{name: '{entity}'}}) RETURN p.name, p.role",
+        },
+        {
+            "pattern": r"what (?:issues?|tickets?|tasks?) (?:are|is) (?:related|linked) to (\w+)",
+            "template": "MATCH (i:Issue)-[:RELATED_TO]->(e {{name: '{entity}'}}) RETURN i.key, i.summary, i.status",
+        },
+        {
+            "pattern": r"what (?:dependencies|depends) (?:does|do) (\w+) (?:have|has)",
+            "template": "MATCH (e {{name: '{entity}'}})-[:DEPENDS_ON]->(dep) RETURN dep.name, dep.type",
+        },
+        {
+            "pattern": r"show (?:me )?(?:all )?(?:the )?(\w+) (?:and|with) (?:their|its) (\w+)",
+            "template": "MATCH (a:{entity1})-[r]->(b:{entity2}) RETURN a.name, type(r), b.name LIMIT 20",
+        },
+    ]
+
+    def generate(self, query: str) -> str | None:
+        """
+        Generate Cypher query from natural language.
+
+        Returns Cypher query string or None if no pattern matches.
+        """
+        query_lower = query.lower().strip()
+
+        for pattern_info in self.PATTERNS:
+            match = re.search(pattern_info["pattern"], query_lower)
+            if match:
+                entity = match.group(1).capitalize()
+                cypher = pattern_info["template"].format(entity=entity)
+                logger.info(f"Generated Cypher for query: {query[:50]}...")
+                return cypher
+
+        # Fallback: entity search
+        entities = self._extract_entities(query)
+        if entities:
+            entity = entities[0]
+            cypher = (
+                f"MATCH (n) WHERE n.name CONTAINS '{entity}'"
+                f" OR n.description CONTAINS '{entity}'"
+                f" RETURN n.name, n.description, labels(n) LIMIT 10"
+            )
+            logger.info(f"Generated fallback Cypher for entity: {entity}")
+            return cypher
+
+        return None
+
+    def _extract_entities(self, query: str) -> list[str]:
+        """Extract potential entity names from query."""
+        # Simple extraction: capitalized words
+        words = query.split()
+        entities = [w for w in words if w[0].isupper() and len(w) > 2]
+
+        # Filter common words
+        stop_words = {"What", "How", "When", "Where", "Who", "Which", "The", "This", "That"}
+        entities = [e for e in entities if e not in stop_words]
+
+        return entities
+
+
+# Global generator instance
+_cypher_generator = CypherQueryGenerator()
 
 
 # Если нужен синхронный доступ к кэшу, добавим методы в CacheManager
