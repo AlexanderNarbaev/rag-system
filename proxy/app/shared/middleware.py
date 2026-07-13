@@ -31,12 +31,12 @@ logger = logging.getLogger("rag-proxy.middleware")
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """Injects X-Request-ID header into every request/response."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request.state.request_id = request_id
         RequestIdFilter.set_request_id(request_id)
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -44,9 +44,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Logs each request with method, path, status, and duration."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         start = time.monotonic()
-        response = await call_next(request)
+        response: Response = await call_next(request)
         duration_ms = (time.monotonic() - start) * 1000
         logger.info(
             "%s %s %d %.2fms",
@@ -66,11 +66,11 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 
     HEADER_NAME = "X-Correlation-ID"
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         correlation_id = request.headers.get(self.HEADER_NAME) or str(uuid.uuid4())
         request.state.correlation_id = correlation_id
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
         response.headers[self.HEADER_NAME] = correlation_id
         return response
 
@@ -78,8 +78,8 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Injects security-related HTTP headers into every response."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        response = await call_next(request)
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
+        response: Response = await call_next(request)
         headers = SecurityHeaders.get_headers()
         for header_name, header_value in headers.items():
             if header_name not in response.headers:
@@ -94,11 +94,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.audit_logger = audit_logger
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         client_ip = request.client.host if request.client else "unknown"
         start = time.monotonic()
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         _duration_ms = (time.monotonic() - start) * 1000
         if self.audit_logger and response.status_code >= 400:
@@ -119,7 +119,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 class InputSanitizationMiddleware(BaseHTTPMiddleware):
     """Sanitizes query parameters in requests to prevent injection attacks."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         if request.url.query:
             sanitized_params = {}
             for key, values in request.query_params.multi_items():
@@ -130,7 +130,7 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
                     sanitized_vals.append(sv if sv is not None else v)
                 sanitized_params[sanitized_key] = sanitized_vals
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
         return response
 
 

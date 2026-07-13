@@ -144,7 +144,7 @@ class RedisCache:
 
     async def delete(self, key: str) -> bool:
         client = await self._get_client()
-        deleted = await client.delete(key)
+        deleted: int = await client.delete(key)
         return deleted > 0
 
     async def clear(self) -> None:
@@ -180,7 +180,8 @@ class RedisCache:
     def delete_sync(self, key: str) -> bool:
         try:
             client = self._get_sync_client()
-            return client.delete(key) > 0
+            deleted: int = client.delete(key)
+            return deleted > 0
         except Exception as e:
             logger.debug("Redis delete_sync failed: %s", e)
             return False
