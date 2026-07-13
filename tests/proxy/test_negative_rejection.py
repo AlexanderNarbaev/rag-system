@@ -6,15 +6,13 @@ Covers:
 - Integration with the main RAG pipeline refusal path
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from proxy.app.core.confidence import (
     RetrievalQualityReport,
     evaluate_retrieval_quality,
     should_generate_answer,
 )
-
 
 # ── Unit Tests: should_generate_answer ──────────────────────────────────────
 

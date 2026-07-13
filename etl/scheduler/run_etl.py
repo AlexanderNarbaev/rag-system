@@ -42,17 +42,17 @@ signal.signal(signal.SIGTERM, _signal_handler)
 # Добавляем корень проекта в PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# Импорт модулей ETL
-from etl.chunker.hash_versioning import ChunkVersionStore
-from etl.chunker.semantic_chunker import MDKeyChunker, MetadataEnricher, SemanticChunker
-from etl.extractors.confluence import ConfluenceExtractor
-from etl.extractors.gitlab import GitLabExtractor
-from etl.extractors.jira import JiraExtractor
-from etl.graph_builder.entity_extractor import EntityRelationExtractor
-from etl.graph_builder.neo4j_loader import Neo4jLoader
-from etl.indexer.live_vector_lake import LiveVectorLake
-from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-from etl.indexer.wal_manager import (
+# Импорт модулей ETL — E402 suppressed: sys.path must be set before imports
+from etl.chunker.hash_versioning import ChunkVersionStore  # noqa: E402
+from etl.chunker.semantic_chunker import MDKeyChunker, MetadataEnricher, SemanticChunker  # noqa: E402
+from etl.extractors.confluence import ConfluenceExtractor  # noqa: E402
+from etl.extractors.gitlab import GitLabExtractor  # noqa: E402
+from etl.extractors.jira import JiraExtractor  # noqa: E402
+from etl.graph_builder.entity_extractor import EntityRelationExtractor  # noqa: E402
+from etl.graph_builder.neo4j_loader import Neo4jLoader  # noqa: E402
+from etl.indexer.live_vector_lake import LiveVectorLake  # noqa: E402
+from etl.indexer.qdrant_hybrid import QdrantHybridIndexer  # noqa: E402
+from etl.indexer.wal_manager import (  # noqa: E402
     PIPELINE_CONFLUENCE,
     PIPELINE_GITLAB,
     PIPELINE_INDEXING,

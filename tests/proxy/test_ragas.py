@@ -1,10 +1,9 @@
 """Tests for RAGAS evaluation metrics."""
 
-import pytest
 from proxy.app.core.ragas_eval import (
-    compute_faithfulness,
     compute_answer_relevance,
     compute_context_relevance,
+    compute_faithfulness,
     evaluate_rag_response,
 )
 
