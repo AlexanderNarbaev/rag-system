@@ -54,6 +54,8 @@ class Chunk:
     parent_metadata: dict[str, Any] = field(default_factory=dict)  # унаследованные метаданные
     position: int = 0  # порядковый номер в документе
     tokens_approx: int = 0  # примерное количество токенов
+    original_text: str = ""  # текст без контекстного префикса (для отображения)
+    enriched: bool = False  # был ли чанк обогащён контекстом
 
 
 class SemanticChunker:
@@ -132,6 +134,30 @@ class SemanticChunker:
                 buffer = chunk
         merged.append(buffer)
         return merged
+
+    def _prepend_context(self, chunk_text: str, metadata: dict) -> str:
+        """
+        Prepend document-level context to chunk text for better embedding.
+        This helps preserve context that gets lost when chunking.
+
+        Pattern from Anthropic's contextual chunking approach.
+        """
+        context_parts = []
+
+        if metadata.get("doc_title"):
+            context_parts.append(f"Document: {metadata['doc_title']}")
+
+        if metadata.get("section_title"):
+            context_parts.append(f"Section: {metadata['section_title']}")
+
+        if metadata.get("source_type"):
+            context_parts.append(f"Source: {metadata['source_type']}")
+
+        if context_parts:
+            context_prefix = " | ".join(context_parts) + "\n\n"
+            return context_prefix + chunk_text
+
+        return chunk_text
 
     def chunk_html(self, html: str, source_metadata: dict[str, Any]) -> list[Chunk]:
         """
@@ -327,10 +353,12 @@ class MDKeyChunker:
         :param content_type: "html" или "markdown"
         :param source_metadata: словарь с source_type, doc_title, version, source_id
         """
+        # Before chunking, prepend context to the content
+        enriched_content = self.base._prepend_context(content, source_metadata)
         if content_type == "markdown":
-            chunks = self.base.chunk_markdown(content, source_metadata)
+            chunks = self.base.chunk_markdown(enriched_content, source_metadata)
         else:
-            chunks = self.base.chunk_html(content, source_metadata)
+            chunks = self.base.chunk_html(enriched_content, source_metadata)
 
         # Обогащение метаданными (NLP + SLM)
         for _idx, chunk in enumerate(chunks):
@@ -355,6 +383,11 @@ class MDKeyChunker:
                         chunk.keywords = slm_data["keywords"]
                     if slm_data.get("hypothetical_questions"):
                         chunk.hypothetical_questions = slm_data["hypothetical_questions"]
+
+        # Save original text before context prefix is added in Rolling Key Propagation
+        for chunk in chunks:
+            chunk.original_text = chunk.text
+            chunk.enriched = True
 
         # Rolling Key Propagation: передаём метаданные предыдущего чанка следующему, если semantic_key не задан
         prev_metadata = {}
