@@ -77,14 +77,20 @@ class InMemoryCache:
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
         return self._set_value(key, value, ttl)
 
+    def delete_sync(self, key: str) -> bool:
+        if key in self._store:
+            del self._store[key]
+            return True
+        return False
+
 
 class RedisCache:
     """Redis-based cache with async and sync interfaces."""
 
     def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
-        self._client = None
-        self._sync_client = None
+        self._client: Any = None
+        self._sync_client: Any = None
 
     async def _get_client(self) -> Any:
         if self._client is None:
@@ -171,6 +177,14 @@ class RedisCache:
             logger.debug("Redis set_sync failed: %s", e)
             return False
 
+    def delete_sync(self, key: str) -> bool:
+        try:
+            client = self._get_sync_client()
+            return client.delete(key) > 0
+        except Exception as e:
+            logger.debug("Redis delete_sync failed: %s", e)
+            return False
+
     async def close(self) -> None:
         if self._client:
             await self._client.close()
@@ -187,7 +201,8 @@ class CacheManager:
 
     def __init__(self, redis_url: str | None = None, use_redis: bool = True) -> None:
         self.use_redis = use_redis and redis_url is not None
-        if self.use_redis:
+        self._cache: RedisCache | InMemoryCache
+        if self.use_redis and redis_url is not None:
             self._cache = RedisCache(redis_url)
         else:
             self._cache = InMemoryCache()
@@ -195,7 +210,7 @@ class CacheManager:
 
     async def initialize(self) -> None:
         """Для Redis: проверка подключения при старте."""
-        if self.use_redis:
+        if self.use_redis and hasattr(self._cache, "_get_client"):
             await self._cache._get_client()
 
     async def get(self, key: str) -> Any | None:
@@ -222,13 +237,13 @@ class CacheManager:
         return self._cache.set_sync(key, value, ttl)
 
     def delete_sync(self, key: str) -> bool:
-        return self._cache.delete_sync(key) if hasattr(self._cache, "delete_sync") else asyncio.run(self.delete(key))
+        return self._cache.delete_sync(key)
 
 
 # Пример использования
 if __name__ == "__main__":
 
-    async def test():
+    async def test() -> None:
         # In-memory
         cache = CacheManager(use_redis=False)
         await cache.set("test_key", "hello", ttl=10)

@@ -415,9 +415,38 @@ async def process_rag_query(
 
 app = FastAPI(
     title="RAG Proxy for Gemma",
-    description="OpenAI-compatible proxy with hybrid search, reranking, and Gemma LLM",
-    version="1.0.0",
+    description=(
+        "OpenAI-compatible proxy with hybrid search, reranking, and Gemma LLM.\n\n"
+        "## Features\n"
+        "- **Chat Completions** — `/v1/chat/completions` (streaming + non-streaming)\n"
+        "- **Hybrid Search** — dense + sparse RRF fusion in Qdrant\n"
+        "- **Reranking** — cross-encoder (MiniLM-L-6-v2)\n"
+        "- **Graph Expansion** — optional Neo4j entity traversal\n"
+        "- **Auth** — JWT + RBAC (admin/expert/user/read-only)\n"
+        "- **Tools** — agentic tool SDK with OpenAPI discovery\n"
+        "- **Model Evolution** — LoRA/QLoRA fine-tuning pipeline\n\n"
+        "## RAG-specific parameters\n"
+        "- `rag_version` — request a specific document version\n"
+        "- `rag_force_refresh` — bypass response cache\n"
+        "- Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`"
+    ),
+    version="2.0.0",
     lifespan=lifespan,
+    openapi_tags=[
+        {"name": "chat", "description": "Chat completions (OpenAI-compatible)"},
+        {"name": "models", "description": "List available models"},
+        {"name": "health", "description": "Health and readiness probes"},
+        {"name": "auth", "description": "Authentication and authorization"},
+        {"name": "feedback", "description": "Expert feedback submission"},
+        {"name": "tools", "description": "Agentic tool discovery"},
+        {"name": "admin", "description": "Model training and management"},
+        {"name": "files", "description": "File upload/download (MinIO)"},
+        {"name": "widget", "description": "Embeddable chat widget"},
+        {"name": "metrics", "description": "Prometheus metrics"},
+    ],
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # Middleware setup (order matters: CORS > auth > correlation > request-id > logging > rate-limit > compression)

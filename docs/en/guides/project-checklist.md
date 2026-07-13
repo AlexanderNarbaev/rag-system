@@ -447,16 +447,16 @@ This document is the **single source of truth** for the current state of the RAG
 | 9 | CHANGELOG.md | Release tracking | Low | ✅ Fixed |
 | 10 | `tests/etl/conftest.py` missing | ETL test isolation | Low | ✅ Fixed |
 | 11 | `tests/integration/conftest.py` missing | Integration test fixtures | Low | ✅ Fixed |
-| 12 | ADR-008 (Java migration) still "Proposed" | Decision pending | Low | 🟡 Open |
+| 12 | ADR-008 (Java migration) still "Proposed" | Decision pending | Low | ✅ Deferred (well-researched, implementation deferred) |
 | 13 | AGENTS.md project structure | Doc inconsistency | Low | ✅ Fixed |
 
 ### 🟢 Nice to Have
 
 | # | Gap | Impact | Effort | Status |
 |---|-----|--------|--------|--------|
-| 14 | OpenAPI/Swagger export for API | Developer experience | Low | 🟡 Open |
-| 15 | C4 diagram for MCP Server | Documentation completeness | Low | 🟡 Open |
-| 16 | Component diagram for Model Evolution | Documentation completeness | Low | 🟡 Open |
+| 14 | OpenAPI/Swagger export for API | Developer experience | Low | ✅ Fixed (/docs, /redoc, /openapi.json) |
+| 15 | C4 diagram for MCP Server | Documentation completeness | Low | ✅ Fixed (c4-mcp-server.excalidraw) |
+| 16 | Component diagram for Model Evolution | Documentation completeness | Low | ✅ Fixed (c4-model-evolution.excalidraw) |
 | 17 | Quarterly RAG maturity review cadence | Process | Low | 🟡 Open |
 
 ### Audit Remediation Log (2026-07-12)

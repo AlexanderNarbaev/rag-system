@@ -1,6 +1,6 @@
 # ADR-008: Java 25 + Quarkus Hybrid Migration (Proxy Layer)
 
-**Status:** Proposed
+**Status:** Deferred
 **Date:** 2026-07-03
 
 ## Context
@@ -449,3 +449,4 @@ rag-system/
 ## Status History
 
 - **2026-07-03** — Proposed. Awaiting architecture review.
+- **2026-07-13** — Deferred. Well-researched ADR with clear hybrid architecture (Java proxy + Python ML sidecar). Implementation deferred until: (1) Python proxy layer stabilizes post-audit, (2) team capacity for dual-runtime maintenance is confirmed, (3) gRPC latency benchmarks are validated. Current Python/FastAPI stack meets production requirements after critical audit fixes.
