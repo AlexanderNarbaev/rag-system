@@ -134,7 +134,7 @@ TRUSTED_PROXY_COUNT = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080")
 
 # ============ Authentication & RBAC ============
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")

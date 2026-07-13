@@ -78,6 +78,8 @@ def auth_enabled_client():
         patch("proxy.app.main.USE_LANGGRAPH", False),
         patch("proxy.app.main.LOG_REQUESTS", False),
         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
+        patch("proxy.app.shared.config.AUTH_ENABLED", True),
+        patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-integration"),
         patch("proxy.app.auth.jwt.AUTH_ENABLED", True),
         patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration"),
     ):
@@ -265,7 +267,7 @@ class TestLoginFlow:
             assert response.status_code == 401
             assert "Invalid credentials" in response.json()["detail"]
 
-    def test_refresh_token_returns_new_pair(self, auth_disabled_client, mock_user_db):
+    def test_refresh_token_returns_new_pair(self, auth_enabled_client, mock_user_db):
         """POST /v1/auth/refresh exchanges a refresh token for a new token pair."""
         mock_user = {
             "id": "user-001",
@@ -280,9 +282,8 @@ class TestLoginFlow:
         with (
             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_user_db),
             patch("proxy.app.auth.user_db.get_user_db", return_value=mock_user_db),
-            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration"),
         ):
-            response = auth_disabled_client.post(
+            response = auth_enabled_client.post(
                 "/v1/auth/refresh",
                 json={"token": "valid_refresh_token_abc123"},
             )
@@ -293,16 +294,15 @@ class TestLoginFlow:
             assert "refresh_token" in data
             assert data["token_type"] == "bearer"
 
-    def test_refresh_invalid_token_returns_401(self, auth_disabled_client, mock_user_db):
+    def test_refresh_invalid_token_returns_401(self, auth_enabled_client, mock_user_db):
         """POST /v1/auth/refresh returns 401 for invalid refresh token."""
         mock_user_db.consume_refresh_token.return_value = None
 
         with (
             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_user_db),
             patch("proxy.app.auth.user_db.get_user_db", return_value=mock_user_db),
-            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration"),
         ):
-            response = auth_disabled_client.post(
+            response = auth_enabled_client.post(
                 "/v1/auth/refresh",
                 json={"token": "invalid_refresh_token"},
             )
