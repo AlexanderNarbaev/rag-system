@@ -121,7 +121,7 @@ jobs:
           Path('$DATASET_DIR/llm_train.json').write_text(json.dumps(llm_data, indent=2))
           Path('$DATASET_DIR/llm_eval.json').write_text(json.dumps(llm_data[:1], indent=2))
 
-          print(f'Dataset exported to {DATASET_DIR}')
+          print(f'Dataset exported to $DATASET_DIR')
           "
 
           echo "dataset_path=$DATASET_DIR" >> $GITHUB_OUTPUT
