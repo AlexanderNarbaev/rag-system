@@ -201,10 +201,19 @@ async def chat_completions (
   
   # LangGraph orchestrator path
   if _main.USE_LANGGRAPH and _main.orchestrator:  # type: ignore[attr-defined]
-    final_response = await _main.orchestrator.ainvoke ({
-        "query": user_query, "version": version, "temperature": request.temperature, "max_tokens": request.max_tokens,
-        "stream": request.stream,
-    })
+    try:
+      final_response = await _main.orchestrator.ainvoke ({
+          "query": user_query, "version": version, "temperature": request.temperature, "max_tokens": request.max_tokens,
+          "stream": request.stream,
+      })
+    except Exception as orch_err:
+      logger.error ("LangGraph orchestrator failed: %s", orch_err, exc_info = True)
+      if _main.audit_logger:
+        _main.audit_logger.log_error (error_type = "OrchestratorError", error_msg = str (orch_err),
+            stack_trace = None, client_ip = client_ip, endpoint = "/v1/chat/completions", )
+      raise HTTPException (status_code = 503,
+          detail = {"error": "orchestrator_unavailable",
+              "message": "Agentic pipeline temporarily unavailable. Please try again.", }) from orch_err
     if request.stream:
       return StreamingResponse (final_response, media_type = "text/event-stream")
     else:
@@ -293,10 +302,19 @@ async def chat_completions (
     return StreamingResponse (event_generator (), media_type = "text/event-stream")
   else:
     # Non-streaming
-    _rag_result = await _main.process_rag_query (user_query = user_query, version = version,
-        force_refresh = request.rag_force_refresh or False, temperature = request.temperature or 0.2,
-        max_tokens = request.max_tokens or 4096, stream = False, other_messages = other_messages, user_context = user,
-        top_k_override = request.rag_top_k, )
+    try:
+      _rag_result = await _main.process_rag_query (user_query = user_query, version = version,
+          force_refresh = request.rag_force_refresh or False, temperature = request.temperature or 0.2,
+          max_tokens = request.max_tokens or 4096, stream = False, other_messages = other_messages, user_context = user,
+          top_k_override = request.rag_top_k, )
+    except Exception as rag_err:
+      logger.error ("Non-streaming RAG query failed: %s", rag_err, exc_info = True)
+      if _main.audit_logger:
+        _main.audit_logger.log_error (error_type = "RAGQueryError", error_msg = str (rag_err),
+            stack_trace = None, client_ip = client_ip, endpoint = "/v1/chat/completions", )
+      raise HTTPException (status_code = 503,
+          detail = {"error": "rag_unavailable",
+              "message": "Knowledge system temporarily unavailable. Please try again later.", }) from rag_err
     response_text = str (_rag_result [0])
     rag_ctx: str = str (_rag_result [1])
     from_cache = _rag_result [2]

@@ -127,12 +127,17 @@ def retrieve (state: dict [str, Any]) -> dict [str, Any]:
   Выполняет гибридный поиск в Qdrant.
   Использует переписанный запрос, если есть, иначе оригинальный.
   Применяет time-decay бустинг для версионированных документов.
+  Gracefully returns empty results when Qdrant is unavailable.
   """
   query_to_use = state.get ("rewritten_query") or state ["query"]
   version = state.get ("version")
   
   logger.info (f"Retrieving for: '{query_to_use}' (version: {version})")
-  results = _get_hybrid_search () (query = query_to_use, version = version, top_k = MAX_CHUNKS_RETRIEVAL)
+  try:
+    results = _get_hybrid_search () (query = query_to_use, version = version, top_k = MAX_CHUNKS_RETRIEVAL)
+  except Exception as exc:
+    logger.warning ("Hybrid search failed (degraded mode): %s", exc)
+    return {"retrieved_chunks": []}
   
   # Преобразуем результаты в список словарей для единообразия
   chunks = []

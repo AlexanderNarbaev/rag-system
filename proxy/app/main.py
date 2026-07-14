@@ -54,7 +54,8 @@ from proxy.app.shared.cache import CacheManager
 
 # Internal module imports
 from proxy.app.shared.config import (
-  COMPRESSION_ENABLED, COMPRESSION_LEVEL, COMPRESSION_MIN_SIZE, CORS_ORIGINS, GRACEFUL_SHUTDOWN_ENABLED, LLM_MODEL_NAME,
+  COLLECTION_NAME, COMPRESSION_ENABLED, COMPRESSION_LEVEL, COMPRESSION_MIN_SIZE, CORS_ORIGINS,
+  GRACEFUL_SHUTDOWN_ENABLED, LLM_MODEL_NAME,
   LOG_DIR, LOG_REQUESTS,  # noqa: F401 — re-export for test patching
   MAX_CHUNKS_AFTER_RERANK, MAX_CHUNKS_RETRIEVAL, OTEL_ENABLED, RATE_LIMIT_BURST, RATE_LIMIT_ENABLED,
   RATE_LIMIT_PER_MINUTE, REDIS_URL, SHUTDOWN_TIMEOUT, TOOLS_DECLARATIVE_DIR, TOOLS_ENABLED, TOOLS_OPENAPI_SPECS,
@@ -89,6 +90,45 @@ _active_requests: set [asyncio.Task [None]] = set ()
 
 # Default TTL for cached responses (1 hour)
 DEFAULT_CACHE_TTL_SECONDS = 3600
+
+
+# ---------------------------------------------------------------------------
+# Qdrant collection auto-provisioning
+# ---------------------------------------------------------------------------
+
+
+def _ensure_qdrant_collection () -> None:
+  """Create the default knowledge-base collection in Qdrant if it doesn't exist.
+
+  Called during startup so the proxy works out-of-the-box even when the
+  separate ``scripts/init_collections.py`` hasn't been run yet.
+  """
+  from proxy.app.core.retrieval import qdrant_client
+  
+  if qdrant_client is None:
+    logger.warning ("Qdrant client not available — skipping collection check")
+    return
+  
+  try:
+    existing = {c.name for c in qdrant_client.get_collections ().collections}
+    if COLLECTION_NAME in existing:
+      logger.info ("Qdrant collection '%s' already exists", COLLECTION_NAME)
+      return
+    # Create collection with dense vector config (matches ETL indexer)
+    from qdrant_client.http import models as qmodels
+    
+    qdrant_client.create_collection (
+        collection_name = COLLECTION_NAME,
+        vectors_config = qmodels.VectorParams (size = 1024, distance = qmodels.Distance.COSINE),
+        optimizers_config = qmodels.OptimizersConfigDiff (indexing_threshold = 20000),
+    )
+    # Create payload indexes for common filter fields
+    for field_name in ["source_type", "source_id", "version", "doc_title"]:
+      qdrant_client.create_payload_index (collection_name = COLLECTION_NAME, field_name = field_name,
+          field_schema = qmodels.PayloadSchemaType.KEYWORD, )
+    logger.info ("Qdrant collection '%s' created with indexes", COLLECTION_NAME)
+  except Exception as exc:
+    logger.warning ("Failed to ensure Qdrant collection '%s': %s", COLLECTION_NAME, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +167,16 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   else:
     cache_manager = CacheManager (use_redis = False)
     logger.info ("In-memory cache initialized (no Redis)")
+  # Auto-initialize Qdrant collections on startup
+  try:
+    from proxy.app.core.retrieval import initialize_retrieval
+    
+    initialize_retrieval ()
+    # Ensure the default collection exists
+    _ensure_qdrant_collection ()
+    logger.info ("Retrieval subsystem initialized")
+  except Exception as e:
+    logger.warning ("Retrieval initialization failed (degraded mode): %s", e)
   # Initialize LangGraph orchestrator (if enabled)
   if USE_LANGGRAPH:
     from proxy.app.core.orchestrator import get_orchestrator
@@ -427,7 +477,14 @@ async def process_rag_query (
   if stream:
     return context, messages_for_llm, False, sources, {}
   else:
-    response_text = await non_stream_completion (messages_for_llm, temperature = temperature, max_tokens = max_tokens)
+    try:
+      response_text = await non_stream_completion (messages_for_llm, temperature = temperature, max_tokens = max_tokens)
+    except Exception as llm_err:
+      logger.error ("LLM completion failed: %s", llm_err, exc_info = True)
+      response_text = (
+        "Извините, сервис LLM временно недоступен. "
+        "Пожалуйста, попробуйте позже или обратитесь к администратору."
+      )
     if cache_manager and not force_refresh:
       await cache_manager.set (cache_key, response_text, ttl = DEFAULT_CACHE_TTL_SECONDS)
     

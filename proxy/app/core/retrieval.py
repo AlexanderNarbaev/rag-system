@@ -139,12 +139,24 @@ _embedding_cache = EmbeddingCache ()
 
 
 def initialize_retrieval () -> None:
-  """Инициализирует клиенты и кэш (вызывается при старте прокси)."""
+  """Инициализирует клиенты и кэш (вызывается при старте прокси).
+
+  Gracefully handles Qdrant unavailability — sets ``qdrant_client`` to
+  ``None`` so subsequent hybrid-search calls degrade to empty results
+  instead of crashing the proxy.
+  """
   global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
   if not QDRANT_AVAILABLE:
     raise ImportError ("qdrant-client is required. Install with: pip install qdrant-client")
   
-  qdrant_client = QdrantClient (host = QDRANT_HOST, port = QDRANT_PORT, check_compatibility = False)
+  try:
+    qdrant_client = QdrantClient (host = QDRANT_HOST, port = QDRANT_PORT, check_compatibility = False)
+    # Quick connectivity probe — if Qdrant is unreachable we degrade gracefully
+    qdrant_client.get_collections ()
+    logger.info ("Qdrant connection established at %s:%s", QDRANT_HOST, QDRANT_PORT)
+  except Exception as exc:
+    logger.warning ("Qdrant unavailable at %s:%s — degraded mode (%s)", QDRANT_HOST, QDRANT_PORT, exc)
+    qdrant_client = None
   
   # Use factory to select remote or local embedder
   from proxy.app.llm.remote_services import create_embedder
@@ -339,6 +351,11 @@ list [Any]:
   """
   if not qdrant_client or not embedder:
     initialize_retrieval ()
+  
+  # If Qdrant is still unavailable after initialization, return empty results
+  if qdrant_client is None:
+    logger.warning ("Qdrant unavailable — returning empty search results")
+    return []
   
   if lang:
     logger.debug (f"Cross-lingual search: query language = {lang}")
