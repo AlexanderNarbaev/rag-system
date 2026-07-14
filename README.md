@@ -72,6 +72,16 @@ curl http://localhost:8080/v1/health
 - ✅ Observability — Prometheus metrics, structured logging, Grafana dashboards
 - ✅ K8s ready — Helm chart with HPA, probes, secrets, network policies
 
+### Knowledge Base Management
+
+- ✅ Multiple knowledge bases — isolated Qdrant collections per KB with SQLite metadata
+- ✅ Admin API — RESTful CRUD for knowledge bases and ETL tasks (`/v1/admin/kb/`)
+- ✅ Auto-provisioning — collections created automatically on proxy startup
+- ✅ Task tracking — ETL task status and progress stored in SQLite database
+- ✅ Graceful degradation — proxy works even when Qdrant or LLM is unavailable
+- ✅ Configuration validation — startup checks for all required settings
+- ✅ Enhanced health checks — `/v1/health` reports Qdrant, LLM, and KB manager status
+
 ---
 
 ## Architecture
