@@ -164,7 +164,7 @@ class JiraExtractor:
   
   def _get_issue_transitions (self, issue_key: str) -> list [dict]:
     """Возвращает доступные переходы (не все хранятся в changelog, но полезно)."""
-    endpoint = f"/rest/api/3/issue/{issue_key}/transitions"
+    endpoint = f"/rest/api/2/issue/{issue_key}/transitions"
     data = self._request (endpoint)
     return data.get ("transitions", [])
   
