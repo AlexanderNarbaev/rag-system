@@ -182,11 +182,11 @@ books:
 
 `MDKeyChunker` splits documents by structural hierarchy (H1→H2→H3). Configure per source:
 
-| Source    | Split On          | Overlap | Max Tokens |
-|-----------|-------------------|---------|------------|
-| Books     | Chapters, sections | 100    | 2000       |
-| Code      | Functions, classes | 0      | 1000       |
-| Chat      | Q&A turns          | 50     | 1500       |
+| Source | Split On           | Overlap | Max Tokens |
+|--------|--------------------|---------|------------|
+| Books  | Chapters, sections | 100     | 2000       |
+| Code   | Functions, classes | 0       | 1000       |
+| Chat   | Q&A turns          | 50      | 1500       |
 
 Cross-reference linking embeds `parent_id` metadata so chunks from the same document or chapter
 can be grouped during retrieval.
@@ -241,6 +241,7 @@ for img in images:
 ```
 
 **Configuration:**
+
 ```bash
 IMAGE_EXTRACTION_ENABLED=true
 IMAGE_MODEL=clip-ViT-B-32  # placeholder for future CLIP integration
@@ -261,6 +262,7 @@ for t in tables:
 ```
 
 **Configuration:**
+
 ```bash
 TABLE_EXTRACTION_ENABLED=true
 ```
@@ -280,6 +282,7 @@ for c in chunks:
 ```
 
 **Configuration:**
+
 ```bash
 CODE_CHUNKING_ENABLED=true
 AST_LANGUAGES=python,javascript,java
@@ -303,6 +306,7 @@ context = assemble_multimodal_context(
 ```
 
 **Configuration:**
+
 ```bash
 MULTI_MODAL_ENABLED=true
 ```

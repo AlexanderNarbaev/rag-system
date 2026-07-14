@@ -4,13 +4,13 @@ Backup and restore scripts for RAG System infrastructure components.
 
 ## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `backup_qdrant.sh` | Create Qdrant snapshot and upload to S3/MinIO |
-| `backup_neo4j.sh` | Create Neo4j database dump and upload to S3/MinIO |
-| `backup_redis.sh` | Trigger Redis BGSAVE and upload RDB to S3/MinIO |
-| `backup_cron.sh` | Cron wrapper that runs all backup scripts in sequence |
-| `restore_all.sh` | Download latest backups from S3/MinIO and restore all services |
+| Script             | Purpose                                                        |
+|--------------------|----------------------------------------------------------------|
+| `backup_qdrant.sh` | Create Qdrant snapshot and upload to S3/MinIO                  |
+| `backup_neo4j.sh`  | Create Neo4j database dump and upload to S3/MinIO              |
+| `backup_redis.sh`  | Trigger Redis BGSAVE and upload RDB to S3/MinIO                |
+| `backup_cron.sh`   | Cron wrapper that runs all backup scripts in sequence          |
+| `restore_all.sh`   | Download latest backups from S3/MinIO and restore all services |
 
 ## Prerequisites
 

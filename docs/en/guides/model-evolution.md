@@ -1,38 +1,44 @@
 # Model Evolution Guide
 
 **Feature Version:** v2.0 (June 2026)
-**Implementation Status:** Implemented. All 13 modules are in `proxy/app/model_evolution/` with full admin API endpoints and 358 unit tests.
+**Implementation Status:** Implemented. All 13 modules are in `proxy/app/model_evolution/` with full admin API endpoints
+and 358 unit tests.
 
 ---
 
 ## 1. Concept
 
-Model Evolution is a complete fine-tuning pipeline that continuously improves the RAG system's models using real-world feedback data. Instead of shipping static models, you train domain-specific adapters that get better over time as more expert feedback accumulates.
+Model Evolution is a complete fine-tuning pipeline that continuously improves the RAG system's models using real-world
+feedback data. Instead of shipping static models, you train domain-specific adapters that get better over time as more
+expert feedback accumulates.
 
 ### 1.1 Why Fine-Tune?
 
-| Driver | Problem | Fine-Tuning Solution |
-|--------|---------|---------------------|
-| **Domain drift** | General-purpose models misunderstand corporate jargon | Adapt to your organization's vocabulary, acronyms, and terminology |
-| **Intent misclassification** | SLM router misroutes `"How do I deploy to staging?"` as a fact question instead of procedural | Train intent classifier on your actual query distribution |
-| **Shallow answers** | LLM generates vague responses for domain-specific questions | Instruction-tune on expert corrections to produce precise, contextual answers |
-| **Poor reranking** | Generic cross-encoder ranks irrelevant chunks higher | Fine-tune on relevance judgments from your document corpus |
-| **Hallucination** | LLM fabricates information not in retrieved context | Ground answers with HITL-corrected examples |
-| **Feedback loop** | Expert corrections are logged but never re-used | Feed corrections back into training, closing the improvement loop |
+| Driver                       | Problem                                                                                       | Fine-Tuning Solution                                                          |
+|------------------------------|-----------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
+| **Domain drift**             | General-purpose models misunderstand corporate jargon                                         | Adapt to your organization's vocabulary, acronyms, and terminology            |
+| **Intent misclassification** | SLM router misroutes `"How do I deploy to staging?"` as a fact question instead of procedural | Train intent classifier on your actual query distribution                     |
+| **Shallow answers**          | LLM generates vague responses for domain-specific questions                                   | Instruction-tune on expert corrections to produce precise, contextual answers |
+| **Poor reranking**           | Generic cross-encoder ranks irrelevant chunks higher                                          | Fine-tune on relevance judgments from your document corpus                    |
+| **Hallucination**            | LLM fabricates information not in retrieved context                                           | Ground answers with HITL-corrected examples                                   |
+| **Feedback loop**            | Expert corrections are logged but never re-used                                               | Feed corrections back into training, closing the improvement loop             |
 
 ### 1.2 What Can Be Fine-Tuned?
 
-| Model | Type | Trainer | Technique | Adapter Size | Use Case |
-|-------|------|---------|-----------|-------------|----------|
-| **SLM** | Intent Classifier | `SLMTrainer` | LoRA (PEFT) | ~5 MB | Query routing to determine intent type |
-| **LLM** | Generator | `LLMTrainer` | QLoRA 4-bit NF4 | ~20-50 MB | Domain-specific answer generation |
-| **Reranker** | Cross-Encoder | `RerankerTrainer` | LoRA or Full | ~5 MB (LoRA) / ~90 MB (full) | Relevance scoring for retrieved chunks |
+| Model        | Type              | Trainer           | Technique       | Adapter Size                 | Use Case                               |
+|--------------|-------------------|-------------------|-----------------|------------------------------|----------------------------------------|
+| **SLM**      | Intent Classifier | `SLMTrainer`      | LoRA (PEFT)     | ~5 MB                        | Query routing to determine intent type |
+| **LLM**      | Generator         | `LLMTrainer`      | QLoRA 4-bit NF4 | ~20-50 MB                    | Domain-specific answer generation      |
+| **Reranker** | Cross-Encoder     | `RerankerTrainer` | LoRA or Full    | ~5 MB (LoRA) / ~90 MB (full) | Relevance scoring for retrieved chunks |
 
 ### 1.3 When to Use Each
 
-- **SLM fine-tuning** — when the intent router frequently misclassifies queries. Quick to train (minutes on GPU), small adapter.
-- **LLM fine-tuning** — when answers need domain-specific precision. Requires substantial HITL feedback data (100+ corrected examples recommended). GPU with 16+ GB VRAM for QLoRA.
-- **Reranker fine-tuning** — when retrieved documents are relevant but ranked incorrectly. Use LoRA mode for quick adaptation, full fine-tune for major domain shifts.
+- **SLM fine-tuning** — when the intent router frequently misclassifies queries. Quick to train (minutes on GPU), small
+  adapter.
+- **LLM fine-tuning** — when answers need domain-specific precision. Requires substantial HITL feedback data (100+
+  corrected examples recommended). GPU with 16+ GB VRAM for QLoRA.
+- **Reranker fine-tuning** — when retrieved documents are relevant but ranked incorrectly. Use LoRA mode for quick
+  adaptation, full fine-tune for major domain shifts.
 
 ---
 
@@ -74,14 +80,16 @@ Model Evolution is a complete fine-tuning pipeline that continuously improves th
 
 ### 2.2 Training Pipeline Flow
 
-1. **Data Collection** — HITL expert feedback accumulates in `logs/hitl.jsonl` (queries, answers, corrections, relevance scores, intent labels).
+1. **Data Collection** — HITL expert feedback accumulates in `logs/hitl.jsonl` (queries, answers, corrections, relevance
+   scores, intent labels).
 2. **Data Processing** — `DataProcessor` reads the HITL log and produces three datasets:
-   - `slm_intent.jsonl` — `{query, intent_label}` pairs for SLM intent classification
-   - `llm_instruction.jsonl` — `{instruction, input, output}` triples for LLM instruction-tuning
-   - `reranker_pairs.jsonl` — `{query, chunk, relevance}` triples for reranker training
+    - `slm_intent.jsonl` — `{query, intent_label}` pairs for SLM intent classification
+    - `llm_instruction.jsonl` — `{instruction, input, output}` triples for LLM instruction-tuning
+    - `reranker_pairs.jsonl` — `{query, chunk, relevance}` triples for reranker training
 3. **Train/Val/Test Split** — 80%/10%/10% stratified split with configurable seed.
 4. **Training** — Configurable environment profile (DEV/CI/PROD) controls batch size, epochs, LoRA rank, quantization.
-5. **Evaluation** — Metrics computed: accuracy, weighted F1 (SLM); BLEU, ROUGE-L, hallucination rate (LLM); MRR, nDCG@10, P@5 (Reranker).
+5. **Evaluation** — Metrics computed: accuracy, weighted F1 (SLM); BLEU, ROUGE-L, hallucination rate (LLM); MRR,
+   nDCG@10, P@5 (Reranker).
 6. **Artifact Storage** — Adapter weights + config saved to MinIO/S3 or local filesystem.
 7. **Model Registry** — Version created with status `staging`, metrics attached.
 8. **EvalGate** — Threshold check against configured criteria. PASS → eligible for canary; FAIL → blocked.
@@ -90,17 +98,18 @@ Model Evolution is a complete fine-tuning pipeline that continuously improves th
 
 ### 2.3 MLflow + MinIO Integration
 
-| Component | Environment Variable | Default |
-|-----------|---------------------|---------|
-| MLflow Tracking URI | `MLFLOW_TRACKING_URI` | `http://localhost:5000` |
-| MLflow Experiment | `MLFLOW_EXPERIMENT_NAME` | `rag-system` |
-| Artifact Root | `MLFLOW_ARTIFACT_ROOT` | `s3://rag-artifacts` |
-| MinIO Endpoint | `MINIO_ENDPOINT` | `localhost:9000` |
-| MinIO Access Key | `MINIO_ACCESS_KEY` | `minioadmin` |
-| MinIO Secret Key | `MINIO_SECRET_KEY` | `minioadmin` |
-| MinIO Bucket | `MINIO_BUCKET` | `rag-artifacts` |
+| Component           | Environment Variable     | Default                 |
+|---------------------|--------------------------|-------------------------|
+| MLflow Tracking URI | `MLFLOW_TRACKING_URI`    | `http://localhost:5000` |
+| MLflow Experiment   | `MLFLOW_EXPERIMENT_NAME` | `rag-system`            |
+| Artifact Root       | `MLFLOW_ARTIFACT_ROOT`   | `s3://rag-artifacts`    |
+| MinIO Endpoint      | `MINIO_ENDPOINT`         | `localhost:9000`        |
+| MinIO Access Key    | `MINIO_ACCESS_KEY`       | `minioadmin`            |
+| MinIO Secret Key    | `MINIO_SECRET_KEY`       | `minioadmin`            |
+| MinIO Bucket        | `MINIO_BUCKET`           | `rag-artifacts`         |
 
 Both MLflow and MinIO are optional. When unavailable (air-gapped or local dev), the system falls back to:
+
 - **Experiment tracking** → local JSON files in `data/experiments/<name>/<run_id>.json`
 - **Artifact storage** → local directory at `data/artifacts/<bucket>/`
 
@@ -155,6 +164,7 @@ curl -X POST http://localhost:8080/v1/admin/models/train \
 ```
 
 Response:
+
 ```json
 {
   "job_id": "abc12345-6789-4abc-def0-1234567890ab",
@@ -172,6 +182,7 @@ curl -X GET http://localhost:8080/v1/admin/models/status/abc12345-6789-4abc-def0
 ```
 
 Response:
+
 ```json
 {
   "job_id": "abc12345-6789-4abc-def0-1234567890ab",
@@ -227,35 +238,36 @@ curl -X POST http://localhost:8080/v1/admin/models/promote \
 
 ## 4. Training Profiles
 
-Training behavior is controlled by `EnvProfile`, selected via the `profile` parameter in the train request or `TrainingConfig.from_profile()`.
+Training behavior is controlled by `EnvProfile`, selected via the `profile` parameter in the train request or
+`TrainingConfig.from_profile()`.
 
 ### 4.1 Profile Presets
 
-| Parameter | DEV | CI | PROD |
-|-----------|-----|----|------|
-| `epochs` | 1 | 1 | 5 |
-| `batch_size` | 2 | 1 | 16 |
-| `use_lora` | true | true | true |
-| `lora_r` | 4 | 2 | 16 |
-| `lora_alpha` | 8 | 4 | 32 |
-| `use_qlora` | false | false | true |
-| `load_in_4bit` | false | false | true |
+| Parameter                | DEV       | CI        | PROD       |
+|--------------------------|-----------|-----------|------------|
+| `epochs`                 | 1         | 1         | 5          |
+| `batch_size`             | 2         | 1         | 16         |
+| `use_lora`               | true      | true      | true       |
+| `lora_r`                 | 4         | 2         | 16         |
+| `lora_alpha`             | 8         | 4         | 32         |
+| `use_qlora`              | false     | false     | true       |
+| `load_in_4bit`           | false     | false     | true       |
 | `bnb_4bit_compute_dtype` | `float16` | `float16` | `bfloat16` |
-| `max_seq_length` | 256 | 128 | 2048 |
-| `eval_split` | 0.2 | 0.5 | 0.2 |
-| `logging_steps` | 5 | 1 | 10 |
-| `eval_steps` | 50 | 10 | 500 |
-| `warmup_steps` | — | — | 100 |
-| `save_steps` | — | — | 500 |
-| `gpu_enabled` | false | false | true |
+| `max_seq_length`         | 256       | 128       | 2048       |
+| `eval_split`             | 0.2       | 0.5       | 0.2        |
+| `logging_steps`          | 5         | 1         | 10         |
+| `eval_steps`             | 50        | 10        | 500        |
+| `warmup_steps`           | —         | —         | 100        |
+| `save_steps`             | —         | —         | 500        |
+| `gpu_enabled`            | false     | false     | true       |
 
 ### 4.2 Profile Selection
 
-| Profile | When to Use | Hardware | Training Time (SLM) |
-|---------|-------------|----------|---------------------|
-| **DEV** | Local development, smoke tests, quick experiments | CPU | ~1 minute |
-| **CI** | Automated CI pipelines, PR validation | CPU (runner) | ~30 seconds |
-| **PROD** | Real training runs for production deployment | GPU (16+ GB VRAM) | ~5-15 minutes |
+| Profile  | When to Use                                       | Hardware          | Training Time (SLM) |
+|----------|---------------------------------------------------|-------------------|---------------------|
+| **DEV**  | Local development, smoke tests, quick experiments | CPU               | ~1 minute           |
+| **CI**   | Automated CI pipelines, PR validation             | CPU (runner)      | ~30 seconds         |
+| **PROD** | Real training runs for production deployment      | GPU (16+ GB VRAM) | ~5-15 minutes       |
 
 ### 4.3 Overriding Profile Settings
 
@@ -273,7 +285,8 @@ curl -X POST http://localhost:8080/v1/admin/models/train \
   }'
 ```
 
-Overrides at the API level take precedence over profile defaults. The `TrainingConfig.from_profile()` method merges profile presets with explicit kwargs — explicit keys always win.
+Overrides at the API level take precedence over profile defaults. The `TrainingConfig.from_profile()` method merges
+profile presets with explicit kwargs — explicit keys always win.
 
 ---
 
@@ -311,19 +324,19 @@ config = TrainingConfig(
 
 LoRA target modules are auto-detected from the base model architecture:
 
-| Base Model | Target Modules |
-|------------|---------------|
-| BERT / RoBERTa | `query`, `value` |
+| Base Model                   | Target Modules                         |
+|------------------------------|----------------------------------------|
+| BERT / RoBERTa               | `query`, `value`                       |
 | GPT / Llama / Mistral / Qwen | `q_proj`, `v_proj`, `k_proj`, `o_proj` |
-| Unknown | `q_proj`, `v_proj` |
+| Unknown                      | `q_proj`, `v_proj`                     |
 
 #### Metrics
 
-| Metric | Description |
-|--------|-------------|
-| `accuracy` | Overall classification accuracy |
+| Metric        | Description                          |
+|---------------|--------------------------------------|
+| `accuracy`    | Overall classification accuracy      |
 | `weighted_f1` | F1 score weighted by class frequency |
-| `loss` | Cross-entropy eval loss |
+| `loss`        | Cross-entropy eval loss              |
 
 #### Example Data Format
 
@@ -373,13 +386,14 @@ With QLoRA, a 7B model fits in ~6 GB VRAM (vs. ~28 GB for full fine-tuning).
 
 #### GPU vs CPU Behavior
 
-| Environment | Behavior |
-|-------------|----------|
-| PROD profile + CUDA available | Full QLoRA GPU training with bitsandbytes |
-| DEV/CI profile or no CUDA | **Mock training** — produces placeholder metrics and adapter config for testing |
-| GPU profile but QLoRA libs missing | Falls back to mock with warning |
+| Environment                        | Behavior                                                                        |
+|------------------------------------|---------------------------------------------------------------------------------|
+| PROD profile + CUDA available      | Full QLoRA GPU training with bitsandbytes                                       |
+| DEV/CI profile or no CUDA          | **Mock training** — produces placeholder metrics and adapter config for testing |
+| GPU profile but QLoRA libs missing | Falls back to mock with warning                                                 |
 
-Mock training is a fully valid path for development and CI. It generates real adapter files and metrics, so the full pipeline (registry, EvalGate, canary) can be tested without a GPU.
+Mock training is a fully valid path for development and CI. It generates real adapter files and metrics, so the full
+pipeline (registry, EvalGate, canary) can be tested without a GPU.
 
 #### Data Format
 
@@ -417,20 +431,21 @@ config = TrainingConfig(
 
 #### LoRA vs Full Fine-Tune
 
-| Mode | Activation | Technique | Adapter Size | When to Use |
-|------|-----------|-----------|-------------|-------------|
-| **LoRA** | `use_lora=True` | PEFT LoRA on `AutoModelForSequenceClassification` | ~5 MB | Quick adaptation, frequent updates |
-| **Full** | `use_lora=False` | `CrossEncoder.fit()` | ~90 MB | Major domain shift, maximum quality |
+| Mode     | Activation       | Technique                                         | Adapter Size | When to Use                         |
+|----------|------------------|---------------------------------------------------|--------------|-------------------------------------|
+| **LoRA** | `use_lora=True`  | PEFT LoRA on `AutoModelForSequenceClassification` | ~5 MB        | Quick adaptation, frequent updates  |
+| **Full** | `use_lora=False` | `CrossEncoder.fit()`                              | ~90 MB       | Major domain shift, maximum quality |
 
-The trainer auto-selects the mode: if `use_lora=True` and PEFT + transformers are installed, it uses LoRA; otherwise it falls back to full fine-tune via `sentence-transformers`.
+The trainer auto-selects the mode: if `use_lora=True` and PEFT + transformers are installed, it uses LoRA; otherwise it
+falls back to full fine-tune via `sentence-transformers`.
 
 #### Metrics
 
-| Metric | Description |
-|--------|-------------|
-| `mrr` | Mean Reciprocal Rank — position of first relevant document |
-| `ndcg_at_10` | Normalized Discounted Cumulative Gain at 10 |
-| `precision_at_5` | Precision of top 5 results |
+| Metric           | Description                                                |
+|------------------|------------------------------------------------------------|
+| `mrr`            | Mean Reciprocal Rank — position of first relevant document |
+| `ndcg_at_10`     | Normalized Discounted Cumulative Gain at 10                |
+| `precision_at_5` | Precision of top 5 results                                 |
 
 #### Data Format
 
@@ -489,14 +504,14 @@ llm_formatted = processor.format_for_llm(train)
 
 Each line in `logs/hitl.jsonl` is a JSON object with these keys:
 
-| Key | Type | Required For | Description |
-|-----|------|-------------|-------------|
-| `query` | `str` | SLM, LLM, Reranker | User's original query |
-| `answer` / `response` | `str` | LLM | Original generated answer |
-| `correction` | `str` | LLM | Expert-corrected answer (target for training) |
-| `intent` / `predicted_intent` | `str` | SLM | Corrected intent label |
-| `relevance` / `score` | `float` | Reranker | Relevance score (0.0-1.0) |
-| `chunks` / `sources` | `list` | Reranker | Retrieved chunks with `{text, ...}` or string values |
+| Key                           | Type    | Required For       | Description                                          |
+|-------------------------------|---------|--------------------|------------------------------------------------------|
+| `query`                       | `str`   | SLM, LLM, Reranker | User's original query                                |
+| `answer` / `response`         | `str`   | LLM                | Original generated answer                            |
+| `correction`                  | `str`   | LLM                | Expert-corrected answer (target for training)        |
+| `intent` / `predicted_intent` | `str`   | SLM                | Corrected intent label                               |
+| `relevance` / `score`         | `float` | Reranker           | Relevance score (0.0-1.0)                            |
+| `chunks` / `sources`          | `list`  | Reranker           | Retrieved chunks with `{text, ...}` or string values |
 
 ### 6.5 Output Files
 
@@ -624,6 +639,7 @@ store.delete_version("slm_intent", "v1")
 ### 8.3 Storage Layout
 
 **S3/MinIO:**
+
 ```
 s3://rag-artifacts/
 └── models/
@@ -636,6 +652,7 @@ s3://rag-artifacts/
 ```
 
 **Local filesystem (fallback):**
+
 ```
 data/artifacts/rag-artifacts/
 └── models/
@@ -649,7 +666,8 @@ data/artifacts/rag-artifacts/
 
 ### 9.1 Concept
 
-EvalGate is a CI/CD quality gate that decides whether a newly trained model can be promoted. It evaluates metrics against configurable thresholds, detects baseline regression, and produces a **PASS / WARN / FAIL** decision.
+EvalGate is a CI/CD quality gate that decides whether a newly trained model can be promoted. It evaluates metrics
+against configurable thresholds, detects baseline regression, and produces a **PASS / WARN / FAIL** decision.
 
 ### 9.2 Threshold Configuration
 
@@ -671,19 +689,19 @@ config = EvalGateConfig(
 
 ### 9.3 Comparisons
 
-| Operator | Meaning | Example |
-|----------|---------|---------|
-| `gte` | greater than or equal | `accuracy >= 0.90` |
-| `gt` | greater than | `bleu_4 > 0.15` |
-| `lte` | less than or equal | `eval_loss <= 1.0` |
-| `lt` | less than | `hallucination_rate < 0.05` |
+| Operator | Meaning               | Example                     |
+|----------|-----------------------|-----------------------------|
+| `gte`    | greater than or equal | `accuracy >= 0.90`          |
+| `gt`     | greater than          | `bleu_4 > 0.15`             |
+| `lte`    | less than or equal    | `eval_loss <= 1.0`          |
+| `lt`     | less than             | `hallucination_rate < 0.05` |
 
 ### 9.4 Severity Levels
 
-| Severity | On Failure | Blocks Promotion? |
-|----------|-----------|-------------------|
-| `fail` | Adds to `failures` list | **Yes** — gate returns FAIL |
-| `warn` | Adds to `warnings` list | **No** — gate returns WARN but still passable |
+| Severity | On Failure              | Blocks Promotion?                             |
+|----------|-------------------------|-----------------------------------------------|
+| `fail`   | Adds to `failures` list | **Yes** — gate returns FAIL                   |
+| `warn`   | Adds to `warnings` list | **No** — gate returns WARN but still passable |
 
 ### 9.5 Baseline Comparison
 
@@ -710,7 +728,8 @@ result = EvalGate.evaluate_with_nli(
 )
 ```
 
-This appends `nli_entailment_rate`, `nli_contradiction_rate`, `nli_neutral_rate`, and `nli_overall_score` to the metrics dict before evaluation. See [§15 — NLI Evaluator](#15-nli-evaluator) for details.
+This appends `nli_entailment_rate`, `nli_contradiction_rate`, `nli_neutral_rate`, and `nli_overall_score` to the metrics
+dict before evaluation. See [§15 — NLI Evaluator](#15-nli-evaluator) for details.
 
 ### 9.7 Report Format
 
@@ -755,7 +774,8 @@ Delta from Baseline
 
 ### 10.1 Concept
 
-The `ModelRegistry` manages model versions with a promotion lifecycle. State is persisted as a JSON file, making it fully air-gapped compatible.
+The `ModelRegistry` manages model versions with a promotion lifecycle. State is persisted as a JSON file, making it
+fully air-gapped compatible.
 
 ### 10.2 Version Lifecycle
 
@@ -774,12 +794,12 @@ rollback() → previous production restored
 
 ### 10.3 States
 
-| Status | Meaning | Can Serve Traffic? |
-|--------|---------|--------------------|
-| **staging** | Newly trained, not yet evaluated | No |
-| **canary** | Passed EvalGate, receiving partial traffic | Yes (configurable %) |
-| **production** | Full traffic, current baseline | Yes (100%) |
-| **archived** | Replaced by newer version | No |
+| Status         | Meaning                                    | Can Serve Traffic?   |
+|----------------|--------------------------------------------|----------------------|
+| **staging**    | Newly trained, not yet evaluated           | No                   |
+| **canary**     | Passed EvalGate, receiving partial traffic | Yes (configurable %) |
+| **production** | Full traffic, current baseline             | Yes (100%)           |
+| **archived**   | Replaced by newer version                  | No                   |
 
 ### 10.4 Registry API
 
@@ -821,7 +841,8 @@ registry.update_metrics("slm", "3", {"accuracy": 0.93})
 
 ### 10.5 JSON Persistence
 
-The registry file (`data/model_registry.json`) is atomic — writes go to a `.tmp` file first, then atomically replaced with `os.replace()`:
+The registry file (`data/model_registry.json`) is atomic — writes go to a `.tmp` file first, then atomically replaced
+with `os.replace()`:
 
 ```json
 {
@@ -854,19 +875,20 @@ The registry file (`data/model_registry.json`) is atomic — writes go to a `.tm
 
 ### 11.1 Concept
 
-The `CanaryController` routes a configurable percentage of traffic to a new model version while the majority continues to the stable baseline. If metrics degrade, it automatically rolls back to 100% baseline.
+The `CanaryController` routes a configurable percentage of traffic to a new model version while the majority continues
+to the stable baseline. If metrics degrade, it automatically rolls back to 100% baseline.
 
 ### 11.2 Rollout Phases
 
-| Phase | Traffic % | Description |
-|-------|----------|-------------|
-| `IDLE` | 0% | Canary not active |
-| `RAMP_5` | <5% | Initial smoke test |
-| `RAMP_25` | 5-24% | Early validation |
-| `RAMP_50` | 25-49% | Mid-scale |
-| `RAMP_75` | 50-74% | Pre-production |
-| `FULL` | 75-100% | Canary becomes stable |
-| `ROLLBACK` | 0% | Auto-triggered on degradation |
+| Phase      | Traffic % | Description                   |
+|------------|-----------|-------------------------------|
+| `IDLE`     | 0%        | Canary not active             |
+| `RAMP_5`   | <5%       | Initial smoke test            |
+| `RAMP_25`  | 5-24%     | Early validation              |
+| `RAMP_50`  | 25-49%    | Mid-scale                     |
+| `RAMP_75`  | 50-74%    | Pre-production                |
+| `FULL`     | 75-100%   | Canary becomes stable         |
+| `ROLLBACK` | 0%        | Auto-triggered on degradation |
 
 ### 11.3 Configuration
 
@@ -945,7 +967,9 @@ status = controller.status("slm")
 
 ### 12.1 Concept
 
-The `AdapterManager` enables loading and unloading model adapters without restarting the proxy. New adapter versions are detected via filesystem polling or MLflow registry changes, and hot-swapped with zero-downtime draining of in-flight requests.
+The `AdapterManager` enables loading and unloading model adapters without restarting the proxy. New adapter versions are
+detected via filesystem polling or MLflow registry changes, and hot-swapped with zero-downtime draining of in-flight
+requests.
 
 ### 12.2 Adapter Lifecycle States
 
@@ -958,14 +982,14 @@ UNLOADED ──→ LOADING ──→ ACTIVE ──→ DRAINING ──→ RETIRIN
 
 Valid transitions:
 
-| From | Valid Target States |
-|------|-------------------|
-| UNLOADED | LOADING, ERROR |
-| LOADING | ACTIVE, ERROR |
-| ACTIVE | DRAINING, ERROR |
+| From     | Valid Target States              |
+|----------|----------------------------------|
+| UNLOADED | LOADING, ERROR                   |
+| LOADING  | ACTIVE, ERROR                    |
+| ACTIVE   | DRAINING, ERROR                  |
 | DRAINING | RETIRING, ACTIVE, LOADING, ERROR |
-| RETIRING | UNLOADED, ERROR |
-| ERROR | UNLOADED, LOADING, ACTIVE |
+| RETIRING | UNLOADED, ERROR                  |
+| ERROR    | UNLOADED, LOADING, ACTIVE        |
 
 ### 12.3 Registration and Loading
 
@@ -1069,18 +1093,19 @@ All endpoints require **admin role** (`Role.ADMIN`) via JWT authentication.
 
 **`POST /v1/admin/models/train`**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `trainer_type` | `str` | (required) | One of: `"slm"`, `"llm"`, `"reranker"` |
-| `base_model` | `str` | `""` | HuggingFace model name or path (e.g., `"bert-base-uncased"`, `"meta-llama/Llama-3-8B"`) |
-| `profile` | `str` | `"dev"` | Environment profile: `"dev"`, `"prod"`, `"ci"` |
-| `data_dir` | `str` | `"./data/training/"` | Directory containing training data files |
-| `epochs` | `int` | `3` | Number of training epochs |
-| `batch_size` | `int` | `8` | Per-device batch size |
-| `learning_rate` | `float` | `2e-4` | Learning rate |
-| `use_lora` | `bool` | `true` | Enable LoRA adapter training |
+| Parameter       | Type    | Default              | Description                                                                             |
+|-----------------|---------|----------------------|-----------------------------------------------------------------------------------------|
+| `trainer_type`  | `str`   | (required)           | One of: `"slm"`, `"llm"`, `"reranker"`                                                  |
+| `base_model`    | `str`   | `""`                 | HuggingFace model name or path (e.g., `"bert-base-uncased"`, `"meta-llama/Llama-3-8B"`) |
+| `profile`       | `str`   | `"dev"`              | Environment profile: `"dev"`, `"prod"`, `"ci"`                                          |
+| `data_dir`      | `str`   | `"./data/training/"` | Directory containing training data files                                                |
+| `epochs`        | `int`   | `3`                  | Number of training epochs                                                               |
+| `batch_size`    | `int`   | `8`                  | Per-device batch size                                                                   |
+| `learning_rate` | `float` | `2e-4`               | Learning rate                                                                           |
+| `use_lora`      | `bool`  | `true`               | Enable LoRA adapter training                                                            |
 
 **Request:**
+
 ```json
 {
   "trainer_type": "slm",
@@ -1094,6 +1119,7 @@ All endpoints require **admin role** (`Role.ADMIN`) via JWT authentication.
 ```
 
 **Response (202 accepted):**
+
 ```json
 {
   "job_id": "abc12345-6789-4abc-def0-1234567890ab",
@@ -1112,6 +1138,7 @@ Training runs asynchronously. On completion, the model is auto-registered in the
 **`GET /v1/admin/models/status/{job_id}`**
 
 **Response:**
+
 ```json
 {
   "job_id": "abc12345-6789-4abc-def0-1234567890ab",
@@ -1134,6 +1161,7 @@ Possible status values: `queued`, `running`, `completed`, `failed`.
 **`GET /v1/admin/models`**
 
 **Response:**
+
 ```json
 {
   "models": {
@@ -1166,12 +1194,13 @@ Possible status values: `queued`, `running`, `completed`, `failed`.
 
 **`POST /v1/admin/models/promote`**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type  | Description                      |
+|--------------|-------|----------------------------------|
 | `model_name` | `str` | Model identifier (e.g., `"slm"`) |
-| `version` | `str` | Version to promote |
+| `version`    | `str` | Version to promote               |
 
 **Request:**
+
 ```json
 {
   "model_name": "slm",
@@ -1180,6 +1209,7 @@ Possible status values: `queued`, `running`, `completed`, `failed`.
 ```
 
 **Response:**
+
 ```json
 {
   "model_name": "slm",
@@ -1190,6 +1220,7 @@ Possible status values: `queued`, `running`, `completed`, `failed`.
 ```
 
 Status transitions:
+
 - `staging` → `canary` (first promote)
 - `canary` → `production` (second promote, archives previous production)
 - `production` → `production` (no-op)
@@ -1201,11 +1232,12 @@ Status transitions:
 
 **`POST /v1/admin/models/rollback`**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type  | Description      |
+|--------------|-------|------------------|
 | `model_name` | `str` | Model identifier |
 
 **Request:**
+
 ```json
 {
   "model_name": "slm"
@@ -1213,6 +1245,7 @@ Status transitions:
 ```
 
 **Response:**
+
 ```json
 {
   "model_name": "slm",
@@ -1230,24 +1263,25 @@ Finds the current production version, archives it, and restores the most recent 
 
 **`POST /v1/admin/models/evaluate`**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `model_name` | `str` | (required) | Model identifier |
-| `version` | `str` | `"unknown"` | Version to evaluate |
-| `metrics` | `dict` | (required) | Metric name → value mapping |
+| Parameter    | Type   | Default     | Description                 |
+|--------------|--------|-------------|-----------------------------|
+| `model_name` | `str`  | (required)  | Model identifier            |
+| `version`    | `str`  | `"unknown"` | Version to evaluate         |
+| `metrics`    | `dict` | (required)  | Metric name → value mapping |
 
 Default thresholds applied:
 
-| Metric | Threshold | Comparison | Severity |
-|--------|-----------|------------|----------|
-| `accuracy` | 0.90 | `gte` | `fail` |
-| `weighted_f1` | 0.85 | `gte` | `fail` |
-| `mrr` | 0.70 | `gte` | `fail` |
-| `recall_at_10` | 0.65 | `gte` | `fail` |
-| `rouge_l_f1` | 0.35 | `gte` | `fail` |
-| `eval_loss` | 1.0 | `lte` | `warn` |
+| Metric         | Threshold | Comparison | Severity |
+|----------------|-----------|------------|----------|
+| `accuracy`     | 0.90      | `gte`      | `fail`   |
+| `weighted_f1`  | 0.85      | `gte`      | `fail`   |
+| `mrr`          | 0.70      | `gte`      | `fail`   |
+| `recall_at_10` | 0.65      | `gte`      | `fail`   |
+| `rouge_l_f1`   | 0.35      | `gte`      | `fail`   |
+| `eval_loss`    | 1.0       | `lte`      | `warn`   |
 
 **Request:**
+
 ```json
 {
   "model_name": "slm",
@@ -1261,6 +1295,7 @@ Default thresholds applied:
 ```
 
 **Response:**
+
 ```json
 {
   "model_name": "slm",
@@ -1276,7 +1311,8 @@ Default thresholds applied:
 }
 ```
 
-If a production version exists for the model, its metrics are used as baseline for regression detection. Metrics are also saved to the registry via `update_metrics()`.
+If a production version exists for the model, its metrics are used as baseline for regression detection. Metrics are
+also saved to the registry via `update_metrics()`.
 
 ---
 
@@ -1284,12 +1320,13 @@ If a production version exists for the model, its metrics are used as baseline f
 
 **`POST /v1/admin/models/canary/split`**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `model_name` | `str` | Model identifier |
+| Parameter       | Type    | Description                                |
+|-----------------|---------|--------------------------------------------|
+| `model_name`    | `str`   | Model identifier                           |
 | `traffic_split` | `float` | Fraction of traffic to canary (0.0 to 1.0) |
 
 **Request:**
+
 ```json
 {
   "model_name": "slm",
@@ -1298,6 +1335,7 @@ If a production version exists for the model, its metrics are used as baseline f
 ```
 
 **Response:**
+
 ```json
 {
   "model_name": "slm",
@@ -1313,6 +1351,7 @@ If a production version exists for the model, its metrics are used as baseline f
 **`GET /v1/admin/models/canary/status`**
 
 **Response:**
+
 ```json
 {
   "slm": {
@@ -1427,11 +1466,11 @@ jobs:
 
 ### 14.2 Promotion Decision Matrix
 
-| EvalGate Result | Action | Manual Step Required? |
-|----------------|--------|----------------------|
-| **PASS** | Auto-promote to canary at 5% | No |
-| **WARN** | Auto-promote to canary at 5% (with alert) | No |
-| **FAIL** | Block promotion | Yes — investigate metrics |
+| EvalGate Result | Action                                    | Manual Step Required?     |
+|-----------------|-------------------------------------------|---------------------------|
+| **PASS**        | Auto-promote to canary at 5%              | No                        |
+| **WARN**        | Auto-promote to canary at 5% (with alert) | No                        |
+| **FAIL**        | Block promotion                           | Yes — investigate metrics |
 
 ---
 
@@ -1439,23 +1478,27 @@ jobs:
 
 ### 15.1 Concept
 
-The NLI (Natural Language Inference) evaluator checks whether generated answers are grounded in their source context by decomposing answers into claims and evaluating each claim for entailment, contradiction, or neutrality against the context.
+The NLI (Natural Language Inference) evaluator checks whether generated answers are grounded in their source context by
+decomposing answers into claims and evaluating each claim for entailment, contradiction, or neutrality against the
+context.
 
 ### 15.2 Model
 
-**Primary:** `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` — a DeBERTa-v3 model fine-tuned on MNLI, FEVER, and ANLI datasets. Classifies each (context, claim) pair into:
+**Primary:** `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` — a DeBERTa-v3 model fine-tuned on MNLI, FEVER, and ANLI
+datasets. Classifies each (context, claim) pair into:
+
 - **Entailment** — the claim logically follows from the context
 - **Contradiction** — the claim contradicts the context
 - **Neutral** — the claim is neither entailed nor contradicted
 
 ### 15.3 NLI Metrics
 
-| Metric | Formula | Range |
-|--------|---------|-------|
-| `nli_entailment_rate` | entailed_claims / total_claims | [0, 1] — higher is better |
-| `nli_contradiction_rate` | contradicted_claims / total_claims | [0, 1] — lower is better |
-| `nli_neutral_rate` | neutral_claims / total_claims | [0, 1] |
-| `nli_overall_score` | max(0, min(1, entailment_rate − 0.5 × contradiction_rate)) | [0, 1] — higher is better |
+| Metric                   | Formula                                                    | Range                     |
+|--------------------------|------------------------------------------------------------|---------------------------|
+| `nli_entailment_rate`    | entailed_claims / total_claims                             | [0, 1] — higher is better |
+| `nli_contradiction_rate` | contradicted_claims / total_claims                         | [0, 1] — lower is better  |
+| `nli_neutral_rate`       | neutral_claims / total_claims                              | [0, 1]                    |
+| `nli_overall_score`      | max(0, min(1, entailment_rate − 0.5 × contradiction_rate)) | [0, 1] — higher is better |
 
 ### 15.4 Usage
 
@@ -1484,7 +1527,8 @@ metrics = evaluate_nli_batch(
 
 ### 15.5 Lightweight Fallback
 
-When the DeBERTa-v3 model is unavailable (air-gapped or not installed), the evaluator falls back to a **token-overlap proxy**:
+When the DeBERTa-v3 model is unavailable (air-gapped or not installed), the evaluator falls back to a **token-overlap
+proxy**:
 
 1. Tokenizes claim and context into word sets
 2. Computes cosine similarity from token overlap
@@ -1492,13 +1536,15 @@ When the DeBERTa-v3 model is unavailable (air-gapped or not installed), the eval
 4. Combines similarity and coverage → classifies as entailment / contradiction / neutral
 
 **Enable lightweight mode:**
+
 ```python
 evaluate_nli(answer, context, use_real_nli=False)
 ```
 
 ### 15.6 Claim Decomposition
 
-Answers are split into individual claims using sentence boundaries (`.`, `!`, `?`, `\n`, `;`). Claims shorter than 10 characters are filtered out. Bullet-point markers (`-`, `*`, `•`) are stripped.
+Answers are split into individual claims using sentence boundaries (`.`, `!`, `?`, `\n`, `;`). Claims shorter than 10
+characters are filtered out. Bullet-point markers (`-`, `*`, `•`) are stripped.
 
 ---
 
@@ -1570,6 +1616,7 @@ save_steps: 500
 **Symptom:** SLM or Reranker training returns error about missing `transformers` or `peft`.
 
 **Solution:**
+
 ```bash
 pip install transformers peft accelerate
 ```
@@ -1592,6 +1639,7 @@ pip install transformers peft accelerate
 **Symptom:** `torch.cuda.OutOfMemoryError` during LLM training.
 
 **Solutions:**
+
 - Reduce `batch_size` to 1 or 2
 - Set `gradient_accumulation_steps` higher (e.g., 8) to maintain effective batch size
 - Reduce `max_seq_length` to 1024 or 512
@@ -1602,7 +1650,8 @@ pip install transformers peft accelerate
 
 **Symptom:** `KeyError: "Model 'slm' not found in registry"`
 
-**Solution:** The model must be registered first. After a successful training job, models are auto-registered. For manual registration:
+**Solution:** The model must be registered first. After a successful training job, models are auto-registered. For
+manual registration:
 
 ```python
 from proxy.app.model_evolution.model_registry import ModelRegistry
@@ -1614,7 +1663,9 @@ registry.register("slm", "./path/to/adapter", {"accuracy": 0.92})
 
 **Symptom:** Every evaluation shows warning `"No baseline metrics provided for comparison"`.
 
-**Solution:** This is expected for the first model version or when no production version exists. It is not an error — the gate still evaluates thresholds. To suppress:
+**Solution:** This is expected for the first model version or when no production version exists. It is not an error —
+the gate still evaluates thresholds. To suppress:
+
 - Promote a model to production first
 - Or set `require_baseline_comparison=False` in `EvalGateConfig`
 
@@ -1623,10 +1674,12 @@ registry.register("slm", "./path/to/adapter", {"accuracy": 0.92})
 **Symptom:** Canary rolls back as soon as traffic is routed, even without real errors.
 
 **Causes:**
+
 - `min_samples` set too high → not enough data, but `error_rate` appears inflated early
 - `rollback_thresholds` too strict (e.g., `error_rate > 0.01`)
 
 **Solution:** Start with generous thresholds and tighten gradually:
+
 ```python
 rollback_thresholds={
     "error_rate": (0.10, "gt"),      # Start at 10%
@@ -1638,8 +1691,10 @@ rollback_thresholds={
 **Symptom:** New adapter files placed in the watch directory are not picked up.
 
 **Checks:**
+
 1. Is the watcher enabled? `manager.enable_watcher("name", "/path/to/adapters")`
-2. Do files match the detection patterns? Default: `adapter_config.json`, `*.safetensors`, `*.bin`, `*.pt`, `*.ckpt`, `lora_weights.*`, `pytorch_model.*`
+2. Do files match the detection patterns? Default: `adapter_config.json`, `*.safetensors`, `*.bin`, `*.pt`, `*.ckpt`,
+   `lora_weights.*`, `pytorch_model.*`
 3. Did you call `watch_directory()` for file-level watching (vs. subdirectory-level)?
 4. Call `watcher.force_rescan()` to clear the cache and re-scan immediately.
 
@@ -1648,18 +1703,23 @@ rollback_thresholds={
 **Symptom:** `adapter.state` is `LOADING` or `ERROR` and won't transition to `ACTIVE`.
 
 **Solution:**
+
 - For LOADING: check load callback returns `True` and doesn't throw exceptions
-- For ERROR: unload the adapter first (`manager.unload_adapter("name")`) which transitions ERROR → UNLOADED, then try loading again
+- For ERROR: unload the adapter first (`manager.unload_adapter("name")`) which transitions ERROR → UNLOADED, then try
+  loading again
 - Check Prometheus: `rag_adapter_error_count{name="..."}` for error history
 
 ### 17.9 Model registry file corrupted
 
 **Symptom:** `json.JSONDecodeError` when loading registry.
 
-**Solution:** The registry uses atomic writes (write to `.tmp`, then `os.replace`). If the main file is corrupted, check for a `.tmp` file:
+**Solution:** The registry uses atomic writes (write to `.tmp`, then `os.replace`). If the main file is corrupted, check
+for a `.tmp` file:
+
 ```bash
 ls -la data/model_registry.json*
 ```
+
 If both are corrupted, delete them and re-register models from artifact store.
 
 ### 17.10 NLI evaluator uses lightweight fallback
@@ -1667,19 +1727,23 @@ If both are corrupted, delete them and re-register models from artifact store.
 **Symptom:** Log says `"NLI model loading skipped: transformers not installed"` or `"NLI model load failed"`.
 
 **Solutions:**
+
 1. Install dependencies: `pip install transformers torch`
-2. Download the NLI model for air-gapped use: store `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` locally and set `local_files_only=True` (already default)
+2. Download the NLI model for air-gapped use: store `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` locally and set
+   `local_files_only=True` (already default)
 3. If lightweight proxy is acceptable (no GPU, air-gapped), no action needed — it's a conscious fallback
 
 ### 17.11 Training succeeds but adapter doesn't change model behavior
 
 **Possible causes:**
+
 - Adapter loaded into wrong base model — check `trainer_config.json` for `base_model` field
 - Canary split at 0% — all traffic still goes to stable
 - Adapter not promoted through lifecycle — stuck in `staging` status
 - Wrong target modules for LoRA — check `_resolve_target_modules()` matches your model architecture
 
 **Verification:**
+
 ```bash
 # Check registry
 curl http://localhost:8080/v1/admin/models -H "Authorization: Bearer $JWT_TOKEN"
@@ -1694,18 +1758,18 @@ curl http://localhost:8080/v1/admin/models/canary/status -H "Authorization: Bear
 
 All model evolution configuration via environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODEL_EVOLUTION_ENABLED` | `false` | Master switch for the entire subsystem |
-| `MLFLOW_TRACKING_URI` | `http://localhost:5000` | MLflow tracking server URL |
-| `MLFLOW_EXPERIMENT_NAME` | `rag-system` | MLflow experiment name |
-| `MLFLOW_ARTIFACT_ROOT` | `s3://rag-artifacts` | Artifact storage root |
-| `MINIO_ENDPOINT` | `localhost:9000` | MinIO/S3 endpoint |
-| `MINIO_ACCESS_KEY` | `minioadmin` | MinIO access key |
-| `MINIO_SECRET_KEY` | `minioadmin` | MinIO secret key |
-| `MINIO_BUCKET` | `rag-artifacts` | MinIO bucket name |
-| `MINIO_SECURE` | `false` | Use HTTPS for MinIO |
-| `MODEL_REGISTRY_PATH` | `./data/model_registry.json` | Registry JSON file path |
+| Variable                  | Default                      | Description                            |
+|---------------------------|------------------------------|----------------------------------------|
+| `MODEL_EVOLUTION_ENABLED` | `false`                      | Master switch for the entire subsystem |
+| `MLFLOW_TRACKING_URI`     | `http://localhost:5000`      | MLflow tracking server URL             |
+| `MLFLOW_EXPERIMENT_NAME`  | `rag-system`                 | MLflow experiment name                 |
+| `MLFLOW_ARTIFACT_ROOT`    | `s3://rag-artifacts`         | Artifact storage root                  |
+| `MINIO_ENDPOINT`          | `localhost:9000`             | MinIO/S3 endpoint                      |
+| `MINIO_ACCESS_KEY`        | `minioadmin`                 | MinIO access key                       |
+| `MINIO_SECRET_KEY`        | `minioadmin`                 | MinIO secret key                       |
+| `MINIO_BUCKET`            | `rag-artifacts`              | MinIO bucket name                      |
+| `MINIO_SECURE`            | `false`                      | Use HTTPS for MinIO                    |
+| `MODEL_REGISTRY_PATH`     | `./data/model_registry.json` | Registry JSON file path                |
 
 ---
 
@@ -1751,6 +1815,7 @@ pip install safetensors
 ---
 
 **Related Guides:**
+
 - [RAG Maturity Assessment](rag-maturity-assessment.md) — where Model Evolution fits in the RAG capability model
 - [Best Practices Checklist](best-practices-checklist.md) — production readiness dimensions
 - [Access Control & RBAC](access-control-rbac.md) — admin role required for all model evolution endpoints

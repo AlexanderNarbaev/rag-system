@@ -162,7 +162,7 @@ relation_types:
   - name: "WORKS_ON"
     description: "Сотрудник работает над проектом/задачей"
     source_type: "PERSON"
-    target_type: ["PROJECT", "TICKET"]
+    target_type: [ "PROJECT", "TICKET" ]
     properties:
       - name: "since"
         type: "date"
@@ -171,7 +171,7 @@ relation_types:
 
   - name: "AUTHORED_BY"
     description: "Документ/коммит создан автором"
-    source_type: ["DOCUMENT", "COMMIT", "TICKET", "CODE_FILE"]
+    source_type: [ "DOCUMENT", "COMMIT", "TICKET", "CODE_FILE" ]
     target_type: "PERSON"
     properties:
       - name: "date"
@@ -180,7 +180,7 @@ relation_types:
   - name: "MENTIONS"
     description: "Документ упоминает сущность (человека, технологию, проект)"
     source_type: "DOCUMENT"
-    target_type: ["PERSON", "TECHNOLOGY", "PRODUCT", "PROJECT", "CONCEPT"]
+    target_type: [ "PERSON", "TECHNOLOGY", "PRODUCT", "PROJECT", "CONCEPT" ]
     properties:
       - name: "context"
         type: "string"
@@ -189,8 +189,8 @@ relation_types:
 
   - name: "DEPENDS_ON"
     description: "Проект/компонент зависит от другого"
-    source_type: ["PROJECT", "TICKET", "CODE_FILE"]
-    target_type: ["PROJECT", "PRODUCT", "TECHNOLOGY"]
+    source_type: [ "PROJECT", "TICKET", "CODE_FILE" ]
+    target_type: [ "PROJECT", "PRODUCT", "TECHNOLOGY" ]
     properties:
       - name: "type"
         type: "string"  # build, runtime, optional
@@ -207,16 +207,16 @@ relation_types:
 
   - name: "CONTAINS"
     description: "Включает в себя (проект содержит файл, документ содержит код)"
-    source_type: ["PROJECT", "DOCUMENT"]
-    target_type: ["CODE_FILE", "DOCUMENT", "TICKET"]
+    source_type: [ "PROJECT", "DOCUMENT" ]
+    target_type: [ "CODE_FILE", "DOCUMENT", "TICKET" ]
     properties:
       - name: "path"
         type: "string"
 
   - name: "PARENT_OF"
     description: "Иерархическая связь (эпик содержит подзадачи, папка содержит страницы)"
-    source_type: ["TICKET", "DOCUMENT", "PROJECT"]
-    target_type: ["TICKET", "DOCUMENT"]
+    source_type: [ "TICKET", "DOCUMENT", "PROJECT" ]
+    target_type: [ "TICKET", "DOCUMENT" ]
     properties:
       - name: "type"
         type: "string"  # epic->task, folder->page, etc.
@@ -234,7 +234,7 @@ relation_types:
   - name: "UPDATES"
     description: "Коммит обновляет файл или задачу"
     source_type: "COMMIT"
-    target_type: ["CODE_FILE", "TICKET"]
+    target_type: [ "CODE_FILE", "TICKET" ]
     properties:
       - name: "lines_added"
         type: "int"
@@ -243,8 +243,8 @@ relation_types:
 
   - name: "BELONGS_TO"
     description: "Принадлежность к проекту/организации"
-    source_type: ["DOCUMENT", "TICKET", "CODE_FILE"]
-    target_type: ["PROJECT", "ORGANIZATION"]
+    source_type: [ "DOCUMENT", "TICKET", "CODE_FILE" ]
+    target_type: [ "PROJECT", "ORGANIZATION" ]
     properties:
       - name: "role"
         type: "string"
@@ -257,11 +257,11 @@ extraction_rules:
       - pattern: "[А-Я][а-я]+ [А-Я][а-я]+"  # Имя Фамилия
       - pattern: "@[a-z0-9_-]+"            # username
     TECHNOLOGY:
-      - keywords: ["Python", "Java", "Docker", "Kubernetes", "PostgreSQL", "Redis", "Git", "CI/CD", "REST API"]
+      - keywords: [ "Python", "Java", "Docker", "Kubernetes", "PostgreSQL", "Redis", "Git", "CI/CD", "REST API" ]
     PROJECT:
       - pattern: "[A-Z]{2,}-\d+"           # Jira issue ключ
     CONCEPT:
-      - keywords: ["микросервисы", "RAG", "LLM", "векторная база", "рефакторинг", "деплой"]
+      - keywords: [ "микросервисы", "RAG", "LLM", "векторная база", "рефакторинг", "деплой" ]
 
   # Шаблоны для отношений
   relation_patterns:

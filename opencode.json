@@ -6,7 +6,9 @@
     "deepseek": {},
     "opencode": {}
   },
-  "instructions": ["AGENTS.md"],
+  "instructions": [
+    "AGENTS.md"
+  ],
   "compaction": {
     "auto": true,
     "prune": true,
@@ -18,53 +20,84 @@
     "max_bytes": 51200
   },
   "watcher": {
-    "ignore": ["node_modules/**", "dist/**", ".git/**", "target/**", "__pycache__/**"]
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      ".git/**",
+      "target/**",
+      "__pycache__/**"
+    ]
   },
-  "plugin": ["opencode-codegraph"],
+  "plugin": [
+    "opencode-codegraph"
+  ],
   "mcp": {
     "filesystem": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.bun/bin/mcp-server-filesystem", "/home/alexandr-narbaev/Projects/rag-system"],
+      "command": [
+        "/home/alexandr-narbaev/.bun/bin/mcp-server-filesystem",
+        "/home/alexandr-narbaev/Projects/rag-system"
+      ],
       "enabled": true
     },
     "context7": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.bun/bin/c7-mcp-server"],
+      "command": [
+        "/home/alexandr-narbaev/.bun/bin/c7-mcp-server"
+      ],
       "enabled": true
     },
     "sequential-thinking": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.bun/bin/mcp-server-sequential-thinking"],
+      "command": [
+        "/home/alexandr-narbaev/.bun/bin/mcp-server-sequential-thinking"
+      ],
       "enabled": true
     },
     "codegraph": {
       "type": "local",
-      "command": ["codegraph", "serve", "--mcp"],
+      "command": [
+        "codegraph",
+        "serve",
+        "--mcp"
+      ],
       "enabled": true
     },
     "agentic-tools": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.bun/bin/agentic-tools-mcp"],
+      "command": [
+        "/home/alexandr-narbaev/.bun/bin/agentic-tools-mcp"
+      ],
       "enabled": true
     },
     "memorylayer": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.bun/bin/memorylayer-mcp"],
+      "command": [
+        "/home/alexandr-narbaev/.bun/bin/memorylayer-mcp"
+      ],
       "enabled": true
     },
     "fetch": {
       "type": "local",
-      "command": ["uvx", "mcp-server-fetch"],
+      "command": [
+        "uvx",
+        "mcp-server-fetch"
+      ],
       "enabled": true
     },
     "sqlite": {
       "type": "local",
-      "command": ["uvx", "mcp-server-sqlite"],
+      "command": [
+        "uvx",
+        "mcp-server-sqlite"
+      ],
       "enabled": true
     },
     "github": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.bun/bin/mcp-server-github"],
+      "command": [
+        "/home/alexandr-narbaev/.bun/bin/mcp-server-github"
+      ],
       "enabled": true,
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
@@ -72,12 +105,17 @@
     },
     "excalidraw": {
       "type": "local",
-      "command": ["uvx", "excalidraw-architect-mcp"],
+      "command": [
+        "uvx",
+        "excalidraw-architect-mcp"
+      ],
       "enabled": true
     },
     "context7-official": {
       "type": "local",
-      "command": ["/home/alexandr-narbaev/.npm-global/bin/context7-mcp"],
+      "command": [
+        "/home/alexandr-narbaev/.npm-global/bin/context7-mcp"
+      ],
       "enabled": true
     }
   }

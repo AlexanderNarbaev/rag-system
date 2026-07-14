@@ -1,12 +1,15 @@
 # Agentic Tools — Declarative Tools Reference (YAML/JSON)
 
-**Implementation Status:** Implemented in Beyond v2.0. Tools can be defined declaratively in YAML or JSON files, loaded at startup from `TOOLS_DECLARATIVE_DIR`, with schema validation, variable interpolation, and built-in HTTP/shell handlers.
+**Implementation Status:** Implemented in Beyond v2.0. Tools can be defined declaratively in YAML or JSON files, loaded
+at startup from `TOOLS_DECLARATIVE_DIR`, with schema validation, variable interpolation, and built-in HTTP/shell
+handlers.
 
 ---
 
 ## 1. Overview
 
-Declarative tools allow defining tools without writing Python code. Tool definitions are stored as YAML or JSON files and automatically loaded at proxy startup. This is ideal for:
+Declarative tools allow defining tools without writing Python code. Tool definitions are stored as YAML or JSON files
+and automatically loaded at proxy startup. This is ideal for:
 
 - Non-developer tool configuration
 - Infrastructure automation (shell commands)
@@ -73,33 +76,33 @@ shell:
 
 ### 3.1 Top-Level Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | Yes | Unique tool identifier |
-| `description` | `string` | Yes | Tool description for LLM routing |
-| `category` | `string` | No | Grouping category (default: `"general"`) |
-| `type` | `string` | Yes | Handler type: `"http"`, `"shell"` |
-| `parameters` | `array` | No | List of parameter definitions |
-| `tags` | `array<string>` | No | Searchable tags |
-| `version` | `string` | No | Semantic version (default: `"1.0.0"`) |
-| `timeout` | `number` | No | Execution timeout in seconds (default: `30`) |
-| `visibility` | `string` | No | RBAC level: `"public"`, `"user"`, `"internal"`, `"admin"` |
-| `depends_on` | `array<string>` | No | Tool dependencies |
-| `retry` | `object` | No | Retry policy configuration |
-| `http` | `object` | Required for `type: http` | HTTP handler config |
-| `shell` | `object` | Required for `type: shell` | Shell handler config |
+| Field         | Type            | Required                   | Description                                               |
+|---------------|-----------------|----------------------------|-----------------------------------------------------------|
+| `name`        | `string`        | Yes                        | Unique tool identifier                                    |
+| `description` | `string`        | Yes                        | Tool description for LLM routing                          |
+| `category`    | `string`        | No                         | Grouping category (default: `"general"`)                  |
+| `type`        | `string`        | Yes                        | Handler type: `"http"`, `"shell"`                         |
+| `parameters`  | `array`         | No                         | List of parameter definitions                             |
+| `tags`        | `array<string>` | No                         | Searchable tags                                           |
+| `version`     | `string`        | No                         | Semantic version (default: `"1.0.0"`)                     |
+| `timeout`     | `number`        | No                         | Execution timeout in seconds (default: `30`)              |
+| `visibility`  | `string`        | No                         | RBAC level: `"public"`, `"user"`, `"internal"`, `"admin"` |
+| `depends_on`  | `array<string>` | No                         | Tool dependencies                                         |
+| `retry`       | `object`        | No                         | Retry policy configuration                                |
+| `http`        | `object`        | Required for `type: http`  | HTTP handler config                                       |
+| `shell`       | `object`        | Required for `type: shell` | Shell handler config                                      |
 
 ### 3.2 Parameter Definition
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | `string` | Yes | Parameter name |
-| `type` | `string` | Yes | JSON Schema type: `"string"`, `"integer"`, `"number"`, `"boolean"`, `"array"`, `"object"` |
-| `description` | `string` | No | Parameter description |
-| `required` | `boolean` | No | Whether the parameter is required (default: `false` if `default` is set) |
-| `default` | `any` | No | Default value |
-| `enum` | `array<string>` | No | Allowed values |
-| `items_type` | `string` | No | For `array` type: inner element type |
+| Field         | Type            | Required | Description                                                                               |
+|---------------|-----------------|----------|-------------------------------------------------------------------------------------------|
+| `name`        | `string`        | Yes      | Parameter name                                                                            |
+| `type`        | `string`        | Yes      | JSON Schema type: `"string"`, `"integer"`, `"number"`, `"boolean"`, `"array"`, `"object"` |
+| `description` | `string`        | No       | Parameter description                                                                     |
+| `required`    | `boolean`       | No       | Whether the parameter is required (default: `false` if `default` is set)                  |
+| `default`     | `any`           | No       | Default value                                                                             |
+| `enum`        | `array<string>` | No       | Allowed values                                                                            |
+| `items_type`  | `string`        | No       | For `array` type: inner element type                                                      |
 
 ### 3.3 Retry Policy
 
@@ -110,11 +113,11 @@ retry:
   retry_on: ["timeout", "http_5xx"]
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `max_retries` | `number` | `1` | Maximum retry attempts |
-| `backoff_s` | `number` | `1.0` | Backoff multiplier in seconds |
-| `retry_on` | `array<string>` | `["timeout"]` | Error types: `"timeout"`, `"http_5xx"`, `"all"` |
+| Field         | Type            | Default       | Description                                     |
+|---------------|-----------------|---------------|-------------------------------------------------|
+| `max_retries` | `number`        | `1`           | Maximum retry attempts                          |
+| `backoff_s`   | `number`        | `1.0`         | Backoff multiplier in seconds                   |
+| `retry_on`    | `array<string>` | `["timeout"]` | Error types: `"timeout"`, `"http_5xx"`, `"all"` |
 
 ---
 
@@ -135,15 +138,15 @@ http:
   verify_ssl: true
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `method` | `string` | Yes | HTTP method: `GET`, `POST`, `PUT`, `DELETE`, `PATCH` |
-| `url_template` | `string` | Yes | URL with `{{variable}}` placeholders |
-| `headers` | `object` | No | HTTP headers to send |
-| `body_template` | `string` | No | Request body template (for POST/PUT/PATCH) |
-| `allowed_hosts` | `array<string>` | Yes | Host whitelist (glob patterns supported) |
-| `follow_redirects` | `boolean` | No | Follow HTTP redirects (default: `false`) |
-| `verify_ssl` | `boolean` | No | Verify SSL certificates (default: `true`) |
+| Field              | Type            | Required | Description                                          |
+|--------------------|-----------------|----------|------------------------------------------------------|
+| `method`           | `string`        | Yes      | HTTP method: `GET`, `POST`, `PUT`, `DELETE`, `PATCH` |
+| `url_template`     | `string`        | Yes      | URL with `{{variable}}` placeholders                 |
+| `headers`          | `object`        | No       | HTTP headers to send                                 |
+| `body_template`    | `string`        | No       | Request body template (for POST/PUT/PATCH)           |
+| `allowed_hosts`    | `array<string>` | Yes      | Host whitelist (glob patterns supported)             |
+| `follow_redirects` | `boolean`       | No       | Follow HTTP redirects (default: `false`)             |
+| `verify_ssl`       | `boolean`       | No       | Verify SSL certificates (default: `true`)            |
 
 ---
 
@@ -166,14 +169,14 @@ shell:
     PATH: "/usr/bin:/bin"
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `command` | `string` | Yes | Shell command with `{{variable}}` placeholders |
-| `working_dir` | `string` | No | Working directory for the command |
-| `allowed_commands` | `array<string>` | Yes | Command whitelist (first word only) |
-| `allowed_paths` | `array<string>` | No | Path whitelist for arguments |
-| `timeout` | `number` | No | Per-command timeout override |
-| `env` | `object` | No | Environment variables |
+| Field              | Type            | Required | Description                                    |
+|--------------------|-----------------|----------|------------------------------------------------|
+| `command`          | `string`        | Yes      | Shell command with `{{variable}}` placeholders |
+| `working_dir`      | `string`        | No       | Working directory for the command              |
+| `allowed_commands` | `array<string>` | Yes      | Command whitelist (first word only)            |
+| `allowed_paths`    | `array<string>` | No       | Path whitelist for arguments                   |
+| `timeout`          | `number`        | No       | Per-command timeout override                   |
+| `env`              | `object`        | No       | Environment variables                          |
 
 ### Security Notes
 
@@ -197,6 +200,7 @@ http:
 ```
 
 Resolution order:
+
 1. **Tool parameters** — values passed at call time
 2. **CONTEXT.*** — shared execution context (`user_id`, `namespace`, `request_id`, etc.)
 3. **Environment variables** — `os.environ`

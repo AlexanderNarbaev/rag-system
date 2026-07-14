@@ -1,61 +1,61 @@
-{{- if .Values.qdrant.enabled }}
+{ { - if .Values.qdrant.enabled } }
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "rag-system.fullname" . }}-qdrant
-  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  name: { { include "rag-system.fullname" . } }-qdrant
+  namespace: { { .Values.global.namespace | default .Release.Namespace } }
   labels:
-    {{- include "rag-system.qdrantLabels" . | nindent 4 }}
+    { { - include "rag-system.qdrantLabels" . | nindent 4 } }
 spec:
-  serviceName: {{ include "rag-system.fullname" . }}-qdrant
-  replicas: {{ .Values.qdrant.replicaCount }}
+  serviceName: { { include "rag-system.fullname" . } }-qdrant
+  replicas: { { .Values.qdrant.replicaCount } }
   selector:
     matchLabels:
-      {{- include "rag-system.qdrantSelector" . | nindent 6 }}
+      { { - include "rag-system.qdrantSelector" . | nindent 6 } }
   template:
     metadata:
       labels:
-        {{- include "rag-system.qdrantLabels" . | nindent 8 }}
+        { { - include "rag-system.qdrantLabels" . | nindent 8 } }
     spec:
       securityContext:
-        {{- toYaml .Values.qdrant.podSecurityContext | nindent 8 }}
+        { { - toYaml .Values.qdrant.podSecurityContext | nindent 8 } }
       containers:
         - name: qdrant
           securityContext:
-            {{- toYaml .Values.qdrant.securityContext | nindent 12 }}
+            { { - toYaml .Values.qdrant.securityContext | nindent 12 } }
           image: "{{ .Values.qdrant.image.repository }}:{{ .Values.qdrant.image.tag }}"
-          imagePullPolicy: {{ .Values.qdrant.image.pullPolicy }}
+          imagePullPolicy: { { .Values.qdrant.image.pullPolicy } }
           ports:
             - name: http
-              containerPort: {{ .Values.qdrant.service.port }}
+              containerPort: { { .Values.qdrant.service.port } }
               protocol: TCP
             - name: grpc
-              containerPort: {{ .Values.qdrant.service.grpcPort }}
+              containerPort: { { .Values.qdrant.service.grpcPort } }
               protocol: TCP
           env:
             - name: QDRANT__SERVICE__GRPC_PORT
-              value: {{ .Values.qdrant.service.grpcPort | quote }}
+              value: { { .Values.qdrant.service.grpcPort | quote } }
           volumeMounts:
             - name: data
               mountPath: /qdrant/storage
           resources:
-            {{- toYaml .Values.qdrant.resources | nindent 12 }}
+            { { - toYaml .Values.qdrant.resources | nindent 12 } }
           livenessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.qdrant.service.port }}
+              port: { { .Values.qdrant.service.port } }
             initialDelaySeconds: 30
             periodSeconds: 15
           readinessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.qdrant.service.port }}
+              port: { { .Values.qdrant.service.port } }
             initialDelaySeconds: 15
             periodSeconds: 10
-      {{- if .Values.qdrant.podAntiAffinity.enabled }}
+      { { - if .Values.qdrant.podAntiAffinity.enabled } }
       affinity:
         podAntiAffinity:
-          {{- if eq .Values.qdrant.podAntiAffinity.type "hard" }}
+          { { - if eq .Values.qdrant.podAntiAffinity.type "hard" } }
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
@@ -64,7 +64,7 @@ spec:
                     values:
                       - qdrant
               topologyKey: kubernetes.io/hostname
-          {{- else }}
+          { { - else } }
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -75,22 +75,22 @@ spec:
                       values:
                         - qdrant
                 topologyKey: kubernetes.io/hostname
-          {{- end }}
-      {{- end }}
+          { { - end } }
+      { { - end } }
   volumeClaimTemplates:
     - metadata:
         name: data
         labels:
-          {{- include "rag-system.qdrantLabels" . | nindent 10 }}
+          { { - include "rag-system.qdrantLabels" . | nindent 10 } }
       spec:
         accessModes:
-          - {{ .Values.qdrant.persistence.accessMode }}
-        {{- if .Values.qdrant.persistence.storageClass }}
-        storageClassName: {{ .Values.qdrant.persistence.storageClass }}
-        {{- else if .Values.global.storageClass }}
-        storageClassName: {{ .Values.global.storageClass }}
-        {{- end }}
+          - { { .Values.qdrant.persistence.accessMode } }
+        { { - if .Values.qdrant.persistence.storageClass } }
+        storageClassName: { { .Values.qdrant.persistence.storageClass } }
+        { { - else if .Values.global.storageClass } }
+        storageClassName: { { .Values.global.storageClass } }
+        { { - end } }
         resources:
           requests:
-            storage: {{ .Values.qdrant.persistence.size }}
-{{- end }}
+            storage: { { .Values.qdrant.persistence.size } }
+  { { - end } }

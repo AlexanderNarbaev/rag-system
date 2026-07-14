@@ -2,7 +2,8 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-06
 
-Definitive operations reference for the RAG Knowledge Assistant. Covers monitoring, health checks, performance tuning, scaling, backup/restore, maintenance, upgrades, disaster recovery, day-to-day commands, and SLI/SLO management.
+Definitive operations reference for the RAG Knowledge Assistant. Covers monitoring, health checks, performance tuning,
+scaling, backup/restore, maintenance, upgrades, disaster recovery, day-to-day commands, and SLI/SLO management.
 
 ---
 
@@ -10,58 +11,59 @@ Definitive operations reference for the RAG Knowledge Assistant. Covers monitori
 
 ### 1.1 Prometheus Metrics Reference
 
-All metrics are exposed at `GET /metrics` (port 8080). Set `METRICS_ENABLED=true` and `LOG_FORMAT=json` for structured logging.
+All metrics are exposed at `GET /metrics` (port 8080). Set `METRICS_ENABLED=true` and `LOG_FORMAT=json` for structured
+logging.
 
 #### Proxy Application Metrics
 
-| # | Metric Name | Type | Labels | Description |
-|---|-------------|------|--------|-------------|
-| 1 | `rag_requests_total` | Counter | `endpoint`, `status` | Total API requests per endpoint with HTTP status |
-| 2 | `rag_request_duration_seconds` | Histogram | `endpoint` | End-to-end request latency (buckets: 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0) |
-| 3 | `rag_retrieval_duration_seconds` | Histogram | — | Qdrant hybrid search latency (buckets: 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0) |
-| 4 | `rag_rerank_duration_seconds` | Histogram | — | Cross-encoder reranker latency (buckets: 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0) |
-| 5 | `rag_llm_duration_seconds` | Histogram | — | LLM generation latency (buckets: 0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0) |
-| 6 | `rag_cache_hits_total` | Counter | — | Cumulative cache hit count across all tiers |
-| 7 | `rag_context_tokens` | Gauge | — | Current number of context tokens passed to LLM |
-| 8 | `rag_active_requests` | Gauge | — | Number of currently in-flight requests |
+| # | Metric Name                      | Type      | Labels               | Description                                                                                       |
+|---|----------------------------------|-----------|----------------------|---------------------------------------------------------------------------------------------------|
+| 1 | `rag_requests_total`             | Counter   | `endpoint`, `status` | Total API requests per endpoint with HTTP status                                                  |
+| 2 | `rag_request_duration_seconds`   | Histogram | `endpoint`           | End-to-end request latency (buckets: 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0) |
+| 3 | `rag_retrieval_duration_seconds` | Histogram | —                    | Qdrant hybrid search latency (buckets: 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)           |
+| 4 | `rag_rerank_duration_seconds`    | Histogram | —                    | Cross-encoder reranker latency (buckets: 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)               |
+| 5 | `rag_llm_duration_seconds`       | Histogram | —                    | LLM generation latency (buckets: 0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0)                |
+| 6 | `rag_cache_hits_total`           | Counter   | —                    | Cumulative cache hit count across all tiers                                                       |
+| 7 | `rag_context_tokens`             | Gauge     | —                    | Current number of context tokens passed to LLM                                                    |
+| 8 | `rag_active_requests`            | Gauge     | —                    | Number of currently in-flight requests                                                            |
 
 #### Infrastructure Metrics (external exporters)
 
-| # | Metric Name | Source | Description |
-|---|-------------|--------|-------------|
-| 9 | `up{job="rag-proxy"}` | Prometheus scrape | Proxy process up/down (1/0) |
-| 10 | `up{job="qdrant"}` | Qdrant `/metrics` | Qdrant up/down |
-| 11 | `up{job="neo4j"}` | Neo4j exporter `:2004/metrics` | Neo4j up/down |
-| 12 | `up{job="redis"}` | Redis exporter `:9121/metrics` | Redis up/down |
-| 13 | `qdrant_collections_vector_count` | Qdrant `/metrics` | Total vectors indexed |
-| 14 | `qdrant_grpc_responses_total` | Qdrant `/metrics` | gRPC search requests |
-| 15 | `qdrant_collections_segments_count` | Qdrant `/metrics` | HNSW segment count |
-| 16 | `redis_connected_clients` | Redis exporter | Active Redis connections |
-| 17 | `redis_used_memory_bytes` | Redis exporter | Redis memory usage |
-| 18 | `redis_evicted_keys_total` | Redis exporter | Keys evicted (LRU) |
-| 19 | `redis_keyspace_hits_total` | Redis exporter | Successful key lookups |
-| 20 | `redis_keyspace_misses_total` | Redis exporter | Missed key lookups |
-| 21 | `neo4j_dbms_memory_heap_used` | Neo4j exporter | Neo4j heap usage |
-| 22 | `neo4j_dbms_memory_pagecache_usage_ratio` | Neo4j exporter | Page cache hit/miss |
-| 23 | `neo4j_bolt_connections_opened_total` | Neo4j exporter | Bolt connections opened |
-| 24 | `node_cpu_seconds_total` | Node exporter | CPU usage per instance |
-| 25 | `node_memory_MemAvailable_bytes` | Node exporter | Available memory |
-| 26 | `node_filesystem_avail_bytes` | Node exporter | Available disk space |
-| 27 | `node_network_receive_bytes_total` | Node exporter | Network ingress |
-| 28 | `node_network_transmit_bytes_total` | Node exporter | Network egress |
-| 29 | `rag_warmup_completed` | Gauge | 1 if model warm-up completed successfully |
-| 30 | `rag_etl_stream_lag` | Gauge (from Redis Streams) | Pending ETL messages per consumer group |
+| #  | Metric Name                               | Source                         | Description                               |
+|----|-------------------------------------------|--------------------------------|-------------------------------------------|
+| 9  | `up{job="rag-proxy"}`                     | Prometheus scrape              | Proxy process up/down (1/0)               |
+| 10 | `up{job="qdrant"}`                        | Qdrant `/metrics`              | Qdrant up/down                            |
+| 11 | `up{job="neo4j"}`                         | Neo4j exporter `:2004/metrics` | Neo4j up/down                             |
+| 12 | `up{job="redis"}`                         | Redis exporter `:9121/metrics` | Redis up/down                             |
+| 13 | `qdrant_collections_vector_count`         | Qdrant `/metrics`              | Total vectors indexed                     |
+| 14 | `qdrant_grpc_responses_total`             | Qdrant `/metrics`              | gRPC search requests                      |
+| 15 | `qdrant_collections_segments_count`       | Qdrant `/metrics`              | HNSW segment count                        |
+| 16 | `redis_connected_clients`                 | Redis exporter                 | Active Redis connections                  |
+| 17 | `redis_used_memory_bytes`                 | Redis exporter                 | Redis memory usage                        |
+| 18 | `redis_evicted_keys_total`                | Redis exporter                 | Keys evicted (LRU)                        |
+| 19 | `redis_keyspace_hits_total`               | Redis exporter                 | Successful key lookups                    |
+| 20 | `redis_keyspace_misses_total`             | Redis exporter                 | Missed key lookups                        |
+| 21 | `neo4j_dbms_memory_heap_used`             | Neo4j exporter                 | Neo4j heap usage                          |
+| 22 | `neo4j_dbms_memory_pagecache_usage_ratio` | Neo4j exporter                 | Page cache hit/miss                       |
+| 23 | `neo4j_bolt_connections_opened_total`     | Neo4j exporter                 | Bolt connections opened                   |
+| 24 | `node_cpu_seconds_total`                  | Node exporter                  | CPU usage per instance                    |
+| 25 | `node_memory_MemAvailable_bytes`          | Node exporter                  | Available memory                          |
+| 26 | `node_filesystem_avail_bytes`             | Node exporter                  | Available disk space                      |
+| 27 | `node_network_receive_bytes_total`        | Node exporter                  | Network ingress                           |
+| 28 | `node_network_transmit_bytes_total`       | Node exporter                  | Network egress                            |
+| 29 | `rag_warmup_completed`                    | Gauge                          | 1 if model warm-up completed successfully |
+| 30 | `rag_etl_stream_lag`                      | Gauge (from Redis Streams)     | Pending ETL messages per consumer group   |
 
 #### RAG Quality Metrics (from evaluation pipeline)
 
-| # | Metric Name | Type | Description |
-|---|-------------|------|-------------|
-| 31 | `rag_retrieval_mrr` | Gauge | Mean Reciprocal Rank from eval run |
-| 32 | `rag_retrieval_recall_at_10` | Gauge | Recall@10 from eval run |
-| 33 | `rag_retrieval_ndcg_at_10` | Gauge | nDCG@10 from eval run |
-| 34 | `rag_confidence_score_high_ratio` | Gauge | Fraction of responses with confidence ≥ 0.5 |
-| 35 | `rag_ttft_seconds` | Histogram | Time To First Token for streaming responses |
-| 36 | `rag_last_backup_timestamp_seconds` | Gauge | Unix timestamp of last successful backup |
+| #  | Metric Name                         | Type      | Description                                 |
+|----|-------------------------------------|-----------|---------------------------------------------|
+| 31 | `rag_retrieval_mrr`                 | Gauge     | Mean Reciprocal Rank from eval run          |
+| 32 | `rag_retrieval_recall_at_10`        | Gauge     | Recall@10 from eval run                     |
+| 33 | `rag_retrieval_ndcg_at_10`          | Gauge     | nDCG@10 from eval run                       |
+| 34 | `rag_confidence_score_high_ratio`   | Gauge     | Fraction of responses with confidence ≥ 0.5 |
+| 35 | `rag_ttft_seconds`                  | Histogram | Time To First Token for streaming responses |
+| 36 | `rag_last_backup_timestamp_seconds` | Gauge     | Unix timestamp of last successful backup    |
 
 ### 1.2 Key Dashboards
 
@@ -70,6 +72,7 @@ Three Grafana dashboards are defined:
 #### Dashboard 1: RAG Overview (`grafana-overview.json`)
 
 **Key panels:**
+
 - **Request Rate**: `rate(rag_requests_total[5m])` by endpoint
 - **Latency Distribution**: `histogram_quantile(0.50, 0.95, 0.99, rate(rag_request_duration_seconds_bucket[5m]))`
 - **Error Rate**: `sum(rate(rag_requests_total{status=~"5.."}[5m])) / sum(rate(rag_requests_total[5m]))`
@@ -82,6 +85,7 @@ Three Grafana dashboards are defined:
 #### Dashboard 2: Retrieval Quality (`grafana-retrieval.json`)
 
 **Key panels:**
+
 - **MRR over time**: `rag_retrieval_mrr`
 - **Recall@10 over time**: `rag_retrieval_recall_at_10`
 - **nDCG@10 over time**: `rag_retrieval_ndcg_at_10`
@@ -91,6 +95,7 @@ Three Grafana dashboards are defined:
 #### Dashboard 3: Infrastructure (`grafana-infrastructure.json`)
 
 **Key panels:**
+
 - **CPU per component**: `rate(node_cpu_seconds_total{mode!="idle"}[5m])` grouped by service
 - **Memory per component**: `node_memory_MemAvailable_bytes` per node
 - **Disk usage**: `(node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes`
@@ -270,17 +275,17 @@ LOG_FORMAT=json
 
 **Key log fields for querying (json):**
 
-| Field | Description |
-|-------|-------------|
-| `timestamp` | ISO 8601 timestamp |
-| `level` | DEBUG, INFO, WARNING, ERROR |
-| `logger` | Component name (rag-proxy, retrieval, rerank, etc.) |
-| `request_id` | Unique request identifier (`rag_<timestamp>_<hex>`) |
-| `client_ip` | Originating IP address |
-| `query` | Sanitized user query (truncated at 100 chars) |
-| `duration_ms` | Request processing time |
-| `chunks_count` | Retrieved chunks |
-| `confidence` | Confidence score |
+| Field          | Description                                         |
+|----------------|-----------------------------------------------------|
+| `timestamp`    | ISO 8601 timestamp                                  |
+| `level`        | DEBUG, INFO, WARNING, ERROR                         |
+| `logger`       | Component name (rag-proxy, retrieval, rerank, etc.) |
+| `request_id`   | Unique request identifier (`rag_<timestamp>_<hex>`) |
+| `client_ip`    | Originating IP address                              |
+| `query`        | Sanitized user query (truncated at 100 chars)       |
+| `duration_ms`  | Request processing time                             |
+| `chunks_count` | Retrieved chunks                                    |
+| `confidence`   | Confidence score                                    |
 
 **Common log queries (jq):**
 
@@ -335,24 +340,27 @@ services:
 
 ### 2.1 Endpoint Reference
 
-| Endpoint | Method | Purpose | Success Code | Degraded Code |
-|----------|--------|---------|-------------|---------------|
-| `/v1/health/live` | GET | Liveness — process is alive | 200 | — |
-| `/v1/health/ready` | GET | Readiness — deps available | 200 | 503 |
-| `/v1/health` | GET | Full health — detailed component status | 200 if all ok | 503 if any component degraded |
-| `/metrics` | GET | Prometheus scrape endpoint | 200 | — |
+| Endpoint           | Method | Purpose                                 | Success Code  | Degraded Code                 |
+|--------------------|--------|-----------------------------------------|---------------|-------------------------------|
+| `/v1/health/live`  | GET    | Liveness — process is alive             | 200           | —                             |
+| `/v1/health/ready` | GET    | Readiness — deps available              | 200           | 503                           |
+| `/v1/health`       | GET    | Full health — detailed component status | 200 if all ok | 503 if any component degraded |
+| `/metrics`         | GET    | Prometheus scrape endpoint              | 200           | —                             |
 
 ### 2.2 What Each Probe Checks
 
 **Liveness (`/v1/health/live`):**
-Returns 200 as long as the Python process is alive. No dependency checks. Purpose: detect deadlocked or crashed processes.
+Returns 200 as long as the Python process is alive. No dependency checks. Purpose: detect deadlocked or crashed
+processes.
 
 ```json
 {"status": "alive", "timestamp": "2026-07-06T12:00:00Z"}
 ```
 
 **Readiness (`/v1/health/ready`):**
-Checks Qdrant connectivity (`get_collections()`) and LLM backend health (`GET /health` on the LLM endpoint with 2s timeout). Returns 503 if either is unreachable. Purpose: remove pod from service load balancer when dependencies are down.
+Checks Qdrant connectivity (`get_collections()`) and LLM backend health (`GET /health` on the LLM endpoint with 2s
+timeout). Returns 503 if either is unreachable. Purpose: remove pod from service load balancer when dependencies are
+down.
 
 ```json
 {
@@ -366,7 +374,8 @@ Checks Qdrant connectivity (`get_collections()`) and LLM backend health (`GET /h
 ```
 
 **Full Health (`/v1/health`):**
-Same checks as readiness but returns individual component status strings. Returns 200 if all OK, 503 if any degraded. Purpose: human-readable health dashboard.
+Same checks as readiness but returns individual component status strings. Returns 200 if all OK, 503 if any degraded.
+Purpose: human-readable health dashboard.
 
 ```json
 {
@@ -459,13 +468,15 @@ vllm:
 ### 2.4 Startup Probe Rationale
 
 The startup probe tolerates model loading time:
+
 - **Embedder** (bge-m3): ~5-15s to load
 - **Reranker** (MiniLM-L-6-v2): ~3-5s
 - **spaCy models**: ~2s each
 - **Neo4j driver connect**: ~2-5s
 - **SLM local (llama.cpp)**: up to 60s
 
-Total startup time typically 30-60s. The startup probe allows 150s (`failureThreshold: 30 × periodSeconds: 5`) to accommodate cold starts and concurrent model loading.
+Total startup time typically 30-60s. The startup probe allows 150s (`failureThreshold: 30 × periodSeconds: 5`) to
+accommodate cold starts and concurrent model loading.
 
 ---
 
@@ -475,11 +486,11 @@ Total startup time typically 30-60s. The startup probe allows 150s (`failureThre
 
 Configure via collection creation in `scripts/init_collections.py` or your ETL pipeline:
 
-| Collection Size | `ef_construct` | `ef` (search) | `m` | Expected Recall@10 | RAM per 1M vec |
-|-----------------|----------------|---------------|-----|--------------------|----------------|
-| < 100K vectors | 128 | 64 | 16 | > 0.98 | ~1.5 GB |
-| 100K – 1M vectors | 200 | 128 | 24 | > 0.96 | ~2.5 GB |
-| > 1M vectors | 256 | 200 | 32 | > 0.94 | ~3.5 GB |
+| Collection Size   | `ef_construct` | `ef` (search) | `m` | Expected Recall@10 | RAM per 1M vec |
+|-------------------|----------------|---------------|-----|--------------------|----------------|
+| < 100K vectors    | 128            | 64            | 16  | > 0.98             | ~1.5 GB        |
+| 100K – 1M vectors | 200            | 128           | 24  | > 0.96             | ~2.5 GB        |
+| > 1M vectors      | 256            | 200           | 32  | > 0.94             | ~3.5 GB        |
 
 **Apply via Qdrant API:**
 
@@ -508,19 +519,22 @@ client.search(
 ```
 
 **Tuning notes:**
+
 - `m`: Number of edges per node. Higher = better recall, more RAM. Rule of thumb: `m = 16` to `64`, scale with `log(N)`.
 - `ef_construct`: Controls build-time search depth. Higher = slower indexing, better graph quality. Keep 100-256.
-- `ef` (search): Controls query-time search depth. Higher = better recall, slower search. Keep `ef ≥ k × 4` (e.g., `ef=128` for `top_k=20`).
+- `ef` (search): Controls query-time search depth. Higher = better recall, slower search. Keep `ef ≥ k × 4` (e.g.,
+  `ef=128` for `top_k=20`).
 
 ### 3.2 Quantization Strategies
 
-| Strategy | RAM Reduction | Recall Impact | Config |
-|----------|--------------|---------------|--------|
-| Scalar (int8) | 4× | < 1% | `models.ScalarQuantization(type=models.ScalarType.INT8, quantile=0.99, always_ram=True)` |
-| Product (PQ) | 16× | 2–4% | `models.ProductQuantization(compression="x16", always_ram=True)` |
-| Binary (BQ) | 32× | 5–8% | `models.BinaryQuantization(always_ram=True)` |
+| Strategy      | RAM Reduction | Recall Impact | Config                                                                                   |
+|---------------|---------------|---------------|------------------------------------------------------------------------------------------|
+| Scalar (int8) | 4×            | < 1%          | `models.ScalarQuantization(type=models.ScalarType.INT8, quantile=0.99, always_ram=True)` |
+| Product (PQ)  | 16×           | 2–4%          | `models.ProductQuantization(compression="x16", always_ram=True)`                         |
+| Binary (BQ)   | 32×           | 5–8%          | `models.BinaryQuantization(always_ram=True)`                                             |
 
 **Recommendation:**
+
 - **Always enable scalar quantization** — 4× RAM savings with negligible recall loss.
 - Enable **product quantization** for collections > 5M vectors.
 - Enable **binary quantization** only for pre-filtered retrieval where you already reduce candidates to < 1000.
@@ -541,11 +555,11 @@ on_disk=True,  # moves vectors to disk, reduces RAM by 60%, ~5% latency increase
 
 The proxy uses a multi-tier cache with the `CacheManager` (Redis or in-memory fallback):
 
-| Cache Tier | Key Pattern | TTL | Expected Hit Rate |
-|------------|-------------|-----|-------------------|
-| **Embedding cache** | `embed:{md5(text)}` | 3600s (1h) | 15-25% |
-| **Search result cache** | `rag:{user_id}:{query}:{version}` | 3600s (1h) | 5-10% |
-| **Rerank cache** | `rerank:{md5(query)}:{md5(chunk_ids)}` | 300s (5min) | 8-12% |
+| Cache Tier              | Key Pattern                            | TTL         | Expected Hit Rate |
+|-------------------------|----------------------------------------|-------------|-------------------|
+| **Embedding cache**     | `embed:{md5(text)}`                    | 3600s (1h)  | 15-25%            |
+| **Search result cache** | `rag:{user_id}:{query}:{version}`      | 3600s (1h)  | 5-10%             |
+| **Rerank cache**        | `rerank:{md5(query)}:{md5(chunk_ids)}` | 300s (5min) | 8-12%             |
 
 **Redis configuration** in `docker-compose.yml` or K8s:
 
@@ -558,6 +572,7 @@ The proxy uses a multi-tier cache with the `CacheManager` (Redis or in-memory fa
 ```
 
 **Sizing guidelines:**
+
 - 500K unique chunks: ~2 GB embedding cache (4KB per 1024-dim float32 dense vector)
 - If `redis_evicted_keys_total` > 100/hour, increase `maxmemory` to 4 GB or reduce embedding TTL to 1800s
 - Monitor: `redis-cli INFO stats | grep evicted_keys`
@@ -568,7 +583,8 @@ The proxy runs with `WORKERS=1` per replica. This is intentional:
 
 - **Embedder, reranker, and cache state** are loaded per-process. Multiple workers mean multiple model copies in memory.
 - **SSE streaming** works correctly with 1 worker per process.
-- **Scale horizontally** via replicas (K8s `replicaCount`, Docker `docker compose scale`) instead of increasing `WORKERS`.
+- **Scale horizontally** via replicas (K8s `replicaCount`, Docker `docker compose scale`) instead of increasing
+  `WORKERS`.
 
 ```bash
 # proxy/.env — always keep at 1
@@ -613,11 +629,11 @@ proxy:
 
 ### 3.6 Reranker Trade-off
 
-| Model | Latency per pair | MRR Delta | VRAM |
-|-------|-----------------|-----------|------|
-| MiniLM-L-6-v2 (default) | 8ms | +15% over dense | 0.5 GB |
-| MiniLM-L-12-v2 | 15ms | +18% | 1 GB |
-| bge-reranker-v2-m3 | 25ms | +22% | 2 GB |
+| Model                   | Latency per pair | MRR Delta       | VRAM   |
+|-------------------------|------------------|-----------------|--------|
+| MiniLM-L-6-v2 (default) | 8ms              | +15% over dense | 0.5 GB |
+| MiniLM-L-12-v2          | 15ms             | +18%            | 1 GB   |
+| bge-reranker-v2-m3      | 25ms             | +22%            | 2 GB   |
 
 Stay with MiniLM-L-6-v2 unless MRR < 0.75. Configure via:
 
@@ -696,13 +712,13 @@ docker compose -f docker-compose.yml up -d --scale rag-proxy=4
 ### 4.2 Vertical Scaling (Resource Limits)
 
 | Component | CPU Request | CPU Limit | Memory Request | Memory Limit |
-|-----------|------------|-----------|----------------|--------------|
-| RAG Proxy | 1 core | 4 cores | 2 Gi | 8 Gi |
-| Qdrant | 500m | 4 cores | 1 Gi | 8 Gi |
-| Neo4j | 500m | 4 cores | 2 Gi | 4 Gi |
-| Redis | 100m | 1 core | 256 Mi | 2 Gi |
-| vLLM | — | 16 cores | — | 48 Gi |
-| llama.cpp | — | 16 cores | — | 64 Gi |
+|-----------|-------------|-----------|----------------|--------------|
+| RAG Proxy | 1 core      | 4 cores   | 2 Gi           | 8 Gi         |
+| Qdrant    | 500m        | 4 cores   | 1 Gi           | 8 Gi         |
+| Neo4j     | 500m        | 4 cores   | 2 Gi           | 4 Gi         |
+| Redis     | 100m        | 1 core    | 256 Mi         | 2 Gi         |
+| vLLM      | —           | 16 cores  | —              | 48 Gi        |
+| llama.cpp | —           | 16 cores  | —              | 64 Gi        |
 
 **When to increase:**
 
@@ -725,6 +741,7 @@ qdrant:
 ```
 
 **Sharding strategy:**
+
 - 1 shard per collection for < 1M vectors (simpler)
 - 2-4 shards for 1M-10M vectors (parallelizes writes)
 - Replication factor: 2 for durability (tolerates 1 node failure)
@@ -801,7 +818,8 @@ sentinel failover-timeout rag-redis 30000
 sentinel parallel-syncs rag-redis 1
 ```
 
-**Update proxy `REDIS_URL`** to point to Sentinel: `redis-sentinel://sentinel-1:26379,sentinel-2:26379,sentinel-3:26379/mymaster/rag-redis`.
+**Update proxy `REDIS_URL`** to point to Sentinel:
+`redis-sentinel://sentinel-1:26379,sentinel-2:26379,sentinel-3:26379/mymaster/rag-redis`.
 
 ---
 
@@ -809,13 +827,13 @@ sentinel parallel-syncs rag-redis 1
 
 ### 5.1 Backup Schedule
 
-| Component | Frequency | Retention | Method |
-|-----------|-----------|-----------|--------|
-| Qdrant snapshots | Every 6h | 7 daily, 4 weekly, 3 monthly | `POST /collections/{name}/snapshots` |
-| Neo4j dumps | Every 6h | 7 daily, 4 weekly, 3 monthly | `neo4j-admin database dump` |
-| Redis RDB | Every 1h | 24 hourly, 7 daily | `redis-cli BGSAVE` |
-| ETL WAL state | Every 30m | 7 daily | File copy to S3 |
-| Proxy config | On change (git) | Full history | `git push` |
+| Component        | Frequency       | Retention                    | Method                               |
+|------------------|-----------------|------------------------------|--------------------------------------|
+| Qdrant snapshots | Every 6h        | 7 daily, 4 weekly, 3 monthly | `POST /collections/{name}/snapshots` |
+| Neo4j dumps      | Every 6h        | 7 daily, 4 weekly, 3 monthly | `neo4j-admin database dump`          |
+| Redis RDB        | Every 1h        | 24 hourly, 7 daily           | `redis-cli BGSAVE`                   |
+| ETL WAL state    | Every 30m       | 7 daily                      | File copy to S3                      |
+| Proxy config     | On change (git) | Full history                 | `git push`                           |
 
 ### 5.2 Qdrant Snapshots
 
@@ -1081,7 +1099,8 @@ curl -X POST "http://${QDRANT_HOST}:6333/collections/knowledge_base/update" \
 
 **Docker:** Configure via `logging` driver options (see Section 1.4).
 
-**Kubernetes:** The `logDir` is `/app/logs` inside the container. Mount a persistent volume or use the sidecar pattern to forward to a centralized logging system (ELK/Loki).
+**Kubernetes:** The `logDir` is `/app/logs` inside the container. Mount a persistent volume or use the sidecar pattern
+to forward to a centralized logging system (ELK/Loki).
 
 **Manual cleanup:**
 
@@ -1253,13 +1272,14 @@ curl -X POST http://localhost:8080/v1/admin/models/rollback \
 
 ### 7.4 Version Compatibility Matrix
 
-| Proxy | Qdrant | Neo4j | Redis | vLLM | Python |
-|-------|--------|-------|-------|------|--------|
+| Proxy  | Qdrant  | Neo4j  | Redis | vLLM  | Python    |
+|--------|---------|--------|-------|-------|-----------|
 | v2.0.0 | v1.10.x | 5.25.x | 7.4.x | 0.6.x | 3.11-3.12 |
-| v1.5.0 | v1.9.x | 5.23.x | 7.2.x | 0.5.x | 3.11 |
-| v1.0.0 | v1.8.x | 5.20.x | 7.0.x | 0.4.x | 3.10-3.11 |
+| v1.5.0 | v1.9.x  | 5.23.x | 7.2.x | 0.5.x | 3.11      |
+| v1.0.0 | v1.8.x  | 5.20.x | 7.0.x | 0.4.x | 3.10-3.11 |
 
 **Upgrade order:**
+
 1. **Databases first** (Qdrant, Neo4j, Redis) — backward compatible within major versions
 2. **LLM backend** (vLLM/llama.cpp) — ensure model compatibility
 3. **Proxy last** — reads from databases, makes API calls to LLM
@@ -1296,11 +1316,13 @@ rag-proxy:
 ### 8.1 Qdrant Failure
 
 **Detection:**
+
 - `/v1/health/ready` returns 503 with `qdrant: "unavailable"`
 - Prometheus alert: `QdrantUnhealthy` (critical)
 - All retrieval fails; proxy returns empty contexts
 
-**Impact:** Complete retrieval failure. Proxy returns "I don't have enough information" with `rag_confidence: 0`. LLM still generates responses but without context.
+**Impact:** Complete retrieval failure. Proxy returns "I don't have enough information" with `rag_confidence: 0`. LLM
+still generates responses but without context.
 
 **Recovery (total data loss):**
 
@@ -1350,11 +1372,13 @@ curl -X PUT "http://${QDRANT_HOST}:6333/cluster/recover" \
 ### 8.2 Neo4j Corruption
 
 **Detection:**
+
 - `/v1/health/ready` reports LLM ok but Neo4j connectivity fails
 - Prometheus alert: `Neo4jUnhealthy` (warning)
 - Graph expansion returns empty results
 
-**Impact:** Graph context is skipped. Non-agentic queries unaffected. Agentic queries lose entity expansion (~500 tokens of entity context). Proxy degrades gracefully per design.
+**Impact:** Graph context is skipped. Non-agentic queries unaffected. Agentic queries lose entity expansion (~500 tokens
+of entity context). Proxy degrades gracefully per design.
 
 **Recovery:**
 
@@ -1395,11 +1419,13 @@ neo4j-admin database create neo4j --force
 ### 8.3 Redis Data Loss
 
 **Detection:**
+
 - Cache hit rate drops to near-zero
 - Prometheus alert: `LowCacheHitRate` (warning)
 - Proxy still functions but with higher latency (no cache)
 
-**Impact:** All cache tiers empty. Search and LLM latencies increase by 20-50ms per embedding compute and 8-25ms per reranker call. Not a critical failure — proxy degrades gracefully.
+**Impact:** All cache tiers empty. Search and LLM latencies increase by 20-50ms per embedding compute and 8-25ms per
+reranker call. Not a critical failure — proxy degrades gracefully.
 
 **Recovery:**
 
@@ -1426,6 +1452,7 @@ redis-cli INFO stats | grep keyspace_hits
 ### 8.4 Proxy Crash
 
 **Detection:**
+
 - Prometheus alert: `RAGProxyDown` (critical)
 - Kubernetes: Pod shows `CrashLoopBackOff` or `Error`
 - Docker: Container exits
@@ -1478,12 +1505,14 @@ docker compose logs rag-proxy | grep -i "model"
 ### 8.5 LLM Backend Failure
 
 **Detection:**
+
 - `/v1/health/ready` returns 503 with `llm: "unavailable"`
 - Non-streaming responses time out
 - Streaming responses return errors
 - Prometheus alert: `LLMUnavailable` (critical)
 
-**Impact:** LLM generation fails. Retrieved contexts are returned but no synthesis. Responses contain only raw chunk text.
+**Impact:** LLM generation fails. Retrieved contexts are returned but no synthesis. Responses contain only raw chunk
+text.
 
 **Recovery:**
 
@@ -1682,20 +1711,20 @@ curl http://localhost:8080/v1/admin/models/canary/status \
 
 ### 9.4 Troubleshooting Cheatsheet
 
-| Symptom | Check | Command |
-|---------|-------|---------|
-| **Latency spike** | Qdrant segment count | `curl localhost:6333/collections/knowledge_base | jq '.result.segments_count'` |
-| | LLM backend queue | vLLM: `curl localhost:8000/metrics | grep vllm:num_requests_waiting` |
-| | Redis eviction rate | `redis-cli INFO stats | grep evicted_keys` |
-| **Empty responses** | Qdrant vectors count | `curl localhost:6333/collections/knowledge_base | jq '.result.vectors_count'` |
-| | Embedder loaded | `docker compose logs rag-proxy | grep -i embedder` |
-| | Access control filtering | Check `LOG_REQUESTS` logs for "Access control filtered" messages |
-| **High error rate** | Proxy crash loop | `kubectl describe pod -n rag-system -l app=rag-proxy` |
-| | LLM timeout | Check `REQUEST_TIMEOUT` and increase if model is slow |
-| | Rate limiting | Check `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_BURST` |
-| **Cache misses** | Redis connectivity | `redis-cli PING` from proxy container |
-| | Cache TTL too short | Check `ttl` parameter in `CacheManager.set()` calls (3600s default) |
-| | Memory pressure | `redis-cli INFO memory | grep used_memory_human` |
+| Symptom             | Check                    | Command                                                             |
+|---------------------|--------------------------|---------------------------------------------------------------------|
+| **Latency spike**   | Qdrant segment count     | `curl localhost:6333/collections/knowledge_base                     | jq '.result.segments_count'` |
+|                     | LLM backend queue        | vLLM: `curl localhost:8000/metrics                                  | grep vllm:num_requests_waiting` |
+|                     | Redis eviction rate      | `redis-cli INFO stats                                               | grep evicted_keys` |
+| **Empty responses** | Qdrant vectors count     | `curl localhost:6333/collections/knowledge_base                     | jq '.result.vectors_count'` |
+|                     | Embedder loaded          | `docker compose logs rag-proxy                                      | grep -i embedder` |
+|                     | Access control filtering | Check `LOG_REQUESTS` logs for "Access control filtered" messages    |
+| **High error rate** | Proxy crash loop         | `kubectl describe pod -n rag-system -l app=rag-proxy`               |
+|                     | LLM timeout              | Check `REQUEST_TIMEOUT` and increase if model is slow               |
+|                     | Rate limiting            | Check `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_BURST`                |
+| **Cache misses**    | Redis connectivity       | `redis-cli PING` from proxy container                               |
+|                     | Cache TTL too short      | Check `ttl` parameter in `CacheManager.set()` calls (3600s default) |
+|                     | Memory pressure          | `redis-cli INFO memory                                              | grep used_memory_human` |
 
 ---
 
@@ -1703,17 +1732,17 @@ curl http://localhost:8080/v1/admin/models/canary/status \
 
 ### 10.1 SLO Definitions
 
-| # | SLI | SLO Target | Window | PromQL |
-|---|-----|-----------|--------|--------|
-| 1 | **Availability** | 99.5% | 30 days | `avg_over_time(up{job="rag-proxy"}[30d])` |
-| 2 | **Latency (p95)** | < 5s | 30 days | `histogram_quantile(0.95, rate(rag_request_duration_seconds_bucket[30d]))` |
-| 3 | **Error Rate** | < 1% | 30 days | `sum(rate(rag_requests_total{status=~"5.."}[30d])) / sum(rate(rag_requests_total[30d]))` |
-| 4 | **Cache Hit Rate** | > 30% | 30 days | `rate(rag_cache_hits_total[30d]) / rate(rag_requests_total[30d])` |
-| 5 | **Retrieval MRR** | > 0.75 | per eval | `rag_retrieval_mrr` |
-| 6 | **Confidence ≥ 0.5** | > 70% | 30 days | `rag_confidence_score_high_ratio` |
-| 7 | **TTFT (streaming)** | < 1s | 30 days | `histogram_quantile(0.95, rate(rag_ttft_seconds_bucket[30d]))` |
-| 8 | **Backup RPO** | < 1h | per backup | `time() - rag_last_backup_timestamp_seconds` |
-| 9 | **Backup RTO** | < 30m | per drill | Manual measurement |
+| # | SLI                  | SLO Target | Window     | PromQL                                                                                   |
+|---|----------------------|------------|------------|------------------------------------------------------------------------------------------|
+| 1 | **Availability**     | 99.5%      | 30 days    | `avg_over_time(up{job="rag-proxy"}[30d])`                                                |
+| 2 | **Latency (p95)**    | < 5s       | 30 days    | `histogram_quantile(0.95, rate(rag_request_duration_seconds_bucket[30d]))`               |
+| 3 | **Error Rate**       | < 1%       | 30 days    | `sum(rate(rag_requests_total{status=~"5.."}[30d])) / sum(rate(rag_requests_total[30d]))` |
+| 4 | **Cache Hit Rate**   | > 30%      | 30 days    | `rate(rag_cache_hits_total[30d]) / rate(rag_requests_total[30d])`                        |
+| 5 | **Retrieval MRR**    | > 0.75     | per eval   | `rag_retrieval_mrr`                                                                      |
+| 6 | **Confidence ≥ 0.5** | > 70%      | 30 days    | `rag_confidence_score_high_ratio`                                                        |
+| 7 | **TTFT (streaming)** | < 1s       | 30 days    | `histogram_quantile(0.95, rate(rag_ttft_seconds_bucket[30d]))`                           |
+| 8 | **Backup RPO**       | < 1h       | per backup | `time() - rag_last_backup_timestamp_seconds`                                             |
+| 9 | **Backup RTO**       | < 30m      | per drill  | Manual measurement                                                                       |
 
 ### 10.2 Error Budget Calculation
 
@@ -1739,12 +1768,12 @@ Example for Availability SLO (99.5%):
 
 ### 10.3 Burn Rate Alerts
 
-| Burn Rate | Time Window | Alert Severity | Action |
-|-----------|-------------|----------------|--------|
-| 14.4× | 1 hour | Critical | Page on-call, freeze deployments |
-| 6× | 6 hours | Critical | Page on-call |
-| 3× | 24 hours | Warning | Investigate, notify team |
-| 1× | 30 days | Warning | Team review in sprint planning |
+| Burn Rate | Time Window | Alert Severity | Action                           |
+|-----------|-------------|----------------|----------------------------------|
+| 14.4×     | 1 hour      | Critical       | Page on-call, freeze deployments |
+| 6×        | 6 hours     | Critical       | Page on-call                     |
+| 3×        | 24 hours    | Warning        | Investigate, notify team         |
+| 1×        | 30 days     | Warning        | Team review in sprint planning   |
 
 **PromQL for burn rate detection:**
 
@@ -1819,49 +1848,49 @@ fi
 
 ## Appendix A: Port Reference
 
-| Port | Service | Protocol | External? |
-|------|---------|----------|-----------|
-| 80, 443 | nginx Ingress | HTTP/HTTPS | Yes |
-| 3000 | Grafana | HTTP | Internal (VPN) |
-| 5000 | MLflow | HTTP | Internal |
-| 6333 | Qdrant HTTP | HTTP/JSON | Internal |
-| 6334 | Qdrant gRPC | gRPC | Internal |
-| 6379 | Redis | TCP | Internal |
-| 7474 | Neo4j Browser | HTTP | Internal |
-| 7687 | Neo4j Bolt | TCP | Internal |
-| 8000 | vLLM/llama.cpp | HTTP | Internal |
-| 8080 | RAG Proxy | HTTP | External (via ingress) |
-| 8081 | Federation Proxy | HTTP | Internal |
-| 8082 | MCP Server | HTTP/STDIO | Internal |
-| 8501 | HITL Dashboard | HTTP | Internal |
-| 9000 | MinIO S3 API | HTTP | Internal |
-| 9001 | MinIO Console | HTTP | Internal |
+| Port    | Service          | Protocol   | External?              |
+|---------|------------------|------------|------------------------|
+| 80, 443 | nginx Ingress    | HTTP/HTTPS | Yes                    |
+| 3000    | Grafana          | HTTP       | Internal (VPN)         |
+| 5000    | MLflow           | HTTP       | Internal               |
+| 6333    | Qdrant HTTP      | HTTP/JSON  | Internal               |
+| 6334    | Qdrant gRPC      | gRPC       | Internal               |
+| 6379    | Redis            | TCP        | Internal               |
+| 7474    | Neo4j Browser    | HTTP       | Internal               |
+| 7687    | Neo4j Bolt       | TCP        | Internal               |
+| 8000    | vLLM/llama.cpp   | HTTP       | Internal               |
+| 8080    | RAG Proxy        | HTTP       | External (via ingress) |
+| 8081    | Federation Proxy | HTTP       | Internal               |
+| 8082    | MCP Server       | HTTP/STDIO | Internal               |
+| 8501    | HITL Dashboard   | HTTP       | Internal               |
+| 9000    | MinIO S3 API     | HTTP       | Internal               |
+| 9001    | MinIO Console    | HTTP       | Internal               |
 
 ## Appendix B: Environment Variable Quick Reference
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `QDRANT_HOST` | `localhost` | Qdrant server hostname |
-| `QDRANT_PORT` | `6333` | Qdrant HTTP port |
-| `LLM_ENDPOINT` | `http://localhost:8000/v1` | LLM backend URL |
-| `LLM_MODEL_NAME` | — | Model identifier (Required) |
-| `LLM_API_KEY` | — | Backend API key |
-| `LLM_PROVIDER_TYPE` | `openai` | `openai`, `anthropic`, `generic` |
-| `EMBEDDER_MODEL` | — | Embedder model path/name |
-| `RERANKER_MODEL` | — | Reranker model path/name |
-| `USE_REDIS` | `false` | Enable Redis cache |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL |
-| `USE_LANGGRAPH` | `false` | Enable LangGraph orchestration |
-| `GRAPH_ENABLED` | `false` | Enable Neo4j |
-| `METRICS_ENABLED` | `true` | Enable Prometheus metrics |
-| `LOG_FORMAT` | `text` | `text` or `json` |
-| `RATE_LIMIT_ENABLED` | `false` | Enable rate limiting |
-| `AUTH_ENABLED` | `false` | Enable JWT authentication |
-| `RBAC_ENABLED` | `false` | Enable role-based access control |
-| `WORKERS` | `1` | Uvicorn workers (keep at 1) |
-| `SHUTDOWN_TIMEOUT` | `30` | Graceful shutdown wait (seconds) |
-| `COMPRESSION_ENABLED` | `true` | Enable gzip response compression |
-| `WARMUP_ENABLED` | `true` | Enable model warm-up on startup |
+| Variable              | Default                    | Purpose                          |
+|-----------------------|----------------------------|----------------------------------|
+| `QDRANT_HOST`         | `localhost`                | Qdrant server hostname           |
+| `QDRANT_PORT`         | `6333`                     | Qdrant HTTP port                 |
+| `LLM_ENDPOINT`        | `http://localhost:8000/v1` | LLM backend URL                  |
+| `LLM_MODEL_NAME`      | —                          | Model identifier (Required)      |
+| `LLM_API_KEY`         | —                          | Backend API key                  |
+| `LLM_PROVIDER_TYPE`   | `openai`                   | `openai`, `anthropic`, `generic` |
+| `EMBEDDER_MODEL`      | —                          | Embedder model path/name         |
+| `RERANKER_MODEL`      | —                          | Reranker model path/name         |
+| `USE_REDIS`           | `false`                    | Enable Redis cache               |
+| `REDIS_URL`           | `redis://localhost:6379`   | Redis connection URL             |
+| `USE_LANGGRAPH`       | `false`                    | Enable LangGraph orchestration   |
+| `GRAPH_ENABLED`       | `false`                    | Enable Neo4j                     |
+| `METRICS_ENABLED`     | `true`                     | Enable Prometheus metrics        |
+| `LOG_FORMAT`          | `text`                     | `text` or `json`                 |
+| `RATE_LIMIT_ENABLED`  | `false`                    | Enable rate limiting             |
+| `AUTH_ENABLED`        | `false`                    | Enable JWT authentication        |
+| `RBAC_ENABLED`        | `false`                    | Enable role-based access control |
+| `WORKERS`             | `1`                        | Uvicorn workers (keep at 1)      |
+| `SHUTDOWN_TIMEOUT`    | `30`                       | Graceful shutdown wait (seconds) |
+| `COMPRESSION_ENABLED` | `true`                     | Enable gzip response compression |
+| `WARMUP_ENABLED`      | `true`                     | Enable model warm-up on startup  |
 
 ## Appendix C: Related Documents
 

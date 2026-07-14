@@ -3,7 +3,7 @@
 **Status:** Accepted  
 **Date:** 2026-07-05  
 **Author:** Architecture Design  
-**Scope:** Tool system redesign — SDK, declarative, OpenAPI, orchestration  
+**Scope:** Tool system redesign — SDK, declarative, OpenAPI, orchestration
 
 ---
 
@@ -95,35 +95,36 @@
 
 ### 2.1 New Package: `proxy/app/tools/`
 
-| Module | Responsibility | Key Classes |
-|--------|---------------|-------------|
-| `definition.py` | Unified data models, JSON Schema generation | `ToolDefinition`, `ToolResult`, `ToolParam`, `ToolError`, `RetryPolicy`, `ToolVisibility` |
-| `registry.py` | Enhanced registry with provider pattern, backward compat | `EnhancedToolRegistry`, `ToolProvider` (ABC), `SDKProvider`, `DeclarativeProvider`, `OpenAPIProvider` |
-| `sdk.py` | Python decorator API and builder API | `tool` (decorator), `ToolBuilder`, `ToolContext`, `json_schema_from_func` |
-| `declarative.py` | YAML/JSON declarative tool loader with validation | `DeclarativeToolLoader`, `DeclarativeToolSchema`, `HttpToolConfig`, `ShellToolConfig` |
-| `openapi_discovery.py` | OpenAPI spec parser → tool generator | `OpenAPIDiscovery`, `OpenAPIToolGenerator`, `DiscoveryMode` (AUTO, LLM_DRIVEN) |
-| `orchestrator.py` | Parallel/streaming execution, composition patterns | `ParallelExecutor`, `StreamingExecutor`, `ToolComposer`, `CompositionPattern` |
-| `errors.py` | Error taxonomy and classification | `ToolNotFoundError`, `ToolExecutionError`, `ToolTimeoutError`, `ToolPermissionError`, `ToolValidationError` |
-| `security.py` | RBAC visibility filter, input sanitizer | `ToolVisibilityFilter`, `ToolInputSanitizer` |
-| `metrics.py` | Prometheus instrumentation | `ToolMetrics` (counters, histograms, gauges) |
-| `audit.py` | Structured audit logging | `ToolAuditLogger` |
-| `__init__.py` | Public API re-exports, backward-compat shim | Re-exports all public symbols, `ToolRegistry` alias |
+| Module                 | Responsibility                                           | Key Classes                                                                                                 |
+|------------------------|----------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|
+| `definition.py`        | Unified data models, JSON Schema generation              | `ToolDefinition`, `ToolResult`, `ToolParam`, `ToolError`, `RetryPolicy`, `ToolVisibility`                   |
+| `registry.py`          | Enhanced registry with provider pattern, backward compat | `EnhancedToolRegistry`, `ToolProvider` (ABC), `SDKProvider`, `DeclarativeProvider`, `OpenAPIProvider`       |
+| `sdk.py`               | Python decorator API and builder API                     | `tool` (decorator), `ToolBuilder`, `ToolContext`, `json_schema_from_func`                                   |
+| `declarative.py`       | YAML/JSON declarative tool loader with validation        | `DeclarativeToolLoader`, `DeclarativeToolSchema`, `HttpToolConfig`, `ShellToolConfig`                       |
+| `openapi_discovery.py` | OpenAPI spec parser → tool generator                     | `OpenAPIDiscovery`, `OpenAPIToolGenerator`, `DiscoveryMode` (AUTO, LLM_DRIVEN)                              |
+| `orchestrator.py`      | Parallel/streaming execution, composition patterns       | `ParallelExecutor`, `StreamingExecutor`, `ToolComposer`, `CompositionPattern`                               |
+| `errors.py`            | Error taxonomy and classification                        | `ToolNotFoundError`, `ToolExecutionError`, `ToolTimeoutError`, `ToolPermissionError`, `ToolValidationError` |
+| `security.py`          | RBAC visibility filter, input sanitizer                  | `ToolVisibilityFilter`, `ToolInputSanitizer`                                                                |
+| `metrics.py`           | Prometheus instrumentation                               | `ToolMetrics` (counters, histograms, gauges)                                                                |
+| `audit.py`             | Structured audit logging                                 | `ToolAuditLogger`                                                                                           |
+| `__init__.py`          | Public API re-exports, backward-compat shim              | Re-exports all public symbols, `ToolRegistry` alias                                                         |
 
 ### 2.2 Modified Files
 
-| File | Changes |
-|------|---------|
-| `proxy/app/tools.py` | **Deprecated.** Becomes a thin re-export shim pointing to `proxy/app/tools/__init__.py`. All existing imports continue working. |
-| `proxy/app/orchestrator.py` | `call_tools` node upgraded: parallel execution via `ParallelExecutor`, async tool support, tool result streaming. |
-| `proxy/app/provider_adapter.py` | Consolidate `ToolDefinition`/`ToolResult`/`ToolCall` to import from `proxy.app.tools.definition` instead of local dataclasses. |
-| `proxy/app/main.py` | Add endpoints: `GET /v1/tools`, `GET /v1/tools/{name}`. Add tool discovery on startup. |
-| `proxy/app/config.py` | Add configuration: `TOOLS_PARALLEL_EXECUTION`, `TOOLS_MAX_CONCURRENCY`, `TOOLS_DECLARATIVE_DIR`, `TOOLS_OPENAPI_SPECS` |
+| File                            | Changes                                                                                                                         |
+|---------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `proxy/app/tools.py`            | **Deprecated.** Becomes a thin re-export shim pointing to `proxy/app/tools/__init__.py`. All existing imports continue working. |
+| `proxy/app/orchestrator.py`     | `call_tools` node upgraded: parallel execution via `ParallelExecutor`, async tool support, tool result streaming.               |
+| `proxy/app/provider_adapter.py` | Consolidate `ToolDefinition`/`ToolResult`/`ToolCall` to import from `proxy.app.tools.definition` instead of local dataclasses.  |
+| `proxy/app/main.py`             | Add endpoints: `GET /v1/tools`, `GET /v1/tools/{name}`. Add tool discovery on startup.                                          |
+| `proxy/app/config.py`           | Add configuration: `TOOLS_PARALLEL_EXECUTION`, `TOOLS_MAX_CONCURRENCY`, `TOOLS_DECLARATIVE_DIR`, `TOOLS_OPENAPI_SPECS`          |
 
 ### 2.3 Component Descriptions
 
 #### 2.3.1 `definition.py` — Unified Data Model
 
 Consolidates and extends three currently separate `ToolDefinition` classes:
+
 - `proxy/app/tools.py::ToolDefinition` (current registry)
 - `proxy/app/provider_adapter.py::ToolDefinition` (LLM format)
 - `proxy/app/provider_adapter.py::ToolResult` / `ToolCall` (execution)
@@ -190,6 +191,7 @@ async def my_tool(param1: str, param2: int = 5, ctx: ToolContext = None) -> str:
 ```
 
 The decorator:
+
 1. Reads type hints via `typing.get_type_hints()`
 2. Reads docstring for description
 3. Generates JSON Schema from parameter types
@@ -253,18 +255,18 @@ def json_schema_from_func(func: Callable) -> dict:
 
 **Type Hint → JSON Schema Mapping:**
 
-| Python Type | JSON Schema |
-|-------------|-------------|
-| `str` | `{"type": "string"}` |
-| `int` | `{"type": "integer"}` |
-| `float` | `{"type": "number"}` |
-| `bool` | `{"type": "boolean"}` |
-| `list[X]` | `{"type": "array", "items": type_of(X)}` |
-| `Optional[X]` | `type_of(X)` + omit from `required` |
-| `Literal["a","b"]` | `{"type": "string", "enum": ["a", "b"]}` |
-| `dict[str, X]` | `{"type": "object", "additionalProperties": type_of(X)}` |
-| `Annotated[T, desc]` | `type_of(T)` with `description` |
-| `BaseModel` subclass | `{"type": "object", ...}` recursive |
+| Python Type          | JSON Schema                                              |
+|----------------------|----------------------------------------------------------|
+| `str`                | `{"type": "string"}`                                     |
+| `int`                | `{"type": "integer"}`                                    |
+| `float`              | `{"type": "number"}`                                     |
+| `bool`               | `{"type": "boolean"}`                                    |
+| `list[X]`            | `{"type": "array", "items": type_of(X)}`                 |
+| `Optional[X]`        | `type_of(X)` + omit from `required`                      |
+| `Literal["a","b"]`   | `{"type": "string", "enum": ["a", "b"]}`                 |
+| `dict[str, X]`       | `{"type": "object", "additionalProperties": type_of(X)}` |
+| `Annotated[T, desc]` | `type_of(T)` with `description`                          |
+| `BaseModel` subclass | `{"type": "object", ...}` recursive                      |
 
 #### 2.3.3 `declarative.py` — YAML/JSON Declarative Tools
 
@@ -397,11 +399,13 @@ tools:
 ```
 
 **Variable Interpolation:**
+
 - `{{ENV_VAR}}` — environment variable at load time
 - `{{param_name}}` — tool parameter at call time
 - `{{CONTEXT.user_id}}` — ToolContext fields at call time
 
 **Validation on Load:**
+
 - Schema validation against JSON Schema
 - Name uniqueness check
 - Allowed hosts/commands whitelist check
@@ -411,10 +415,10 @@ tools:
 
 **Discovery Modes:**
 
-| Mode | Behavior | When to Use |
-|------|----------|-------------|
-| `AUTO` | Parse spec → register all GET as search tools, all POST/PUT/DELETE as action tools | Known, well-structured APIs |
-| `LLM_DRIVEN` | Give LLM the spec, let it decide which endpoints to expose, interactive confirmation | Complex or unfamiliar APIs |
+| Mode         | Behavior                                                                             | When to Use                 |
+|--------------|--------------------------------------------------------------------------------------|-----------------------------|
+| `AUTO`       | Parse spec → register all GET as search tools, all POST/PUT/DELETE as action tools   | Known, well-structured APIs |
+| `LLM_DRIVEN` | Give LLM the spec, let it decide which endpoints to expose, interactive confirmation | Complex or unfamiliar APIs  |
 
 **Auto Mode Algorithm:**
 
@@ -797,11 +801,11 @@ class ToolProvider(ABC):
 
 **Concrete Providers:**
 
-| Provider | `provider_name` | Source |
-|----------|-----------------|--------|
-| `SDKProvider` | `"sdk"` | Decorated functions and builders |
+| Provider              | `provider_name` | Source                                     |
+|-----------------------|-----------------|--------------------------------------------|
+| `SDKProvider`         | `"sdk"`         | Decorated functions and builders           |
 | `DeclarativeProvider` | `"declarative"` | YAML/JSON files in `TOOLS_DECLARATIVE_DIR` |
-| `OpenAPIProvider` | `"openapi"` | OpenAPI specs from `TOOLS_OPENAPI_SPECS` |
+| `OpenAPIProvider`     | `"openapi"`     | OpenAPI specs from `TOOLS_OPENAPI_SPECS`   |
 
 ### 3.3 New FastAPI Endpoints
 
@@ -810,6 +814,7 @@ class ToolProvider(ABC):
 Query parameters: `category`, `tag`, `provider`
 
 Response:
+
 ```json
 {
   "count": 12,
@@ -837,6 +842,7 @@ Response:
 #### `GET /v1/tools/{name}`
 
 Response:
+
 ```json
 {
   "name": "search_documents",
@@ -856,13 +862,13 @@ Response:
 
 ### 3.4 `GET /v1/tools` Authorization
 
-| User Role | Visible Tools (by visibility field) |
-|-----------|-------------------------------------|
-| `admin` | `public`, `admin`, `expert`, `user` |
-| `expert` | `public`, `expert`, `user` |
-| `user` | `public`, `user` |
-| `read_only` | `public` |
-| Unauthenticated | `public` only |
+| User Role       | Visible Tools (by visibility field) |
+|-----------------|-------------------------------------|
+| `admin`         | `public`, `admin`, `expert`, `user` |
+| `expert`        | `public`, `expert`, `user`          |
+| `user`          | `public`, `user`                    |
+| `read_only`     | `public`                            |
+| Unauthenticated | `public` only                       |
 
 ---
 
@@ -956,20 +962,25 @@ Execution plan:
 ### ADR-009-1: Tool Definition Consolidation
 
 **Context:** Three separate `ToolDefinition` classes exist in the codebase:
+
 - `proxy/app/tools.py::ToolDefinition` (registry dataclass)
 - `proxy/app/provider_adapter.py::ToolDefinition` (LLM format)
 - `proxy/app/provider_adapter.py::ToolResult` / `ToolCall` (execution)
 
 **Options:**
+
 1. Keep all three, add a fourth for the expansion
 2. Consolidate into one canonical `ToolDefinition` with format conversion methods
 3. Consolidate but keep provider_adapter's simple version for performance
 
 **Chosen:** Option 2 — Consolidate into `proxy/app/tools/definition.py` with format methods.
 
-**Rationale:** Single source of truth reduces drift. Format conversion methods (`to_openai_format()`, `to_anthropic_format()`) handle provider-specific serialization. The decoupling between the canonical model and LLM format is preserved via methods, not separate classes.
+**Rationale:** Single source of truth reduces drift. Format conversion methods (`to_openai_format()`,
+`to_anthropic_format()`) handle provider-specific serialization. The decoupling between the canonical model and LLM
+format is preserved via methods, not separate classes.
 
-**Tradeoffs:** Slightly larger dataclass (but fields are optional where not universally needed). Provider_adapter must import from tools package (new dependency, acceptable).
+**Tradeoffs:** Slightly larger dataclass (but fields are optional where not universally needed). Provider_adapter must
+import from tools package (new dependency, acceptable).
 
 **Risks:** Must ensure no circular imports. Mitigation: definition.py has zero internal dependencies.
 
@@ -977,35 +988,45 @@ Execution plan:
 
 ### ADR-009-2: Subpackage vs. Flat Module
 
-**Context:** The tool system functionality spans 10+ concerns (SDK, declarative, OpenAPI, orchestration, errors, security, metrics, audit, registry, definition).
+**Context:** The tool system functionality spans 10+ concerns (SDK, declarative, OpenAPI, orchestration, errors,
+security, metrics, audit, registry, definition).
 
 **Options:**
+
 1. Keep everything in a single `tools.py` (monolithic)
 2. Create `proxy/app/tools/` subpackage with separate modules
 3. Create `tools/` at the top level (separate package)
 
 **Chosen:** Option 2 — `proxy/app/tools/` subpackage.
 
-**Rationale:** `tools.py` is already 257 lines and growing. The expansion adds thousands of lines. Separate modules enable independent testing and maintenance. Copied from existing project pattern (ETL has `extractors/`, `chunker/`, etc.).
+**Rationale:** `tools.py` is already 257 lines and growing. The expansion adds thousands of lines. Separate modules
+enable independent testing and maintenance. Copied from existing project pattern (ETL has `extractors/`, `chunker/`,
+etc.).
 
-**Tradeoffs:** More files, but each focused (< 300 lines target). Import paths change. Mitigation: `__init__.py` re-exports all public symbols. Old `tools.py` becomes a deprecation shim.
+**Tradeoffs:** More files, but each focused (< 300 lines target). Import paths change. Mitigation: `__init__.py`
+re-exports all public symbols. Old `tools.py` becomes a deprecation shim.
 
 ---
 
 ### ADR-009-3: Async Execution Strategy
 
-**Context:** Current `call_tools` is synchronous sequential (`for tc in tool_calls: handle_function_call(tc, registry)`). Live sources are async but not registered as tools.
+**Context:** Current `call_tools` is synchronous sequential (
+`for tc in tool_calls: handle_function_call(tc, registry)`). Live sources are async but not registered as tools.
 
 **Options:**
+
 1. Keep sequential, add async support when needed
 2. `asyncio.gather` with semaphore for uncontrolled parallelism
 3. Dependency-aware parallel execution (topological sort + gather per level)
 
 **Chosen:** Option 3 — Dependency-aware parallel execution.
 
-**Rationale:** Live sources (Confluence, Jira, GitLab) are independent I/O operations. Running them sequentially adds unnecessary latency. At 15s timeout each, 3 sequential calls = 45s vs 15s parallel. Dependency-awareness prevents ordering bugs.
+**Rationale:** Live sources (Confluence, Jira, GitLab) are independent I/O operations. Running them sequentially adds
+unnecessary latency. At 15s timeout each, 3 sequential calls = 45s vs 15s parallel. Dependency-awareness prevents
+ordering bugs.
 
-**Tradeoffs:** Added complexity in executor. For backward compat, synchronous path preserved for when `USE_LANGGRAPH=false`.
+**Tradeoffs:** Added complexity in executor. For backward compat, synchronous path preserved for when
+`USE_LANGGRAPH=false`.
 
 ---
 
@@ -1014,23 +1035,29 @@ Execution plan:
 **Context:** Current tools require manual JSON Schema writing (`parameters_schema` dict). Error-prone and verbose.
 
 **Options:**
+
 1. Keep manual JSON Schema (no change)
 2. Use `inspect.signature()` + `typing.get_type_hints()` auto-generation
 3. Require Pydantic models for tool parameters
 
 **Chosen:** Option 2 with optional Option 3.
 
-**Rationale:** Auto-generation from type hints covers 90%+ of tools. The `json_schema_from_func()` function handles all common Python types. For complex nested schemas, Pydantic `BaseModel` parameters are supported as an escape hatch. Manual override still available.
+**Rationale:** Auto-generation from type hints covers 90%+ of tools. The `json_schema_from_func()` function handles all
+common Python types. For complex nested schemas, Pydantic `BaseModel` parameters are supported as an escape hatch.
+Manual override still available.
 
-**Tradeoffs:** Complex type hints (e.g., `Annotated[list[dict[str, int]], Field(...)]`) may not map perfectly. Mitigation: manual `parameters_schema` override takes precedence.
+**Tradeoffs:** Complex type hints (e.g., `Annotated[list[dict[str, int]], Field(...)]`) may not map perfectly.
+Mitigation: manual `parameters_schema` override takes precedence.
 
 ---
 
 ### ADR-009-5: Backward Compatibility Strategy
 
-**Context:** Existing 3 built-in tools, existing `ToolRegistry` API, existing `execute_tool()` and `handle_function_call()` functions must continue working.
+**Context:** Existing 3 built-in tools, existing `ToolRegistry` API, existing `execute_tool()` and
+`handle_function_call()` functions must continue working.
 
 **Options:**
+
 1. Replace everything, breaking changes
 2. Keep old API, add new alongside
 3. Deprecation shim + gradual migration
@@ -1038,6 +1065,7 @@ Execution plan:
 **Chosen:** Option 3 — Deprecation shim.
 
 **Rationale:** The old `tools.py` becomes:
+
 ```python
 # proxy/app/tools.py (deprecated shim)
 """DEPRECATED: Import from proxy.app.tools instead."""
@@ -1059,15 +1087,19 @@ Existing imports continue working. Tests pass. No breakage.
 **Context:** Declarative tools include shell command support. This is inherently dangerous.
 
 **Options:**
+
 1. No shell tools (reject requirement)
 2. Allow shell with whitelist-based safety
 3. Allow shell with sandbox/container isolation
 
 **Chosen:** Option 2 — Whitelist-based safety.
 
-**Rationale:** Declarative tools target administrators who need system diagnostics (disk, memory, logs). Whitelist (`allowed_commands`, `allowed_paths`) provides defense-in-depth. Shell tools are `visibility: admin` only by convention (enforced at validation).
+**Rationale:** Declarative tools target administrators who need system diagnostics (disk, memory, logs). Whitelist (
+`allowed_commands`, `allowed_paths`) provides defense-in-depth. Shell tools are `visibility: admin` only by convention (
+enforced at validation).
 
 **Safety Constraints:**
+
 - `allowed_commands`: Regex-matched allowed binaries (e.g., `["echo", "df", "free", "systemctl"]`)
 - `allowed_paths`: Restrict file access to specific directories
 - `env_whitelist`: Only pass specific env vars (never secrets)
@@ -1075,7 +1107,8 @@ Existing imports continue working. Tests pass. No breakage.
 - `no_shell_metacharacters`: Block `;`, `&&`, `|`, `$()`, backticks in parameter values
 - Log all shell commands at WARNING level
 
-**Tradeoffs:** Whitelists can be circumvented if too permissive. Mitigation: validation rejects tools with no `allowed_commands`.
+**Tradeoffs:** Whitelists can be circumvented if too permissive. Mitigation: validation rejects tools with no
+`allowed_commands`.
 
 ---
 
@@ -1084,13 +1117,16 @@ Existing imports continue working. Tests pass. No breakage.
 **Context:** OpenAPI specs may be remote. Declarative files may be numerous. Registration happens at startup.
 
 **Options:**
+
 1. Load all at startup, keep in memory (current approach)
 2. Lazy-load on first tool call
 3. Periodic refresh with TTL cache
 
 **Chosen:** Option 1 with optional Option 3.
 
-**Rationale:** Tools are critical to request processing. Lazy loading adds latency on first call. Most deployments have < 100 tools, fitting easily in memory. For dynamic environments, `reload_provider()` enables hot reload without restart.
+**Rationale:** Tools are critical to request processing. Lazy loading adds latency on first call. Most deployments
+have < 100 tools, fitting easily in memory. For dynamic environments, `reload_provider()` enables hot reload without
+restart.
 
 ---
 
@@ -1142,116 +1178,124 @@ Layer 7: Application integration
 
 ### 6.3 External Dependencies
 
-| Package | Purpose | Required? |
-|---------|---------|-----------|
-| `pyyaml` | YAML declarative tool loading | Optional (only if declarative tools used) |
-| `jsonschema` | Declarative tool validation | Optional |
-| `openapi-spec-validator` | OpenAPI spec validation | Optional (only if OpenAPI discovery used) |
-| `prometheus_client` | Already present, used for tool metrics | Optional (METRICS_ENABLED) |
-| `aiohttp` | Already present, HTTP declarative tools | Already present |
+| Package                  | Purpose                                 | Required?                                 |
+|--------------------------|-----------------------------------------|-------------------------------------------|
+| `pyyaml`                 | YAML declarative tool loading           | Optional (only if declarative tools used) |
+| `jsonschema`             | Declarative tool validation             | Optional                                  |
+| `openapi-spec-validator` | OpenAPI spec validation                 | Optional (only if OpenAPI discovery used) |
+| `prometheus_client`      | Already present, used for tool metrics  | Optional (METRICS_ENABLED)                |
+| `aiohttp`                | Already present, HTTP declarative tools | Already present                           |
 
 ---
 
 ## 7. Implementation Sequence
 
 ### Phase 1: Foundation (2-3 days)
+
 **Goal:** Laying groundwork, zero breaking changes.
 
-| Step | File | Description |
-|------|------|-------------|
-| 1.1 | `proxy/app/tools/definition.py` | Create unified `ToolDefinition`, `ToolResult`, `ToolParam`, `RetryPolicy`, `ToolVisibility` dataclasses with `to_openai_format()`, `to_anthropic_format()` methods |
-| 1.2 | `proxy/app/tools/errors.py` | Create `ToolError` hierarchy, `classify_error()` function |
-| 1.3 | `proxy/app/tools/__init__.py` | Re-export all public symbols. Empty registry (no built-in tools yet). |
-| 1.4 | `proxy/app/tools.py` (modify) | Convert to deprecation shim, re-export from `proxy.app.tools` |
-| 1.5 | Tests | Unit tests for definition.py, errors.py |
+| Step | File                            | Description                                                                                                                                                        |
+|------|---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.1  | `proxy/app/tools/definition.py` | Create unified `ToolDefinition`, `ToolResult`, `ToolParam`, `RetryPolicy`, `ToolVisibility` dataclasses with `to_openai_format()`, `to_anthropic_format()` methods |
+| 1.2  | `proxy/app/tools/errors.py`     | Create `ToolError` hierarchy, `classify_error()` function                                                                                                          |
+| 1.3  | `proxy/app/tools/__init__.py`   | Re-export all public symbols. Empty registry (no built-in tools yet).                                                                                              |
+| 1.4  | `proxy/app/tools.py` (modify)   | Convert to deprecation shim, re-export from `proxy.app.tools`                                                                                                      |
+| 1.5  | Tests                           | Unit tests for definition.py, errors.py                                                                                                                            |
 
 **Acceptance:** Existing tests pass. No functional change. Imports from `proxy.app.tools` still work.
 
 ### Phase 2: Enhanced Registry (2-3 days)
+
 **Goal:** Replace singleton registry with provider-based registry.
 
-| Step | File | Description |
-|------|------|-------------|
-| 2.1 | `proxy/app/tools/registry.py` | Implement `EnhancedToolRegistry` with `ToolProvider` ABC, `register()`, `unregister()`, `list_tools()` with filters, `execute()`, `execute_async()`, `validate_tool()` |
-| 2.2 | — | Migrate 3 built-in tools (search_documents, search_by_version, get_document_metadata) to `SDKProvider` |
-| 2.3 | `proxy/app/tools/__init__.py` (modify) | Initialize global registry with built-in tools on first access |
-| 2.4 | Tests | Unit tests for registry operations, filtering, execution |
+| Step | File                                   | Description                                                                                                                                                            |
+|------|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2.1  | `proxy/app/tools/registry.py`          | Implement `EnhancedToolRegistry` with `ToolProvider` ABC, `register()`, `unregister()`, `list_tools()` with filters, `execute()`, `execute_async()`, `validate_tool()` |
+| 2.2  | —                                      | Migrate 3 built-in tools (search_documents, search_by_version, get_document_metadata) to `SDKProvider`                                                                 |
+| 2.3  | `proxy/app/tools/__init__.py` (modify) | Initialize global registry with built-in tools on first access                                                                                                         |
+| 2.4  | Tests                                  | Unit tests for registry operations, filtering, execution                                                                                                               |
 
 **Acceptance:** Built-in tools work through new registry. `get_tool_registry()` returns `EnhancedToolRegistry`.
 
 ### Phase 3: Python SDK (3-4 days)
+
 **Goal:** Decorator and builder API fully functional.
 
-| Step | File | Description |
-|------|------|-------------|
-| 3.1 | `proxy/app/tools/sdk.py` | Implement `json_schema_from_func()`, `@tool` decorator, `ToolBuilder`, `ToolContext` |
-| 3.2 | — | Implement async tool support in decorator (detects coroutine functions) |
-| 3.3 | — | Implement `SDKProvider.discover()` — scans for decorated functions |
-| 3.4 | — | Register live sources (ConfluenceLiveClient, JiraLiveClient, GitLabLiveClient) as async SDK tools |
-| 3.5 | Tests | Unit tests for JSON Schema generation, decorator, builder, async execution |
+| Step | File                     | Description                                                                                       |
+|------|--------------------------|---------------------------------------------------------------------------------------------------|
+| 3.1  | `proxy/app/tools/sdk.py` | Implement `json_schema_from_func()`, `@tool` decorator, `ToolBuilder`, `ToolContext`              |
+| 3.2  | —                        | Implement async tool support in decorator (detects coroutine functions)                           |
+| 3.3  | —                        | Implement `SDKProvider.discover()` — scans for decorated functions                                |
+| 3.4  | —                        | Register live sources (ConfluenceLiveClient, JiraLiveClient, GitLabLiveClient) as async SDK tools |
+| 3.5  | Tests                    | Unit tests for JSON Schema generation, decorator, builder, async execution                        |
 
 **Acceptance:** `@tool async def my_tool(...)` works end-to-end. Live sources callable as tools.
 
 ### Phase 4: Declarative Tools (2-3 days)
+
 **Goal:** YAML/JSON tools loadable and executable.
 
-| Step | File | Description |
-|------|------|-------------|
-| 4.1 | `proxy/app/tools/declarative.py` | Implement `DeclarativeToolLoader`, JSON Schema validation, variable interpolation, HTTP executor, shell executor with safety constraints |
-| 4.2 | `proxy/app/config.py` (modify) | Add `TOOLS_DECLARATIVE_DIR` config |
-| 4.3 | — | Sample declarative tool files for documentation |
-| 4.4 | Tests | Unit tests for YAML loading, validation, HTTP execution (mock), shell execution, safety rejection |
+| Step | File                             | Description                                                                                                                              |
+|------|----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| 4.1  | `proxy/app/tools/declarative.py` | Implement `DeclarativeToolLoader`, JSON Schema validation, variable interpolation, HTTP executor, shell executor with safety constraints |
+| 4.2  | `proxy/app/config.py` (modify)   | Add `TOOLS_DECLARATIVE_DIR` config                                                                                                       |
+| 4.3  | —                                | Sample declarative tool files for documentation                                                                                          |
+| 4.4  | Tests                            | Unit tests for YAML loading, validation, HTTP execution (mock), shell execution, safety rejection                                        |
 
 **Acceptance:** Declarative tools load from `TOOLS_DECLARATIVE_DIR`. Shell safety constraints enforced.
 
 ### Phase 5: OpenAPI Auto-Discovery (2-3 days)
+
 **Goal:** OpenAPI specs auto-converted to tools.
 
-| Step | File | Description |
-|------|------|-------------|
-| 5.1 | `proxy/app/tools/openapi_discovery.py` | Implement `OpenAPIDiscovery`, `OpenAPIToolGenerator`, AUTO and LLM_DRIVEN modes |
-| 5.2 | `proxy/app/config.py` (modify) | Add `TOOLS_OPENAPI_SPECS` config |
-| 5.3 | Tests | Unit tests with mock OpenAPI specs, both modes |
+| Step | File                                   | Description                                                                     |
+|------|----------------------------------------|---------------------------------------------------------------------------------|
+| 5.1  | `proxy/app/tools/openapi_discovery.py` | Implement `OpenAPIDiscovery`, `OpenAPIToolGenerator`, AUTO and LLM_DRIVEN modes |
+| 5.2  | `proxy/app/config.py` (modify)         | Add `TOOLS_OPENAPI_SPECS` config                                                |
+| 5.3  | Tests                                  | Unit tests with mock OpenAPI specs, both modes                                  |
 
 **Acceptance:** OpenAPI spec → registered tools. Endpoint parameters mapped correctly.
 
 ### Phase 6: Orchestration (3-4 days)
+
 **Goal:** Parallel execution, streaming, composition patterns.
 
-| Step | File | Description |
-|------|------|-------------|
-| 6.1 | `proxy/app/tools/orchestrator.py` | Implement `ParallelExecutor`, `StreamingExecutor`, `ToolComposer` |
-| 6.2 | `proxy/app/tools/security.py` | Implement `ToolVisibilityFilter`, `ToolInputSanitizer` |
-| 6.3 | `proxy/app/tools/metrics.py` | Implement `ToolMetrics` with Prometheus counters/histograms/gauges |
-| 6.4 | `proxy/app/tools/audit.py` | Implement `ToolAuditLogger` with structured JSON logging |
-| 6.5 | `proxy/app/orchestrator.py` (modify) | Upgrade `call_tools` to use `ParallelExecutor`. Make it async. |
-| 6.6 | `proxy/app/config.py` (modify) | Add `TOOLS_PARALLEL_EXECUTION`, `TOOLS_MAX_CONCURRENCY` |
-| 6.7 | Tests | Unit tests for parallel execution, error handling, retry, composition, metrics emission |
+| Step | File                                 | Description                                                                             |
+|------|--------------------------------------|-----------------------------------------------------------------------------------------|
+| 6.1  | `proxy/app/tools/orchestrator.py`    | Implement `ParallelExecutor`, `StreamingExecutor`, `ToolComposer`                       |
+| 6.2  | `proxy/app/tools/security.py`        | Implement `ToolVisibilityFilter`, `ToolInputSanitizer`                                  |
+| 6.3  | `proxy/app/tools/metrics.py`         | Implement `ToolMetrics` with Prometheus counters/histograms/gauges                      |
+| 6.4  | `proxy/app/tools/audit.py`           | Implement `ToolAuditLogger` with structured JSON logging                                |
+| 6.5  | `proxy/app/orchestrator.py` (modify) | Upgrade `call_tools` to use `ParallelExecutor`. Make it async.                          |
+| 6.6  | `proxy/app/config.py` (modify)       | Add `TOOLS_PARALLEL_EXECUTION`, `TOOLS_MAX_CONCURRENCY`                                 |
+| 6.7  | Tests                                | Unit tests for parallel execution, error handling, retry, composition, metrics emission |
 
 **Acceptance:** Multiple tool calls execute in parallel. Failed tool doesn't crash other tools. Metrics emitted.
 
 ### Phase 7: API + Integration (2 days)
+
 **Goal:** Tool discovery endpoint, consolidations.
 
-| Step | File | Description |
-|------|------|-------------|
-| 7.1 | `proxy/app/main.py` (modify) | Add `GET /v1/tools`, `GET /v1/tools/{name}` endpoints |
-| 7.2 | `proxy/app/provider_adapter.py` (modify) | Switch `ToolDefinition`/`ToolResult`/`ToolCall` imports to `proxy.app.tools.definition` |
-| 7.3 | — | Add tool discovery on startup (load all providers) |
-| 7.4 | Tests | Integration tests for /v1/tools endpoint, E2E tool call through orchestrator |
+| Step | File                                     | Description                                                                             |
+|------|------------------------------------------|-----------------------------------------------------------------------------------------|
+| 7.1  | `proxy/app/main.py` (modify)             | Add `GET /v1/tools`, `GET /v1/tools/{name}` endpoints                                   |
+| 7.2  | `proxy/app/provider_adapter.py` (modify) | Switch `ToolDefinition`/`ToolResult`/`ToolCall` imports to `proxy.app.tools.definition` |
+| 7.3  | —                                        | Add tool discovery on startup (load all providers)                                      |
+| 7.4  | Tests                                    | Integration tests for /v1/tools endpoint, E2E tool call through orchestrator            |
 
 **Acceptance:** `/v1/tools` returns all registered tools. Provider_adapter uses consolidated types.
 
 ### Phase 8: Documentation + Polish (1-2 days)
+
 **Goal:** Developer docs, migration guide.
 
-| Step | Description |
-|------|-------------|
-| 8.1 | Write SDK developer guide with examples |
-| 8.2 | Write declarative tools reference |
-| 8.3 | Write OpenAPI discovery guide |
-| 8.4 | Update AGENTS.md with new tool system architecture |
-| 8.5 | Migration guide for existing tool authors |
+| Step | Description                                        |
+|------|----------------------------------------------------|
+| 8.1  | Write SDK developer guide with examples            |
+| 8.2  | Write declarative tools reference                  |
+| 8.3  | Write OpenAPI discovery guide                      |
+| 8.4  | Update AGENTS.md with new tool system architecture |
+| 8.5  | Migration guide for existing tool authors          |
 
 **Total estimate:** 17-24 days for a senior developer.
 
@@ -1259,15 +1303,15 @@ Layer 7: Application integration
 
 ## 8. Risks and Mitigations
 
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| Circular imports with provider_adapter | HIGH — app won't start | LOW | `definition.py` has zero internal imports. All format conversion methods are on `ToolDefinition` itself, avoiding import of LLM adapter. |
-| Shell tool security breach | HIGH — RCE | MEDIUM | Mandatory whitelist validation at load time. Reject tools without `allowed_commands`. Block shell metacharacters in parameter values. Log all shell executions at WARNING. |
-| OpenAPI spec parsing failure | MEDIUM — tools missing | MEDIUM | Graceful degradation. Failed specs log warning, don't crash startup. Partial registration if some endpoints parse correctly. |
-| Performance regression with parallel execution | MEDIUM — CPU/memory spike | LOW | `TOOLS_MAX_CONCURRENCY` semaphore limits concurrent executions. Default 10, configurable. |
-| Existing tool authors confused by deprecation | LOW — support ticket | MEDIUM | Shims preserve 100% backward compat. DeprecationWarning with clear migration path. Migration guide in docs. |
-| Async/sync mismatch in LangGraph | MEDIUM — runtime error | MEDIUM | LangGraph supports async nodes. `call_tools` becomes `async def call_tools_async`. Synchronous path preserved for non-LangGraph mode. |
-| Schema generation edge cases | LOW — manual override available | MEDIUM | `json_schema_from_func()` covers 90%+ patterns. Remaining 10% use `parameters_schema` dictionary override (same as current API). |
+| Risk                                           | Impact                          | Likelihood | Mitigation                                                                                                                                                                 |
+|------------------------------------------------|---------------------------------|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Circular imports with provider_adapter         | HIGH — app won't start          | LOW        | `definition.py` has zero internal imports. All format conversion methods are on `ToolDefinition` itself, avoiding import of LLM adapter.                                   |
+| Shell tool security breach                     | HIGH — RCE                      | MEDIUM     | Mandatory whitelist validation at load time. Reject tools without `allowed_commands`. Block shell metacharacters in parameter values. Log all shell executions at WARNING. |
+| OpenAPI spec parsing failure                   | MEDIUM — tools missing          | MEDIUM     | Graceful degradation. Failed specs log warning, don't crash startup. Partial registration if some endpoints parse correctly.                                               |
+| Performance regression with parallel execution | MEDIUM — CPU/memory spike       | LOW        | `TOOLS_MAX_CONCURRENCY` semaphore limits concurrent executions. Default 10, configurable.                                                                                  |
+| Existing tool authors confused by deprecation  | LOW — support ticket            | MEDIUM     | Shims preserve 100% backward compat. DeprecationWarning with clear migration path. Migration guide in docs.                                                                |
+| Async/sync mismatch in LangGraph               | MEDIUM — runtime error          | MEDIUM     | LangGraph supports async nodes. `call_tools` becomes `async def call_tools_async`. Synchronous path preserved for non-LangGraph mode.                                      |
+| Schema generation edge cases                   | LOW — manual override available | MEDIUM     | `json_schema_from_func()` covers 90%+ patterns. Remaining 10% use `parameters_schema` dictionary override (same as current API).                                           |
 
 ---
 
@@ -1323,6 +1367,7 @@ tests/proxy/tools/
 ### 10.1 For Existing Tool Authors (Breaking Change: None)
 
 **Before (current):**
+
 ```python
 from proxy.app.tools import ToolRegistry, ToolDefinition, get_tool_registry
 
@@ -1337,6 +1382,7 @@ registry.register(ToolDefinition(
 ```
 
 **After (recommended):**
+
 ```python
 from proxy.app.tools.sdk import tool
 
@@ -1347,6 +1393,7 @@ def my_tool(param1: str, param2: int = 5) -> str:
 ```
 
 **After (still works, deprecation warning):**
+
 ```python
 # Old import path still works, emits DeprecationWarning
 from proxy.app.tools import ToolRegistry, ToolDefinition, get_tool_registry
@@ -1354,16 +1401,19 @@ from proxy.app.tools import ToolRegistry, ToolDefinition, get_tool_registry
 
 ### 10.2 For Existing Tool Consumers
 
-No changes needed. `get_tool_registry()` returns an `EnhancedToolRegistry` that is API-compatible with old `ToolRegistry`. All methods (`register`, `unregister`, `get_tool`, `list_tools`, `get_all`) have identical signatures.
+No changes needed. `get_tool_registry()` returns an `EnhancedToolRegistry` that is API-compatible with old
+`ToolRegistry`. All methods (`register`, `unregister`, `get_tool`, `list_tools`, `get_all`) have identical signatures.
 
 ### 10.3 Provider Adapter Consolidation
 
 Before:
+
 ```python
 from proxy.app.provider_adapter import ToolDefinition as PDToolDef  # local dataclass
 ```
 
 After:
+
 ```python
 from proxy.app.tools.definition import ToolDefinition  # canonical dataclass
 ```
@@ -1373,6 +1423,7 @@ from proxy.app.tools.definition import ToolDefinition  # canonical dataclass
 ### 10.4 Rollback Plan
 
 If the expansion causes issues:
+
 1. Remove `proxy/app/tools/` directory
 2. Restore original `proxy/app/tools.py` from git
 3. Revert `orchestrator.py` `call_tools` to original sequential version

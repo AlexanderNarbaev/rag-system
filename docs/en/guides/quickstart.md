@@ -2,22 +2,24 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-12
 
-Get the RAG Knowledge Assistant up and running in 5 minutes. This guide covers local development setup with Docker Compose.
+Get the RAG Knowledge Assistant up and running in 5 minutes. This guide covers local development setup with Docker
+Compose.
 
 ---
 
 ## Prerequisites
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **Docker** | 24.0+ | With Compose v2 plugin |
-| **Python** | 3.11+ | For ETL and local dev |
-| **RAM** | 16 GB minimum | 32 GB recommended |
-| **Disk** | 20 GB free | SSD strongly recommended |
-| **GPU** | Optional | CPU-only works for testing |
+| Requirement | Version       | Notes                      |
+|-------------|---------------|----------------------------|
+| **Docker**  | 24.0+         | With Compose v2 plugin     |
+| **Python**  | 3.11+         | For ETL and local dev      |
+| **RAM**     | 16 GB minimum | 32 GB recommended          |
+| **Disk**    | 20 GB free    | SSD strongly recommended   |
+| **GPU**     | Optional      | CPU-only works for testing |
 
 !!! tip "GPU Acceleration"
-    An NVIDIA GPU with 12+ GB VRAM is recommended for LLM inference. Without a GPU, the system works in CPU mode with significantly slower response times. You can also point to a remote LLM endpoint (e.g., a GPU server on your network).
+An NVIDIA GPU with 12+ GB VRAM is recommended for LLM inference. Without a GPU, the system works in CPU mode with
+significantly slower response times. You can also point to a remote LLM endpoint (e.g., a GPU server on your network).
 
 ---
 
@@ -75,7 +77,8 @@ LLM_PROVIDER_TYPE=openai
 ```
 
 !!! warning "No LLM Endpoint?"
-    If you don't have an LLM backend yet, the system will start but chat completions will return errors. You can still test health endpoints and explore the API. See the [Deployment Guide](deployment-guide.md) for LLM setup instructions.
+If you don't have an LLM backend yet, the system will start but chat completions will return errors. You can still test
+health endpoints and explore the API. See the [Deployment Guide](deployment-guide.md) for LLM setup instructions.
 
 ---
 
@@ -98,7 +101,7 @@ Expected output:
 ```
 
 !!! note "First Start"
-    The first startup takes 1-2 minutes as Docker images are downloaded. Subsequent starts take ~10 seconds.
+The first startup takes 1-2 minutes as Docker images are downloaded. Subsequent starts take ~10 seconds.
 
 ### Verify Services
 
@@ -217,7 +220,8 @@ Open in a browser:
 http://localhost:8080/v1/widget
 ```
 
-The widget provides a ready-made chat interface you can embed in any webpage. See the [API Examples](api-examples.md) for more integration options.
+The widget provides a ready-made chat interface you can embed in any webpage. See the [API Examples](api-examples.md)
+for more integration options.
 
 ### K8s Health Probes
 
@@ -356,16 +360,16 @@ docker-compose up -d
 
 Now that the system is running:
 
-| Goal | Guide |
-|------|-------|
-| **Ingest your data** | [ETL Guide](etl-guide.md) — Connect Confluence, Jira, GitLab |
-| **Deploy to production** | [Deployment Guide](deployment-guide.md) — K8s, HA, GPU setup |
-| **Explore the API** | [API Examples](api-examples.md) — curl, Python, JavaScript examples |
-| **Full API reference** | [API Reference](../../api_reference.md) — All endpoints, schemas, parameters |
-| **Configure authentication** | [Access Control](access-control-rbac.md) — JWT, Keycloak, LDAP |
-| **Add custom tools** | [Agentic Tools SDK](agentic-tools-sdk.md) — `@tool` decorator |
-| **Tune performance** | [Performance & Quality](performance-quality.md) — HNSW, caching, quantization |
-| **Monitor the system** | [Operations Guide](operations-guide.md) — Prometheus, Grafana, alerts |
+| Goal                         | Guide                                                                         |
+|------------------------------|-------------------------------------------------------------------------------|
+| **Ingest your data**         | [ETL Guide](etl-guide.md) — Connect Confluence, Jira, GitLab                  |
+| **Deploy to production**     | [Deployment Guide](deployment-guide.md) — K8s, HA, GPU setup                  |
+| **Explore the API**          | [API Examples](api-examples.md) — curl, Python, JavaScript examples           |
+| **Full API reference**       | [API Reference](../../api_reference.md) — All endpoints, schemas, parameters  |
+| **Configure authentication** | [Access Control](access-control-rbac.md) — JWT, Keycloak, LDAP                |
+| **Add custom tools**         | [Agentic Tools SDK](agentic-tools-sdk.md) — `@tool` decorator                 |
+| **Tune performance**         | [Performance & Quality](performance-quality.md) — HNSW, caching, quantization |
+| **Monitor the system**       | [Operations Guide](operations-guide.md) — Prometheus, Grafana, alerts         |
 
 ---
 
@@ -388,14 +392,14 @@ docker compose down -v --rmi all
 
 ## Quick Reference
 
-| Command | Description |
-|---------|-------------|
-| `docker compose up -d` | Start all services |
-| `docker compose down` | Stop all services |
-| `docker compose logs -f` | Follow all logs |
-| `docker compose logs rag-proxy` | Proxy logs only |
-| `docker compose ps` | List running containers |
-| `docker compose restart` | Restart all services |
-| `curl localhost:8080/v1/health` | Health check |
-| `curl localhost:8080/v1/models` | List models |
-| `curl localhost:8080/metrics` | Prometheus metrics |
+| Command                         | Description             |
+|---------------------------------|-------------------------|
+| `docker compose up -d`          | Start all services      |
+| `docker compose down`           | Stop all services       |
+| `docker compose logs -f`        | Follow all logs         |
+| `docker compose logs rag-proxy` | Proxy logs only         |
+| `docker compose ps`             | List running containers |
+| `docker compose restart`        | Restart all services    |
+| `curl localhost:8080/v1/health` | Health check            |
+| `curl localhost:8080/v1/models` | List models             |
+| `curl localhost:8080/metrics`   | Prometheus metrics      |

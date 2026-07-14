@@ -1,6 +1,7 @@
 # Integration Guide
 
-**Implementation Status:** Implemented. The RAG system exposes an OpenAI-compatible API, an embeddable chat widget, a Tools SDK, and an MCP server for IDE integration.
+**Implementation Status:** Implemented. The RAG system exposes an OpenAI-compatible API, an embeddable chat widget, a
+Tools SDK, and an MCP server for IDE integration.
 
 ---
 
@@ -8,14 +9,14 @@
 
 The RAG system provides multiple integration points:
 
-| Integration | Method | Use Case |
-|-------------|--------|----------|
-| **OpenAI-Compatible API** | REST / SSE | Any OpenAI client, chat applications, custom code |
-| **Chat Widget** | HTML/JS | Embed RAG chat in web pages, dashboards, wikis |
-| **Tools SDK** | Python decorator | Custom tool definitions for agentic orchestration |
-| **Declarative Tools** | YAML/JSON | No-code tool definitions for HTTP and shell integrations |
-| **OpenAPI Auto-Discovery** | OpenAPI spec | Automatic tool generation from API specifications |
-| **MCP Server** | STDIO / HTTP | IDE integration (OpenCode, Claude Desktop) |
+| Integration                | Method           | Use Case                                                 |
+|----------------------------|------------------|----------------------------------------------------------|
+| **OpenAI-Compatible API**  | REST / SSE       | Any OpenAI client, chat applications, custom code        |
+| **Chat Widget**            | HTML/JS          | Embed RAG chat in web pages, dashboards, wikis           |
+| **Tools SDK**              | Python decorator | Custom tool definitions for agentic orchestration        |
+| **Declarative Tools**      | YAML/JSON        | No-code tool definitions for HTTP and shell integrations |
+| **OpenAPI Auto-Discovery** | OpenAPI spec     | Automatic tool generation from API specifications        |
+| **MCP Server**             | STDIO / HTTP     | IDE integration (OpenCode, Claude Desktop)               |
 
 All integrations communicate through the proxy layer at `http://<host>:8080/v1`.
 
@@ -58,10 +59,10 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ### 2.4 RAG-Specific Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `rag_version` | `string` | Request a specific document version |
-| `rag_force_refresh` | `bool` | Bypass response cache for fresh results |
+| Parameter           | Type     | Description                             |
+|---------------------|----------|-----------------------------------------|
+| `rag_version`       | `string` | Request a specific document version     |
+| `rag_force_refresh` | `bool`   | Bypass response cache for fresh results |
 
 ### 2.5 Response Extensions
 
@@ -80,15 +81,15 @@ The proxy adds RAG metadata to the response:
 
 ### 2.6 Other Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/models` | GET | List available models |
-| `/v1/health` | GET | Health check (Qdrant + LLM status) |
-| `/v1/health/live` | GET | Liveness probe (K8s-compatible) |
-| `/v1/health/ready` | GET | Readiness probe |
-| `/v1/feedback` | POST | Submit expert feedback |
-| `/v1/tools` | GET | List available tools |
-| `/metrics` | GET | Prometheus metrics |
+| Endpoint           | Method | Description                        |
+|--------------------|--------|------------------------------------|
+| `/v1/models`       | GET    | List available models              |
+| `/v1/health`       | GET    | Health check (Qdrant + LLM status) |
+| `/v1/health/live`  | GET    | Liveness probe (K8s-compatible)    |
+| `/v1/health/ready` | GET    | Readiness probe                    |
+| `/v1/feedback`     | POST   | Submit expert feedback             |
+| `/v1/tools`        | GET    | List available tools               |
+| `/metrics`         | GET    | Prometheus metrics                 |
 
 ---
 
@@ -272,12 +273,12 @@ The RAG chat widget can be embedded in any web page. Two methods are available:
 
 ### 5.2 Widget Configuration
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `container` | `string` | required | CSS selector or element ID for the widget root |
-| `endpoint` | `string` | `/v1/chat/completions` | Chat completions endpoint URL |
-| `token` | `string` | `null` | JWT Bearer token for authenticated requests |
-| `model` | `string` | `null` | Model name override |
+| Option      | Type     | Default                | Description                                    |
+|-------------|----------|------------------------|------------------------------------------------|
+| `container` | `string` | required               | CSS selector or element ID for the widget root |
+| `endpoint`  | `string` | `/v1/chat/completions` | Chat completions endpoint URL                  |
+| `token`     | `string` | `null`                 | JWT Bearer token for authenticated requests    |
+| `model`     | `string` | `null`                 | Model name override                            |
 
 ### 5.3 Customizing Appearance
 
@@ -325,7 +326,8 @@ async def search_confluence(
     return f"Found {max_results} results for '{query}'"
 ```
 
-Type hints are automatically converted to JSON Schema. The function name becomes the tool name, the docstring becomes the description.
+Type hints are automatically converted to JSON Schema. The function name becomes the tool name, the docstring becomes
+the description.
 
 ### 6.2 Declarative Tools (YAML/JSON)
 
@@ -387,6 +389,7 @@ TOOLS_OPENAPI_SPECS='[{"name":"petstore","url":"https://petstore3.swagger.io/api
 ```
 
 The system automatically:
+
 1. Fetches and parses the OpenAPI spec
 2. Converts GET endpoints to search tools
 3. Converts POST/PUT/DELETE endpoints to action tools
@@ -445,12 +448,12 @@ client = OpenAI(
 
 ### 7.3 Role-Based Access Control
 
-| Role | Visible Tools | Access Level |
-|------|---------------|-------------|
-| `admin` | All tools (public, user, expert, admin) | Full access |
-| `expert` | public, user, expert tools | Expert-level tools |
-| `user` | public, user tools | Standard user tools |
-| `read_only` | public tools only | Read-only access |
+| Role        | Visible Tools                           | Access Level        |
+|-------------|-----------------------------------------|---------------------|
+| `admin`     | All tools (public, user, expert, admin) | Full access         |
+| `expert`    | public, user, expert tools              | Expert-level tools  |
+| `user`      | public, user tools                      | Standard user tools |
+| `read_only` | public tools only                       | Read-only access    |
 
 ---
 

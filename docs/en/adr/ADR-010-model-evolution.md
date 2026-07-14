@@ -3,7 +3,8 @@
 **Status:** Accepted  
 **Date:** 2026-07-05  
 **Author:** Architecture Design  
-**Scope:** On-prem model fine-tuning (SLM, LLM, Reranker), MLflow tracking, model registry, CI/CD eval gates, artifact storage (MinIO), hot-reload adapters, canary deployment with automatic rollback.
+**Scope:** On-prem model fine-tuning (SLM, LLM, Reranker), MLflow tracking, model registry, CI/CD eval gates, artifact
+storage (MinIO), hot-reload adapters, canary deployment with automatic rollback.
 
 ---
 
@@ -30,30 +31,32 @@
 
 ### 1.1 Current State
 
-| Aspect | Current | Gap |
-|--------|---------|-----|
-| **Reranker FT** | Full fine-tune (`CrossEncoder.fit()`) from HITL feedback | No LoRA/PEFT, large disk footprint, single strategy |
-| **SLM** | Local llama.cpp subprocess, no fine-tuning | Intent classification uses generic model; no domain adaptation |
-| **LLM** | Remote vLLM endpoint, no fine-tuning | Generic generation; no domain-specific knowledge injection |
-| **Model loading** | Global singletons (`reranker`, `embedder`) at startup | No hot-reload, restart required for any model change |
-| **Model versioning** | None — file path only (`FT_MODEL_DIR`) | No traceability, no rollback |
-| **Experiment tracking** | None | No record of what worked and why |
-| **Eval metrics** | MRR, Recall@k, nDCG@k, Precision@k (retrieval only) | No generation quality metrics (BLEU, ROUGE, BertScore) |
-| **A/B testing** | Pipeline variants only (`ab_test.py`) | Cannot test model variants |
-| **Artifact storage** | Local filesystem (`./models/`) | No centralized artifact store |
-| **CI/CD gates** | `pip-audit` only | No model quality gate before deploy |
-| **GPU usage** | Single GPU for vLLM; embedder/reranker on CPU | Underutilized GPU for training |
-| **Hot-reload** | None | Restart required |
+| Aspect                  | Current                                                  | Gap                                                            |
+|-------------------------|----------------------------------------------------------|----------------------------------------------------------------|
+| **Reranker FT**         | Full fine-tune (`CrossEncoder.fit()`) from HITL feedback | No LoRA/PEFT, large disk footprint, single strategy            |
+| **SLM**                 | Local llama.cpp subprocess, no fine-tuning               | Intent classification uses generic model; no domain adaptation |
+| **LLM**                 | Remote vLLM endpoint, no fine-tuning                     | Generic generation; no domain-specific knowledge injection     |
+| **Model loading**       | Global singletons (`reranker`, `embedder`) at startup    | No hot-reload, restart required for any model change           |
+| **Model versioning**    | None — file path only (`FT_MODEL_DIR`)                   | No traceability, no rollback                                   |
+| **Experiment tracking** | None                                                     | No record of what worked and why                               |
+| **Eval metrics**        | MRR, Recall@k, nDCG@k, Precision@k (retrieval only)      | No generation quality metrics (BLEU, ROUGE, BertScore)         |
+| **A/B testing**         | Pipeline variants only (`ab_test.py`)                    | Cannot test model variants                                     |
+| **Artifact storage**    | Local filesystem (`./models/`)                           | No centralized artifact store                                  |
+| **CI/CD gates**         | `pip-audit` only                                         | No model quality gate before deploy                            |
+| **GPU usage**           | Single GPU for vLLM; embedder/reranker on CPU            | Underutilized GPU for training                                 |
+| **Hot-reload**          | None                                                     | Restart required                                               |
 
 ### 1.2 Requirements
 
 1. **SLM fine-tune** for intent classification and query routing, using LoRA adapters (small, swappable, GPU-efficient)
 2. **LLM fine-tune** for domain-specific generation, using QLoRA (4-bit quantized, fits single GPU alongside inference)
 3. **Reranker fine-tune** — keep existing full fine-tune path; add LoRA option for experimentation
-4. **Infrastructure**: MLflow for experiment tracking, MLflow Model Registry for versioned models, MinIO for artifact storage, CI/CD eval gates for automated quality gating
+4. **Infrastructure**: MLflow for experiment tracking, MLflow Model Registry for versioned models, MinIO for artifact
+   storage, CI/CD eval gates for automated quality gating
 5. **Flexible config per environment**: `dev=cpu`, `prod=gpu`, `ci=no_gpu` — training scales to available hardware
 6. **Hot-reload adapters**: swap LoRA adapters, SLM weights, or reranker models without proxy restart
-7. **Canary deployment** with automatic rollback: traffic splitting (95/5 → 50/50 → 100/0), Prometheus-driven rollback on metric degradation
+7. **Canary deployment** with automatic rollback: traffic splitting (95/5 → 50/50 → 100/0), Prometheus-driven rollback
+   on metric degradation
 8. **Backward compatible**: all new features disabled by default; existing pipeline unchanged until explicitly enabled
 
 ---
@@ -262,15 +265,15 @@ graph TD
 
 ### 3.4 Evaluation Gate Thresholds
 
-| Model | Metric | Threshold | Action on Failure |
-|-------|--------|-----------|-------------------|
-| SLM | Weighted F1 | ≥ 0.85 | Reject → retrain with more data |
-| SLM | Intent Accuracy | ≥ 0.90 | Reject → retrain |
-| LLM | BertScore-F1 | ≥ 0.70 | Reject → retrain |
-| LLM | Hallucination Rate | ≤ 0.05 | Reject → retrain with factuality prompt |
-| LLM | ROUGE-L | ≥ 0.35 | Reject → retrain |
-| Reranker | MRR | ≥ baseline + 0.02 | Reject → retrain |
-| Reranker | nDCG@10 | ≥ baseline + 0.02 | Reject → retrain |
+| Model    | Metric             | Threshold         | Action on Failure                       |
+|----------|--------------------|-------------------|-----------------------------------------|
+| SLM      | Weighted F1        | ≥ 0.85            | Reject → retrain with more data         |
+| SLM      | Intent Accuracy    | ≥ 0.90            | Reject → retrain                        |
+| LLM      | BertScore-F1       | ≥ 0.70            | Reject → retrain                        |
+| LLM      | Hallucination Rate | ≤ 0.05            | Reject → retrain with factuality prompt |
+| LLM      | ROUGE-L            | ≥ 0.35            | Reject → retrain                        |
+| Reranker | MRR                | ≥ baseline + 0.02 | Reject → retrain                        |
+| Reranker | nDCG@10            | ≥ baseline + 0.02 | Reject → retrain                        |
 
 ---
 
@@ -278,41 +281,41 @@ graph TD
 
 ### 4.1 New Package: `proxy/app/model_evolution/`
 
-| Module | Responsibility | Key Classes / Functions |
-|--------|---------------|------------------------|
-| `trainer.py` | Unified training job orchestration | `TrainerRegistry`, `TrainingJob`, `TrainingConfig`, `TrainerBase` |
-| `slm_trainer.py` | SLM LoRA fine-tuning for intent classification | `SLMTrainer(TrainerBase)`, `SLMTrainingConfig` |
-| `llm_trainer.py` | LLM QLoRA fine-tuning for domain generation | `LLMTrainer(TrainerBase)`, `LLMTrainingConfig` |
-| `reranker_trainer.py` | Reranker fine-tuning (full + LoRA) | `RerankerTrainer(TrainerBase)`, `RerankerTrainingConfig` |
-| `data_processor.py` | HITL data → training format converters | `DataProcessor`, `IntentDataset`, `CompletionDataset`, `RerankPairDataset` |
-| `registry.py` | MLflow Model Registry integration | `ModelRegistry`, `ModelVersion`, `ModelStage`, `RegistryConfig` |
-| `tracking.py` | MLflow experiment tracking wrapper | `ExperimentTracker`, `RunContext`, `track_run()` context manager |
-| `eval_gate.py` | CI/CD evaluation gate logic | `EvalGate`, `EvalGateConfig`, `GateResult`, `MetricThreshold` |
-| `adapter_manager.py` | Hot-reload adapter lifecycle | `AdapterManager`, `ModelAdapter`, `AdapterState`, `HotReloadWatcher` |
-| `canary.py` | Canary deployment controller | `CanaryController`, `CanaryConfig`, `TrafficSplit`, `RollbackPolicy` |
-| `artifact_store.py` | MinIO artifact storage client | `ArtifactStore`, `ArtifactRef`, `store_artifact()`, `load_artifact()` |
-| `metrics_gen.py` | Generation quality metrics | `compute_bleu()`, `compute_rouge()`, `compute_bertscore()`, `compute_hallucination_rate()` |
-| `config.py` | Model evolution configuration | `ModelEvolutionConfig`, `EnvProfile` (dev/prod/ci) |
-| `__init__.py` | Public API exports | Re-exports all public symbols |
+| Module                | Responsibility                                 | Key Classes / Functions                                                                    |
+|-----------------------|------------------------------------------------|--------------------------------------------------------------------------------------------|
+| `trainer.py`          | Unified training job orchestration             | `TrainerRegistry`, `TrainingJob`, `TrainingConfig`, `TrainerBase`                          |
+| `slm_trainer.py`      | SLM LoRA fine-tuning for intent classification | `SLMTrainer(TrainerBase)`, `SLMTrainingConfig`                                             |
+| `llm_trainer.py`      | LLM QLoRA fine-tuning for domain generation    | `LLMTrainer(TrainerBase)`, `LLMTrainingConfig`                                             |
+| `reranker_trainer.py` | Reranker fine-tuning (full + LoRA)             | `RerankerTrainer(TrainerBase)`, `RerankerTrainingConfig`                                   |
+| `data_processor.py`   | HITL data → training format converters         | `DataProcessor`, `IntentDataset`, `CompletionDataset`, `RerankPairDataset`                 |
+| `registry.py`         | MLflow Model Registry integration              | `ModelRegistry`, `ModelVersion`, `ModelStage`, `RegistryConfig`                            |
+| `tracking.py`         | MLflow experiment tracking wrapper             | `ExperimentTracker`, `RunContext`, `track_run()` context manager                           |
+| `eval_gate.py`        | CI/CD evaluation gate logic                    | `EvalGate`, `EvalGateConfig`, `GateResult`, `MetricThreshold`                              |
+| `adapter_manager.py`  | Hot-reload adapter lifecycle                   | `AdapterManager`, `ModelAdapter`, `AdapterState`, `HotReloadWatcher`                       |
+| `canary.py`           | Canary deployment controller                   | `CanaryController`, `CanaryConfig`, `TrafficSplit`, `RollbackPolicy`                       |
+| `artifact_store.py`   | MinIO artifact storage client                  | `ArtifactStore`, `ArtifactRef`, `store_artifact()`, `load_artifact()`                      |
+| `metrics_gen.py`      | Generation quality metrics                     | `compute_bleu()`, `compute_rouge()`, `compute_bertscore()`, `compute_hallucination_rate()` |
+| `config.py`           | Model evolution configuration                  | `ModelEvolutionConfig`, `EnvProfile` (dev/prod/ci)                                         |
+| `__init__.py`         | Public API exports                             | Re-exports all public symbols                                                              |
 
 ### 4.2 Modified / Extended Files
 
-| File | Changes |
-|------|---------|
-| `proxy/app/config.py` | Add model evolution env vars: `MODEL_EVOLUTION_ENABLED`, `MLFLOW_TRACKING_URI`, `MINIO_ENDPOINT`, `CANARY_ENABLED`, `HOT_RELOAD_ENABLED`, `TRAINING_PROFILE` (dev/prod/ci) |
-| `proxy/app/main.py` | Add admin endpoints: `POST /v1/admin/models/reload`, `GET /v1/admin/models`, `POST /v1/admin/models/promote`, `GET /v1/admin/canary/status`, `POST /v1/admin/canary/promote`, `POST /v1/admin/canary/rollback` |
-| `proxy/app/slm_router.py` | Replace singleton SLM with `AdapterManager`-managed adapter; add `reload_slm_adapter()` signal handler |
-| `proxy/app/rerank.py` | Replace global `reranker` singleton with `AdapterManager`-managed adapter; add `reload_reranker_adapter()` signal handler |
-| `proxy/app/provider_adapter.py` | Add `LLMAdapterManager` integration for LoRA adapter hot-swap; extend `MultiProviderRouter` with adapter path parameter |
-| `proxy/app/evaluation.py` | Add generation quality metrics: `compute_bleu()`, `compute_rouge_l()`, `compute_bertscore()`, `compute_hallucination_rate()` |
-| `proxy/app/ab_test.py` | Extend `ABTest` to support model variant selection with `ModelVariant` dataclass |
-| `proxy/app/hitl.py` | Add `export_intent_dataset()` for SLM training data export |
-| `proxy/app/exceptions.py` | Add: `TrainingError`, `ModelRegistryError`, `EvalGateError`, `CanaryError`, `HotReloadError` |
-| `proxy/Dockerfile` | Add model evolution dependencies: `peft`, `bitsandbytes`, `mlflow`, `minio`, `rouge-score`, `bert-score`, `nltk` |
-| `proxy/requirements_proxy.txt` | Add: `peft>=0.12`, `bitsandbytes>=0.44`, `mlflow>=2.15`, `minio>=7.2`, `rouge-score>=0.1`, `bert-score>=0.3`, `nltk>=3.9`, `accelerate>=0.34`, `transformers>=4.45` |
-| `Makefile` | Add targets: `make train-slm`, `make train-llm`, `make train-reranker`, `make eval-gate`, `make promote-model` |
-| `docker-compose.yml` | Add services: `mlflow`, `minio` |
-| Helm chart (`k8s/`) | Add: MinIO PVC, MLflow deployment, canary ConfigMap |
+| File                            | Changes                                                                                                                                                                                                        |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `proxy/app/config.py`           | Add model evolution env vars: `MODEL_EVOLUTION_ENABLED`, `MLFLOW_TRACKING_URI`, `MINIO_ENDPOINT`, `CANARY_ENABLED`, `HOT_RELOAD_ENABLED`, `TRAINING_PROFILE` (dev/prod/ci)                                     |
+| `proxy/app/main.py`             | Add admin endpoints: `POST /v1/admin/models/reload`, `GET /v1/admin/models`, `POST /v1/admin/models/promote`, `GET /v1/admin/canary/status`, `POST /v1/admin/canary/promote`, `POST /v1/admin/canary/rollback` |
+| `proxy/app/slm_router.py`       | Replace singleton SLM with `AdapterManager`-managed adapter; add `reload_slm_adapter()` signal handler                                                                                                         |
+| `proxy/app/rerank.py`           | Replace global `reranker` singleton with `AdapterManager`-managed adapter; add `reload_reranker_adapter()` signal handler                                                                                      |
+| `proxy/app/provider_adapter.py` | Add `LLMAdapterManager` integration for LoRA adapter hot-swap; extend `MultiProviderRouter` with adapter path parameter                                                                                        |
+| `proxy/app/evaluation.py`       | Add generation quality metrics: `compute_bleu()`, `compute_rouge_l()`, `compute_bertscore()`, `compute_hallucination_rate()`                                                                                   |
+| `proxy/app/ab_test.py`          | Extend `ABTest` to support model variant selection with `ModelVariant` dataclass                                                                                                                               |
+| `proxy/app/hitl.py`             | Add `export_intent_dataset()` for SLM training data export                                                                                                                                                     |
+| `proxy/app/exceptions.py`       | Add: `TrainingError`, `ModelRegistryError`, `EvalGateError`, `CanaryError`, `HotReloadError`                                                                                                                   |
+| `proxy/Dockerfile`              | Add model evolution dependencies: `peft`, `bitsandbytes`, `mlflow`, `minio`, `rouge-score`, `bert-score`, `nltk`                                                                                               |
+| `proxy/requirements_proxy.txt`  | Add: `peft>=0.12`, `bitsandbytes>=0.44`, `mlflow>=2.15`, `minio>=7.2`, `rouge-score>=0.1`, `bert-score>=0.3`, `nltk>=3.9`, `accelerate>=0.34`, `transformers>=4.45`                                            |
+| `Makefile`                      | Add targets: `make train-slm`, `make train-llm`, `make train-reranker`, `make eval-gate`, `make promote-model`                                                                                                 |
+| `docker-compose.yml`            | Add services: `mlflow`, `minio`                                                                                                                                                                                |
+| Helm chart (`k8s/`)             | Add: MinIO PVC, MLflow deployment, canary ConfigMap                                                                                                                                                            |
 
 ### 4.3 Component Descriptions
 
@@ -1202,6 +1205,7 @@ volumes:
 **Context**: Need versioned experiment tracking and model lifecycle management for SLM, LLM, and reranker fine-tuning.
 
 **Options considered**:
+
 1. **MLflow** — mature, Python-native, S3-compatible artifact store, built-in model registry
 2. **Weights & Biases** — SaaS only, incompatible with air-gapped requirement
 3. **DVC** — data versioning focus, no built-in experiment tracking UI
@@ -1210,6 +1214,7 @@ volumes:
 **Chosen**: MLflow
 
 **Rationale**:
+
 - Self-hosted (open-source), runs in air-gapped environment
 - Built-in Model Registry with stage transitions (None → Staging → Production → Archived)
 - Natively supports S3-compatible artifact stores (MinIO)
@@ -1218,19 +1223,23 @@ volumes:
 - Wide community adoption, well-documented
 
 **Tradeoffs**:
+
 - MLflow server adds operational overhead (~200 MB RAM idle)
 - SQLite backend sufficient for <10K runs; need PostgreSQL for larger scale
 - No built-in RBAC (acceptable for on-prem, single-team use)
 
-**Risk**: MLflow server downtime blocks artifact logging. Mitigation: training scripts buffer artifacts locally during MLflow outage, retry on reconnect.
+**Risk**: MLflow server downtime blocks artifact logging. Mitigation: training scripts buffer artifacts locally during
+MLflow outage, retry on reconnect.
 
 ---
 
 ### ADR-ME-002: Use LoRA/QLoRA for SLM/LLM Fine-Tuning (Not Full Fine-Tune)
 
-**Context**: Need domain-specific adaptation without full model retraining cost. Single GPU must serve inference concurrently.
+**Context**: Need domain-specific adaptation without full model retraining cost. Single GPU must serve inference
+concurrently.
 
 **Options considered**:
+
 1. **Full fine-tune** — all weights updated, large disk footprint (multi-GB), slow to swap
 2. **LoRA** — low-rank adapters, 10-200 MB each, swappable in < 1s
 3. **Prompt tuning** — only soft prompts, limited expressivity
@@ -1239,6 +1248,7 @@ volumes:
 **Chosen**: LoRA for SLM (rank=8), QLoRA for LLM (rank=16, 4-bit NF4)
 
 **Rationale**:
+
 - LoRA adapters are small (10-200 MB) — enables hot-swap without memory pressure
 - QLoRA fits 7B-13B models on single 24 GB GPU, leaving VRAM for inference
 - Adapter merging (PEFT `merge_and_unload()`) for inference speed when needed
@@ -1247,11 +1257,13 @@ volumes:
 - Standardized format via PEFT library, well-supported
 
 **Tradeoffs**:
+
 - LoRA rank limits expressivity; full fine-tune may outperform for very domain-specific tasks
 - QLoRA 4-bit quantization introduces minor precision loss (~0.5-1% on benchmarks)
 - Base model still loaded; LoRA adds 10-15% memory overhead on top
 
-**Risk**: LoRA adapter incompatibility between PEFT versions. Mitigation: pin PEFT version, store adapter_config.json with version metadata.
+**Risk**: LoRA adapter incompatibility between PEFT versions. Mitigation: pin PEFT version, store adapter_config.json
+with version metadata.
 
 ---
 
@@ -1260,6 +1272,7 @@ volumes:
 **Context**: Swapping model adapters without restart. Current system loads all models as global singletons at startup.
 
 **Options considered**:
+
 1. **File watcher (inotify/polling)** — watch adapter directory, auto-reload on change
 2. **SIGHUP signal handler** — reload on signal, explicit control
 3. **gRPC model server** — separate process, swap via load balancer
@@ -1268,6 +1281,7 @@ volumes:
 **Chosen**: File watcher + SIGHUP (modes 1+2 combined)
 
 **Rationale**:
+
 - File watcher: automatic on CI/CD pipeline artifact push. Fits MLflow → MinIO → local cache flow.
 - SIGHUP: manual control for operators. Standard Unix pattern.
 - Process-local swap avoids network hop latency (< 1ms vs ~2ms for gRPC)
@@ -1275,11 +1289,13 @@ volumes:
 - Far simpler than gRPC model server or service mesh for single-worker proxy
 
 **Tradeoffs**:
+
 - File watcher adds polling overhead (configurable interval, default 5s)
 - No multi-process synchronization (but WORKERS=1 by design)
 - Requires careful memory management to avoid OOM on adapter swap
 
-**Risk**: Race condition if reload triggered during model GC. Mitigation: global `threading.RLock`, ref-count in-flight requests before retiring.
+**Risk**: Race condition if reload triggered during model GC. Mitigation: global `threading.RLock`, ref-count in-flight
+requests before retiring.
 
 ---
 
@@ -1288,6 +1304,7 @@ volumes:
 **Context**: Gradual rollout of new model versions with automatic rollback on metric degradation.
 
 **Options considered**:
+
 1. **Application-layer traffic split** — proxy routes `canary_weight` fraction to new model
 2. **Load balancer (nginx/Envoy)** — split at network layer by header/cookie
 3. **Shadow deployment** — mirror 100% traffic to canary, compare offline
@@ -1296,6 +1313,7 @@ volumes:
 **Chosen**: Application-layer traffic split with weighted random selection
 
 **Rationale**:
+
 - Single-worker proxy can't use load balancer split
 - Weighted random selection is simple, stateless, and statistically sound
 - Prometheus metrics already per-request, enabling metric comparison
@@ -1304,11 +1322,13 @@ volumes:
 - Rollback is instantaneous — just revert `traffic_split` weights
 
 **Tradeoffs**:
+
 - Random assignment means no sticky canary (same user may get different models)
 - Statistical significance requires sufficient traffic volume
 - Adds ~10 µs overhead per request (random + conditional branch)
 
-**Risk**: Metric evaluation during low-traffic periods may lack statistical power. Mitigation: minimum sample threshold before phase advancement, configurable `min_eval_samples`.
+**Risk**: Metric evaluation during low-traffic periods may lack statistical power. Mitigation: minimum sample threshold
+before phase advancement, configurable `min_eval_samples`.
 
 ---
 
@@ -1317,6 +1337,7 @@ volumes:
 **Context**: Centralized, versioned storage for model artifacts (adapters, datasets, eval reports).
 
 **Options considered**:
+
 1. **MinIO** — S3-compatible, self-hosted, air-gapped compatible
 2. **Local filesystem** — simple but no replication, single point of failure
 3. **NFS mount** — shared but slow for many small files, no versioning
@@ -1325,6 +1346,7 @@ volumes:
 **Chosen**: MinIO
 
 **Rationale**:
+
 - S3-compatible API — MLflow natively supports S3 artifact stores
 - Self-hosted, air-gapped compatible
 - Built-in versioning, bucket policies, replication
@@ -1332,11 +1354,13 @@ volumes:
 - Already planned in roadmap for backup automation
 
 **Tradeoffs**:
+
 - Adds operational overhead (one more service to monitor)
 - Requires persistent volume for data durability
 - No built-in lifecycle policies (manual cleanup)
 
-**Risk**: MinIO data loss = loss of all model artifacts. Mitigation: regular `mc mirror` to secondary storage, backup via existing S3/MinIO backup pipeline.
+**Risk**: MinIO data loss = loss of all model artifacts. Mitigation: regular `mc mirror` to secondary storage, backup
+via existing S3/MinIO backup pipeline.
 
 ---
 
@@ -1398,6 +1422,7 @@ volumes:
 ```
 
 **Circular dependency check**: No circular dependencies. The dependency graph is a DAG:
+
 - `config.py` ← no imports from model_evolution package
 - `data_processor.py` ← depends on `hitl.py` (existing module, external)
 - `trainer.py` ← depends on `data_processor`, `tracking`, `artifact_store`
@@ -1413,58 +1438,58 @@ volumes:
 
 ### Phase 1: Foundation (Week 1-2)
 
-| Step | Task | Dependencies | Output |
-|------|------|-------------|--------|
-| 1.1 | Add `MODEL_EVOLUTION_ENABLED` and all config env vars to `config.py` | None | Config ready |
-| 1.2 | Add `docker-compose.yml` services for mlflow + minio | None | Infra running |
-| 1.3 | Implement `artifact_store.py` (MinIO client) | 1.2 | Artifact upload/download |
-| 1.4 | Implement `tracking.py` (MLflow wrapper) | 1.2, 1.3 | Experiment tracking |
-| 1.5 | Implement `metrics_gen.py` (generation metrics) | None | BLEU, ROUGE, BertScore |
-| 1.6 | Add `export_intent_dataset()` to `hitl.py` | None | SLM training data |
-| 1.7 | Add exception types to `exceptions.py` | None | TrainingError, etc. |
+| Step | Task                                                                 | Dependencies | Output                   |
+|------|----------------------------------------------------------------------|--------------|--------------------------|
+| 1.1  | Add `MODEL_EVOLUTION_ENABLED` and all config env vars to `config.py` | None         | Config ready             |
+| 1.2  | Add `docker-compose.yml` services for mlflow + minio                 | None         | Infra running            |
+| 1.3  | Implement `artifact_store.py` (MinIO client)                         | 1.2          | Artifact upload/download |
+| 1.4  | Implement `tracking.py` (MLflow wrapper)                             | 1.2, 1.3     | Experiment tracking      |
+| 1.5  | Implement `metrics_gen.py` (generation metrics)                      | None         | BLEU, ROUGE, BertScore   |
+| 1.6  | Add `export_intent_dataset()` to `hitl.py`                           | None         | SLM training data        |
+| 1.7  | Add exception types to `exceptions.py`                               | None         | TrainingError, etc.      |
 
 ### Phase 2: Training Pipeline (Week 3-4)
 
-| Step | Task | Dependencies | Output |
-|------|------|-------------|--------|
-| 2.1 | Implement `data_processor.py` | 1.6 | Training data loaders |
-| 2.2 | Implement `trainer.py` (base class + TrainingJob) | 1.4, 2.1 | Trainer framework |
-| 2.3 | Implement `slm_trainer.py` | 2.2 | SLM LoRA fine-tuning |
-| 2.4 | Implement `reranker_trainer.py` | 2.2 | Reranker FT + LoRA |
-| 2.5 | Implement `llm_trainer.py` | 2.2 | LLM QLoRA fine-tuning |
-| 2.6 | Implement `registry.py` (ModelRegistry) | 1.4, 1.3 | Model versioning |
-| 2.7 | Implement CLI scripts: `train_slm.py`, `train_llm.py`, `train_reranker.py` | 2.3-2.6 | CLI tools |
+| Step | Task                                                                       | Dependencies | Output                |
+|------|----------------------------------------------------------------------------|--------------|-----------------------|
+| 2.1  | Implement `data_processor.py`                                              | 1.6          | Training data loaders |
+| 2.2  | Implement `trainer.py` (base class + TrainingJob)                          | 1.4, 2.1     | Trainer framework     |
+| 2.3  | Implement `slm_trainer.py`                                                 | 2.2          | SLM LoRA fine-tuning  |
+| 2.4  | Implement `reranker_trainer.py`                                            | 2.2          | Reranker FT + LoRA    |
+| 2.5  | Implement `llm_trainer.py`                                                 | 2.2          | LLM QLoRA fine-tuning |
+| 2.6  | Implement `registry.py` (ModelRegistry)                                    | 1.4, 1.3     | Model versioning      |
+| 2.7  | Implement CLI scripts: `train_slm.py`, `train_llm.py`, `train_reranker.py` | 2.3-2.6      | CLI tools             |
 
 ### Phase 3: Eval Gates (Week 5)
 
-| Step | Task | Dependencies | Output |
-|------|------|-------------|--------|
-| 3.1 | Implement `eval_gate.py` | 2.6, 1.5 | Eval gate logic |
-| 3.2 | Implement `run_eval_gate.py` CLI | 3.1 | CI integration |
-| 3.3 | Implement `promote_model.py` CLI | 2.6, 3.1 | Promotion script |
-| 3.4 | Implement `.github/workflows/model-evolution.yml` | 3.2, 3.3 | CI/CD pipeline |
+| Step | Task                                              | Dependencies | Output           |
+|------|---------------------------------------------------|--------------|------------------|
+| 3.1  | Implement `eval_gate.py`                          | 2.6, 1.5     | Eval gate logic  |
+| 3.2  | Implement `run_eval_gate.py` CLI                  | 3.1          | CI integration   |
+| 3.3  | Implement `promote_model.py` CLI                  | 2.6, 3.1     | Promotion script |
+| 3.4  | Implement `.github/workflows/model-evolution.yml` | 3.2, 3.3     | CI/CD pipeline   |
 
 ### Phase 4: Hot-Reload & Canary (Week 6-7)
 
-| Step | Task | Dependencies | Output |
-|------|------|-------------|--------|
-| 4.1 | Implement `adapter_manager.py` | 2.6 | Hot-reload manager |
-| 4.2 | Integrate `AdapterManager` with `slm_router.py` | 4.1 | SLM hot-swap |
-| 4.3 | Integrate `AdapterManager` with `rerank.py` | 4.1 | Reranker hot-swap |
-| 4.4 | Integrate `AdapterManager` with `provider_adapter.py` | 4.1 | LLM adapter hot-swap |
-| 4.5 | Implement `canary.py` | 4.1 | Canary controller |
-| 4.6 | Add admin endpoints to `main.py` | 4.1, 4.5 | REST API for management |
-| 4.7 | Extend `ab_test.py` for model variants | 4.2-4.4 | A/B model testing |
+| Step | Task                                                  | Dependencies | Output                  |
+|------|-------------------------------------------------------|--------------|-------------------------|
+| 4.1  | Implement `adapter_manager.py`                        | 2.6          | Hot-reload manager      |
+| 4.2  | Integrate `AdapterManager` with `slm_router.py`       | 4.1          | SLM hot-swap            |
+| 4.3  | Integrate `AdapterManager` with `rerank.py`           | 4.1          | Reranker hot-swap       |
+| 4.4  | Integrate `AdapterManager` with `provider_adapter.py` | 4.1          | LLM adapter hot-swap    |
+| 4.5  | Implement `canary.py`                                 | 4.1          | Canary controller       |
+| 4.6  | Add admin endpoints to `main.py`                      | 4.1, 4.5     | REST API for management |
+| 4.7  | Extend `ab_test.py` for model variants                | 4.2-4.4      | A/B model testing       |
 
 ### Phase 5: Testing & Documentation (Week 8)
 
-| Step | Task | Dependencies | Output |
-|------|------|-------------|--------|
-| 5.1 | Write unit tests for all model_evolution modules | All | Test coverage |
-| 5.2 | Write integration tests (train→eval→promote flow) | All | E2E tests |
-| 5.3 | Write `docs/en/guides/model-evolution-guide.md` | All | User guide |
-| 5.4 | Update `Makefile` with training targets | All | Dev workflow |
-| 5.5 | Run full test suite, verify 100% pass | 5.1, 5.2 | CI green |
+| Step | Task                                              | Dependencies | Output        |
+|------|---------------------------------------------------|--------------|---------------|
+| 5.1  | Write unit tests for all model_evolution modules  | All          | Test coverage |
+| 5.2  | Write integration tests (train→eval→promote flow) | All          | E2E tests     |
+| 5.3  | Write `docs/en/guides/model-evolution-guide.md`   | All          | User guide    |
+| 5.4  | Update `Makefile` with training targets           | All          | Dev workflow  |
+| 5.5  | Run full test suite, verify 100% pass             | 5.1, 5.2     | CI green      |
 
 ---
 
@@ -1472,16 +1497,16 @@ volumes:
 
 ### 13.1 Guarantees
 
-| Aspect | Guarantee |
-|--------|-----------|
-| **Existing RAG pipeline** | Unchanged when `MODEL_EVOLUTION_ENABLED=false` (default) |
-| **Existing singletons** | `reranker`, `embedder`, SLM subprocess — continue working as-is |
-| **Existing API** | All `/v1/chat/completions`, `/v1/models`, etc. — no breaking changes |
-| **Existing config** | All current env vars unchanged; new vars are additive |
-| **Existing tests** | All 1469 existing tests continue passing |
-| **HITL data** | `export_training_dataset()` unchanged; new `export_intent_dataset()` is additive |
-| **Reranker FT path** | Existing `fine_tune_reranker()` unchanged; new LoRA path is parallel |
-| **Docker images** | New dependencies in requirements are optional; proxy starts without them |
+| Aspect                    | Guarantee                                                                        |
+|---------------------------|----------------------------------------------------------------------------------|
+| **Existing RAG pipeline** | Unchanged when `MODEL_EVOLUTION_ENABLED=false` (default)                         |
+| **Existing singletons**   | `reranker`, `embedder`, SLM subprocess — continue working as-is                  |
+| **Existing API**          | All `/v1/chat/completions`, `/v1/models`, etc. — no breaking changes             |
+| **Existing config**       | All current env vars unchanged; new vars are additive                            |
+| **Existing tests**        | All 1469 existing tests continue passing                                         |
+| **HITL data**             | `export_training_dataset()` unchanged; new `export_intent_dataset()` is additive |
+| **Reranker FT path**      | Existing `fine_tune_reranker()` unchanged; new LoRA path is parallel             |
+| **Docker images**         | New dependencies in requirements are optional; proxy starts without them         |
 
 ### 13.2 Migration Path
 
@@ -1494,6 +1519,7 @@ volumes:
 ### 13.3 Rollback Plan
 
 If model evolution features cause issues:
+
 ```bash
 # Disable all model evolution features
 export MODEL_EVOLUTION_ENABLED=false
@@ -1509,18 +1535,18 @@ docker-compose restart proxy
 
 ## 14. Risks and Mitigations
 
-| Risk | Probability | Impact | Mitigation |
-|------|------------|--------|------------|
-| **OOM on adapter swap** | Medium | High | Drain before unload; monitor RSS; `torch.cuda.empty_cache()` after retire; configurable `HOT_RELOAD_MAX_ADAPTERS` limit |
-| **Training data leakage** (eval in train set) | Medium | Medium | Stratified split by document ID (not random); `data_processor.py` enforces same-document grouping |
-| **Canary rollback flapping** (promote→rollback→promote) | Low | Medium | Mandatory cooldown period (`CANARY_COOLDOWN_SECONDS`); minimum phase duration; alert on repeated rollbacks |
-| **MLflow SQLite corruption** | Low | High | Regular backups; migration path to PostgreSQL documented; MLflow DB on persistent volume |
-| **MinIO single point of failure** | Medium | High | MinIO replication to secondary node; local cache of production adapters at `./models/adapters/versions/` so proxy works even if MinIO down |
-| **GPU OOM during QLoRA training** (single GPU) | Medium | Medium | `TRAINING_PROFILE=ci` uses CPU fallback; `PROD` profile validates VRAM before training start; gradient checkpointing enabled |
-| **Adapter version incompatibility** (PEFT upgrade) | Low | Medium | Pin PEFT + transformers versions; store `adapter_config.json` with `peft_version`; version check before load |
-| **Hallucination rate regression** after LLM fine-tune | Medium | High | Eval gate blocks promotion if hallucination_rate > 5%; canary phase catches real-world hallucination drift |
-| **SLM routing degradation** (wrong intent → wrong top-k) | Low | Medium | Eval gate requires weighted F1 ≥ 0.85; canary phase monitors retrieval quality metrics as proxy for routing quality |
-| **Hot-reload race condition** (requests during swap) | Low | High | `threading.RLock` on adapter swap; in-flight request counter; DRAINING state prevents new requests on old adapter |
+| Risk                                                     | Probability | Impact | Mitigation                                                                                                                                 |
+|----------------------------------------------------------|-------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| **OOM on adapter swap**                                  | Medium      | High   | Drain before unload; monitor RSS; `torch.cuda.empty_cache()` after retire; configurable `HOT_RELOAD_MAX_ADAPTERS` limit                    |
+| **Training data leakage** (eval in train set)            | Medium      | Medium | Stratified split by document ID (not random); `data_processor.py` enforces same-document grouping                                          |
+| **Canary rollback flapping** (promote→rollback→promote)  | Low         | Medium | Mandatory cooldown period (`CANARY_COOLDOWN_SECONDS`); minimum phase duration; alert on repeated rollbacks                                 |
+| **MLflow SQLite corruption**                             | Low         | High   | Regular backups; migration path to PostgreSQL documented; MLflow DB on persistent volume                                                   |
+| **MinIO single point of failure**                        | Medium      | High   | MinIO replication to secondary node; local cache of production adapters at `./models/adapters/versions/` so proxy works even if MinIO down |
+| **GPU OOM during QLoRA training** (single GPU)           | Medium      | Medium | `TRAINING_PROFILE=ci` uses CPU fallback; `PROD` profile validates VRAM before training start; gradient checkpointing enabled               |
+| **Adapter version incompatibility** (PEFT upgrade)       | Low         | Medium | Pin PEFT + transformers versions; store `adapter_config.json` with `peft_version`; version check before load                               |
+| **Hallucination rate regression** after LLM fine-tune    | Medium      | High   | Eval gate blocks promotion if hallucination_rate > 5%; canary phase catches real-world hallucination drift                                 |
+| **SLM routing degradation** (wrong intent → wrong top-k) | Low         | Medium | Eval gate requires weighted F1 ≥ 0.85; canary phase monitors retrieval quality metrics as proxy for routing quality                        |
+| **Hot-reload race condition** (requests during swap)     | Low         | High   | `threading.RLock` on adapter swap; in-flight request counter; DRAINING state prevents new requests on old adapter                          |
 
 ---
 
@@ -1553,17 +1579,19 @@ rag_eval_gate_metric_value{model, metric}        # Gauge
 
 ## Appendix B: Admin API Endpoints
 
-| Endpoint | Method | Description | Auth |
-|----------|--------|-------------|------|
-| `GET /v1/admin/models` | GET | List all registered models with versions and stages | admin |
-| `POST /v1/admin/models/reload` | POST | Trigger hot-reload for a specific model adapter | admin |
-| `POST /v1/admin/models/promote` | POST | Promote a model version to Production stage | admin |
-| `GET /v1/admin/canary/status` | GET | Current canary phase, split, metric comparison | admin |
-| `POST /v1/admin/canary/promote` | POST | Manually advance canary to next phase | admin |
-| `POST /v1/admin/canary/rollback` | POST | Immediately roll back canary to stable version | admin |
-| `GET /v1/admin/training/jobs` | GET | List recent training jobs with status | admin |
-| `POST /v1/admin/training/run` | POST | Trigger a training job (SLM/LLM/reranker) | admin |
+| Endpoint                         | Method | Description                                         | Auth  |
+|----------------------------------|--------|-----------------------------------------------------|-------|
+| `GET /v1/admin/models`           | GET    | List all registered models with versions and stages | admin |
+| `POST /v1/admin/models/reload`   | POST   | Trigger hot-reload for a specific model adapter     | admin |
+| `POST /v1/admin/models/promote`  | POST   | Promote a model version to Production stage         | admin |
+| `GET /v1/admin/canary/status`    | GET    | Current canary phase, split, metric comparison      | admin |
+| `POST /v1/admin/canary/promote`  | POST   | Manually advance canary to next phase               | admin |
+| `POST /v1/admin/canary/rollback` | POST   | Immediately roll back canary to stable version      | admin |
+| `GET /v1/admin/training/jobs`    | GET    | List recent training jobs with status               | admin |
+| `POST /v1/admin/training/run`    | POST   | Trigger a training job (SLM/LLM/reranker)           | admin |
 
 ---
 
-> **This ADR is part of the v2.1 "Model Evolution" horizon.** When accepted, the implementation sequence above becomes the execution plan. All features are gated behind `MODEL_EVOLUTION_ENABLED=false` by default, preserving full backward compatibility with v2.0.
+> **This ADR is part of the v2.1 "Model Evolution" horizon.** When accepted, the implementation sequence above becomes
+> the execution plan. All features are gated behind `MODEL_EVOLUTION_ENABLED=false` by default, preserving full backward
+> compatibility with v2.0.

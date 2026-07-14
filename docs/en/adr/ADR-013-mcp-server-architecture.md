@@ -9,9 +9,11 @@
 
 ## Context
 
-Developers need RAG capabilities integrated into their IDE workflow. The Model Context Protocol (MCP) provides a standardized way to expose tools to AI-powered IDEs.
+Developers need RAG capabilities integrated into their IDE workflow. The Model Context Protocol (MCP) provides a
+standardized way to expose tools to AI-powered IDEs.
 
 Requirements:
+
 - Expose RAG search, chat, and feedback as MCP tools
 - Support STDIO transport (for OpenCode, Claude Desktop)
 - Support HTTP transport (for web-based clients)
@@ -36,15 +38,16 @@ OpenCode/Claude Desktop → MCP Server (STDIO/HTTP) → RAG Proxy (8080)
 
 ## Tool Definitions
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `rag_search` | Search corporate documents | `query: str`, `limit: int = 5` |
-| `rag_chat` | Ask questions about knowledge | `message: str`, `context: str = ""` |
-| `rag_feedback` | Submit answer feedback | `query: str`, `answer: str`, `rating: str` |
+| Tool           | Description                   | Parameters                                 |
+|----------------|-------------------------------|--------------------------------------------|
+| `rag_search`   | Search corporate documents    | `query: str`, `limit: int = 5`             |
+| `rag_chat`     | Ask questions about knowledge | `message: str`, `context: str = ""`        |
+| `rag_feedback` | Submit answer feedback        | `query: str`, `answer: str`, `rating: str` |
 
 ## Client Configuration
 
 ### OpenCode (opencode.json)
+
 ```json
 {
   "mcp": {
@@ -58,6 +61,7 @@ OpenCode/Claude Desktop → MCP Server (STDIO/HTTP) → RAG Proxy (8080)
 ```
 
 ### Claude Desktop
+
 ```json
 {
   "mcpServers": {
@@ -73,17 +77,20 @@ OpenCode/Claude Desktop → MCP Server (STDIO/HTTP) → RAG Proxy (8080)
 ## Consequences
 
 ### Positive
+
 - Developers get RAG capabilities directly in IDE
 - Standard MCP protocol works with any MCP client
 - Standalone deployment (can run without main proxy)
 - Easy to install and configure
 
 ### Negative
+
 - Additional service to manage
 - Network latency for remote proxies
 - No caching (each request goes to proxy)
 
 ### Mitigations
+
 - Run MCP server on same machine as IDE (STDIO transport)
 - Proxy handles caching internally
 - Health check endpoint for monitoring

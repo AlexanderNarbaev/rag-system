@@ -4,9 +4,9 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Weekly Monday 6am
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

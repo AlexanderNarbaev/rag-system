@@ -27,17 +27,17 @@ streamlit run dashboard/app.py --server.port 8501
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PROXY_URL` | `http://localhost:8080` | RAG proxy endpoint |
-| `QDRANT_HOST` | `localhost` | Qdrant server host |
-| `QDRANT_PORT` | `6333` | Qdrant server port |
-| `NEO4J_HOST` | `localhost` | Neo4j server host |
-| `NEO4J_HTTP_PORT` | `7474` | Neo4j HTTP port |
-| `REDIS_HOST` | `localhost` | Redis server host |
-| `REDIS_PORT` | `6379` | Redis server port |
-| `LLM_ENDPOINT` | `http://localhost:8000/v1` | LLM API endpoint |
-| `LOG_DIR` | `./proxy/logs` | Log directory path |
+| Variable          | Default                    | Description        |
+|-------------------|----------------------------|--------------------|
+| `PROXY_URL`       | `http://localhost:8080`    | RAG proxy endpoint |
+| `QDRANT_HOST`     | `localhost`                | Qdrant server host |
+| `QDRANT_PORT`     | `6333`                     | Qdrant server port |
+| `NEO4J_HOST`      | `localhost`                | Neo4j server host  |
+| `NEO4J_HTTP_PORT` | `7474`                     | Neo4j HTTP port    |
+| `REDIS_HOST`      | `localhost`                | Redis server host  |
+| `REDIS_PORT`      | `6379`                     | Redis server port  |
+| `LLM_ENDPOINT`    | `http://localhost:8000/v1` | LLM API endpoint   |
+| `LOG_DIR`         | `./proxy/logs`             | Log directory path |
 
 ## Access
 

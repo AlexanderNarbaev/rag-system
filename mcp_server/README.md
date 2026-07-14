@@ -1,10 +1,12 @@
 # RAG System MCP Server
 
-A standalone MCP server that exposes RAG (Retrieval-Augmented Generation) tools to MCP-compatible clients like OpenCode, Claude Desktop, and other AI assistants.
+A standalone MCP server that exposes RAG (Retrieval-Augmented Generation) tools to MCP-compatible clients like OpenCode,
+Claude Desktop, and other AI assistants.
 
 ## Overview
 
 This server provides:
+
 - **rag_search** — Search your corporate knowledge base for relevant documents
 - **rag_chat** — Ask questions and get AI-generated answers from your documents
 - **rag_feedback** — Submit feedback to improve answer quality
@@ -30,10 +32,10 @@ pip install fastmcp>=0.4.0 httpx>=0.25.0
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RAG_PROXY_URL` | `http://localhost:8080` | URL of the RAG proxy service |
-| `MCP_TRANSPORT` | `stdio` | Transport mode: `stdio` or `http` |
+| Variable        | Default                 | Description                       |
+|-----------------|-------------------------|-----------------------------------|
+| `RAG_PROXY_URL` | `http://localhost:8080` | URL of the RAG proxy service      |
+| `MCP_TRANSPORT` | `stdio`                 | Transport mode: `stdio` or `http` |
 
 ### OpenCode Configuration
 
@@ -55,7 +57,8 @@ Add to your `opencode.json`:
 
 ### Claude Desktop Configuration
 
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows):
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
 ```json
 {
@@ -149,4 +152,5 @@ python -c "from mcp_server.server import mcp; print('MCP server OK')"
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-The MCP server acts as a bridge between MCP-compatible clients and the RAG proxy service, translating MCP tool calls into HTTP requests to the proxy's OpenAI-compatible API.
+The MCP server acts as a bridge between MCP-compatible clients and the RAG proxy service, translating MCP tool calls
+into HTTP requests to the proxy's OpenAI-compatible API.

@@ -2,7 +2,8 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-10
 
-This document describes the system architecture of the RAG Knowledge Assistant — an OpenAI-compatible proxy with a full ETL pipeline for corporate knowledge retrieval.
+This document describes the system architecture of the RAG Knowledge Assistant — an OpenAI-compatible proxy with a full
+ETL pipeline for corporate knowledge retrieval.
 
 ---
 
@@ -10,22 +11,23 @@ This document describes the system architecture of the RAG Knowledge Assistant �
 
 The system consists of two main components that run on separate machines:
 
-| Component | Purpose | Port |
-|-----------|---------|------|
-| **ETL Pipeline** | Extract data from sources, chunk, embed, index into vector/graph stores | N/A (batch) |
-| **RAG Proxy** | Serve OpenAI-compatible API with hybrid retrieval, reranking, and LLM generation | `8080` |
+| Component        | Purpose                                                                          | Port        |
+|------------------|----------------------------------------------------------------------------------|-------------|
+| **ETL Pipeline** | Extract data from sources, chunk, embed, index into vector/graph stores          | N/A (batch) |
+| **RAG Proxy**    | Serve OpenAI-compatible API with hybrid retrieval, reranking, and LLM generation | `8080`      |
 
-These components share Qdrant and Neo4j as storage backends but run independently. The ETL pipeline populates the databases; the proxy queries them at serving time.
+These components share Qdrant and Neo4j as storage backends but run independently. The ETL pipeline populates the
+databases; the proxy queries them at serving time.
 
 ### Supporting Services
 
-| Service | Purpose | Optional |
-|---------|---------|----------|
-| **Redis** | Multi-tier cache (embeddings, rerank results, responses) | Yes |
-| **Neo4j** | Knowledge graph for entity-based context expansion | Yes |
-| **HITL Dashboard** | Streamlit expert review interface | Yes |
-| **MCP Server** | Model Context Protocol server for IDE integration | Yes |
-| **MLflow + MinIO** | Model experiment tracking and artifact storage | Yes |
+| Service            | Purpose                                                  | Optional |
+|--------------------|----------------------------------------------------------|----------|
+| **Redis**          | Multi-tier cache (embeddings, rerank results, responses) | Yes      |
+| **Neo4j**          | Knowledge graph for entity-based context expansion       | Yes      |
+| **HITL Dashboard** | Streamlit expert review interface                        | Yes      |
+| **MCP Server**     | Model Context Protocol server for IDE integration        | Yes      |
+| **MLflow + MinIO** | Model experiment tracking and artifact storage           | Yes      |
 
 ---
 
@@ -124,9 +126,11 @@ Data Sources → Extract → Chunk → Embed → Index
 ```
 
 1. **Extract**: Connectors pull raw data from Confluence, Jira, GitLab, local files (documents, books, chat logs).
-2. **Chunk**: Semantic chunker splits documents into overlapping segments with SHA-256 content addressing for deduplication.
+2. **Chunk**: Semantic chunker splits documents into overlapping segments with SHA-256 content addressing for
+   deduplication.
 3. **Embed**: BAAI/bge-m3 generates dense (1024-dim) and sparse vectors for each chunk.
-4. **Index**: Vectors stored in Qdrant with hybrid search (dense + sparse + ColBERT). Entities extracted via spaCy NER and loaded into Neo4j.
+4. **Index**: Vectors stored in Qdrant with hybrid search (dense + sparse + ColBERT). Entities extracted via spaCy NER
+   and loaded into Neo4j.
 5. **WAL**: Write-ahead log tracks processing state for incremental updates and crash recovery.
 
 ### 3.2 Query Flow
@@ -185,17 +189,18 @@ The ETL pipeline runs independently, typically on a separate machine from the pr
 
 #### Extractors
 
-| Extractor | Source | Output |
-|-----------|--------|--------|
-| `confluence.py` | Confluence REST API | Pages, attachments, metadata |
-| `jira.py` | Jira REST API | Issues, comments, transitions |
-| `gitlab.py` | GitLab REST API | Repos, MRs, issues, wikis |
-| `doc_extractor.py` | Local files (PDF, DOCX, MD, TXT) | Document text + metadata |
-| `book_extractor.py` | E-books (EPUB, FB2) | Chapter-level chunks |
-| `chat_extractor.py` | Chat history exports | Conversation threads |
-| `image_extractor.py` | Images in documents | OCR text extraction |
+| Extractor            | Source                           | Output                        |
+|----------------------|----------------------------------|-------------------------------|
+| `confluence.py`      | Confluence REST API              | Pages, attachments, metadata  |
+| `jira.py`            | Jira REST API                    | Issues, comments, transitions |
+| `gitlab.py`          | GitLab REST API                  | Repos, MRs, issues, wikis     |
+| `doc_extractor.py`   | Local files (PDF, DOCX, MD, TXT) | Document text + metadata      |
+| `book_extractor.py`  | E-books (EPUB, FB2)              | Chapter-level chunks          |
+| `chat_extractor.py`  | Chat history exports             | Conversation threads          |
+| `image_extractor.py` | Images in documents              | OCR text extraction           |
 
 All extractors inherit from `base_extractor.py` which provides:
+
 - Incremental extraction via content hashing
 - Error handling and retry logic
 - Metadata normalization
@@ -209,13 +214,16 @@ All extractors inherit from `base_extractor.py` which provides:
 
 #### Indexer
 
-- **`qdrant_hybrid.py`**: Creates and manages Qdrant collections with dense, sparse, and ColBERT vector indexes. Implements RRF fusion for hybrid search.
+- **`qdrant_hybrid.py`**: Creates and manages Qdrant collections with dense, sparse, and ColBERT vector indexes.
+  Implements RRF fusion for hybrid search.
 - **`live_vector_lake.py`**: Real-time vector ingestion for streaming data sources.
-- **`wal_manager.py`**: Write-ahead log for crash recovery and incremental processing. Tracks chunk states (pending, processing, indexed, failed).
+- **`wal_manager.py`**: Write-ahead log for crash recovery and incremental processing. Tracks chunk states (pending,
+  processing, indexed, failed).
 
 #### Graph Builder
 
-- **`entity_extractor.py`**: spaCy NER-based extraction of 10 entity types: Person, Document, Project, Component, Technology, Team, Meeting, Decision, Milestone, Issue.
+- **`entity_extractor.py`**: spaCy NER-based extraction of 10 entity types: Person, Document, Project, Component,
+  Technology, Team, Meeting, Decision, Milestone, Issue.
 - **`neo4j_loader.py`**: Loads entities and 9 relation types into Neo4j. Supports incremental updates.
 - **`schema.yaml`**: Defines the graph schema (entity types, relation types, constraints).
 
@@ -283,7 +291,8 @@ The proxy is a FastAPI application serving on port `8080`.
 The knowledge graph enriches retrieval with entity relationships.
 
 - **10 Entity Types**: Person, Document, Project, Component, Technology, Team, Meeting, Decision, Milestone, Issue
-- **9 Relation Types**: authored_by, belongs_to, depends_on, related_to, mentions, created_by, assigned_to, reviewed_by, blocks
+- **9 Relation Types**: authored_by, belongs_to, depends_on, related_to, mentions, created_by, assigned_to, reviewed_by,
+  blocks
 - **Multi-hop Traversal**: Cypher queries traverse relationships to find related entities within configurable depth
 - **Graceful Degradation**: Neo4j unavailable → graph expansion skipped, proxy continues with vector search only
 
@@ -291,34 +300,35 @@ The knowledge graph enriches retrieval with entity relationships.
 
 Multi-tier caching with configurable backends:
 
-| Tier | Backend | TTL | Content |
-|------|---------|-----|---------|
-| **Embedding** | Redis / in-memory | 24h | Query embeddings (MD5 key) |
-| **Rerank** | Redis / in-memory | 5 min | Reranked chunk indices |
-| **Response** | Redis / in-memory | 1h | Full LLM responses |
+| Tier          | Backend           | TTL   | Content                    |
+|---------------|-------------------|-------|----------------------------|
+| **Embedding** | Redis / in-memory | 24h   | Query embeddings (MD5 key) |
+| **Rerank**    | Redis / in-memory | 5 min | Reranked chunk indices     |
+| **Response**  | Redis / in-memory | 1h    | Full LLM responses         |
 
-When Redis is unavailable (`USE_REDIS=false` or connection failure), the system falls back to an in-memory LRU cache. The proxy never crashes on cache failure.
+When Redis is unavailable (`USE_REDIS=false` or connection failure), the system falls back to an in-memory LRU cache.
+The proxy never crashes on cache failure.
 
 ---
 
 ## 5. Technology Stack
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **LLM** | Any OpenAI-compatible (vLLM, llama.cpp, Anthropic, Ollama) | Response generation |
-| **SLM** | Lightweight ~2-3B (Llama, Gemma, Qwen) | Query routing, entity extraction |
-| **Embeddings** | BAAI/bge-m3 | Dense (1024-dim) + sparse + ColBERT |
-| **Vector DB** | Qdrant | Hybrid search, RRF fusion |
-| **Graph DB** | Neo4j | Entity relationships, multi-hop traversal |
-| **Cache** | Redis | Multi-tier caching |
-| **Proxy** | FastAPI + LangGraph | OpenAI-compatible API, agentic orchestration |
-| **ETL** | Python, spaCy, BeautifulSoup, sentence-transformers | Data extraction, chunking, indexing |
-| **Dashboard** | Streamlit | HITL expert review |
-| **MCP** | FastMCP | Model Context Protocol server |
-| **Auth** | JWT + Keycloak OIDC + LDAP/AD | SSO, RBAC (4 roles) |
-| **Infra** | Kubernetes + Helm | HPA, probes, secrets |
-| **Backup** | S3/MinIO | Automated snapshots |
-| **Fine-tuning** | LoRA/QLoRA, MLflow, MinIO | Model training and tracking |
+| Component       | Technology                                                 | Purpose                                      |
+|-----------------|------------------------------------------------------------|----------------------------------------------|
+| **LLM**         | Any OpenAI-compatible (vLLM, llama.cpp, Anthropic, Ollama) | Response generation                          |
+| **SLM**         | Lightweight ~2-3B (Llama, Gemma, Qwen)                     | Query routing, entity extraction             |
+| **Embeddings**  | BAAI/bge-m3                                                | Dense (1024-dim) + sparse + ColBERT          |
+| **Vector DB**   | Qdrant                                                     | Hybrid search, RRF fusion                    |
+| **Graph DB**    | Neo4j                                                      | Entity relationships, multi-hop traversal    |
+| **Cache**       | Redis                                                      | Multi-tier caching                           |
+| **Proxy**       | FastAPI + LangGraph                                        | OpenAI-compatible API, agentic orchestration |
+| **ETL**         | Python, spaCy, BeautifulSoup, sentence-transformers        | Data extraction, chunking, indexing          |
+| **Dashboard**   | Streamlit                                                  | HITL expert review                           |
+| **MCP**         | FastMCP                                                    | Model Context Protocol server                |
+| **Auth**        | JWT + Keycloak OIDC + LDAP/AD                              | SSO, RBAC (4 roles)                          |
+| **Infra**       | Kubernetes + Helm                                          | HPA, probes, secrets                         |
+| **Backup**      | S3/MinIO                                                   | Automated snapshots                          |
+| **Fine-tuning** | LoRA/QLoRA, MLflow, MinIO                                  | Model training and tracking                  |
 
 ---
 
@@ -328,7 +338,8 @@ When Redis is unavailable (`USE_REDIS=false` or connection failure), the system 
 
 The system is designed to run fully offline:
 
-1. **Pre-downloaded models**: All models (embedder, reranker, LLM, SLM) are downloaded via `scripts/download_models_offline.py` and stored locally.
+1. **Pre-downloaded models**: All models (embedder, reranker, LLM, SLM) are downloaded via
+   `scripts/download_models_offline.py` and stored locally.
 2. **No external API calls**: All inference runs locally — no OpenAI, Cohere, or HuggingFace API calls at runtime.
 3. **Offline Docker images**: All container images are pre-pulled and available locally.
 4. **Local model serving**: vLLM or llama.cpp serves models on localhost.
@@ -360,20 +371,20 @@ services:
 
 ### Authentication
 
-| Method | Status | Description |
-|--------|--------|-------------|
-| **JWT (local)** | Implemented | Access + refresh token pairs, SQLite user store |
-| **LDAP/AD** | Implemented | Enterprise directory authentication fallback |
-| **Keycloak OIDC** | Configurable | Corporate SSO integration |
+| Method            | Status       | Description                                     |
+|-------------------|--------------|-------------------------------------------------|
+| **JWT (local)**   | Implemented  | Access + refresh token pairs, SQLite user store |
+| **LDAP/AD**       | Implemented  | Enterprise directory authentication fallback    |
+| **Keycloak OIDC** | Configurable | Corporate SSO integration                       |
 
 ### Authorization (RBAC)
 
-| Role | Rank | Permissions |
-|------|------|-------------|
-| `admin` | 4 | All endpoints, model management, training triggers |
-| `expert` | 3 | Chat + feedback submission |
-| `user` | 2 | Chat only |
-| `read_only` | 1 | Models list + health checks |
+| Role        | Rank | Permissions                                        |
+|-------------|------|----------------------------------------------------|
+| `admin`     | 4    | All endpoints, model management, training triggers |
+| `expert`    | 3    | Chat + feedback submission                         |
+| `user`      | 2    | Chat only                                          |
+| `read_only` | 1    | Models list + health checks                        |
 
 ### Security Features
 
@@ -391,9 +402,12 @@ services:
 ## 8. Key Design Principles
 
 1. **Air-gapped first** — All models pre-downloaded. No external API calls at runtime.
-2. **Graceful degradation** — Every component can fail independently. Neo4j unavailable → skip graph expansion. Reranker OOM → use raw scores. Redis down → in-memory cache. The proxy never crashes.
-3. **Incremental by default** — WAL-based checkpointing. SHA-256 content-addressable chunks. Only changed documents reindexed.
-4. **OpenAI compatibility** — Drop-in replacement for any OpenAI client. RAG extensions silently ignored by standard clients.
+2. **Graceful degradation** — Every component can fail independently. Neo4j unavailable → skip graph expansion. Reranker
+   OOM → use raw scores. Redis down → in-memory cache. The proxy never crashes.
+3. **Incremental by default** — WAL-based checkpointing. SHA-256 content-addressable chunks. Only changed documents
+   reindexed.
+4. **OpenAI compatibility** — Drop-in replacement for any OpenAI client. RAG extensions silently ignored by standard
+   clients.
 5. **Dual-model routing** — SLM (2-3B) for fast preprocessing. LLM for heavy generation.
 6. **Multi-provider** — Pluggable backend adapters for vLLM, llama.cpp, Anthropic, Ollama, OpenAI-compatible.
 7. **Optional complexity** — LangGraph, Neo4j, Redis all optional. Runs in simple RAG mode by default.

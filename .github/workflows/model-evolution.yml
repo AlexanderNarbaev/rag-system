@@ -2,7 +2,7 @@ name: Model Evolution CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "proxy/app/model_evolution/**"
       - "tests/model_evolution/**"
@@ -571,7 +571,7 @@ jobs:
   summary:
     name: Pipeline Summary
     runs-on: ubuntu-latest
-    needs: [export-dataset, train, evaluate, promote]
+    needs: [ export-dataset, train, evaluate, promote ]
     if: always()
     steps:
       - name: Generate summary

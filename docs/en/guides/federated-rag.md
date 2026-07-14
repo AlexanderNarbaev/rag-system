@@ -2,7 +2,8 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-06
 
-Guide to deploying and operating the Federated RAG Proxy — a standalone service that fans out queries across multiple independent RAG instances (silos), merges results, and generates answers from the unified corpus.
+Guide to deploying and operating the Federated RAG Proxy — a standalone service that fans out queries across multiple
+independent RAG instances (silos), merges results, and generates answers from the unified corpus.
 
 ---
 
@@ -29,7 +30,8 @@ Guide to deploying and operating the Federated RAG Proxy — a standalone servic
 
 ### What Is Federated RAG?
 
-Federated RAG allows you to query **multiple independent RAG instances** (called "silos") through a single unified endpoint. Each silo maintains its own vector database, knowledge graph, and document collection. The federation layer:
+Federated RAG allows you to query **multiple independent RAG instances** (called "silos") through a single unified
+endpoint. Each silo maintains its own vector database, knowledge graph, and document collection. The federation layer:
 
 1. Receives a single query from the user
 2. Fans out the query to multiple silos **in parallel** (via `asyncio.gather`)
@@ -38,13 +40,13 @@ Federated RAG allows you to query **multiple independent RAG instances** (called
 
 ### When to Use It
 
-| Scenario | Why Federated RAG |
-|----------|-------------------|
-| **Multi-department knowledge** | HR, Engineering, Finance each have separate RAG instances with different access controls |
-| **Geo-distributed teams** | Silos in US-East, US-West, EU-West with local latency optimization |
-| **Mergers & acquisitions** | Combine RAG systems from different companies without migrating data |
-| **Data isolation requirements** | Legal/policy mandates keep certain document sets on separate infrastructure |
-| **Independent scaling** | High-traffic engineering docs and low-traffic HR docs scale independently |
+| Scenario                        | Why Federated RAG                                                                        |
+|---------------------------------|------------------------------------------------------------------------------------------|
+| **Multi-department knowledge**  | HR, Engineering, Finance each have separate RAG instances with different access controls |
+| **Geo-distributed teams**       | Silos in US-East, US-West, EU-West with local latency optimization                       |
+| **Mergers & acquisitions**      | Combine RAG systems from different companies without migrating data                      |
+| **Data isolation requirements** | Legal/policy mandates keep certain document sets on separate infrastructure              |
+| **Independent scaling**         | High-traffic engineering docs and low-traffic HR docs scale independently                |
 
 ### Multi-Silo Topology
 
@@ -65,7 +67,9 @@ Federated RAG allows you to query **multiple independent RAG instances** (called
    └─────────┘       └─────────┘       └─────────┘
 ```
 
-**Key principle:** Each silo is a complete, self-contained RAG proxy instance with its own `/v1/chat/completions` endpoint. The federation layer does **not** have its own vector store — it is purely a router, merger, and generation delegator.
+**Key principle:** Each silo is a complete, self-contained RAG proxy instance with its own `/v1/chat/completions`
+endpoint. The federation layer does **not** have its own vector store — it is purely a router, merger, and generation
+delegator.
 
 ---
 
@@ -142,12 +146,12 @@ Client Request
 
 ### Key Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| **Async fan-out (asyncio.gather)** | Parallelizes silo queries; total latency ≈ max(silo_latency) not sum |
-| **Circuit breaker per silo** | Prevents cascading failures; 5 consecutive failures → OPEN for 30s |
-| **No vector store in federation** | Federation is stateless; all retrieval happens in silos |
-| **Graceful partial failure** | If 1 of 3 silos times out, the federation returns results from the other 2 |
+| Decision                                | Rationale                                                                        |
+|-----------------------------------------|----------------------------------------------------------------------------------|
+| **Async fan-out (asyncio.gather)**      | Parallelizes silo queries; total latency ≈ max(silo_latency) not sum             |
+| **Circuit breaker per silo**            | Prevents cascading failures; 5 consecutive failures → OPEN for 30s               |
+| **No vector store in federation**       | Federation is stateless; all retrieval happens in silos                          |
+| **Graceful partial failure**            | If 1 of 3 silos times out, the federation returns results from the other 2       |
 | **rag_skip_generation on silo queries** | Silos return only `rag_sources` (chunks), not full answers — saves LLM inference |
 
 ---
@@ -157,7 +161,8 @@ Client Request
 ### Prerequisites
 
 - **Docker** 24.0+ and **Docker Compose** v2.20+
-- At least **one running RAG proxy instance** (the federation layer queries silos via their `/v1/chat/completions` endpoints)
+- At least **one running RAG proxy instance** (the federation layer queries silos via their `/v1/chat/completions`
+  endpoints)
 - Python 3.12+ (if running without Docker)
 
 ### 3.1 Docker Deployment (Recommended)
@@ -249,55 +254,55 @@ All configuration is set via environment variables in `federation/.env`.
 
 ### Required Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_INSTANCES_JSON` | `[]` | JSON array of silo configurations. Must contain at least one silo. |
-| `FEDERATION_MODE` | `auto` | Federation mode: `auto`, `strict`, or `merge`. See [Section 6](#6-federation-modes). |
+| Variable                    | Default | Description                                                                          |
+|-----------------------------|---------|--------------------------------------------------------------------------------------|
+| `FEDERATION_INSTANCES_JSON` | `[]`    | JSON array of silo configurations. Must contain at least one silo.                   |
+| `FEDERATION_MODE`           | `auto`  | Federation mode: `auto`, `strict`, or `merge`. See [Section 6](#6-federation-modes). |
 
 ### Merge Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_MERGE_STRATEGY` | `weighted_rrf` | Merge strategy: `weighted_rrf`, `round_robin`, or `top_per_instance`. See [Section 7](#7-merge-strategies). |
-| `FEDERATION_MERGE_K` | `60` | Maximum number of chunks returned after merge (top-K). Range: 1–200. |
-| `FEDERATION_RRF_K` | `60` | RRF smoothing constant. Higher values reduce rank position sensitivity. Used only by `weighted_rrf` strategy. |
+| Variable                    | Default        | Description                                                                                                   |
+|-----------------------------|----------------|---------------------------------------------------------------------------------------------------------------|
+| `FEDERATION_MERGE_STRATEGY` | `weighted_rrf` | Merge strategy: `weighted_rrf`, `round_robin`, or `top_per_instance`. See [Section 7](#7-merge-strategies).   |
+| `FEDERATION_MERGE_K`        | `60`           | Maximum number of chunks returned after merge (top-K). Range: 1–200.                                          |
+| `FEDERATION_RRF_K`          | `60`           | RRF smoothing constant. Higher values reduce rank position sensitivity. Used only by `weighted_rrf` strategy. |
 
 ### Timeout Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_PER_INSTANCE_TIMEOUT_S` | `10` | Timeout for each individual silo HTTP request (seconds). |
-| `FEDERATION_TOTAL_TIMEOUT_S` | `30` | Budgeted total timeout — logged for monitoring, not enforced at the HTTP level (FastAPI handles request-level timeouts). |
+| Variable                            | Default | Description                                                                                                              |
+|-------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------|
+| `FEDERATION_PER_INSTANCE_TIMEOUT_S` | `10`    | Timeout for each individual silo HTTP request (seconds).                                                                 |
+| `FEDERATION_TOTAL_TIMEOUT_S`        | `30`    | Budgeted total timeout — logged for monitoring, not enforced at the HTTP level (FastAPI handles request-level timeouts). |
 
 ### Circuit Breaker Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_CIRCUIT_BREAKER_THRESHOLD` | `5` | Consecutive failures before circuit breaker opens. |
-| `FEDERATION_CIRCUIT_BREAKER_RECOVERY_S` | `30` | Seconds to wait before attempting recovery (transitioning to HALF_OPEN). |
+| Variable                                | Default | Description                                                              |
+|-----------------------------------------|---------|--------------------------------------------------------------------------|
+| `FEDERATION_CIRCUIT_BREAKER_THRESHOLD`  | `5`     | Consecutive failures before circuit breaker opens.                       |
+| `FEDERATION_CIRCUIT_BREAKER_RECOVERY_S` | `30`    | Seconds to wait before attempting recovery (transitioning to HALF_OPEN). |
 
 ### LLM / Generation Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_LLM_ENDPOINT` | `""` | Direct LLM endpoint for generation. When set, the federation layer generates answers itself instead of delegating to a primary silo. Example: `http://llm-host:8000/v1` |
-| `FEDERATION_LLM_MODEL` | `""` | Model name to use with `FEDERATION_LLM_ENDPOINT` for direct generation. |
-| `FEDERATION_AUTO_SLM_ENABLED` | `true` | Enable keyword-based auto-routing in `auto` mode. When `false`, auto mode fans out to all silos. |
+| Variable                      | Default | Description                                                                                                                                                             |
+|-------------------------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FEDERATION_LLM_ENDPOINT`     | `""`    | Direct LLM endpoint for generation. When set, the federation layer generates answers itself instead of delegating to a primary silo. Example: `http://llm-host:8000/v1` |
+| `FEDERATION_LLM_MODEL`        | `""`    | Model name to use with `FEDERATION_LLM_ENDPOINT` for direct generation.                                                                                                 |
+| `FEDERATION_AUTO_SLM_ENABLED` | `true`  | Enable keyword-based auto-routing in `auto` mode. When `false`, auto mode fans out to all silos.                                                                        |
 
 ### Auth Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_AUTH_ENABLED` | `false` | When `true`, the federation extracts user groups from JWT tokens. When `false`, uses `FEDERATION_DEFAULT_GROUPS`. |
-| `FEDERATION_JWT_SECRET` | `""` | Secret key for JWT signature verification. Falls back to `JWT_SECRET` env var. |
-| `FEDERATION_JWT_ALGORITHM` | `HS256` | JWT signing algorithm. Falls back to `JWT_ALGORITHM` env var. |
-| `FEDERATION_DEFAULT_GROUPS` | `admin` | Comma-separated list of groups assigned when auth is disabled. Example: `admin,engineering,hr`. |
+| Variable                    | Default | Description                                                                                                       |
+|-----------------------------|---------|-------------------------------------------------------------------------------------------------------------------|
+| `FEDERATION_AUTH_ENABLED`   | `false` | When `true`, the federation extracts user groups from JWT tokens. When `false`, uses `FEDERATION_DEFAULT_GROUPS`. |
+| `FEDERATION_JWT_SECRET`     | `""`    | Secret key for JWT signature verification. Falls back to `JWT_SECRET` env var.                                    |
+| `FEDERATION_JWT_ALGORITHM`  | `HS256` | JWT signing algorithm. Falls back to `JWT_ALGORITHM` env var.                                                     |
+| `FEDERATION_DEFAULT_GROUPS` | `admin` | Comma-separated list of groups assigned when auth is disabled. Example: `admin,engineering,hr`.                   |
 
 ### Silo Config File Alternative
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FEDERATION_INSTANCES_FILE` | `""` | Path to a JSON file containing silo configurations. When set, overrides `FEDERATION_INSTANCES_JSON`. Useful for mounting via ConfigMap in K8s. |
+| Variable                    | Default | Description                                                                                                                                    |
+|-----------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FEDERATION_INSTANCES_FILE` | `""`    | Path to a JSON file containing silo configurations. When set, overrides `FEDERATION_INSTANCES_JSON`. Useful for mounting via ConfigMap in K8s. |
 
 ---
 
@@ -323,21 +328,22 @@ Each silo in `FEDERATION_INSTANCES_JSON` is a JSON object with the following fie
 
 ### Field Reference
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `id` | string | **Yes** | — | Unique silo identifier. Used in federation metadata and circuit breaker naming. |
-| `name` | string | **Yes** | — | Human-readable silo name for responses and logs. |
-| `proxy_url` | string | **Yes** | — | Base URL of the RAG proxy instance. Must include the path prefix (e.g., `http://host:8000/v1`). Trailing slashes are stripped automatically. |
-| `weight` | float | No | `1.0` | Relative weight for the `weighted_rrf` merge strategy. Higher weight = silo results ranked higher. Must be > 0. |
-| `access_groups` | string[] | No | `[]` | List of groups that can access this silo. User must be in at least one group for access. Empty list = no group restriction. |
-| `collections` | string[] | No | `[]` | Qdrant collections available in this silo. Informational — not enforced at the federation layer. |
-| `api_key` | string | No | `null` | Bearer token sent as `Authorization: Bearer <api_key>` to the silo's proxy. |
-| `timeout_s` | int | No | `10` | Per-request timeout for this specific silo (overrides `FEDERATION_PER_INSTANCE_TIMEOUT_S`). |
-| `is_primary` | boolean | No | `false` | When `true`, this silo is used for LLM generation delegation when no direct `FEDERATION_LLM_ENDPOINT` is configured. Only one primary recommended. |
+| Field           | Type     | Required | Default | Description                                                                                                                                        |
+|-----------------|----------|----------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `id`            | string   | **Yes**  | —       | Unique silo identifier. Used in federation metadata and circuit breaker naming.                                                                    |
+| `name`          | string   | **Yes**  | —       | Human-readable silo name for responses and logs.                                                                                                   |
+| `proxy_url`     | string   | **Yes**  | —       | Base URL of the RAG proxy instance. Must include the path prefix (e.g., `http://host:8000/v1`). Trailing slashes are stripped automatically.       |
+| `weight`        | float    | No       | `1.0`   | Relative weight for the `weighted_rrf` merge strategy. Higher weight = silo results ranked higher. Must be > 0.                                    |
+| `access_groups` | string[] | No       | `[]`    | List of groups that can access this silo. User must be in at least one group for access. Empty list = no group restriction.                        |
+| `collections`   | string[] | No       | `[]`    | Qdrant collections available in this silo. Informational — not enforced at the federation layer.                                                   |
+| `api_key`       | string   | No       | `null`  | Bearer token sent as `Authorization: Bearer <api_key>` to the silo's proxy.                                                                        |
+| `timeout_s`     | int      | No       | `10`    | Per-request timeout for this specific silo (overrides `FEDERATION_PER_INSTANCE_TIMEOUT_S`).                                                        |
+| `is_primary`    | boolean  | No       | `false` | When `true`, this silo is used for LLM generation delegation when no direct `FEDERATION_LLM_ENDPOINT` is configured. Only one primary recommended. |
 
 ### Validation Rules
 
 The `SiloRegistry.validate()` method enforces:
+
 - Each `id` must be unique (duplicate IDs raise `ConfigError`)
 - `weight` must be > 0
 - `proxy_url` must be non-empty
@@ -345,6 +351,7 @@ The `SiloRegistry.validate()` method enforces:
 ### Examples
 
 **Single primary silo (minimal):**
+
 ```json
 [
   {
@@ -357,6 +364,7 @@ The `SiloRegistry.validate()` method enforces:
 ```
 
 **Multi-department with access control:**
+
 ```json
 [
   {
@@ -395,6 +403,7 @@ The `SiloRegistry.validate()` method enforces:
 ```
 
 **Geo-distributed with regional weights:**
+
 ```json
 [
   {
@@ -426,26 +435,32 @@ The `SiloRegistry.validate()` method enforces:
 
 ## 6. Federation Modes
 
-Three modes control which silos receive queries. The mode is set via `FEDERATION_MODE` and can be overridden per-request via the `federation_mode` field in the request body.
+Three modes control which silos receive queries. The mode is set via `FEDERATION_MODE` and can be overridden per-request
+via the `federation_mode` field in the request body.
 
 ### 6.1 `auto` — Keyword-Based Routing (Default)
 
 The federation analyzes the query text and routes it to the most relevant silos using keyword matching.
 
 **How it works:**
+
 1. `classify_query()` in `auto_router.py` checks the query against a keyword map:
-   - **hr**: `sick leave`, `vacation`, `hiring`, `onboarding`, `payroll`, `salary`, `benefits`, `hr policy`, and Russian equivalents (`больничный`, `отпуск`)
-   - **engineering**: `deploy`, `production`, `kubernetes`, `docker`, `pipeline`, `code review`, `merge request`, `pull request`, `git`, `jira`, `confluence`, `architecture`, `microservice`, `api`
-   - **finance**: `budget`, `expense`, `invoice`, `reimbursement`, `report`, `quarterly`, `annual`, `fiscal`, `tax`
+    - **hr**: `sick leave`, `vacation`, `hiring`, `onboarding`, `payroll`, `salary`, `benefits`, `hr policy`, and
+      Russian equivalents (`больничный`, `отпуск`)
+    - **engineering**: `deploy`, `production`, `kubernetes`, `docker`, `pipeline`, `code review`, `merge request`,
+      `pull request`, `git`, `jira`, `confluence`, `architecture`, `microservice`, `api`
+    - **finance**: `budget`, `expense`, `invoice`, `reimbursement`, `report`, `quarterly`, `annual`, `fiscal`, `tax`
 2. Silos are sorted by match count (most matches first).
 3. If no keywords match, the query fans out to **all** accessible silos.
 
 **When to use:**
+
 - Queries are domain-specific and keywords are sufficient for routing
 - You want to minimize silo load by not fanning out to irrelevant silos
 - You have a small number of clearly-separated knowledge domains
 
 **When NOT to use:**
+
 - Queries span multiple domains (e.g., "Compare engineering and HR onboarding processes")
 - Your silos have overlapping content that isn't captured by keyword mapping
 
@@ -457,12 +472,14 @@ Set `FEDERATION_AUTO_SLM_ENABLED=false` to make `auto` mode fan out to all silos
 Queries only the silo(s) specified by the client in the `federation_silo` request field.
 
 **How it works:**
+
 1. Client sends `"federation_silo": "hr"` in the request body.
 2. Only the `hr` silo is queried.
 3. Other silos are completely ignored.
 4. Access control still applies — the user must have access to the requested silo.
 
 **Example request:**
+
 ```bash
 curl -X POST http://localhost:8001/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -477,6 +494,7 @@ curl -X POST http://localhost:8001/v1/chat/completions \
 ```
 
 **When to use:**
+
 - The client (UI or upstream service) already knows which silo to query
 - You have a silo selector in your chat UI
 - Debugging — isolating a specific silo's behavior
@@ -486,30 +504,33 @@ curl -X POST http://localhost:8001/v1/chat/completions \
 Queries **every** silo the user has access to, regardless of query content.
 
 **How it works:**
+
 1. `list_accessible(user_groups)` returns all silos the user can access.
 2. The query is sent to every accessible silo in parallel.
 3. Results from all silos are merged.
 
 **When to use:**
+
 - Cross-domain queries (e.g., "What company policies apply to engineering interns?")
 - You want maximum recall at the cost of higher latency and silo load
 - You have a small number of silos (2–5) where fan-out overhead is acceptable
 
 ### Mode Comparison
 
-| Aspect | `auto` | `strict` | `merge` |
-|--------|--------|----------|---------|
-| Silo selection | Keyword-based, fallback to all | Client-specified: `federation_silo` | All accessible silos |
-| Latency | Low (few silos queried) | Lowest (1 silo) | Highest (all silos) |
-| Recall | Domain-targeted | Silo-scoped | Maximum cross-silo |
-| Per-request override | `federation_mode: "auto"` | `federation_mode: "strict"` | `federation_mode: "merge"` |
-| Good for | Domain-separated knowledge | Silo-isolated queries | Cross-domain search |
+| Aspect               | `auto`                         | `strict`                            | `merge`                    |
+|----------------------|--------------------------------|-------------------------------------|----------------------------|
+| Silo selection       | Keyword-based, fallback to all | Client-specified: `federation_silo` | All accessible silos       |
+| Latency              | Low (few silos queried)        | Lowest (1 silo)                     | Highest (all silos)        |
+| Recall               | Domain-targeted                | Silo-scoped                         | Maximum cross-silo         |
+| Per-request override | `federation_mode: "auto"`      | `federation_mode: "strict"`         | `federation_mode: "merge"` |
+| Good for             | Domain-separated knowledge     | Silo-isolated queries               | Cross-domain search        |
 
 ---
 
 ## 7. Merge Strategies
 
-After fan-out, the federation must combine results from multiple silos into a single ranked list. Three strategies are available.
+After fan-out, the federation must combine results from multiple silos into a single ranked list. Three strategies are
+available.
 
 ### 7.1 `weighted_rrf` — Weighted Reciprocal Rank Fusion (Default)
 
@@ -522,17 +543,21 @@ RRF_Score(chunk) = w / (k + r + 1)
 ```
 
 Where:
+
 - `w` = the silo's configured `weight` factor (default: 1.0)
 - `k` = RRF smoothing constant (`FEDERATION_RRF_K`, default: 60)
 - `r` = the chunk's 0-based rank within its silo's results
 
-After scoring, chunks are sorted by descending RRF score, deduplicated (by SHA-256 of text+source+title), and truncated to `merge_k`.
+After scoring, chunks are sorted by descending RRF score, deduplicated (by SHA-256 of text+source+title), and truncated
+to `merge_k`.
 
 **Effect of `k`:**
+
 - Higher `k` (e.g., 120) → rank position matters less → more even blending
 - Lower `k` (e.g., 20) → rank position dominates → top-ranked chunks from each silo are strongly preferred
 
 **Effect of `weight`:**
+
 - `weight: 2.0` → silo's chunks always outrank identically-positioned chunks from a `weight: 1.0` silo
 - Useful for prioritizing primary/authoritative sources
 
@@ -551,6 +576,7 @@ Final order: chunk_b1, chunk_b2, chunk_a1, chunk_a2
 ```
 
 **When to use:**
+
 - You trust the silos' internal ranking (score-aware retrieval)
 - You have silos with different authority levels (use weights)
 - Default strategy for most deployments
@@ -569,6 +595,7 @@ Round-robin: a1, b1, a2, b2, a3 → deduplicated, truncated to merge_k
 ```
 
 **When to use:**
+
 - You want equal representation from every silo
 - Silo internal rankings are unreliable or incomparable
 - You want diversity across silos rather than score optimization
@@ -592,17 +619,18 @@ All 60 chunks sorted by descending score → truncated to merge_k
 ```
 
 **When to use:**
+
 - You want guaranteed representation from every silo
 - Each silo's scoring is comparable across silos
 - You want the "best of each" rather than pure interleaving
 
 ### Strategy Selection Guide
 
-| Strategy | Uses Weights | Uses Scores | Best For |
-|----------|-------------|-------------|----------|
-| `weighted_rrf` | Yes | Yes (indirectly, via rank) | Most deployments; authoritative sources |
-| `round_robin` | No | No | Diversity; equal representation |
-| `top_per_instance` | No | Yes (silo scores) | Guaranteed per-silo representation |
+| Strategy           | Uses Weights | Uses Scores                | Best For                                |
+|--------------------|--------------|----------------------------|-----------------------------------------|
+| `weighted_rrf`     | Yes          | Yes (indirectly, via rank) | Most deployments; authoritative sources |
+| `round_robin`      | No           | No                         | Diversity; equal representation         |
+| `top_per_instance` | No           | Yes (silo scores)          | Guaranteed per-silo representation      |
 
 **Per-request override:**
 
@@ -629,6 +657,7 @@ All endpoints are served by the federation FastAPI app on port 8001.
 OpenAI-compatible chat completion with federation. Performs search + merge + generation.
 
 **Request:**
+
 ```json
 {
   "model": "rag-federated",
@@ -647,17 +676,18 @@ OpenAI-compatible chat completion with federation. Performs search + merge + gen
 
 **Request Fields:**
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `model` | string | Yes | — | Must be `"rag-federated"`. |
-| `messages` | array | Yes | — | Chat messages. Last message `content` is used as the query. |
-| `federation_mode` | string | No | `FEDERATION_MODE` | Override mode: `auto`, `strict`, or `merge`. |
-| `federation_silo` | string | No | `null` | Target silo ID for `strict` mode. |
-| `federation_merge_strategy` | string | No | `FEDERATION_MERGE_STRATEGY` | Override merge strategy. |
-| `federation_top_k` | int | No | `FEDERATION_MERGE_K` | Max chunks after merge. |
-| `rag_skip_generation` | boolean | No | `false` | When `true`, returns only search results (no LLM generation). |
+| Field                       | Type    | Required | Default                     | Description                                                   |
+|-----------------------------|---------|----------|-----------------------------|---------------------------------------------------------------|
+| `model`                     | string  | Yes      | —                           | Must be `"rag-federated"`.                                    |
+| `messages`                  | array   | Yes      | —                           | Chat messages. Last message `content` is used as the query.   |
+| `federation_mode`           | string  | No       | `FEDERATION_MODE`           | Override mode: `auto`, `strict`, or `merge`.                  |
+| `federation_silo`           | string  | No       | `null`                      | Target silo ID for `strict` mode.                             |
+| `federation_merge_strategy` | string  | No       | `FEDERATION_MERGE_STRATEGY` | Override merge strategy.                                      |
+| `federation_top_k`          | int     | No       | `FEDERATION_MERGE_K`        | Max chunks after merge.                                       |
+| `rag_skip_generation`       | boolean | No       | `false`                     | When `true`, returns only search results (no LLM generation). |
 
 **Response (with generation):**
+
 ```json
 {
   "id": "fed-1751234567",
@@ -701,6 +731,7 @@ OpenAI-compatible chat completion with federation. Performs search + merge + gen
 ```
 
 **Response (skip_generation=true or no chunks):**
+
 ```json
 {
   "id": "fed-1751234567",
@@ -727,12 +758,14 @@ OpenAI-compatible chat completion with federation. Performs search + merge + gen
 ```
 
 **Error response (all silos down):**
+
 ```json
 {
   "error": "All silos unavailable: ['hr', 'eng']",
   "type": "AllSilosDownError"
 }
 ```
+
 HTTP Status: 503
 
 ### 8.2 `POST /v1/search`
@@ -740,6 +773,7 @@ HTTP Status: 503
 Search-only endpoint. Retrieves and merges chunks without LLM generation.
 
 **Request:**
+
 ```json
 {
   "query": "deployment pipeline",
@@ -751,6 +785,7 @@ Search-only endpoint. Retrieves and merges chunks without LLM generation.
 ```
 
 **Response:**
+
 ```json
 {
   "rag_sources": [
@@ -790,6 +825,7 @@ Search-only endpoint. Retrieves and merges chunks without LLM generation.
 Lists silos accessible to the authenticated user (or all silos if auth is disabled).
 
 **Response:**
+
 ```json
 {
   "silos": [
@@ -820,6 +856,7 @@ Lists silos accessible to the authenticated user (or all silos if auth is disabl
 Comprehensive health check with silo status.
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -848,6 +885,7 @@ Kubernetes readiness probe. Returns silo URLs and statuses. Returns `not_ready` 
 OpenAI-compatible model listing.
 
 **Response:**
+
 ```json
 {
   "object": "list",
@@ -873,21 +911,22 @@ Prometheus metrics endpoint. Returns plain-text metrics in Prometheus exposition
 ### How It Works
 
 1. **Auth enabled** (`FEDERATION_AUTH_ENABLED=true`):
-   - `extract_user_groups()` reads the JWT from the `Authorization: Bearer <token>` header
-   - Decodes the token using `FEDERATION_JWT_SECRET` and `FEDERATION_JWT_ALGORITHM`
-   - Extracts groups from `payload.groups` and `payload.realm_access.roles`
-   - Combines both lists into a single `user_groups` array
+    - `extract_user_groups()` reads the JWT from the `Authorization: Bearer <token>` header
+    - Decodes the token using `FEDERATION_JWT_SECRET` and `FEDERATION_JWT_ALGORITHM`
+    - Extracts groups from `payload.groups` and `payload.realm_access.roles`
+    - Combines both lists into a single `user_groups` array
 
 2. **Auth disabled** (default):
-   - All users get the groups from `FEDERATION_DEFAULT_GROUPS` (default: `"admin"`)
+    - All users get the groups from `FEDERATION_DEFAULT_GROUPS` (default: `"admin"`)
 
 3. **Silo access check:**
-   - `SiloConfig.is_accessible_by(user_groups)` checks if the intersection of `user_groups` and `silo.access_groups` is non-empty
-   - If `silo.access_groups` is empty, all users can access the silo
+    - `SiloConfig.is_accessible_by(user_groups)` checks if the intersection of `user_groups` and `silo.access_groups` is
+      non-empty
+    - If `silo.access_groups` is empty, all users can access the silo
 
 4. **Filtering:**
-   - `registry.list_accessible(user_groups)` returns only silos the user can access
-   - Inaccessible silos are excluded from all queries
+    - `registry.list_accessible(user_groups)` returns only silos the user can access
+    - Inaccessible silos are excluded from all queries
 
 ### JWT Token Structure
 
@@ -909,6 +948,7 @@ Both `groups` (direct array) and `realm_access.roles` (Keycloak-style) are suppo
 ### Fallback: Unsigned Tokens
 
 If `FEDERATION_JWT_SECRET` is empty but a token is provided:
+
 - The token is decoded **without signature verification**
 - Groups are extracted from the payload
 - A warning is logged: `"No JWT secret configured — returning empty groups"`
@@ -957,13 +997,15 @@ Federation ──→ Direct LLM (FEDERATION_LLM_ENDPOINT)
 ```
 
 **Use when:**
+
 - You have a dedicated LLM for federation (avoids loading silo LLMs)
 - You want consistent generation style across all silos
 - You don't have a primary silo that should "own" answer generation
 
 ### Tier 2: Primary Silo Delegation
 
-If no `FEDERATION_LLM_ENDPOINT` is set, the federation finds the **primary silo** (the one with `is_primary: true`) and delegates generation to it:
+If no `FEDERATION_LLM_ENDPOINT` is set, the federation finds the **primary silo** (the one with `is_primary: true`) and
+delegates generation to it:
 
 ```
 Federation ──→ Primary Silo (/v1/chat/completions)
@@ -977,16 +1019,19 @@ Federation ──→ Primary Silo (/v1/chat/completions)
                }
 ```
 
-The primary silo receives **all merged chunks** (not just its own) and generates a comprehensive answer. The primary silo's `api_key` is used for authentication.
+The primary silo receives **all merged chunks** (not just its own) and generates a comprehensive answer. The primary
+silo's `api_key` is used for authentication.
 
 **Use when:**
+
 - Your primary silo has the most capable LLM
 - You want answers to be consistent with the primary silo's generation style
 - You don't have a separate LLM endpoint for federation
 
 ### Tier 3: Fallback Content
 
-If both direct LLM and primary silo delegation fail (or neither is configured), the federation returns a static fallback message:
+If both direct LLM and primary silo delegation fail (or neither is configured), the federation returns a static fallback
+message:
 
 ```
 "Retrieved {N} chunks from {M} silos. Generation service is currently unavailable.
@@ -1072,10 +1117,10 @@ For each silo:
 
 ### Configuration
 
-| Parameter | Env Variable | Default | Effect |
-|-----------|-------------|---------|--------|
-| Failure threshold | `FEDERATION_CIRCUIT_BREAKER_THRESHOLD` | 5 | Number of consecutive failures before opening |
-| Recovery timeout | `FEDERATION_CIRCUIT_BREAKER_RECOVERY_S` | 30 | Seconds in OPEN state before transitioning to HALF_OPEN |
+| Parameter         | Env Variable                            | Default | Effect                                                  |
+|-------------------|-----------------------------------------|---------|---------------------------------------------------------|
+| Failure threshold | `FEDERATION_CIRCUIT_BREAKER_THRESHOLD`  | 5       | Number of consecutive failures before opening           |
+| Recovery timeout  | `FEDERATION_CIRCUIT_BREAKER_RECOVERY_S` | 30      | Seconds in OPEN state before transitioning to HALF_OPEN |
 
 ### State Transitions
 
@@ -1105,15 +1150,15 @@ Alerts should fire when any silo enters OPEN state for more than 2 minutes.
 
 All metrics are exported at `GET /metrics` on the federation proxy (port 8001).
 
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `rag_federation_requests_total` | Counter | `mode`, `status` | Total federation requests. `status`: `started`, `success`, `error`. |
-| `rag_federation_silo_requests_total` | Counter | `silo`, `status` | Per-silo request count. Tracked by `silo_client.py`. |
-| `rag_federation_silo_latency_seconds` | Histogram | `silo` | Per-silo response latency. Buckets: 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0s. |
-| `rag_federation_total_latency_seconds` | Histogram | `mode` | End-to-end federation latency (fan-out + merge + generation). Buckets: 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0s. |
-| `rag_federation_merge_total_chunks` | Histogram | — | Distribution of chunk counts after merge. Buckets: 5, 10, 20, 30, 40, 50, 60, 80, 100. |
-| `rag_federation_circuit_breaker_state` | Gauge | `silo` | Circuit breaker state: 0=CLOSED, 1=OPEN, 2=HALF_OPEN. |
-| `rag_federation_silos_active` | Gauge | — | Total number of configured silos at startup. |
+| Metric                                 | Type      | Labels           | Description                                                                                                        |
+|----------------------------------------|-----------|------------------|--------------------------------------------------------------------------------------------------------------------|
+| `rag_federation_requests_total`        | Counter   | `mode`, `status` | Total federation requests. `status`: `started`, `success`, `error`.                                                |
+| `rag_federation_silo_requests_total`   | Counter   | `silo`, `status` | Per-silo request count. Tracked by `silo_client.py`.                                                               |
+| `rag_federation_silo_latency_seconds`  | Histogram | `silo`           | Per-silo response latency. Buckets: 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0s.                                    |
+| `rag_federation_total_latency_seconds` | Histogram | `mode`           | End-to-end federation latency (fan-out + merge + generation). Buckets: 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0s. |
+| `rag_federation_merge_total_chunks`    | Histogram | —                | Distribution of chunk counts after merge. Buckets: 5, 10, 20, 30, 40, 50, 60, 80, 100.                             |
+| `rag_federation_circuit_breaker_state` | Gauge     | `silo`           | Circuit breaker state: 0=CLOSED, 1=OPEN, 2=HALF_OPEN.                                                              |
+| `rag_federation_silos_active`          | Gauge     | —                | Total number of configured silos at startup.                                                                       |
 
 ### Key Monitoring Queries (PromQL)
 
@@ -1146,15 +1191,15 @@ rate(rag_federation_requests_total[5m])
 
 The federation uses Python's standard `logging` module with logger name `"federation"`. Key log events:
 
-| Event | Level | Message Pattern |
-|-------|-------|-----------------|
-| Startup | INFO | `Federation started: {N} silos, mode={mode}` |
-| Breaker opens | WARNING | `Breaker 'federation_{silo}' → OPEN ({count} failures)` |
-| Breaker closes | INFO | `Breaker 'federation_{silo}' → CLOSED (half-open success)` |
-| Silo query failure | WARNING | `Silo '{id}' query failed: {error}` |
+| Event              | Level   | Message Pattern                                                                                |
+|--------------------|---------|------------------------------------------------------------------------------------------------|
+| Startup            | INFO    | `Federation started: {N} silos, mode={mode}`                                                   |
+| Breaker opens      | WARNING | `Breaker 'federation_{silo}' → OPEN ({count} failures)`                                        |
+| Breaker closes     | INFO    | `Breaker 'federation_{silo}' → CLOSED (half-open success)`                                     |
+| Silo query failure | WARNING | `Silo '{id}' query failed: {error}`                                                            |
 | Generation failure | WARNING | `Direct LLM generation failed: {error}` / `Generation via primary silo '{id}' failed: {error}` |
-| Rate limiting | WARNING | *(from middleware, if enabled)* |
-| Shutdown | INFO | `Federation shutting down` |
+| Rate limiting      | WARNING | *(from middleware, if enabled)*                                                                |
+| Shutdown           | INFO    | `Federation shutting down`                                                                     |
 
 ---
 
@@ -1420,12 +1465,15 @@ federation:
 **Symptom:** Response contains `"errors": ["No accessible silos for user"]` with zero chunks.
 
 **Causes:**
+
 - Auth is enabled (`FEDERATION_AUTH_ENABLED=true`) but no valid JWT token is provided
 - User's JWT groups don't match any silo's `access_groups`
 - `FEDERATION_DEFAULT_GROUPS` is set to a group that has no access
 
 **Fix:**
-1. Check the JWT token's groups: decode it at [jwt.io](https://jwt.io) and verify `groups` or `realm_access.roles` claims
+
+1. Check the JWT token's groups: decode it at [jwt.io](https://jwt.io) and verify `groups` or `realm_access.roles`
+   claims
 2. Verify silo `access_groups` match the user's groups
 3. If testing without auth, set `FEDERATION_AUTH_ENABLED=false` and `FEDERATION_DEFAULT_GROUPS=admin`
 4. Check that at least one silo has `"access_groups": ["admin"]` or empty `"access_groups": []`
@@ -1435,11 +1483,13 @@ federation:
 **Symptom:** One silo consistently appears in `silos_skipped` in federation metadata.
 
 **Causes:**
+
 - Circuit breaker is OPEN for that silo (5+ consecutive failures)
 - Silo's `access_groups` don't include the user's groups
 - In `auto` mode, the query doesn't match any keywords for that silo
 
 **Fix:**
+
 1. Check circuit breaker state: look for `WARNING` log messages with `Breaker 'federation_{silo}' → OPEN`
 2. Wait for recovery timeout (default 30s) or restart the federation service to reset breakers
 3. Verify the silo is actually reachable: `curl http://silo-host:8000/v1/health`
@@ -1450,11 +1500,13 @@ federation:
 **Symptom:** Total latency is significantly higher than individual silo latencies.
 
 **Causes:**
+
 - One slow silo is blocking the fan-out (total latency ≈ max of individual latencies)
 - Generation step is slow (LLM inference)
 - Network latency to silos is high
 
 **Fix:**
+
 1. Check `per_silo_latency_ms` in the federation metadata to identify the slow silo
 2. Reduce `FEDERATION_PER_INSTANCE_TIMEOUT_S` to fail fast on slow silos
 3. Lower `FEDERATION_MERGE_K` to reduce context size for generation
@@ -1466,11 +1518,14 @@ federation:
 **Symptom:** The same content appears multiple times in `rag_sources`.
 
 **Causes:**
+
 - Two silos contain the same document (e.g., both Eng and HR silos have the company handbook)
 - SHA-256 deduplication didn't catch it due to slight text differences (formatting, metadata)
 
 **Fix:**
-- The built-in `deduplicate_chunks()` uses SHA-256 of `text + source_type + title`. If duplicates persist, the chunks differ in one of these fields
+
+- The built-in `deduplicate_chunks()` uses SHA-256 of `text + source_type + title`. If duplicates persist, the chunks
+  differ in one of these fields
 - Check silo configurations to ensure documents aren't indexed in multiple silos unintentionally
 - Review the ETL pipeline for each silo to confirm data source overlap
 
@@ -1479,12 +1534,14 @@ federation:
 **Symptom:** Response contains "Retrieved N chunks from M silos. Generation service is currently unavailable."
 
 **Causes:**
+
 - `FEDERATION_LLM_ENDPOINT` is not set AND no silo has `is_primary: true`
 - The direct LLM endpoint is unreachable
 - The primary silo's LLM is down or the silo returned an error during generation
 - `rag_skip_generation: true` was set in the request
 
 **Fix:**
+
 1. Check logs for: `"Direct LLM generation failed"` or `"Generation via primary silo 'X' failed"`
 2. Verify `FEDERATION_LLM_ENDPOINT` is reachable: `curl $FEDERATION_LLM_ENDPOINT/models`
 3. Ensure exactly one silo has `"is_primary": true`
@@ -1496,6 +1553,7 @@ federation:
 **Symptom:** Federation fails to start with `ConfigError`.
 
 **Common config errors:**
+
 ```
 ConfigError: Invalid FEDERATION_INSTANCES_JSON: ...    # Malformed JSON
 ConfigError: FEDERATION_INSTANCES_JSON must be a JSON array  # Object instead of array
@@ -1508,6 +1566,7 @@ ConfigError: Silo 'hr' proxy_url is empty                     # Empty URL
 ```
 
 **Fix:**
+
 1. Validate your JSON at [jsonlint.com](https://jsonlint.com)
 2. Ensure each silo has `id`, `name`, and `proxy_url` fields
 3. Ensure all silo IDs are unique
@@ -1519,14 +1578,16 @@ ConfigError: Silo 'hr' proxy_url is empty                     # Empty URL
 **Symptom:** A query about HR topics gets routed to the Engineering silo (or vice versa).
 
 **Causes:**
+
 - No keywords matched, so auto mode fell back to all silos
 - The keyword map doesn't cover the user's query terms
 
 **Fix:**
+
 1. The current keyword map is hardcoded in `auto_router.py`. To customize:
-   - Edit the `_KEYWORD_MAP` dictionary in `federation/app/auto_router.py`
-   - Add your domain-specific keywords to the appropriate silo entry
-   - Rebuild the Docker image
+    - Edit the `_KEYWORD_MAP` dictionary in `federation/app/auto_router.py`
+    - Add your domain-specific keywords to the appropriate silo entry
+    - Rebuild the Docker image
 2. Use `strict` mode with `federation_silo` for explicit routing
 3. Set `FEDERATION_AUTO_SLM_ENABLED=false` to disable keyword routing and always fan out
 

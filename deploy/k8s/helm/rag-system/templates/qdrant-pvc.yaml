@@ -1,23 +1,23 @@
-{{- if .Values.qdrant.enabled }}
+{ { - if .Values.qdrant.enabled } }
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "rag-system.fullname" . }}-qdrant
-  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  name: { { include "rag-system.fullname" . } }-qdrant
+  namespace: { { .Values.global.namespace | default .Release.Namespace } }
   labels:
-    {{- include "rag-system.qdrantLabels" . | nindent 4 }}
+    { { - include "rag-system.qdrantLabels" . | nindent 4 } }
 spec:
   type: ClusterIP
   clusterIP: None
   ports:
     - name: http
-      port: {{ .Values.qdrant.service.port }}
-      targetPort: {{ .Values.qdrant.service.port }}
+      port: { { .Values.qdrant.service.port } }
+      targetPort: { { .Values.qdrant.service.port } }
       protocol: TCP
     - name: grpc
-      port: {{ .Values.qdrant.service.grpcPort }}
-      targetPort: {{ .Values.qdrant.service.grpcPort }}
+      port: { { .Values.qdrant.service.grpcPort } }
+      targetPort: { { .Values.qdrant.service.grpcPort } }
       protocol: TCP
   selector:
-    {{- include "rag-system.qdrantSelector" . | nindent 4 }}
-{{- end }}
+    { { - include "rag-system.qdrantSelector" . | nindent 4 } }
+  { { - end } }

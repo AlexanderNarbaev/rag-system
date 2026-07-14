@@ -1,6 +1,7 @@
 # Security Guide
 
-This guide covers the security model, authentication, authorization, input sanitization, rate limiting, audit logging, and deployment hardening for the RAG System proxy.
+This guide covers the security model, authentication, authorization, input sanitization, rate limiting, audit logging,
+and deployment hardening for the RAG System proxy.
 
 ## Table of Contents
 
@@ -21,17 +22,17 @@ This guide covers the security model, authentication, authorization, input sanit
 
 The RAG System follows a defense-in-depth security model with multiple layers:
 
-| Layer | Component | File |
-|-------|-----------|------|
-| **Authentication** | JWT tokens, Keycloak OIDC, LDAP/AD | `proxy/app/auth/jwt.py` |
-| **Authorization** | Role-based access control (RBAC) | `proxy/app/auth/rbac.py` |
-| **User Store** | SQLite with bcrypt passwords | `proxy/app/auth/user_db.py` |
-| **LDAP Integration** | Active Directory / LDAP bind | `proxy/app/auth/ldap.py` |
-| **Input Sanitization** | SQL injection, XSS, length limits | `proxy/app/shared/sanitizer.py` |
-| **Security Utilities** | Validation, secrets, headers | `proxy/app/shared/security.py` |
-| **Rate Limiting** | Token bucket per-IP/API-key | `proxy/app/shared/rate_limiter.py` |
-| **Audit Logging** | JSONL event log | `proxy/app/shared/audit.py` |
-| **Middleware** | Request ID, CORS, security headers | `proxy/app/shared/middleware.py` |
+| Layer                  | Component                          | File                               |
+|------------------------|------------------------------------|------------------------------------|
+| **Authentication**     | JWT tokens, Keycloak OIDC, LDAP/AD | `proxy/app/auth/jwt.py`            |
+| **Authorization**      | Role-based access control (RBAC)   | `proxy/app/auth/rbac.py`           |
+| **User Store**         | SQLite with bcrypt passwords       | `proxy/app/auth/user_db.py`        |
+| **LDAP Integration**   | Active Directory / LDAP bind       | `proxy/app/auth/ldap.py`           |
+| **Input Sanitization** | SQL injection, XSS, length limits  | `proxy/app/shared/sanitizer.py`    |
+| **Security Utilities** | Validation, secrets, headers       | `proxy/app/shared/security.py`     |
+| **Rate Limiting**      | Token bucket per-IP/API-key        | `proxy/app/shared/rate_limiter.py` |
+| **Audit Logging**      | JSONL event log                    | `proxy/app/shared/audit.py`        |
+| **Middleware**         | Request ID, CORS, security headers | `proxy/app/shared/middleware.py`   |
 
 ### Design Principles
 
@@ -49,10 +50,10 @@ The RAG System follows a defense-in-depth security model with multiple layers:
 
 The system supports two JWT algorithms:
 
-| Algorithm | Use Case | Key Source |
-|-----------|----------|------------|
-| **HS256** (default) | Local dev, service accounts | `JWT_SECRET` env var |
-| **RS256** | Keycloak OIDC, production SSO | `JWT_PUBLIC_KEY` or JWKS endpoint |
+| Algorithm           | Use Case                      | Key Source                        |
+|---------------------|-------------------------------|-----------------------------------|
+| **HS256** (default) | Local dev, service accounts   | `JWT_SECRET` env var              |
+| **RS256**           | Keycloak OIDC, production SSO | `JWT_PUBLIC_KEY` or JWKS endpoint |
 
 #### Configuration
 
@@ -84,13 +85,13 @@ REFRESH_TOKEN_DAYS=7                 # Refresh token lifetime
 
 #### Token Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/auth/login` | POST | Username/password login, returns access + refresh token pair |
-| `/v1/auth/register` | POST | Self-registration (bcrypt-hashed passwords in SQLite) |
-| `/v1/auth/refresh` | POST | Exchange refresh token for new access + refresh pair |
-| `/v1/auth/logout` | POST | Revoke refresh tokens, blacklist access token |
-| `/v1/auth/me` | GET | Current user context |
+| Endpoint            | Method | Description                                                  |
+|---------------------|--------|--------------------------------------------------------------|
+| `/v1/auth/login`    | POST   | Username/password login, returns access + refresh token pair |
+| `/v1/auth/register` | POST   | Self-registration (bcrypt-hashed passwords in SQLite)        |
+| `/v1/auth/refresh`  | POST   | Exchange refresh token for new access + refresh pair         |
+| `/v1/auth/logout`   | POST   | Revoke refresh tokens, blacklist access token                |
+| `/v1/auth/me`       | GET    | Current user context                                         |
 
 #### Authentication Modes
 
@@ -116,6 +117,7 @@ KEYCLOAK_CLIENT_ID=rag-proxy
 ```
 
 The system automatically:
+
 1. Fetches JWKS from `{KEYCLOAK_URL}/realms/{REALM}/protocol/openid-connect/certs`
 2. Caches keys for 1 hour
 3. Validates RS256 tokens against the fetched public keys
@@ -133,6 +135,7 @@ AD_USER_DN_TEMPLATE=cn={username},{base_dn}
 ```
 
 **Behavior:**
+
 - On successful LDAP bind, the user is auto-created in the local SQLite database with default `user` role.
 - If LDAP server is unreachable, falls through to local authentication with a warning log.
 - LDAP users get a random local password (not used for auth).
@@ -145,12 +148,12 @@ AD_USER_DN_TEMPLATE=cn={username},{base_dn}
 
 Roles are hierarchical — higher roles inherit all permissions of lower roles:
 
-| Role | Rank | Permissions |
-|------|------|-------------|
-| `admin` | 4 | All endpoints, user management, configuration, warmup |
-| `expert` | 3 | Chat, feedback submission/review, enrichment trigger |
-| `user` | 2 | Chat, streaming, widget access |
-| `read_only` | 1 | Models list, health checks, auth endpoints |
+| Role        | Rank | Permissions                                           |
+|-------------|------|-------------------------------------------------------|
+| `admin`     | 4    | All endpoints, user management, configuration, warmup |
+| `expert`    | 3    | Chat, feedback submission/review, enrichment trigger  |
+| `user`      | 2    | Chat, streaming, widget access                        |
+| `read_only` | 1    | Models list, health checks, auth endpoints            |
 
 ### Configuration
 
@@ -201,6 +204,7 @@ Provides three sanitization functions:
 #### `sanitize_query(text)`
 
 Strips from user search queries:
+
 - SQL/DQL injection keywords (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `DROP`, etc.)
 - SQL comments (`--`)
 - Semicolons
@@ -214,6 +218,7 @@ Strips from user search queries:
 #### `sanitize_feedback(text)`
 
 Strips from expert feedback:
+
 - Script tags, iframes
 - HTML tags
 - JavaScript/VBScript/data protocols
@@ -231,26 +236,26 @@ Truncates text to specified maximum length.
 
 #### InputValidator
 
-| Method | Description |
-|--------|-------------|
-| `validate_query(query)` | Sanitize user query (8000 char max) |
-| `validate_non_empty(s, max_len)` | Validate non-empty string within length |
-| `sanitize_for_log(text)` | Mask emails, IPs, API keys for safe logging |
-| `validate_model_name(name)` | Check model name contains only safe characters |
-| `validate_path_traversal(path)` | Check for `..`, `~`, `\x00` path traversal |
-| `sanitize_headers(headers)` | Redact sensitive headers (Authorization, Cookie, etc.) |
-| `escape_shell_arg(arg)` | Strip shell-unsafe characters |
+| Method                           | Description                                            |
+|----------------------------------|--------------------------------------------------------|
+| `validate_query(query)`          | Sanitize user query (8000 char max)                    |
+| `validate_non_empty(s, max_len)` | Validate non-empty string within length                |
+| `sanitize_for_log(text)`         | Mask emails, IPs, API keys for safe logging            |
+| `validate_model_name(name)`      | Check model name contains only safe characters         |
+| `validate_path_traversal(path)`  | Check for `..`, `~`, `\x00` path traversal             |
+| `sanitize_headers(headers)`      | Redact sensitive headers (Authorization, Cookie, etc.) |
+| `escape_shell_arg(arg)`          | Strip shell-unsafe characters                          |
 
 #### SecretsManager
 
-| Method | Description |
-|--------|-------------|
-| `generate_api_key(prefix)` | Generate cryptographically secure API key |
-| `hash_secret(secret)` | SHA-256 hash for storage |
-| `verify_secret(secret, hashed)` | Verify against hash |
-| `mask_in_response(data)` | Deep-mask sensitive fields in response dicts |
-| `generate_token(length)` | Random URL-safe token |
-| `constant_time_compare(a, b)` | Timing-attack-safe string comparison |
+| Method                          | Description                                  |
+|---------------------------------|----------------------------------------------|
+| `generate_api_key(prefix)`      | Generate cryptographically secure API key    |
+| `hash_secret(secret)`           | SHA-256 hash for storage                     |
+| `verify_secret(secret, hashed)` | Verify against hash                          |
+| `mask_in_response(data)`        | Deep-mask sensitive fields in response dicts |
+| `generate_token(length)`        | Random URL-safe token                        |
+| `constant_time_compare(a, b)`   | Timing-attack-safe string comparison         |
 
 ### Middleware-Level Sanitization
 
@@ -308,15 +313,15 @@ LOG_DIR=./logs        # Audit log directory
 
 ### Event Types
 
-| Event Type | Description | Logged Fields |
-|------------|-------------|---------------|
-| `query` | RAG query execution | user_id, query_preview, response_preview, chunks, duration, tokens |
-| `login` | Authentication attempt | user_id, action, success |
-| `auth` | Auth events (logout, refresh) | user_id, action, success |
-| `access_denied` | Permission denied | user_id, resource, reason |
-| `config_change` | Configuration modification | key, old_value (masked), new_value (masked) |
-| `error` | Application errors | error_type, message, stack_trace |
-| `trace` | Detailed per-request trace | query, chunks, rerank scores, token breakdown, confidence |
+| Event Type      | Description                   | Logged Fields                                                      |
+|-----------------|-------------------------------|--------------------------------------------------------------------|
+| `query`         | RAG query execution           | user_id, query_preview, response_preview, chunks, duration, tokens |
+| `login`         | Authentication attempt        | user_id, action, success                                           |
+| `auth`          | Auth events (logout, refresh) | user_id, action, success                                           |
+| `access_denied` | Permission denied             | user_id, resource, reason                                          |
+| `config_change` | Configuration modification    | key, old_value (masked), new_value (masked)                        |
+| `error`         | Application errors            | error_type, message, stack_trace                                   |
+| `trace`         | Detailed per-request trace    | query, chunks, rerank scores, token breakdown, confidence          |
 
 ### Log Format
 
@@ -356,15 +361,15 @@ Audit events are written to `/var/log/rag-system/audit.jsonl` as JSON Lines:
 
 All secrets are configured via environment variables or `.env` file:
 
-| Variable | Purpose |
-|----------|---------|
-| `JWT_SECRET` | JWT signing key |
-| `JWT_PUBLIC_KEY` | RS256 public key (PEM) |
-| `LLM_API_KEY` | LLM backend API key |
+| Variable           | Purpose                   |
+|--------------------|---------------------------|
+| `JWT_SECRET`       | JWT signing key           |
+| `JWT_PUBLIC_KEY`   | RS256 public key (PEM)    |
+| `LLM_API_KEY`      | LLM backend API key       |
 | `EMBEDDER_API_KEY` | Embedding service API key |
-| `RERANKER_API_KEY` | Reranker service API key |
-| `NEO4J_PASSWORD` | Neo4j database password |
-| `AD_BASE_DN` | LDAP base DN |
+| `RERANKER_API_KEY` | Reranker service API key  |
+| `NEO4J_PASSWORD`   | Neo4j database password   |
+| `AD_BASE_DN`       | LDAP base DN              |
 
 ### Best Practices
 
@@ -377,6 +382,7 @@ All secrets are configured via environment variables or `.env` file:
 ### Log Masking
 
 The logging module (`proxy/app/shared/logging.py`) automatically masks:
+
 - `api_key`, `API_KEY` values
 - `Authorization: Bearer` tokens
 - `password` values
@@ -394,6 +400,7 @@ CORS_ORIGINS=*                    # Allowed origins (comma-separated or *)
 ```
 
 The CORS middleware exposes these headers to clients:
+
 - `X-Request-ID`
 - `X-Correlation-ID`
 - `Retry-After`
@@ -402,16 +409,16 @@ The CORS middleware exposes these headers to clients:
 
 The `SecurityHeadersMiddleware` injects these headers into every response:
 
-| Header | Value |
-|--------|-------|
-| `X-Content-Type-Options` | `nosniff` |
-| `X-Frame-Options` | `DENY` |
-| `X-XSS-Protection` | `1; mode=block` |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
-| `Content-Security-Policy` | `default-src 'self'` |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
-| `Cache-Control` | `no-store, no-cache, must-revalidate` |
+| Header                      | Value                                      |
+|-----------------------------|--------------------------------------------|
+| `X-Content-Type-Options`    | `nosniff`                                  |
+| `X-Frame-Options`           | `DENY`                                     |
+| `X-XSS-Protection`          | `1; mode=block`                            |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains`      |
+| `Content-Security-Policy`   | `default-src 'self'`                       |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`          |
+| `Permissions-Policy`        | `camera=(), microphone=(), geolocation=()` |
+| `Cache-Control`             | `no-store, no-cache, must-revalidate`      |
 
 ### HTTPS
 

@@ -2,7 +2,9 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-06
 
-Comprehensive deployment reference for the RAG Knowledge Assistant. Covers single-server Docker Compose, production multi-node, Kubernetes with Helm, air-gapped environments, LLM backend configuration, federation, model evolution infrastructure, security hardening, monitoring, and backup strategies.
+Comprehensive deployment reference for the RAG Knowledge Assistant. Covers single-server Docker Compose, production
+multi-node, Kubernetes with Helm, air-gapped environments, LLM backend configuration, federation, model evolution
+infrastructure, security hardening, monitoring, and backup strategies.
 
 ---
 
@@ -10,37 +12,37 @@ Comprehensive deployment reference for the RAG Knowledge Assistant. Covers singl
 
 ### Hardware
 
-| Resource | Minimum | Recommended (production) |
-|----------|---------|---------------------------|
-| **CPU** | 8 cores | 16+ cores |
-| **RAM** | 16 GB | 64+ GB |
-| **GPU VRAM** | 12 GB (quantized GGUF) | 48+ GB (full precision) |
-| **Disk** | 20 GB SSD | 500+ GB NVMe |
-| **Network** | 1 Gbps | 10 Gbps (internal) |
+| Resource     | Minimum                | Recommended (production) |
+|--------------|------------------------|--------------------------|
+| **CPU**      | 8 cores                | 16+ cores                |
+| **RAM**      | 16 GB                  | 64+ GB                   |
+| **GPU VRAM** | 12 GB (quantized GGUF) | 48+ GB (full precision)  |
+| **Disk**     | 20 GB SSD              | 500+ GB NVMe             |
+| **Network**  | 1 Gbps                 | 10 Gbps (internal)       |
 
 **Disk breakdown for production:**
 
-| Component | Typical Size |
-|-----------|-------------|
-| Qdrant vectors | ~30 GB |
-| Neo4j graph | ~10 GB |
-| Model files (embedder, reranker, LLM, SLM) | ~20 GB |
-| Raw data + chunks (cold storage Parquet) | ~20 GB |
-| Redis persistence (RDB + AOF) | ~5 GB |
-| Logs | ~10 GB |
-| **Total** | **~100 GB** |
+| Component                                  | Typical Size |
+|--------------------------------------------|--------------|
+| Qdrant vectors                             | ~30 GB       |
+| Neo4j graph                                | ~10 GB       |
+| Model files (embedder, reranker, LLM, SLM) | ~20 GB       |
+| Raw data + chunks (cold storage Parquet)   | ~20 GB       |
+| Redis persistence (RDB + AOF)              | ~5 GB        |
+| Logs                                       | ~10 GB       |
+| **Total**                                  | **~100 GB**  |
 
 ### Software
 
-| Component | Minimum Version | Recommended |
-|-----------|----------------|-------------|
-| **Docker** | 24.0+ | 27.0+ |
-| **Docker Compose** | v2.20+ (plugin) | v2.30+ |
-| **NVIDIA Driver** | 535+ | 550+ |
-| **NVIDIA Container Toolkit** | 1.14+ | 1.17+ |
-| **Python** | 3.11 | 3.12 |
-| **kubectl** (K8s) | 1.28+ | 1.30+ |
-| **Helm** (K8s) | 3.14+ | 3.16+ |
+| Component                    | Minimum Version | Recommended |
+|------------------------------|-----------------|-------------|
+| **Docker**                   | 24.0+           | 27.0+       |
+| **Docker Compose**           | v2.20+ (plugin) | v2.30+      |
+| **NVIDIA Driver**            | 535+            | 550+        |
+| **NVIDIA Container Toolkit** | 1.14+           | 1.17+       |
+| **Python**                   | 3.11            | 3.12        |
+| **kubectl** (K8s)            | 1.28+           | 1.30+       |
+| **Helm** (K8s)               | 3.14+           | 3.16+       |
 
 ### Verify GPU Availability
 
@@ -56,18 +58,18 @@ docker run --rm --gpus all nvidia/cuda:12.4-base nvidia-smi
 
 The RAG system uses these default ports — ensure they are free:
 
-| Port | Service |
-|------|---------|
-| 6333, 6334 | Qdrant (HTTP, gRPC) |
-| 6379 | Redis |
-| 7474, 7687 | Neo4j (HTTP, Bolt) |
-| 8000 | LLM Backend (vLLM / llama.cpp) |
-| 8080 | RAG Proxy (FastAPI) |
-| 8081 | Federation Proxy |
-| 8082 | MCP Server |
-| 8501 | HITL Dashboard (Streamlit) |
-| 9000, 9001 | MinIO (S3 API, Console) |
-| 5000 | MLflow Tracking Server |
+| Port       | Service                        |
+|------------|--------------------------------|
+| 6333, 6334 | Qdrant (HTTP, gRPC)            |
+| 6379       | Redis                          |
+| 7474, 7687 | Neo4j (HTTP, Bolt)             |
+| 8000       | LLM Backend (vLLM / llama.cpp) |
+| 8080       | RAG Proxy (FastAPI)            |
+| 8081       | Federation Proxy               |
+| 8082       | MCP Server                     |
+| 8501       | HITL Dashboard (Streamlit)     |
+| 9000, 9001 | MinIO (S3 API, Console)        |
+| 5000       | MLflow Tracking Server         |
 
 ```bash
 # Check for port conflicts
@@ -78,19 +80,21 @@ ss -tlnp | grep -E '6333|6379|7687|8000|808[0-2]|8501|900[01]|5000'
 
 ## 2. Quick Deploy with setup.sh
 
-The fastest way to get the RAG system running. The interactive setup wizard handles dependency checks, configuration, Docker Compose startup, and health verification.
+The fastest way to get the RAG system running. The interactive setup wizard handles dependency checks, configuration,
+Docker Compose startup, and health verification.
 
 ### 2.1 Minimal Prerequisites
 
-| Requirement | Minimum |
-|-------------|---------|
-| **Docker** | 20.10+ |
+| Requirement        | Minimum     |
+|--------------------|-------------|
+| **Docker**         | 20.10+      |
 | **Docker Compose** | v2 (plugin) |
-| **RAM** | 4 GB |
-| **Disk** | 10 GB free |
+| **RAM**            | 4 GB        |
+| **Disk**           | 10 GB free  |
 
 !!! note
-    These are absolute minimums for a CPU-only development setup with a small model. For production workloads with GPU inference, see the [full prerequisites](#1-prerequisites) (16+ GB RAM, 8+ cores, GPU recommended).
+These are absolute minimums for a CPU-only development setup with a small model. For production workloads with GPU
+inference, see the [full prerequisites](#1-prerequisites) (16+ GB RAM, 8+ cores, GPU recommended).
 
 ### 2.2 Quick Start
 
@@ -323,7 +327,8 @@ docker compose down -v    # Stops AND removes volumes (⚠ destroys data)
 
 ### 4.1 Production Docker Compose (standalone)
 
-Use `docker-compose.standalone.yml` for a self-contained production deployment with resource limits, health checks, and nginx reverse proxy:
+Use `docker-compose.standalone.yml` for a self-contained production deployment with resource limits, health checks, and
+nginx reverse proxy:
 
 ```bash
 cd proxy
@@ -335,7 +340,8 @@ COMPOSE_PROFILES=gpu docker compose -f docker-compose.standalone.yml up -d
 COMPOSE_PROFILES=cpu docker compose -f docker-compose.standalone.yml up -d
 ```
 
-The standalone compose file pins exact image tags (e.g., `qdrant/qdrant:v1.10.0`, `neo4j:5.25-community`, `redis:7.4-alpine`, `vllm/vllm-openai:v0.6.4`) and includes:
+The standalone compose file pins exact image tags (e.g., `qdrant/qdrant:v1.10.0`, `neo4j:5.25-community`,
+`redis:7.4-alpine`, `vllm/vllm-openai:v0.6.4`) and includes:
 
 - **Resource limits** on every service (`deploy.resources.limits`)
 - **Health checks** with `start_period` for slow-starting services
@@ -353,13 +359,13 @@ docker compose -f docker-compose.yml -f docker-compose.ha.yml up -d
 
 This adds:
 
-| Component | HA Configuration |
-|-----------|-----------------|
-| **Qdrant** | 2 nodes with Raft consensus (`qdrant-0` as bootstrap) |
-| **Neo4j** | 1 CORE + 1 READ_REPLICA causal cluster |
-| **Redis** | 1 master + 2 replicas + 3 Sentinel monitors |
-| **RAG Proxy** | 2 replicas (`deploy.replicas: 2`) |
-| **Network** | Separate `rag-internal` network for inter-node cluster traffic |
+| Component     | HA Configuration                                               |
+|---------------|----------------------------------------------------------------|
+| **Qdrant**    | 2 nodes with Raft consensus (`qdrant-0` as bootstrap)          |
+| **Neo4j**     | 1 CORE + 1 READ_REPLICA causal cluster                         |
+| **Redis**     | 1 master + 2 replicas + 3 Sentinel monitors                    |
+| **RAG Proxy** | 2 replicas (`deploy.replicas: 2`)                              |
+| **Network**   | Separate `rag-internal` network for inter-node cluster traffic |
 
 Scale proxy replicas at runtime:
 
@@ -434,15 +440,15 @@ CMD ["python", "scheduler/run_etl.py", "--config", "config/etl_config.yaml"]
 
 ### 3.4 Resource Limits Reference
 
-| Service | CPU Limit | Memory Limit | Justification |
-|---------|-----------|-------------|---------------|
-| Qdrant | 4 cores | 4 GB | HNSW graph traversal, sparse vector indexing |
-| Neo4j | 2 cores | 2 GB | Graph traversal, page cache |
-| Redis | 1 core | 2 GB | Key-value cache, append-only file |
-| vLLM backend | 16 cores | 48 GB | GPU offload; CPU for tokenizer and dispatch |
-| llama.cpp backend | 16 cores | 64 GB | Full CPU inference, no GPU |
-| RAG Proxy | 4 cores | 8 GB | Embedder + reranker loaded in-process |
-| nginx | 0.5 cores | 256 MB | Static reverse proxy |
+| Service           | CPU Limit | Memory Limit | Justification                                |
+|-------------------|-----------|--------------|----------------------------------------------|
+| Qdrant            | 4 cores   | 4 GB         | HNSW graph traversal, sparse vector indexing |
+| Neo4j             | 2 cores   | 2 GB         | Graph traversal, page cache                  |
+| Redis             | 1 core    | 2 GB         | Key-value cache, append-only file            |
+| vLLM backend      | 16 cores  | 48 GB        | GPU offload; CPU for tokenizer and dispatch  |
+| llama.cpp backend | 16 cores  | 64 GB        | Full CPU inference, no GPU                   |
+| RAG Proxy         | 4 cores   | 8 GB         | Embedder + reranker loaded in-process        |
+| nginx             | 0.5 cores | 256 MB       | Static reverse proxy                         |
 
 ### 3.5 Volume Strategy
 
@@ -971,13 +977,14 @@ kubectl rollout undo deployment/rag-proxy -n rag-system
 
 ### 4.7 Probes Reference
 
-| Probe | Endpoint | Purpose | Initial Delay | Period |
-|-------|----------|---------|---------------|--------|
-| **startup** | `/v1/health/live` | Model loading grace period | 0s | 5s |
-| **liveness** | `/v1/health/live` | Process is alive | 30s | 10s |
-| **readiness** | `/v1/health/ready` | All dependencies available | 60s | 15s |
+| Probe         | Endpoint           | Purpose                    | Initial Delay | Period |
+|---------------|--------------------|----------------------------|---------------|--------|
+| **startup**   | `/v1/health/live`  | Model loading grace period | 0s            | 5s     |
+| **liveness**  | `/v1/health/live`  | Process is alive           | 30s           | 10s    |
+| **readiness** | `/v1/health/ready` | All dependencies available | 60s           | 15s    |
 
-Qdrant startup probe uses the native `:6333/health` endpoint. vLLM startup probe uses `:8000/health` with `start_period: 180s`.
+Qdrant startup probe uses the native `:6333/health` endpoint. vLLM startup probe uses `:8000/health` with
+`start_period: 180s`.
 
 ---
 
@@ -1175,14 +1182,14 @@ vllm:
 
 **Key vLLM flags:**
 
-| Flag | Purpose | Suggested Value |
-|------|---------|----------------|
-| `--max-model-len` | Max context length | 65536 (trade VRAM vs context) |
-| `--gpu-memory-utilization` | VRAM fraction | 0.90 |
-| `--tensor-parallel-size` | GPUs for sharding | 1 per 24 GB VRAM |
-| `--enable-prefix-caching` | KV cache reuse | Enabled |
-| `--max-num-seqs` | Concurrent requests | 16 |
-| `--api-key` | Require API key | Same as `LLM_API_KEY` |
+| Flag                       | Purpose             | Suggested Value               |
+|----------------------------|---------------------|-------------------------------|
+| `--max-model-len`          | Max context length  | 65536 (trade VRAM vs context) |
+| `--gpu-memory-utilization` | VRAM fraction       | 0.90                          |
+| `--tensor-parallel-size`   | GPUs for sharding   | 1 per 24 GB VRAM              |
+| `--enable-prefix-caching`  | KV cache reuse      | Enabled                       |
+| `--max-num-seqs`           | Concurrent requests | 16                            |
+| `--api-key`                | Require API key     | Same as `LLM_API_KEY`         |
 
 ### 6.2 llama.cpp Backend (CPU Inference)
 
@@ -1216,13 +1223,13 @@ vllm-cpu:
 
 **Key llama.cpp flags:**
 
-| Flag | Purpose | Suggested Value |
-|------|---------|----------------|
-| `--ctx-size` | Max context length | 65536 |
-| `--threads` | CPU threads | Number of CPU cores |
+| Flag             | Purpose                 | Suggested Value        |
+|------------------|-------------------------|------------------------|
+| `--ctx-size`     | Max context length      | 65536                  |
+| `--threads`      | CPU threads             | Number of CPU cores    |
 | `--n-gpu-layers` | Layers offloaded to GPU | 0 (CPU-only), -1 (all) |
-| `--batch-size` | Prompt processing batch | 512 |
-| `--api-key` | API key requirement | `""` for no key |
+| `--batch-size`   | Prompt processing batch | 512                    |
+| `--api-key`      | API key requirement     | `""` for no key        |
 
 ### 6.3 OpenAI-Compatible Endpoint (any provider)
 
@@ -1243,7 +1250,9 @@ LLM_PROVIDER_TYPE=generic
 
 ### 6.4 GPUStack Backend
 
-[GPUStack](https://github.com/gpustack/gpustack) is an open-source GPU cluster manager that serves OpenAI-compatible endpoints for LLM, embedding, and reranker models. It's ideal for on-premise deployments where you need centralized model serving across multiple GPU nodes.
+[GPUStack](https://github.com/gpustack/gpustack) is an open-source GPU cluster manager that serves OpenAI-compatible
+endpoints for LLM, embedding, and reranker models. It's ideal for on-premise deployments where you need centralized
+model serving across multiple GPU nodes.
 
 **Configure the RAG proxy to use GPUStack:**
 
@@ -1276,13 +1285,13 @@ curl http://<gpu-host>:80/v1/models \
 
 **Key benefits:**
 
-| Feature | Description |
-|---------|-------------|
-| Multi-node GPU cluster | Distribute models across multiple GPU servers |
-| Automatic load balancing | Round-robin across model replicas |
-| OpenAI-compatible API | Drop-in replacement for vLLM/llama.cpp |
-| Model auto-download | Pulls from HuggingFace on first deployment |
-| API key management | Per-model and per-user access control |
+| Feature                  | Description                                   |
+|--------------------------|-----------------------------------------------|
+| Multi-node GPU cluster   | Distribute models across multiple GPU servers |
+| Automatic load balancing | Round-robin across model replicas             |
+| OpenAI-compatible API    | Drop-in replacement for vLLM/llama.cpp        |
+| Model auto-download      | Pulls from HuggingFace on first deployment    |
+| API key management       | Per-model and per-user access control         |
 
 See the [GPUStack documentation](https://docs.gpustack.ai/) for cluster setup and model management.
 
@@ -1303,7 +1312,8 @@ PREFIX_CACHING_ENABLED=true             # vLLM KV-cache reuse
 
 ## 8. Federation Setup
 
-Federation allows querying multiple RAG silos (e.g., different departments or geographic regions) through a single endpoint.
+Federation allows querying multiple RAG silos (e.g., different departments or geographic regions) through a single
+endpoint.
 
 ### 7.1 Architecture
 
@@ -1432,7 +1442,8 @@ spec:
 
 ## 9. Model Evolution Setup
 
-The Model Evolution pipeline supports fine-tuning SLM, LLM, and Reranker models, with MLflow tracking, MinIO artifact storage, automated quality gates, and canary rollouts.
+The Model Evolution pipeline supports fine-tuning SLM, LLM, and Reranker models, with MLflow tracking, MinIO artifact
+storage, automated quality gates, and canary rollouts.
 
 ### 8.1 Enable in Configuration
 
@@ -1749,7 +1760,8 @@ spec:
         key: "rag/production"       # All secrets from this path
 ```
 
-When combined with `reloader.stakater.com/auto: "true"` annotation on the Deployment, pods restart automatically when secrets change.
+When combined with `reloader.stakater.com/auto: "true"` annotation on the Deployment, pods restart automatically when
+secrets change.
 
 ### 9.5 TLS Everywhere
 
@@ -1878,18 +1890,18 @@ spec:
 
 ### 10.2 Key Metrics Exposed
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `rag_requests_total` | Counter | Total API requests by endpoint |
-| `rag_request_duration_seconds` | Histogram | Request latency (p50/p95/p99) |
-| `rag_retrieval_chunks` | Histogram | Chunks retrieved per query |
-| `rag_rerank_duration_seconds` | Histogram | Reranker latency |
-| `rag_llm_duration_seconds` | Histogram | LLM generation latency |
-| `rag_llm_tokens_total` | Counter | Tokens used (prompt + completion) |
-| `rag_cache_hit_ratio` | Gauge | Redis cache hit ratio |
-| `rag_errors_total` | Counter | Error count by type |
-| `rag_etl_stream_lag` | Gauge | Pending messages per consumer group |
-| `rag_warmup_completed` | Gauge | 1 if warm-up finished |
+| Metric                         | Type      | Description                         |
+|--------------------------------|-----------|-------------------------------------|
+| `rag_requests_total`           | Counter   | Total API requests by endpoint      |
+| `rag_request_duration_seconds` | Histogram | Request latency (p50/p95/p99)       |
+| `rag_retrieval_chunks`         | Histogram | Chunks retrieved per query          |
+| `rag_rerank_duration_seconds`  | Histogram | Reranker latency                    |
+| `rag_llm_duration_seconds`     | Histogram | LLM generation latency              |
+| `rag_llm_tokens_total`         | Counter   | Tokens used (prompt + completion)   |
+| `rag_cache_hit_ratio`          | Gauge     | Redis cache hit ratio               |
+| `rag_errors_total`             | Counter   | Error count by type                 |
+| `rag_etl_stream_lag`           | Gauge     | Pending messages per consumer group |
+| `rag_warmup_completed`         | Gauge     | 1 if warm-up finished               |
 
 ### 10.3 Alert Rules
 
@@ -1997,20 +2009,20 @@ kubectl label configmap grafana-dashboard-rag-overview \
 
 **Available dashboards:**
 
-| Dashboard | File | Key Panels |
-|-----------|------|-----------|
-| **RAG Overview** | `grafana-overview.json` | Request rate, latency, error rate, confidence distribution |
-| **Retrieval Quality** | `grafana-retrieval.json` | MRR, Recall@k, nDCG, cache hit ratio |
-| **Infrastructure** | `grafana-infrastructure.json` | CPU, memory, disk, GPU per component |
+| Dashboard             | File                          | Key Panels                                                 |
+|-----------------------|-------------------------------|------------------------------------------------------------|
+| **RAG Overview**      | `grafana-overview.json`       | Request rate, latency, error rate, confidence distribution |
+| **Retrieval Quality** | `grafana-retrieval.json`      | MRR, Recall@k, nDCG, cache hit ratio                       |
+| **Infrastructure**    | `grafana-infrastructure.json` | CPU, memory, disk, GPU per component                       |
 
 ### 10.5 SLI/SLO Reference
 
-| SLI | Target | Measurement Window |
-|-----|--------|--------------------|
-| Availability | 99.5% | 28 days |
-| p95 Latency | < 5s | 5 min window |
-| Error Rate | < 1% | 5 min window |
-| Cache Hit Ratio | > 30% | 1 hour window |
+| SLI             | Target | Measurement Window |
+|-----------------|--------|--------------------|
+| Availability    | 99.5%  | 28 days            |
+| p95 Latency     | < 5s   | 5 min window       |
+| Error Rate      | < 1%   | 5 min window       |
+| Cache Hit Ratio | > 30%  | 1 hour window      |
 
 ---
 
@@ -2018,13 +2030,13 @@ kubectl label configmap grafana-dashboard-rag-overview \
 
 ### 11.1 Backup Schedule
 
-| Component | Frequency | Retention | Method |
-|-----------|-----------|-----------|--------|
-| Qdrant snapshots | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `POST /collections/.../snapshots` |
-| Neo4j dumps | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `neo4j-admin database dump` |
-| Redis RDB | Every 1 hour | 24 hourly, 7 daily | `redis-cli BGSAVE` |
-| ETL WAL state | Every 30 min | 7 daily | File copy |
-| Proxy config | On change (git) | Full history | `git push` |
+| Component        | Frequency       | Retention                    | Method                            |
+|------------------|-----------------|------------------------------|-----------------------------------|
+| Qdrant snapshots | Every 6 hours   | 7 daily, 4 weekly, 3 monthly | `POST /collections/.../snapshots` |
+| Neo4j dumps      | Every 6 hours   | 7 daily, 4 weekly, 3 monthly | `neo4j-admin database dump`       |
+| Redis RDB        | Every 1 hour    | 24 hourly, 7 daily           | `redis-cli BGSAVE`                |
+| ETL WAL state    | Every 30 min    | 7 daily                      | File copy                         |
+| Proxy config     | On change (git) | Full history                 | `git push`                        |
 
 ### 11.2 Qdrant Snapshots
 
@@ -2068,7 +2080,8 @@ docker exec rag-neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
 
 ### 11.4 Redis Persistence
 
-Redis in the standard docker-compose uses `--appendonly yes` (AOF persistence). This provides crash-safe recovery. For backups:
+Redis in the standard docker-compose uses `--appendonly yes` (AOF persistence). This provides crash-safe recovery. For
+backups:
 
 ```bash
 # Trigger a background save
@@ -2423,13 +2436,13 @@ vllm:
 
 ## Related Documents
 
-| Document | Coverage |
-|----------|----------|
-| [Kubernetes Deployment (Helm)](https://github.com/AlexanderNarbaev/rag-system/blob/main/deploy/k8s/README.md) | Helm chart, K8s deployment, secrets management, scaling |
-| [Operations Guide](operations-guide.md) | Day-2 ops: monitoring details, scaling, upgrades, compression, cold storage |
-| [Disaster Recovery Runbook](disaster-recovery-runbook.md) | Step-by-step recovery procedures for all failure scenarios |
-| [Performance & Quality Best Practices](performance-quality.md) | HNSW tuning, quantization, inference optimization, benchmarking |
-| [Production Readiness Checklist](best-practices-checklist.md) | 8-dimension readiness tracker (94% complete) |
-| [SLI/SLO Definitions](../sli_slo.md) | Service level indicators, objectives, error budgets |
-| [Access Control & RBAC](access-control-rbac.md) | JWT auth, Keycloak OIDC, RBAC implementation |
-| [Troubleshooting](troubleshooting.md) | Additional common issues and resolutions |
+| Document                                                                                                      | Coverage                                                                    |
+|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
+| [Kubernetes Deployment (Helm)](https://github.com/AlexanderNarbaev/rag-system/blob/main/deploy/k8s/README.md) | Helm chart, K8s deployment, secrets management, scaling                     |
+| [Operations Guide](operations-guide.md)                                                                       | Day-2 ops: monitoring details, scaling, upgrades, compression, cold storage |
+| [Disaster Recovery Runbook](disaster-recovery-runbook.md)                                                     | Step-by-step recovery procedures for all failure scenarios                  |
+| [Performance & Quality Best Practices](performance-quality.md)                                                | HNSW tuning, quantization, inference optimization, benchmarking             |
+| [Production Readiness Checklist](best-practices-checklist.md)                                                 | 8-dimension readiness tracker (94% complete)                                |
+| [SLI/SLO Definitions](../sli_slo.md)                                                                          | Service level indicators, objectives, error budgets                         |
+| [Access Control & RBAC](access-control-rbac.md)                                                               | JWT auth, Keycloak OIDC, RBAC implementation                                |
+| [Troubleshooting](troubleshooting.md)                                                                         | Additional common issues and resolutions                                    |

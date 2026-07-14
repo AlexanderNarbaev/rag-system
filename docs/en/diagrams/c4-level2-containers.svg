@@ -1,68 +1,226 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1735.01" height="1504.00" viewBox="0 0 1735.01 1504.00">
-<defs>
-    <marker id="arr-495057" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#495057"/></marker>
-  </defs>
-<rect width="1735.01" height="1504.00" fill="#ffffff"/>
-<rect x="40.00" y="516.00" width="265.00" height="700.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2" opacity="1.00"/>
-<rect x="482.00" y="342.00" width="301.00" height="670.00" rx="8" fill="#d0ebff" stroke="#1864ab" stroke-width="2" opacity="1.00"/>
-<rect x="594.80" y="348.00" width="75.40" height="21.00" rx="8" fill="#e9ecef" stroke="#1864ab" stroke-width="1" opacity="1.00"/>
-<rect x="1038.92" y="1330.00" width="274.00" height="134.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2" opacity="1.00"/>
-<rect x="1161.32" y="1336.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1" opacity="1.00"/>
-<rect x="1061.42" y="995.00" width="229.00" height="116.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2" opacity="1.00"/>
-<rect x="1038.92" y="40.00" width="274.00" height="134.00" rx="8" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2" opacity="1.00"/>
-<rect x="1151.42" y="46.00" width="49.00" height="21.00" rx="8" fill="#e9ecef" stroke="#c92a2a" stroke-width="1" opacity="1.00"/>
-<rect x="1052.42" y="294.00" width="247.00" height="134.00" rx="8" fill="#d0ebff" stroke="#1864ab" stroke-width="2" opacity="1.00"/>
-<rect x="1158.02" y="300.00" width="35.80" height="21.00" rx="8" fill="#e9ecef" stroke="#1864ab" stroke-width="1" opacity="1.00"/>
-<rect x="44.50" y="340.00" width="256.00" height="116.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2" opacity="1.00"/>
-<rect x="1493.01" y="514.00" width="202.00" height="670.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2" opacity="1.00"/>
-<rect x="1579.41" y="520.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1" opacity="1.00"/>
-<rect x="500.00" y="1170.00" width="265.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2" opacity="1.00"/>
-<rect x="617.90" y="1176.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1" opacity="1.00"/>
-<rect x="43.00" y="631.00" width="229.00" height="92.00" rx="8" fill="#f1f3f5" stroke="#495057" stroke-width="2" opacity="1.00"/>
-<path d="M 272.00,677.00 L 272.00,476.00 L 386.10,476.00 L 482.00,786.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 305.00,934.40 L 500.00,1178.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 305.00,1071.20 L 413.50,1130.00 L 875.18,1130.00 L 1038.92,1377.33" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 305.00,797.60 L 400.90,1072.00 L 894.53,1072.00 L 1061.42,1069.67" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 305.00,660.80 L 400.90,1191.00 L 1379.20,1191.00 L 1493.01,989.14" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 783.00,895.00 L 885.37,1208.52 L 1038.92,1416.67" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 783.00,786.00 L 894.37,948.72 L 1061.42,1036.33" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 783.00,459.00 L 885.37,268.55 L 1038.92,166.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 783.00,568.00 L 890.77,471.80 L 1052.42,420.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 783.00,677.00 L 1493.01,802.29" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 300.50,381.33 L 482.00,568.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 300.50,414.67 L 399.55,254.00 L 1385.50,254.00 L 1493.01,708.86" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 1312.92,1338.00 L 1493.01,1082.57" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 1290.42,1003.00 L 1493.01,895.71" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<path d="M 1312.92,166.00 L 1493.01,615.43" fill="none" stroke="#495057" stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
-<text x="172.50" y="816.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="172.50" dy="16.00">ETL Pipeline</tspan><tspan x="172.50" dy="20.00">[Container: Python]</tspan><tspan x="172.50" dy="20.00">Extracts, chunks, embeds,</tspan><tspan x="172.50" dy="20.00">indexes data from sources</tspan><tspan x="172.50" dy="20.00">Runs on separate machine</tspan></text>
-<text x="632.50" y="645.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="632.50" dy="16.00">RAG Proxy</tspan><tspan x="632.50" dy="20.00">[Container: FastAPI + Docker]</tspan><tspan x="632.50" dy="20.00">Main application, exposes</tspan><tspan x="632.50" dy="20.00">/v1/chat/completions on :8080</tspan></text>
-<text x="632.50" y="351.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="632.50" dy="12.00">Container</tspan></text>
-<text x="1175.92" y="1365.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="16.00">Qdrant</tspan><tspan x="1175.92" dy="20.00">[Container: Vector DB]</tspan><tspan x="1175.92" dy="20.00">Hybrid dense+sparse search</tspan><tspan x="1175.92" dy="20.00">Port 6333</tspan></text>
-<text x="1175.92" y="1339.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="12.00">DB</tspan></text>
-<text x="1175.92" y="1013.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="16.00">Neo4j</tspan><tspan x="1175.92" dy="20.00">[Container: Graph DB]</tspan><tspan x="1175.92" dy="20.00">Entity graph storage</tspan><tspan x="1175.92" dy="20.00">Bolt port 7687</tspan></text>
-<text x="1175.92" y="75.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="16.00">Redis</tspan><tspan x="1175.92" dy="20.00">[Container: Cache]</tspan><tspan x="1175.92" dy="20.00">Embedding &amp; response cache</tspan><tspan x="1175.92" dy="20.00">Port 6379</tspan></text>
-<text x="1175.92" y="49.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="12.00">Cache</tspan></text>
-<text x="1175.92" y="329.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="16.00">vLLM Server</tspan><tspan x="1175.92" dy="20.00">[Container: Inference]</tspan><tspan x="1175.92" dy="20.00">Gemma-4-26B LLM</tspan><tspan x="1175.92" dy="20.00">GPUStack-managed, :8000</tspan></text>
-<text x="1175.92" y="303.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1175.92" dy="12.00">K8s</tspan></text>
-<text x="172.50" y="358.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="172.50" dy="16.00">HITL Dashboard</tspan><tspan x="172.50" dy="20.00">[Container: Streamlit]</tspan><tspan x="172.50" dy="20.00">Expert review &amp; feedback</tspan><tspan x="172.50" dy="20.00">Port 8501</tspan></text>
-<text x="1594.01" y="817.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="1594.01" dy="16.00">File System</tspan><tspan x="1594.01" dy="20.00">[Shared Volumes]</tspan><tspan x="1594.01" dy="20.00">Cold storage, WAL,</tspan><tspan x="1594.01" dy="20.00">model cache, logs</tspan></text>
-<text x="1594.01" y="523.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1594.01" dy="12.00">DB</tspan></text>
-<text x="632.50" y="1203.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="632.50" dy="16.00">External Sources</tspan><tspan x="632.50" dy="20.00">Confluence, Jira, GitLab,</tspan><tspan x="632.50" dy="20.00">Documents, Books, Chat</tspan></text>
-<text x="632.50" y="1179.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="632.50" dy="12.00">LB</tspan></text>
-<text x="157.50" y="647.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00"><tspan x="157.50" dy="16.00">Users &amp; Clients</tspan><tspan x="157.50" dy="20.00">OpenWebUI, OpenCode,</tspan><tspan x="157.50" dy="20.00">custom OpenAI clients</tspan></text>
-<rect x="325.74" y="469.74" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="387.49" y="471.74" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="387.49" dy="14.00">API calls :8080</tspan></text>
-<rect x="348.45" y="1045.45" width="108.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="402.50" y="1047.45" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="402.50" dy="14.00">Extracts from</tspan></text>
-<rect x="680.75" y="1119.25" width="100.40" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="730.95" y="1121.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="730.95" dy="14.00">Indexes into</tspan></text>
-<rect x="543.33" y="1061.25" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="585.83" y="1063.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="585.83" dy="14.00">Loads into</tspan></text>
-<rect x="670.91" y="1180.25" width="131.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="736.51" y="1182.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="736.51" dy="14.00">Writes WAL, logs</tspan></text>
-<rect x="820.28" y="1163.95" width="108.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="874.33" y="1165.95" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="874.33" dy="14.00">Hybrid search</tspan></text>
-<rect x="837.90" y="934.44" width="108.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="891.95" y="936.44" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="891.95" dy="14.00">Graph queries</tspan></text>
-<rect x="839.25" y="271.71" width="77.30" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="877.90" y="273.71" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="877.90" dy="14.00">Cache R/W</tspan></text>
-<rect x="844.91" y="457.19" width="115.80" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="902.81" y="459.19" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="902.81" dy="14.00">Sends/receives</tspan></text>
-<rect x="1087.81" y="728.89" width="100.40" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1138.01" y="730.89" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1138.01" dy="14.00">Reads/writes</tspan></text>
-<rect x="329.50" y="463.91" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="391.25" y="465.91" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="391.25" dy="14.00">Logs &amp; feedback</tspan></text>
-<rect x="989.35" y="243.25" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1031.85" y="245.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1031.85" dy="14.00">Reads logs</tspan></text>
-<rect x="1356.62" y="1199.54" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1402.97" y="1201.54" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1402.97" dy="14.00">Persists to</tspan></text>
-<rect x="1345.37" y="938.61" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1391.72" y="940.61" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1391.72" dy="14.00">Persists to</tspan></text>
-<rect x="1375.87" y="379.97" width="54.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/><text x="1402.97" y="381.97" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00"><tspan x="1402.97" dy="14.00">AOF to</tspan></text>
+    <defs>
+        <marker id="arr-495057" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#495057"/>
+        </marker>
+    </defs>
+    <rect width="1735.01" height="1504.00" fill="#ffffff"/>
+    <rect x="40.00" y="516.00" width="265.00" height="700.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="482.00" y="342.00" width="301.00" height="670.00" rx="8" fill="#d0ebff" stroke="#1864ab" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="594.80" y="348.00" width="75.40" height="21.00" rx="8" fill="#e9ecef" stroke="#1864ab" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="1038.92" y="1330.00" width="274.00" height="134.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1161.32" y="1336.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="1061.42" y="995.00" width="229.00" height="116.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1038.92" y="40.00" width="274.00" height="134.00" rx="8" fill="#ffe3e3" stroke="#c92a2a" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1151.42" y="46.00" width="49.00" height="21.00" rx="8" fill="#e9ecef" stroke="#c92a2a" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="1052.42" y="294.00" width="247.00" height="134.00" rx="8" fill="#d0ebff" stroke="#1864ab" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1158.02" y="300.00" width="35.80" height="21.00" rx="8" fill="#e9ecef" stroke="#1864ab" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="44.50" y="340.00" width="256.00" height="116.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1493.01" y="514.00" width="202.00" height="670.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1579.41" y="520.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="500.00" y="1170.00" width="265.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="617.90" y="1176.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="43.00" y="631.00" width="229.00" height="92.00" rx="8" fill="#f1f3f5" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <path d="M 272.00,677.00 L 272.00,476.00 L 386.10,476.00 L 482.00,786.00" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 305.00,934.40 L 500.00,1178.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 305.00,1071.20 L 413.50,1130.00 L 875.18,1130.00 L 1038.92,1377.33" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 305.00,797.60 L 400.90,1072.00 L 894.53,1072.00 L 1061.42,1069.67" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 305.00,660.80 L 400.90,1191.00 L 1379.20,1191.00 L 1493.01,989.14" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 783.00,895.00 L 885.37,1208.52 L 1038.92,1416.67" fill="none" stroke="#495057" stroke-width="2"
+          opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 783.00,786.00 L 894.37,948.72 L 1061.42,1036.33" fill="none" stroke="#495057" stroke-width="2"
+          opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 783.00,459.00 L 885.37,268.55 L 1038.92,166.00" fill="none" stroke="#495057" stroke-width="2"
+          opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 783.00,568.00 L 890.77,471.80 L 1052.42,420.00" fill="none" stroke="#495057" stroke-width="2"
+          opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 783.00,677.00 L 1493.01,802.29" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 300.50,381.33 L 482.00,568.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 300.50,414.67 L 399.55,254.00 L 1385.50,254.00 L 1493.01,708.86" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 1312.92,1338.00 L 1493.01,1082.57" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1290.42,1003.00 L 1493.01,895.71" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1312.92,166.00 L 1493.01,615.43" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <text x="172.50" y="816.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="172.50" dy="16.00">ETL Pipeline</tspan>
+        <tspan x="172.50" dy="20.00">[Container: Python]</tspan>
+        <tspan x="172.50" dy="20.00">Extracts, chunks, embeds,</tspan>
+        <tspan x="172.50" dy="20.00">indexes data from sources</tspan>
+        <tspan x="172.50" dy="20.00">Runs on separate machine</tspan>
+    </text>
+    <text x="632.50" y="645.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="632.50" dy="16.00">RAG Proxy</tspan>
+        <tspan x="632.50" dy="20.00">[Container: FastAPI + Docker]</tspan>
+        <tspan x="632.50" dy="20.00">Main application, exposes</tspan>
+        <tspan x="632.50" dy="20.00">/v1/chat/completions on :8080</tspan>
+    </text>
+    <text x="632.50" y="351.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="632.50" dy="12.00">Container</tspan>
+    </text>
+    <text x="1175.92" y="1365.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1175.92" dy="16.00">Qdrant</tspan>
+        <tspan x="1175.92" dy="20.00">[Container: Vector DB]</tspan>
+        <tspan x="1175.92" dy="20.00">Hybrid dense+sparse search</tspan>
+        <tspan x="1175.92" dy="20.00">Port 6333</tspan>
+    </text>
+    <text x="1175.92" y="1339.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1175.92" dy="12.00">DB</tspan>
+    </text>
+    <text x="1175.92" y="1013.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1175.92" dy="16.00">Neo4j</tspan>
+        <tspan x="1175.92" dy="20.00">[Container: Graph DB]</tspan>
+        <tspan x="1175.92" dy="20.00">Entity graph storage</tspan>
+        <tspan x="1175.92" dy="20.00">Bolt port 7687</tspan>
+    </text>
+    <text x="1175.92" y="75.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="1175.92" dy="16.00">Redis</tspan>
+        <tspan x="1175.92" dy="20.00">[Container: Cache]</tspan>
+        <tspan x="1175.92" dy="20.00">Embedding &amp; response cache</tspan>
+        <tspan x="1175.92" dy="20.00">Port 6379</tspan>
+    </text>
+    <text x="1175.92" y="49.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="1175.92" dy="12.00">Cache</tspan>
+    </text>
+    <text x="1175.92" y="329.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1175.92" dy="16.00">vLLM Server</tspan>
+        <tspan x="1175.92" dy="20.00">[Container: Inference]</tspan>
+        <tspan x="1175.92" dy="20.00">Gemma-4-26B LLM</tspan>
+        <tspan x="1175.92" dy="20.00">GPUStack-managed, :8000</tspan>
+    </text>
+    <text x="1175.92" y="303.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1175.92" dy="12.00">K8s</tspan>
+    </text>
+    <text x="172.50" y="358.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="172.50" dy="16.00">HITL Dashboard</tspan>
+        <tspan x="172.50" dy="20.00">[Container: Streamlit]</tspan>
+        <tspan x="172.50" dy="20.00">Expert review &amp; feedback</tspan>
+        <tspan x="172.50" dy="20.00">Port 8501</tspan>
+    </text>
+    <text x="1594.01" y="817.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1594.01" dy="16.00">File System</tspan>
+        <tspan x="1594.01" dy="20.00">[Shared Volumes]</tspan>
+        <tspan x="1594.01" dy="20.00">Cold storage, WAL,</tspan>
+        <tspan x="1594.01" dy="20.00">model cache, logs</tspan>
+    </text>
+    <text x="1594.01" y="523.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1594.01" dy="12.00">DB</tspan>
+    </text>
+    <text x="632.50" y="1203.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="632.50" dy="16.00">External Sources</tspan>
+        <tspan x="632.50" dy="20.00">Confluence, Jira, GitLab,</tspan>
+        <tspan x="632.50" dy="20.00">Documents, Books, Chat</tspan>
+    </text>
+    <text x="632.50" y="1179.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="632.50" dy="12.00">LB</tspan>
+    </text>
+    <text x="157.50" y="647.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="157.50" dy="16.00">Users &amp; Clients</tspan>
+        <tspan x="157.50" dy="20.00">OpenWebUI, OpenCode,</tspan>
+        <tspan x="157.50" dy="20.00">custom OpenAI clients</tspan>
+    </text>
+    <rect x="325.74" y="469.74" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="387.49" y="471.74" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="387.49" dy="14.00">API calls :8080</tspan>
+    </text>
+    <rect x="348.45" y="1045.45" width="108.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="402.50" y="1047.45" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="402.50" dy="14.00">Extracts from</tspan>
+    </text>
+    <rect x="680.75" y="1119.25" width="100.40" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="730.95" y="1121.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="730.95" dy="14.00">Indexes into</tspan>
+    </text>
+    <rect x="543.33" y="1061.25" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="585.83" y="1063.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="585.83" dy="14.00">Loads into</tspan>
+    </text>
+    <rect x="670.91" y="1180.25" width="131.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="736.51" y="1182.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="736.51" dy="14.00">Writes WAL, logs</tspan>
+    </text>
+    <rect x="820.28" y="1163.95" width="108.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="874.33" y="1165.95" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="874.33" dy="14.00">Hybrid search</tspan>
+    </text>
+    <rect x="837.90" y="934.44" width="108.10" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="891.95" y="936.44" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="891.95" dy="14.00">Graph queries</tspan>
+    </text>
+    <rect x="839.25" y="271.71" width="77.30" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="877.90" y="273.71" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="877.90" dy="14.00">Cache R/W</tspan>
+    </text>
+    <rect x="844.91" y="457.19" width="115.80" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="902.81" y="459.19" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="902.81" dy="14.00">Sends/receives</tspan>
+    </text>
+    <rect x="1087.81" y="728.89" width="100.40" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1138.01" y="730.89" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1138.01" dy="14.00">Reads/writes</tspan>
+    </text>
+    <rect x="329.50" y="463.91" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="391.25" y="465.91" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="391.25" dy="14.00">Logs &amp; feedback</tspan>
+    </text>
+    <rect x="989.35" y="243.25" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1031.85" y="245.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1031.85" dy="14.00">Reads logs</tspan>
+    </text>
+    <rect x="1356.62" y="1199.54" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1402.97" y="1201.54" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1402.97" dy="14.00">Persists to</tspan>
+    </text>
+    <rect x="1345.37" y="938.61" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1391.72" y="940.61" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1391.72" dy="14.00">Persists to</tspan>
+    </text>
+    <rect x="1375.87" y="379.97" width="54.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1402.97" y="381.97" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1402.97" dy="14.00">AOF to</tspan>
+    </text>
 </svg>

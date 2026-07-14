@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - FLARE active retrieval (`proxy/app/core/flare.py`)
 - Two-stage reranking: ColBERT + cross-encoder (`proxy/app/core/rerank.py`)
 - Adaptive chunking with dynamic sizes (`etl/chunker/semantic_chunker.py`)
@@ -30,7 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RAGAS dashboard config (`config/monitoring/ragas-dashboard.json`)
 - Prometheus alert rules (`config/monitoring/alerts.yml`)
 - Sprint plans (`docs/en/guides/sprint-plan-2026-s3.md`, `sprint-plan-2026-s3-updated.md`)
-- Model evolution test suite: 277 tests covering trainers, adapter manager, canary controller, eval gate, model registry, experiment tracker
+- Model evolution test suite: 277 tests covering trainers, adapter manager, canary controller, eval gate, model
+  registry, experiment tracker
 - MCP server test suite: 56 tests covering STDIO and HTTP transports, tool execution, resource handling
 - Integration test suite expanded to 64 tests (was 5) covering cross-component flows
 - E2E test suite expanded to 32 tests (was 3) covering full-stack scenarios
@@ -41,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/integration/conftest.py` with shared fixtures for integration tests
 
 ### Fixed
+
 - Multi-hop reasoning enhancement for graph-based retrieval
 - Secure default: `AUTH_ENABLED=false` for development environments
 - Auth test fixtures fixed for consistent CI runs
@@ -60,11 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Orchestrator sync calls — patched test mocks for restructured orchestrator modules
 - ToolError consolidation — unified error hierarchy across tools subsystem
 - Ruff lint errors: F821 forward reference fix, E501 line length violations
-- **CRITICAL: Cache sync methods** — `asyncio.run()` cannot be called from a running event loop. Fixed `InMemoryCache` to use direct dict access (no asyncio needed) and `RedisCache` to use sync Redis client for sync operations
-- **CRITICAL: Double JSON parsing** — `_compute_dense_embedding()` was calling `json.loads()` on already-parsed cache values, causing "JSON object must be str, not list" error
+- **CRITICAL: Cache sync methods** — `asyncio.run()` cannot be called from a running event loop. Fixed `InMemoryCache`
+  to use direct dict access (no asyncio needed) and `RedisCache` to use sync Redis client for sync operations
+- **CRITICAL: Double JSON parsing** — `_compute_dense_embedding()` was calling `json.loads()` on already-parsed cache
+  values, causing "JSON object must be str, not list" error
 - Lint errors: N803 argument naming, B017 blind exception assertions
 
 ### Changed
+
 - Test count: 2688 tests passing
 - Coverage: 75.70%
 - CI/CD pipeline: fully green
@@ -79,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v2.0.0] - 2026-06-26
 
 ### Added
+
 - HyDE query expansion (query_enhancer.py)
 - CRAG evaluator with action mapping
 - Self-reflection module
@@ -100,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v1.0.0] - 2026-03-01
 
 ### Added
+
 - OpenAI-compatible proxy API
 - Qdrant hybrid search (dense + sparse + RRF)
 - Cross-encoder reranking (MiniLM-L-6-v2)

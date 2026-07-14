@@ -1,31 +1,48 @@
 # AGENTS.md — RAG System
 
 ## Identity
-Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline for Confluence, Jira, GitLab data ingestion into Qdrant + Neo4j, served via configurable LLM backend.
+
+Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline for Confluence, Jira, GitLab data
+ingestion into Qdrant + Neo4j, served via configurable LLM backend.
 
 ## Language
-English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language switcher. See `docs/en/` and `docs/ru/`.
+
+English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language
+switcher. See `docs/en/` and `docs/ru/`.
 
 ## Architecture
+
 Three-layer system plus supporting services, with multi-provider LLM backend support:
 
 1. **ETL Layer** — data extraction, chunking, embedding, indexing (runs on a separate machine)
-2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing (vLLM, llama.cpp, or any OpenAI-compatible endpoint)
+2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing (
+   vLLM, llama.cpp, or any OpenAI-compatible endpoint)
 3. **HITL Layer** — Streamlit expert dashboard for feedback and quality control
-4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude Desktop)
-5. **Model Evolution** — LoRA/QLoRA fine-tuning pipeline for SLM, LLM, and Reranker; MLflow experiment tracking; MinIO artifact storage; EvalGate CI/CD quality gating; AdapterManager hot-reload; CanaryController gradual rollout
-6. **Agentic Tools Expansion** — Custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI auto-discovery; parallel tool execution with dependency resolution
+4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude
+   Desktop)
+5. **Model Evolution** — LoRA/QLoRA fine-tuning pipeline for SLM, LLM, and Reranker; MLflow experiment tracking; MinIO
+   artifact storage; EvalGate CI/CD quality gating; AdapterManager hot-reload; CanaryController gradual rollout
+6. **Agentic Tools Expansion** — Custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI
+   auto-discovery; parallel tool execution with dependency resolution
 
 ## Key Architectural Principles
 
-1. **Air-gapped first** — all models pre-downloaded, no external API calls at runtime. The system must function fully offline.
-2. **Graceful degradation** — every component can fail independently: Neo4j unavailable → skip graph expansion. Reranker OOM → use raw hybrid scores. Redis down → fall back to in-memory cache. The proxy never crashes on component failure.
-3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents are reindexed.
-4. **OpenAI compatibility** — the proxy is a drop-in replacement for any OpenAI client. Extensions (`rag_version`, `rag_force_refresh`) are silently ignored by standard clients.
-5. **Dual-model routing** — lightweight SLM for fast preprocessing (intent classification, query decomposition, entity extraction); full-scale LLM for heavy generation. Keeps latency low for routing tasks.
-6. **Multi-provider support** — pluggable backend adapters via `provider_adapter.py` allow swapping between vLLM, llama.cpp, and any OpenAI-compatible API without changing orchestration logic.
-7. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The system runs in simple RAG mode by default.
-8. **Token economy** — every token counts. Token optimizer provides BPE-aware counting, 4 compression strategies, and smart budget allocation.
+1. **Air-gapped first** — all models pre-downloaded, no external API calls at runtime. The system must function fully
+   offline.
+2. **Graceful degradation** — every component can fail independently: Neo4j unavailable → skip graph expansion. Reranker
+   OOM → use raw hybrid scores. Redis down → fall back to in-memory cache. The proxy never crashes on component failure.
+3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents
+   are reindexed.
+4. **OpenAI compatibility** — the proxy is a drop-in replacement for any OpenAI client. Extensions (`rag_version`,
+   `rag_force_refresh`) are silently ignored by standard clients.
+5. **Dual-model routing** — lightweight SLM for fast preprocessing (intent classification, query decomposition, entity
+   extraction); full-scale LLM for heavy generation. Keeps latency low for routing tasks.
+6. **Multi-provider support** — pluggable backend adapters via `provider_adapter.py` allow swapping between vLLM,
+   llama.cpp, and any OpenAI-compatible API without changing orchestration logic.
+7. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The
+   system runs in simple RAG mode by default.
+8. **Token economy** — every token counts. Token optimizer provides BPE-aware counting, 4 compression strategies, and
+   smart budget allocation.
 
 ## Project Structure
 
@@ -192,39 +209,40 @@ rag-system/
 
 ## Tech Stack
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **LLM** | Any OpenAI-compatible model (e.g., Llama, Mistral, Gemma, Qwen) via vLLM/llama.cpp | Response generation (configurable context length) |
-| **SLM** | Lightweight model (e.g., Llama-3B, Gemma-2B, Qwen-2.5-3B) | Query routing, entity extraction (fast path) |
-| **Embeddings** | BAAI/bge-m3 | Dense (1024-dim) + sparse (lexical) + ColBERT |
-| **Vector DB** | Qdrant | Hybrid search (dense + sparse), RRF fusion |
-| **Graph DB** | Neo4j | Entity relationships, multi-hop traversal |
-| **Cache** | Redis | Embedding cache, rerank results, response cache |
-| **Proxy** | FastAPI + LangGraph | OpenAI-compatible API, agentic orchestration |
-| **ETL** | Python, requests, BeautifulSoup, spaCy, sentence-transformers | Data extraction, chunking, indexing |
-| **Dashboard** | Streamlit | HITL expert review |
-| **MCP** | FastMCP | Model Context Protocol server for IDE integration |
-| **Auth** | Keycloak OIDC | Corporate SSO, RBAC |
-| **Infra** | Kubernetes + Helm | Production-grade deployment with HPA, probes |
-| **Backup** | S3/MinIO | Automated snapshots, dumps, RDB backups |
+| Component      | Technology                                                                         | Purpose                                           |
+|----------------|------------------------------------------------------------------------------------|---------------------------------------------------|
+| **LLM**        | Any OpenAI-compatible model (e.g., Llama, Mistral, Gemma, Qwen) via vLLM/llama.cpp | Response generation (configurable context length) |
+| **SLM**        | Lightweight model (e.g., Llama-3B, Gemma-2B, Qwen-2.5-3B)                          | Query routing, entity extraction (fast path)      |
+| **Embeddings** | BAAI/bge-m3                                                                        | Dense (1024-dim) + sparse (lexical) + ColBERT     |
+| **Vector DB**  | Qdrant                                                                             | Hybrid search (dense + sparse), RRF fusion        |
+| **Graph DB**   | Neo4j                                                                              | Entity relationships, multi-hop traversal         |
+| **Cache**      | Redis                                                                              | Embedding cache, rerank results, response cache   |
+| **Proxy**      | FastAPI + LangGraph                                                                | OpenAI-compatible API, agentic orchestration      |
+| **ETL**        | Python, requests, BeautifulSoup, spaCy, sentence-transformers                      | Data extraction, chunking, indexing               |
+| **Dashboard**  | Streamlit                                                                          | HITL expert review                                |
+| **MCP**        | FastMCP                                                                            | Model Context Protocol server for IDE integration |
+| **Auth**       | Keycloak OIDC                                                                      | Corporate SSO, RBAC                               |
+| **Infra**      | Kubernetes + Helm                                                                  | Production-grade deployment with HPA, probes      |
+| **Backup**     | S3/MinIO                                                                           | Automated snapshots, dumps, RDB backups           |
 
 ## MCP Servers (configured in opencode.json)
 
-| Server | Purpose |
-|--------|---------|
-| **`filesystem`** | File operations within the project |
-| **`context7`** | Live documentation for libraries and frameworks |
-| **`context7-official`** | Official Context7 library documentation (upstash) |
-| **`sequential-thinking`** | Step-by-step reasoning for complex problems |
-| **`codegraph`** | Code graph navigation and call tracing |
-| **`agentic-tools`** | Hierarchical task management and memory |
-| **`memorylayer`** | Semantic memory and session context |
-| **`fetch`** | HTTP requests and web content retrieval |
-| **`sqlite`** | SQLite database interactions |
-| **`github`** | GitHub API (repositories, PRs, issues) |
-| **`excalidraw`** | Architecture diagrams (C4, system design) |
+| Server                    | Purpose                                           |
+|---------------------------|---------------------------------------------------|
+| **`filesystem`**          | File operations within the project                |
+| **`context7`**            | Live documentation for libraries and frameworks   |
+| **`context7-official`**   | Official Context7 library documentation (upstash) |
+| **`sequential-thinking`** | Step-by-step reasoning for complex problems       |
+| **`codegraph`**           | Code graph navigation and call tracing            |
+| **`agentic-tools`**       | Hierarchical task management and memory           |
+| **`memorylayer`**         | Semantic memory and session context               |
+| **`fetch`**               | HTTP requests and web content retrieval           |
+| **`sqlite`**              | SQLite database interactions                      |
+| **`github`**              | GitHub API (repositories, PRs, issues)            |
+| **`excalidraw`**          | Architecture diagrams (C4, system design)         |
 
 ## Key Constraints
+
 - **Air-gapped environment** — all components must work without internet access
 - **LLM context limits**: configurable (depends on deployed model); 8K tokens (embedder/reranker)
 - **Technical documents**: versioned, overlapping, duplicate-prone
@@ -274,34 +292,35 @@ ptw tests/ -- -v
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/chat/completions` | POST | Chat completion (streaming + non-streaming) |
-| `/v1/models` | GET | List available models |
-| `/v1/health` | GET | Health check (Qdrant + LLM status) |
-| `/v1/health/live` | GET | Liveness probe (K8s-compatible) |
-| `/v1/health/ready` | GET | Readiness probe (Qdrant + LLM connectivity) |
-| `/v1/feedback` | POST | Submit expert feedback (positive/negative + corrections) |
-| `/v1/auth/login` | POST | JWT token generation (access + refresh pair) |
-| `/v1/auth/register` | POST | User self-registration (bcrypt-hashed passwords in SQLite) |
-| `/v1/auth/refresh` | POST | Token refresh (exchange refresh token for new pair) |
-| `/v1/auth/logout` | POST | Logout (revoke refresh tokens, blacklist access token) |
-| `/v1/auth/me` | GET | Current user context |
-| `/v1/widget` | GET | Embeddable RAG chat widget (HTML) |
-| `/v1/widget.js` | GET | Standalone widget JavaScript |
-| `/v1/tools` | GET | List available tools with optional category/tag filters |
-| `/v1/tools/{name}` | GET | Get a single tool's details (parameters, visibility, provider) |
-| `/v1/admin/models/train` | POST | Trigger a model training job (SLM/LLM/Reranker) |
-| `/v1/admin/models/status/{job_id}` | GET | Poll training job status and metrics |
-| `/v1/admin/models` | GET | List registered models with versions and metrics |
-| `/v1/admin/models/promote` | POST | Promote a model version to production |
-| `/v1/admin/models/rollback` | POST | Rollback model to a previous version |
-| `/v1/admin/models/evaluate` | POST | Evaluate model quality against baseline |
-| `/v1/admin/models/canary/split` | POST | Configure canary traffic split ratio |
-| `/v1/admin/models/canary/status` | GET | Get current canary deployment status |
-| `/metrics` | GET | Prometheus metrics (counters, histograms, gauges) |
+| Endpoint                           | Method | Description                                                    |
+|------------------------------------|--------|----------------------------------------------------------------|
+| `/v1/chat/completions`             | POST   | Chat completion (streaming + non-streaming)                    |
+| `/v1/models`                       | GET    | List available models                                          |
+| `/v1/health`                       | GET    | Health check (Qdrant + LLM status)                             |
+| `/v1/health/live`                  | GET    | Liveness probe (K8s-compatible)                                |
+| `/v1/health/ready`                 | GET    | Readiness probe (Qdrant + LLM connectivity)                    |
+| `/v1/feedback`                     | POST   | Submit expert feedback (positive/negative + corrections)       |
+| `/v1/auth/login`                   | POST   | JWT token generation (access + refresh pair)                   |
+| `/v1/auth/register`                | POST   | User self-registration (bcrypt-hashed passwords in SQLite)     |
+| `/v1/auth/refresh`                 | POST   | Token refresh (exchange refresh token for new pair)            |
+| `/v1/auth/logout`                  | POST   | Logout (revoke refresh tokens, blacklist access token)         |
+| `/v1/auth/me`                      | GET    | Current user context                                           |
+| `/v1/widget`                       | GET    | Embeddable RAG chat widget (HTML)                              |
+| `/v1/widget.js`                    | GET    | Standalone widget JavaScript                                   |
+| `/v1/tools`                        | GET    | List available tools with optional category/tag filters        |
+| `/v1/tools/{name}`                 | GET    | Get a single tool's details (parameters, visibility, provider) |
+| `/v1/admin/models/train`           | POST   | Trigger a model training job (SLM/LLM/Reranker)                |
+| `/v1/admin/models/status/{job_id}` | GET    | Poll training job status and metrics                           |
+| `/v1/admin/models`                 | GET    | List registered models with versions and metrics               |
+| `/v1/admin/models/promote`         | POST   | Promote a model version to production                          |
+| `/v1/admin/models/rollback`        | POST   | Rollback model to a previous version                           |
+| `/v1/admin/models/evaluate`        | POST   | Evaluate model quality against baseline                        |
+| `/v1/admin/models/canary/split`    | POST   | Configure canary traffic split ratio                           |
+| `/v1/admin/models/canary/status`   | GET    | Get current canary deployment status                           |
+| `/metrics`                         | GET    | Prometheus metrics (counters, histograms, gauges)              |
 
 RAG-specific parameters on `/v1/chat/completions`:
+
 - `rag_version` — request a specific document version
 - `rag_force_refresh` — bypass response cache
 - Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`
@@ -330,29 +349,30 @@ LOG_FORMAT=json                # Structured JSON logging
 See `proxy/app/config.py` for all available settings and defaults.
 
 ## Git Remotes
+
 - GitHub: https://github.com/AlexanderNarbaev/rag-system
 - GitVerse: https://gitverse.ru/AlexandrNarbaev/rag-system
 
 ## Documentation Index
 
-| Document | Purpose |
-|----------|---------|
-| `docs/en/adr/ADR-001` through `ADR-014` | Architecture Decision Records (English) |
-| `docs/en/guides/rag-maturity-assessment.md` | RAG maturity model, capability scoring, token economy |
-| `docs/en/guides/best-practices-checklist.md` | Production readiness checklist (8 dimensions) |
-| `docs/en/guides/roadmap.md` | Development roadmap and phased approach |
-| `docs/en/guides/disaster-recovery-runbook.md` | DR procedures for all failure scenarios |
-| `docs/en/sli_slo.md` | SLI/SLO definitions with error budgets |
-| `docs/en/guides/performance-quality.md` | HNSW tuning, quantization, monitoring, resilience |
-| `docs/en/guides/extensibility-data-sources.md` | Adding new ETL data sources |
-| `docs/en/guides/access-control-rbac.md` | RBAC and access control design |
-| `docs/en/guides/knowledge-graph-strategy.md` | Neo4j graph enrichment strategy |
-| `docs/en/guides/federated-rag.md` | Multi-silo federated RAG with fan-out and RRF merge |
-| `docs/en/guides/model-evolution.md` | LoRA/QLoRA fine-tuning, EvalGate, canary deployment |
-| `docs/en/guides/agentic-tools-sdk.md` | `@tool` decorator, `ToolBuilder`, `ToolContext` |
-| `docs/en/guides/agentic-tools-declarative.md` | YAML/JSON declarative tool definitions |
-| `docs/en/guides/agentic-tools-openapi.md` | OpenAPI/Swagger auto-discovery |
-| `docs/en/guides/deployment-guide.md` | Deployment and operations |
-| `docs/en/guides/operations-guide.md` | Operational procedures |
-| `docs/en/guides/integration-opencode.md` | OpenCode IDE integration |
-| `docs/en/guides/troubleshooting.md` | Common issues and resolutions |
+| Document                                       | Purpose                                               |
+|------------------------------------------------|-------------------------------------------------------|
+| `docs/en/adr/ADR-001` through `ADR-014`        | Architecture Decision Records (English)               |
+| `docs/en/guides/rag-maturity-assessment.md`    | RAG maturity model, capability scoring, token economy |
+| `docs/en/guides/best-practices-checklist.md`   | Production readiness checklist (8 dimensions)         |
+| `docs/en/guides/roadmap.md`                    | Development roadmap and phased approach               |
+| `docs/en/guides/disaster-recovery-runbook.md`  | DR procedures for all failure scenarios               |
+| `docs/en/sli_slo.md`                           | SLI/SLO definitions with error budgets                |
+| `docs/en/guides/performance-quality.md`        | HNSW tuning, quantization, monitoring, resilience     |
+| `docs/en/guides/extensibility-data-sources.md` | Adding new ETL data sources                           |
+| `docs/en/guides/access-control-rbac.md`        | RBAC and access control design                        |
+| `docs/en/guides/knowledge-graph-strategy.md`   | Neo4j graph enrichment strategy                       |
+| `docs/en/guides/federated-rag.md`              | Multi-silo federated RAG with fan-out and RRF merge   |
+| `docs/en/guides/model-evolution.md`            | LoRA/QLoRA fine-tuning, EvalGate, canary deployment   |
+| `docs/en/guides/agentic-tools-sdk.md`          | `@tool` decorator, `ToolBuilder`, `ToolContext`       |
+| `docs/en/guides/agentic-tools-declarative.md`  | YAML/JSON declarative tool definitions                |
+| `docs/en/guides/agentic-tools-openapi.md`      | OpenAPI/Swagger auto-discovery                        |
+| `docs/en/guides/deployment-guide.md`           | Deployment and operations                             |
+| `docs/en/guides/operations-guide.md`           | Operational procedures                                |
+| `docs/en/guides/integration-opencode.md`       | OpenCode IDE integration                              |
+| `docs/en/guides/troubleshooting.md`            | Common issues and resolutions                         |

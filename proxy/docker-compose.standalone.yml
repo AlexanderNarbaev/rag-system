@@ -23,7 +23,7 @@ services:
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__LOG_LEVEL: INFO
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:6333/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -56,7 +56,7 @@ services:
       NEO4J_dbms_memory_heap_max__size: 1G
       NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
     healthcheck:
-      test: ["CMD-SHELL", "echo 'RETURN 1' | cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-password} || exit 1"]
+      test: [ "CMD-SHELL", "echo 'RETURN 1' | cypher-shell -u neo4j -p ${NEO4J_PASSWORD:-password} || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -86,7 +86,7 @@ services:
       --save 900 1
       --save 300 10
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -120,7 +120,7 @@ services:
       --dtype auto
       --enforce-eager
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 60s
       timeout: 30s
       retries: 5
@@ -132,7 +132,7 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
         limits:
           memory: 48g
           cpus: "16"
@@ -159,7 +159,7 @@ services:
       --threads ${CPU_THREADS:-8}
       --batch-size 512
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 60s
       timeout: 30s
       retries: 5
@@ -210,7 +210,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/v1/health')"]
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/v1/health')" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -238,7 +238,7 @@ services:
       rag-proxy:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      test: [ "CMD", "curl", "-f", "http://localhost:80/" ]
       interval: 30s
       timeout: 10s
       retries: 3

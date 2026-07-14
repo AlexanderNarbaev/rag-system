@@ -1,22 +1,25 @@
 # ETL Deployment Guide
 
-The ETL pipeline runs on a dedicated machine (or the same machine as the proxy in small deployments). It extracts data from Confluence, Jira, GitLab, and other sources, chunks documents semantically, extracts entities for the knowledge graph, and indexes everything into Qdrant.
+The ETL pipeline runs on a dedicated machine (or the same machine as the proxy in small deployments). It extracts data
+from Confluence, Jira, GitLab, and other sources, chunks documents semantically, extracts entities for the knowledge
+graph, and indexes everything into Qdrant.
 
 ---
 
 ## Prerequisites
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **Python** | 3.11 | 3.12 |
-| **RAM** | 8 GB | 16+ GB |
-| **Disk** | 50 GB SSD | 200+ GB NVMe |
-| **CPU** | 4 cores | 8+ cores |
-| **Network** | Access to source systems | — |
-| **Qdrant** | Running and accessible | Port 6333, 6334 |
-| **Neo4j** (optional) | Running and accessible | Port 7687 |
+| Component            | Minimum                  | Recommended     |
+|----------------------|--------------------------|-----------------|
+| **Python**           | 3.11                     | 3.12            |
+| **RAM**              | 8 GB                     | 16+ GB          |
+| **Disk**             | 50 GB SSD                | 200+ GB NVMe    |
+| **CPU**              | 4 cores                  | 8+ cores        |
+| **Network**          | Access to source systems | —               |
+| **Qdrant**           | Running and accessible   | Port 6333, 6334 |
+| **Neo4j** (optional) | Running and accessible   | Port 7687       |
 
 The ETL machine must have network access to:
+
 - Qdrant server (default: `http://<qdrant-host>:6333`)
 - Neo4j server (optional, default: `bolt://<neo4j-host>:7687`)
 - Source systems: Confluence, Jira, GitLab
@@ -57,6 +60,7 @@ wal:
 ```
 
 The WAL file tracks:
+
 - `last_confluence_sync` — timestamp of last successful Confluence extraction
 - `last_jira_sync` — timestamp of last successful Jira extraction
 - `last_gitlab_sync` — timestamp of last successful GitLab extraction
@@ -64,7 +68,8 @@ The WAL file tracks:
 - `completed_sources` — list of sources that completed in the last run
 - `last_successful_run` — timestamp of the last complete run
 
-**Recovery:** If the ETL crashes, delete `wal/etl_wal.json` to force a full reindex, or run with `--sources` to skip completed sources.
+**Recovery:** If the ETL crashes, delete `wal/etl_wal.json` to force a full reindex, or run with `--sources` to skip
+completed sources.
 
 ### Confluence
 
@@ -84,16 +89,16 @@ confluence:
   api_version: "2"                      # "2" (CQL) or "1" (legacy)
 ```
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `url` | string | *required* | Confluence base URL |
-| `username` | string | *required* | Bot account username |
-| `token` | string | *required* | Personal Access Token or password |
-| `space_keys` | list | `null` | Space keys to extract; omit for all accessible spaces |
-| `incremental` | bool | `true` | Only extract pages modified since last run |
-| `download_attachments` | bool | `true` | Download and index PDFs, images (OCR), Office docs |
-| `max_versions` | int | `0` | Keep only the latest N versions per page |
-| `api_version` | string | `"2"` | Confluence REST API version |
+| Setting                | Type   | Default    | Description                                           |
+|------------------------|--------|------------|-------------------------------------------------------|
+| `url`                  | string | *required* | Confluence base URL                                   |
+| `username`             | string | *required* | Bot account username                                  |
+| `token`                | string | *required* | Personal Access Token or password                     |
+| `space_keys`           | list   | `null`     | Space keys to extract; omit for all accessible spaces |
+| `incremental`          | bool   | `true`     | Only extract pages modified since last run            |
+| `download_attachments` | bool   | `true`     | Download and index PDFs, images (OCR), Office docs    |
+| `max_versions`         | int    | `0`        | Keep only the latest N versions per page              |
+| `api_version`          | string | `"2"`      | Confluence REST API version                           |
 
 ### Jira
 
@@ -111,17 +116,17 @@ jira:
   expand: "changelog,renderedBody"
 ```
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `url` | string | *required* | Jira base URL |
-| `username` | string | *required* | Bot account username |
-| `token` | string | *required* | API token or password |
-| `jql` | string | *required* | JQL query for filtering issues |
-| `incremental` | bool | `true` | Only extract issues updated since last run |
-| `download_attachments` | bool | `true` | Download and index attached files |
-| `max_issues_per_run` | int | `0` | Limit issues per run (0 = unlimited) |
-| `fields` | string | `"*all"` | Jira fields to include in output |
-| `expand` | string | — | Additional Jira API expansions |
+| Setting                | Type   | Default    | Description                                |
+|------------------------|--------|------------|--------------------------------------------|
+| `url`                  | string | *required* | Jira base URL                              |
+| `username`             | string | *required* | Bot account username                       |
+| `token`                | string | *required* | API token or password                      |
+| `jql`                  | string | *required* | JQL query for filtering issues             |
+| `incremental`          | bool   | `true`     | Only extract issues updated since last run |
+| `download_attachments` | bool   | `true`     | Download and index attached files          |
+| `max_issues_per_run`   | int    | `0`        | Limit issues per run (0 = unlimited)       |
+| `fields`               | string | `"*all"`   | Jira fields to include in output           |
+| `expand`               | string | —          | Additional Jira API expansions             |
 
 ### GitLab
 
@@ -146,18 +151,18 @@ gitlab:
     - "*.sql"
 ```
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `url` | string | *required* | GitLab base URL |
-| `token` | string | *required* | Personal Access Token with `read_api`, `read_repository` |
-| `project_ids` | list | `null` | Specific project IDs; omit for all accessible |
-| `incremental` | bool | `true` | Only extract changes since last run |
-| `fetch_commits` | bool | `true` | Extract commit messages and diffs |
-| `fetch_files` | bool | `true` | Extract file contents (filtered by `file_paths_filter`) |
-| `fetch_merge_requests` | bool | `true` | Extract MR titles, descriptions, and discussions |
-| `max_commits_per_project` | int | `1000` | Limit commits per project per run |
-| `since_date` | string | `null` | Only process data after this ISO date |
-| `file_paths_filter` | list | — | Glob patterns for files to index |
+| Setting                   | Type   | Default    | Description                                              |
+|---------------------------|--------|------------|----------------------------------------------------------|
+| `url`                     | string | *required* | GitLab base URL                                          |
+| `token`                   | string | *required* | Personal Access Token with `read_api`, `read_repository` |
+| `project_ids`             | list   | `null`     | Specific project IDs; omit for all accessible            |
+| `incremental`             | bool   | `true`     | Only extract changes since last run                      |
+| `fetch_commits`           | bool   | `true`     | Extract commit messages and diffs                        |
+| `fetch_files`             | bool   | `true`     | Extract file contents (filtered by `file_paths_filter`)  |
+| `fetch_merge_requests`    | bool   | `true`     | Extract MR titles, descriptions, and discussions         |
+| `max_commits_per_project` | int    | `1000`     | Limit commits per project per run                        |
+| `since_date`              | string | `null`     | Only process data after this ISO date                    |
+| `file_paths_filter`       | list   | —          | Glob patterns for files to index                         |
 
 ### Chunking
 
@@ -171,15 +176,16 @@ chunking:
   output_dir: "./chunks"               # Directory for JSON chunk files
 ```
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `max_tokens` | int | `8000` | Maximum tokens per chunk (embedder context window limit) |
-| `overlap_tokens` | int | `200` | Token overlap between consecutive chunks |
-| `min_chunk_tokens` | int | `100` | Minimum chunk size; smaller chunks merged |
-| `use_slm` | bool | `false` | Use SLM for chunk metadata enrichment |
-| `output_dir` | string | `"./chunks"` | Directory for chunk JSON files |
+| Setting            | Type   | Default      | Description                                              |
+|--------------------|--------|--------------|----------------------------------------------------------|
+| `max_tokens`       | int    | `8000`       | Maximum tokens per chunk (embedder context window limit) |
+| `overlap_tokens`   | int    | `200`        | Token overlap between consecutive chunks                 |
+| `min_chunk_tokens` | int    | `100`        | Minimum chunk size; smaller chunks merged                |
+| `use_slm`          | bool   | `false`      | Use SLM for chunk metadata enrichment                    |
+| `output_dir`       | string | `"./chunks"` | Directory for chunk JSON files                           |
 
-The semantic chunker (`MDKeyChunker`) splits documents by markdown headers and sections, respecting document structure. It produces chunks that are:
+The semantic chunker (`MDKeyChunker`) splits documents by markdown headers and sections, respecting document structure.
+It produces chunks that are:
 
 - **Self-contained** — each chunk has enough context to be understood independently
 - **Versioned** — SHA-256 hashed, content-addressable
@@ -202,21 +208,22 @@ indexing:
   version_wal: "./wal/version_wal.json"
 ```
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `qdrant_host` | string | `"localhost"` | Qdrant server hostname |
-| `qdrant_port` | int | `6333` | Qdrant gRPC port |
-| `collection_name` | string | `"knowledge_base"` | Qdrant collection name |
-| `embedder_model` | string | `"your-embedding-model"` | Sentence-transformers model for embeddings |
-| `embedder_device` | string | `"cpu"` | Device for embedding: `cpu`, `cuda`, `cuda:0` |
-| `batch_size` | int | `100` | Chunks per embedding batch |
-| `hot_dir` | string | `"./hot_chunks"` | Hot storage for current active chunks |
-| `cold_dir` | string | `"./cold_chunks"` | Cold storage for historical versions |
-| `lake_dir` | string | `"./cold_lake"` | LiveVectorLake cold storage |
-| `use_delta` | bool | `false` | Use Delta Lake format for cold storage |
-| `version_wal` | string | `"./wal/version_wal.json"` | WAL for chunk version tracking |
+| Setting           | Type   | Default                    | Description                                   |
+|-------------------|--------|----------------------------|-----------------------------------------------|
+| `qdrant_host`     | string | `"localhost"`              | Qdrant server hostname                        |
+| `qdrant_port`     | int    | `6333`                     | Qdrant gRPC port                              |
+| `collection_name` | string | `"knowledge_base"`         | Qdrant collection name                        |
+| `embedder_model`  | string | `"your-embedding-model"`   | Sentence-transformers model for embeddings    |
+| `embedder_device` | string | `"cpu"`                    | Device for embedding: `cpu`, `cuda`, `cuda:0` |
+| `batch_size`      | int    | `100`                      | Chunks per embedding batch                    |
+| `hot_dir`         | string | `"./hot_chunks"`           | Hot storage for current active chunks         |
+| `cold_dir`        | string | `"./cold_chunks"`          | Cold storage for historical versions          |
+| `lake_dir`        | string | `"./cold_lake"`            | LiveVectorLake cold storage                   |
+| `use_delta`       | bool   | `false`                    | Use Delta Lake format for cold storage        |
+| `version_wal`     | string | `"./wal/version_wal.json"` | WAL for chunk version tracking                |
 
 **LiveVectorLake** stratifies chunks into:
+
 - **Hot** — current versions, always in Qdrant
 - **Cold** — historical versions, stored as Parquet files, loaded on demand
 
@@ -238,18 +245,18 @@ graph:
     database: "neo4j"
 ```
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `enabled` | bool | `false` | Enable graph construction |
-| `use_spacy` | bool | `true` | Use spaCy for named entity recognition |
-| `spacy_model` | string | `"ru_core_news_sm"` | spaCy model for NER (language-specific) |
-| `use_slm` | bool | `false` | Use SLM for relation extraction (higher quality, slower) |
-| `cache_dir` | string | `"./entity_cache"` | Cache extracted entities |
-| `neo4j.enabled` | bool | `false` | Load entities and relations into Neo4j |
-| `neo4j.uri` | string | — | Neo4j Bolt URI |
-| `neo4j.user` | string | `"neo4j"` | Neo4j username |
-| `neo4j.password` | string | — | Neo4j password |
-| `neo4j.database` | string | `"neo4j"` | Neo4j database name |
+| Setting          | Type   | Default             | Description                                              |
+|------------------|--------|---------------------|----------------------------------------------------------|
+| `enabled`        | bool   | `false`             | Enable graph construction                                |
+| `use_spacy`      | bool   | `true`              | Use spaCy for named entity recognition                   |
+| `spacy_model`    | string | `"ru_core_news_sm"` | spaCy model for NER (language-specific)                  |
+| `use_slm`        | bool   | `false`             | Use SLM for relation extraction (higher quality, slower) |
+| `cache_dir`      | string | `"./entity_cache"`  | Cache extracted entities                                 |
+| `neo4j.enabled`  | bool   | `false`             | Load entities and relations into Neo4j                   |
+| `neo4j.uri`      | string | —                   | Neo4j Bolt URI                                           |
+| `neo4j.user`     | string | `"neo4j"`           | Neo4j username                                           |
+| `neo4j.password` | string | —                   | Neo4j password                                           |
+| `neo4j.database` | string | `"neo4j"`           | Neo4j database name                                      |
 
 ---
 
@@ -278,7 +285,8 @@ python scheduler/run_etl.py --config config/etl_config.yaml --sources gitlab
 python scheduler/run_etl.py --config config/etl_config.yaml --full
 ```
 
-This deletes all existing chunks, clears the WAL, and re-extracts everything from scratch. **Warning:** this may take hours depending on data volume.
+This deletes all existing chunks, clears the WAL, and re-extracts everything from scratch. **Warning:** this may take
+hours depending on data volume.
 
 ### Dry Run
 
@@ -374,6 +382,7 @@ curl http://localhost:6333/collections/knowledge_base | python -m json.tool
 ```
 
 Look for:
+
 - `vectors_count` — should increase after each ETL run
 - `segments_count` — number of indexed segments
 - `points_count` — total indexed points
@@ -440,14 +449,14 @@ ln -s /mnt/cold_storage/rag_lake etl/cold_lake
 
 ## Performance Tuning
 
-| Scenario | Setting | Recommendation |
-|----------|---------|---------------|
-| High document volume (>100K) | `chunking.max_tokens` | Increase to `8000` to reduce chunk count |
-| Memory-constrained machine | `indexing.batch_size` | Reduce to `50` |
-| GPU available | `indexing.embedder_device` | Set to `cuda` for 10–50× speedup |
-| Slow Confluence API | `confluence.max_versions` | Set to `1` (latest only) |
-| Large GitLab repos | `gitlab.max_commits_per_project` | Reduce to `100` |
-| Graph construction slow | `graph.use_slm` | Set to `false`, use spaCy only |
+| Scenario                     | Setting                          | Recommendation                           |
+|------------------------------|----------------------------------|------------------------------------------|
+| High document volume (>100K) | `chunking.max_tokens`            | Increase to `8000` to reduce chunk count |
+| Memory-constrained machine   | `indexing.batch_size`            | Reduce to `50`                           |
+| GPU available                | `indexing.embedder_device`       | Set to `cuda` for 10–50× speedup         |
+| Slow Confluence API          | `confluence.max_versions`        | Set to `1` (latest only)                 |
+| Large GitLab repos           | `gitlab.max_commits_per_project` | Reduce to `100`                          |
+| Graph construction slow      | `graph.use_slm`                  | Set to `false`, use spaCy only           |
 
 ---
 

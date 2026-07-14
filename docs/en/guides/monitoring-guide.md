@@ -1,6 +1,7 @@
 # Monitoring & Observability Guide
 
-This guide covers the observability strategy for the RAG System, including Prometheus metrics, health checks, structured logging, distributed tracing, and alerting.
+This guide covers the observability strategy for the RAG System, including Prometheus metrics, health checks, structured
+logging, distributed tracing, and alerting.
 
 ## Table of Contents
 
@@ -19,11 +20,11 @@ This guide covers the observability strategy for the RAG System, including Prome
 
 The RAG System provides full observability through three pillars:
 
-| Pillar | Technology | Endpoint |
-|--------|-----------|----------|
-| **Metrics** | Prometheus | `/metrics` |
+| Pillar      | Technology           | Endpoint             |
+|-------------|----------------------|----------------------|
+| **Metrics** | Prometheus           | `/metrics`           |
 | **Logging** | Structured JSON/text | stdout / JSONL files |
-| **Tracing** | OpenTelemetry (OTLP) | OTLP HTTP collector |
+| **Tracing** | OpenTelemetry (OTLP) | OTLP HTTP collector  |
 
 ### Architecture
 
@@ -64,26 +65,26 @@ Returns Prometheus-formatted metrics in plain text. No authentication required (
 
 #### Counters
 
-| Metric | Labels | Description |
-|--------|--------|-------------|
-| `rag_requests_total` | `endpoint`, `status` | Total number of RAG requests |
-| `rag_cache_hits_total` | — | Total number of cache hits |
+| Metric                 | Labels               | Description                  |
+|------------------------|----------------------|------------------------------|
+| `rag_requests_total`   | `endpoint`, `status` | Total number of RAG requests |
+| `rag_cache_hits_total` | —                    | Total number of cache hits   |
 
 #### Histograms
 
-| Metric | Labels | Buckets (seconds) | Description |
-|--------|--------|-------------------|-------------|
-| `rag_request_duration_seconds` | `endpoint` | 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0 | Request duration |
-| `rag_retrieval_duration_seconds` | — | 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0 | Retrieval step duration |
-| `rag_rerank_duration_seconds` | — | 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0 | Rerank step duration |
-| `rag_llm_duration_seconds` | — | 0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0 | LLM call duration |
+| Metric                           | Labels     | Buckets (seconds)                                           | Description             |
+|----------------------------------|------------|-------------------------------------------------------------|-------------------------|
+| `rag_request_duration_seconds`   | `endpoint` | 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0 | Request duration        |
+| `rag_retrieval_duration_seconds` | —          | 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0             | Retrieval step duration |
+| `rag_rerank_duration_seconds`    | —          | 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0                   | Rerank step duration    |
+| `rag_llm_duration_seconds`       | —          | 0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0            | LLM call duration       |
 
 #### Gauges
 
-| Metric | Description |
-|--------|-------------|
-| `rag_context_tokens` | Number of context tokens passed to LLM |
-| `rag_active_requests` | Number of currently active requests |
+| Metric                | Description                            |
+|-----------------------|----------------------------------------|
+| `rag_context_tokens`  | Number of context tokens passed to LLM |
+| `rag_active_requests` | Number of currently active requests    |
 
 ### Example Queries
 
@@ -151,7 +152,8 @@ from proxy.app.shared.metrics import (
 
 ### Dashboard JSON
 
-Pre-built Grafana dashboard JSON can be generated from the metrics definitions. Import into Grafana via **Dashboards → Import → Upload JSON**.
+Pre-built Grafana dashboard JSON can be generated from the metrics definitions. Import into Grafana via **Dashboards →
+Import → Upload JSON**.
 
 ---
 
@@ -159,11 +161,11 @@ Pre-built Grafana dashboard JSON can be generated from the metrics definitions. 
 
 ### Endpoints
 
-| Endpoint | Method | Purpose | Kubernetes |
-|----------|--------|---------|------------|
-| `/v1/health` | GET | General health status | — |
-| `/v1/health/live` | GET | Liveness probe | `livenessProbe` |
-| `/v1/health/ready` | GET | Readiness probe (Qdrant + LLM connectivity) | `readinessProbe` |
+| Endpoint           | Method | Purpose                                     | Kubernetes       |
+|--------------------|--------|---------------------------------------------|------------------|
+| `/v1/health`       | GET    | General health status                       | —                |
+| `/v1/health/live`  | GET    | Liveness probe                              | `livenessProbe`  |
+| `/v1/health/ready` | GET    | Readiness probe (Qdrant + LLM connectivity) | `readinessProbe` |
 
 ### Liveness Probe
 
@@ -245,7 +247,8 @@ LOG_REQUESTS=true   # Log every request (method, path, status, duration)
 
 ### Request ID Propagation
 
-Every request gets a unique `X-Request-ID` (UUID v4) injected by the `RequestIdMiddleware`. If the client provides one, it is preserved. The ID is:
+Every request gets a unique `X-Request-ID` (UUID v4) injected by the `RequestIdMiddleware`. If the client provides one,
+it is preserved. The ID is:
 
 1. Added to `request.state.request_id`
 2. Injected into all log records for that request
@@ -253,11 +256,13 @@ Every request gets a unique `X-Request-ID` (UUID v4) injected by the `RequestIdM
 
 ### Correlation ID
 
-The `CorrelationIdMiddleware` propagates `X-Correlation-ID` across services for distributed tracing. If absent, a new UUID is generated.
+The `CorrelationIdMiddleware` propagates `X-Correlation-ID` across services for distributed tracing. If absent, a new
+UUID is generated.
 
 ### Sensitive Data Masking
 
 The logging module automatically masks:
+
 - API keys (`api_key=...`, `API_KEY=...`)
 - Bearer tokens (`Authorization: Bearer ...`)
 - Passwords (`password=...`)
@@ -266,12 +271,12 @@ The logging module automatically masks:
 
 ### Log Levels
 
-| Level | Usage |
-|-------|-------|
-| `DEBUG` | Detailed diagnostic information |
-| `INFO` | Normal operation events (requests, health checks) |
-| `WARNING` | Degraded operation (fallback activated, timeout) |
-| `ERROR` | Operation failures (LLM timeout, retrieval error) |
+| Level      | Usage                                                  |
+|------------|--------------------------------------------------------|
+| `DEBUG`    | Detailed diagnostic information                        |
+| `INFO`     | Normal operation events (requests, health checks)      |
+| `WARNING`  | Degraded operation (fallback activated, timeout)       |
+| `ERROR`    | Operation failures (LLM timeout, retrieval error)      |
 | `CRITICAL` | System-level failures (startup crash, data corruption) |
 
 ---
@@ -306,32 +311,32 @@ with tracer.start_as_current_span("rag.retrieve") as span:
 
 #### Utility Functions
 
-| Function | Description |
-|----------|-------------|
-| `tracer` | Module-level tracer instance (no-op when disabled) |
-| `setup_tracing()` | Initialize OTLP exporter (call once at startup) |
-| `get_current_span()` | Get active span or invalid no-op span |
-| `add_event(name, attributes)` | Add named event to current span |
-| `set_span_error(exc)` | Record exception and set error status |
+| Function                      | Description                                        |
+|-------------------------------|----------------------------------------------------|
+| `tracer`                      | Module-level tracer instance (no-op when disabled) |
+| `setup_tracing()`             | Initialize OTLP exporter (call once at startup)    |
+| `get_current_span()`          | Get active span or invalid no-op span              |
+| `add_event(name, attributes)` | Add named event to current span                    |
+| `set_span_error(exc)`         | Record exception and set error status              |
 
 #### Recommended Spans
 
-| Span Name | Attributes |
-|-----------|------------|
-| `rag.request` | `rag.endpoint`, `rag.user_id` |
-| `rag.retrieve` | `rag.query`, `rag.num_results` |
-| `rag.rerank` | `rag.num_candidates`, `rag.num_results` |
-| `rag.llm` | `rag.model`, `rag.tokens_prompt`, `rag.tokens_completion` |
-| `rag.cache` | `rag.cache_hit` |
+| Span Name      | Attributes                                                |
+|----------------|-----------------------------------------------------------|
+| `rag.request`  | `rag.endpoint`, `rag.user_id`                             |
+| `rag.retrieve` | `rag.query`, `rag.num_results`                            |
+| `rag.rerank`   | `rag.num_candidates`, `rag.num_results`                   |
+| `rag.llm`      | `rag.model`, `rag.tokens_prompt`, `rag.tokens_completion` |
+| `rag.cache`    | `rag.cache_hit`                                           |
 
 ### Backend Options
 
-| Backend | Protocol | Notes |
-|---------|----------|-------|
-| Jaeger | OTLP HTTP | Popular open-source tracing |
-| Grafana Tempo | OTLP HTTP | Integrates with Grafana stack |
-| Zipkin | OTLP HTTP | Alternative open-source option |
-| Datadog | OTLP HTTP | Commercial APM |
+| Backend       | Protocol  | Notes                          |
+|---------------|-----------|--------------------------------|
+| Jaeger        | OTLP HTTP | Popular open-source tracing    |
+| Grafana Tempo | OTLP HTTP | Integrates with Grafana stack  |
+| Zipkin        | OTLP HTTP | Alternative open-source option |
+| Datadog       | OTLP HTTP | Commercial APM                 |
 
 ---
 
@@ -441,6 +446,7 @@ receivers:
 **Cause**: `METRICS_ENABLED` is not set or set to `false`.
 
 **Fix**:
+
 ```bash
 METRICS_ENABLED=true
 ```
@@ -450,6 +456,7 @@ METRICS_ENABLED=true
 **Cause**: `OTEL_ENABLED` is `false` or collector endpoint is unreachable.
 
 **Fix**:
+
 ```bash
 # Check configuration
 OTEL_ENABLED=true
@@ -464,6 +471,7 @@ curl -v http://localhost:4318/v1/traces
 **Cause**: The sensitive data masking regex is too broad.
 
 **Fix**: The masking patterns in `proxy/app/shared/logging.py` match:
+
 - `api_key`, `API_KEY`
 - `Authorization: Bearer`
 - `password`, `secret`, `token`
@@ -475,6 +483,7 @@ If legitimate values are being masked, adjust the `SENSITIVE_PATTERNS` list.
 **Cause**: One or more backend services (Qdrant, LLM, Redis, Neo4j) are unreachable.
 
 **Fix**:
+
 ```bash
 # Check Qdrant
 curl http://localhost:6333/healthz
@@ -494,6 +503,7 @@ cypher-shell -u neo4j -p neo4j "RETURN 1"
 **Cause**: `RATE_LIMIT_ENABLED` is `false` or middleware is not registered.
 
 **Fix**:
+
 ```bash
 RATE_LIMIT_ENABLED=true
 ```

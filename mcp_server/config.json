@@ -8,7 +8,7 @@
       "description": "Search corporate knowledge base"
     },
     {
-      "name": "rag_chat", 
+      "name": "rag_chat",
       "description": "Chat with RAG system"
     },
     {

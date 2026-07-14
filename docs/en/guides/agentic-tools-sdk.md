@@ -1,14 +1,18 @@
 # Agentic Tools — Python SDK Guide
 
-**Implementation Status:** Implemented in Beyond v2.0. The Python SDK (`@tool` decorator, `ToolBuilder` fluent API, `ToolContext`) is fully available for defining custom tools in pure Python with automatic JSON Schema generation from type hints.
+**Implementation Status:** Implemented in Beyond v2.0. The Python SDK (`@tool` decorator, `ToolBuilder` fluent API,
+`ToolContext`) is fully available for defining custom tools in pure Python with automatic JSON Schema generation from
+type hints.
 
 ---
 
 ## 1. Overview
 
-The Agentic Tools SDK enables developers to define RAG tools in pure Python. Tools are automatically registered, discovered at proxy startup, and made available to the LangGraph orchestrator for agentic query processing.
+The Agentic Tools SDK enables developers to define RAG tools in pure Python. Tools are automatically registered,
+discovered at proxy startup, and made available to the LangGraph orchestrator for agentic query processing.
 
 Two APIs are provided:
+
 - **`@tool` decorator** — declarative, auto-infers schema from type hints
 - **`ToolBuilder` fluent API** — programmatic, explicit control over every field
 
@@ -29,6 +33,7 @@ async def search_confluence(query: str, max_results: int = 5) -> str:
 ```
 
 The decorator automatically:
+
 - Reads parameter names, types, and defaults from the function signature
 - Uses the docstring as the tool description
 - Generates JSON Schema from type hints (`str` → `"string"`, `int` → `"integer"`)
@@ -57,17 +62,17 @@ async def search_jira(jql: str, max_results: int = 10) -> str:
     ...
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `name` | `str` | function name | Unique tool identifier |
-| `description` | `str` | docstring | Tool description for LLM routing |
-| `category` | `str` | `"general"` | Grouping category |
-| `tags` | `list[str]` | `[]` | Searchable tags |
-| `version` | `str` | `"1.0.0"` | Semantic version |
-| `timeout` | `float` | `30.0` | Execution timeout in seconds |
-| `retry_policy` | `RetryPolicy` | `None` | Retry configuration |
-| `visibility` | `ToolVisibility` | `PUBLIC` | RBAC visibility level |
-| `depends_on` | `list[str]` | `[]` | Other tool names this tool requires |
+| Parameter      | Type             | Default       | Description                         |
+|----------------|------------------|---------------|-------------------------------------|
+| `name`         | `str`            | function name | Unique tool identifier              |
+| `description`  | `str`            | docstring     | Tool description for LLM routing    |
+| `category`     | `str`            | `"general"`   | Grouping category                   |
+| `tags`         | `list[str]`      | `[]`          | Searchable tags                     |
+| `version`      | `str`            | `"1.0.0"`     | Semantic version                    |
+| `timeout`      | `float`          | `30.0`        | Execution timeout in seconds        |
+| `retry_policy` | `RetryPolicy`    | `None`        | Retry configuration                 |
+| `visibility`   | `ToolVisibility` | `PUBLIC`      | RBAC visibility level               |
+| `depends_on`   | `list[str]`      | `[]`          | Other tool names this tool requires |
 
 ---
 
@@ -90,15 +95,15 @@ async def stateful_search(ctx: ToolContext, query: str) -> str:
 
 `ToolContext` fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `user_id` | `str \| None` | Authenticated user ID |
-| `user_role` | `str \| None` | User's RBAC role |
-| `request_id` | `str` | Correlation ID |
-| `tool_call_id` | `str` | Unique tool call ID |
-| `get_state(key)` | method | Read cross-tool state |
-| `set_state(key, value)` | method | Write cross-tool state |
-| `stream_partial(data)` | method | Emit streaming partial result |
+| Field                   | Type          | Description                   |
+|-------------------------|---------------|-------------------------------|
+| `user_id`               | `str \| None` | Authenticated user ID         |
+| `user_role`             | `str \| None` | User's RBAC role              |
+| `request_id`            | `str`         | Correlation ID                |
+| `tool_call_id`          | `str`         | Unique tool call ID           |
+| `get_state(key)`        | method        | Read cross-tool state         |
+| `set_state(key, value)` | method        | Write cross-tool state        |
+| `stream_partial(data)`  | method        | Emit streaming partial result |
 
 ---
 
@@ -106,16 +111,16 @@ async def stateful_search(ctx: ToolContext, query: str) -> str:
 
 Python type hints are automatically mapped to JSON Schema types:
 
-| Python Type | JSON Schema |
-|-------------|-------------|
-| `str` | `"string"` |
-| `int` | `"integer"` |
-| `float` | `"number"` |
-| `bool` | `"boolean"` |
-| `list[X]` | `{"type": "array", "items": {"type": "X"}}` |
-| `dict` | `"object"` |
-| `Optional[X]` | X (but not required) |
-| `Annotated[X, "description"]` | X (description extracted) |
+| Python Type                   | JSON Schema                                 |
+|-------------------------------|---------------------------------------------|
+| `str`                         | `"string"`                                  |
+| `int`                         | `"integer"`                                 |
+| `float`                       | `"number"`                                  |
+| `bool`                        | `"boolean"`                                 |
+| `list[X]`                     | `{"type": "array", "items": {"type": "X"}}` |
+| `dict`                        | `"object"`                                  |
+| `Optional[X]`                 | X (but not required)                        |
+| `Annotated[X, "description"]` | X (description extracted)                   |
 
 ### Adding descriptions to parameters
 
@@ -160,24 +165,25 @@ tool = (
 
 `ToolBuilder` methods are chainable and return `self`:
 
-| Method | Description |
-|--------|-------------|
-| `with_description(text)` | Set tool description |
-| `with_param(name, type, desc, required, default, enum, items_type)` | Add a parameter |
-| `with_handler(fn)` | Set synchronous handler |
-| `with_async_handler(fn)` | Set async handler |
-| `with_category(cat)` | Set category |
-| `with_tags(tags)` | Set tags |
-| `with_timeout(s)` | Set timeout |
-| `with_retry_policy(rp)` | Set retry policy |
-| `with_visibility(v)` | Set visibility |
-| `build()` | Construct the `ToolDefinition` |
+| Method                                                              | Description                    |
+|---------------------------------------------------------------------|--------------------------------|
+| `with_description(text)`                                            | Set tool description           |
+| `with_param(name, type, desc, required, default, enum, items_type)` | Add a parameter                |
+| `with_handler(fn)`                                                  | Set synchronous handler        |
+| `with_async_handler(fn)`                                            | Set async handler              |
+| `with_category(cat)`                                                | Set category                   |
+| `with_tags(tags)`                                                   | Set tags                       |
+| `with_timeout(s)`                                                   | Set timeout                    |
+| `with_retry_policy(rp)`                                             | Set retry policy               |
+| `with_visibility(v)`                                                | Set visibility                 |
+| `build()`                                                           | Construct the `ToolDefinition` |
 
 ---
 
 ## 6. Registration & Discovery
 
-Tools defined via `@tool` are auto-registered in the SDK registry. At proxy startup, the `EnhancedToolRegistry` scans and loads all tool definitions.
+Tools defined via `@tool` are auto-registered in the SDK registry. At proxy startup, the `EnhancedToolRegistry` scans
+and loads all tool definitions.
 
 ```python
 # proxy/app/tools/registry.py
@@ -203,12 +209,12 @@ registry.register(tool)
 
 Tool visibility controls which roles can access each tool:
 
-| `ToolVisibility` | Accessible by |
-|------------------|--------------|
-| `PUBLIC` | All authenticated users |
-| `USER` | `user`, `expert`, `admin` |
-| `INTERNAL` | `expert`, `admin` |
-| `ADMIN` | `admin` only |
+| `ToolVisibility` | Accessible by             |
+|------------------|---------------------------|
+| `PUBLIC`         | All authenticated users   |
+| `USER`           | `user`, `expert`, `admin` |
+| `INTERNAL`       | `expert`, `admin`         |
+| `ADMIN`          | `admin` only              |
 
 The `ToolVisibilityFilter` and `ToolInputSanitizer` in `proxy/app/tools/security.py` enforce these rules at runtime.
 

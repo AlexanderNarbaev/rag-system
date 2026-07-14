@@ -72,6 +72,7 @@ token = create_token(
 **Token delivery:**
 
 Tokens are accepted in two forms:
+
 - `Authorization: Bearer <token>` (standard)
 - `X-Auth-Token: <token>` (alternative, for clients that cannot set Bearer)
 
@@ -137,6 +138,7 @@ detects Bearer tokens and uses the key (rather than IP) for rate-limit buckets.
 
 The `/v1/auth/register` endpoint accepts `{username, password, email}` and creates a
 new SQLite user with:
+
 - `roles: ["user"]` (default)
 - `access_level: "user"`
 - Bcrypt-hashed password (12 rounds by default, configurable via `BCRYPT_ROUNDS`)
@@ -146,13 +148,13 @@ only registration and login/refresh are public — all other endpoints require a
 
 ### 1.6 Auth Status Table
 
-| `AUTH_ENABLED` | `KEYCLOAK_URL` set | `AD_ENABLED` | Behavior |
-|---|---|---|---|
-| `false` | — | — | Anonymous context, all endpoints open |
-| `true` | No | No | HS256 JWT, SQLite login, self-registration |
-| `true` | Yes | No | Keycloak RS256 validation + SQLite login fallback |
-| `true` | Yes | Yes | LDAP bind → Keycloak RS256 → SQLite (chain) |
-| `true` | No | Yes | LDAP bind → SQLite login fallback |
+| `AUTH_ENABLED` | `KEYCLOAK_URL` set | `AD_ENABLED` | Behavior                                          |
+|----------------|--------------------|--------------|---------------------------------------------------|
+| `false`        | —                  | —            | Anonymous context, all endpoints open             |
+| `true`         | No                 | No           | HS256 JWT, SQLite login, self-registration        |
+| `true`         | Yes                | No           | Keycloak RS256 validation + SQLite login fallback |
+| `true`         | Yes                | Yes          | LDAP bind → Keycloak RS256 → SQLite (chain)       |
+| `true`         | No                 | Yes          | LDAP bind → SQLite login fallback                 |
 
 ---
 
@@ -171,13 +173,14 @@ The `/v1/auth/login` endpoint returns a token pair:
 }
 ```
 
-| Property | Config Variable | Default | Description |
-|---|---|---|---|
-| Access token TTL | `ACCESS_TOKEN_MINUTES` | 60 min | How long the access token is valid |
-| Refresh token TTL | `REFRESH_TOKEN_DAYS` | 7 days | How long refresh tokens persist in DB |
-| Token hash rounds | `BCRYPT_ROUNDS` | 12 | Bcrypt cost factor for password hashing |
+| Property          | Config Variable        | Default | Description                             |
+|-------------------|------------------------|---------|-----------------------------------------|
+| Access token TTL  | `ACCESS_TOKEN_MINUTES` | 60 min  | How long the access token is valid      |
+| Refresh token TTL | `REFRESH_TOKEN_DAYS`   | 7 days  | How long refresh tokens persist in DB   |
+| Token hash rounds | `BCRYPT_ROUNDS`        | 12      | Bcrypt cost factor for password hashing |
 
 **Access tokens** are JWTs with:
+
 - `type: "access"` claim
 - `jti` (JWT ID) claim for blacklisting
 - Short lifetime (60 min default)
@@ -228,13 +231,13 @@ Oldest entries are evicted when the limit is exceeded.
 
 **Client side:**
 
-| Storage | Recommendation | Reason |
-|---|---|---|
-| `localStorage` | ❌ Avoid | Accessible to any XSS |
-| `sessionStorage` | ⚠️ Acceptable | Cleared on tab close, still XSS-vulnerable |
-| `httpOnly` cookie | ✅ Preferred | Not accessible to JavaScript |
-| In-memory variable | ✅ Preferred | Cleared on page refresh, no persistence |
-| `Authorization` header | ✅ Transport | Use Bearer scheme, never in URL params |
+| Storage                | Recommendation | Reason                                     |
+|------------------------|----------------|--------------------------------------------|
+| `localStorage`         | ❌ Avoid        | Accessible to any XSS                      |
+| `sessionStorage`       | ⚠️ Acceptable  | Cleared on tab close, still XSS-vulnerable |
+| `httpOnly` cookie      | ✅ Preferred    | Not accessible to JavaScript               |
+| In-memory variable     | ✅ Preferred    | Cleared on page refresh, no persistence    |
+| `Authorization` header | ✅ Transport    | Use Bearer scheme, never in URL params     |
 
 **Server side:**
 
@@ -251,12 +254,12 @@ Oldest entries are evicted when the limit is exceeded.
 
 Roles are hierarchical — higher roles inherit all permissions of lower roles:
 
-| Rank | Role | Capabilities |
-|---|---|---|
-| 4 | **admin** | Full system access: all endpoints, admin panel, model evolution, canary control |
-| 3 | **expert** | Chat + feedback submission/review + enrichment triggers |
-| 2 | **user** | Chat completions, widget access, auth endpoints |
-| 1 | **read_only** | Model listing, health checks, auth endpoints only |
+| Rank | Role          | Capabilities                                                                    |
+|------|---------------|---------------------------------------------------------------------------------|
+| 4    | **admin**     | Full system access: all endpoints, admin panel, model evolution, canary control |
+| 3    | **expert**    | Chat + feedback submission/review + enrichment triggers                         |
+| 2    | **user**      | Chat completions, widget access, auth endpoints                                 |
+| 1    | **read_only** | Model listing, health checks, auth endpoints only                               |
 
 The role is extracted from JWT claims. For Keycloak tokens: `realm_access.roles`.
 For internal tokens: `roles`. If a user has multiple roles, the **highest** wins.
@@ -270,21 +273,21 @@ assert get_user_role(user) == Role.ADMIN  # highest wins
 
 ### 3.2 Permission Matrix
 
-| Action | admin | expert | user | read_only |
-|---|---|---|---|---|
-| `admin:config` | ✅ | ❌ | ❌ | ❌ |
-| `admin:users` | ✅ | ❌ | ❌ | ❌ |
-| `admin:stats` | ✅ | ❌ | ❌ | ❌ |
-| `admin:metrics` | ✅ | ❌ | ❌ | ❌ |
-| `admin:warmup` | ✅ | ❌ | ❌ | ❌ |
-| `feedback`, `feedback:submit` | ✅ | ✅ | ❌ | ❌ |
-| `feedback:review` | ✅ | ✅ | ❌ | ❌ |
-| `enrichment:trigger` | ✅ | ✅ | ❌ | ❌ |
-| `chat`, `chat:stream` | ✅ | ✅ | ✅ | ❌ |
-| `widget:access` | ✅ | ✅ | ✅ | ❌ |
-| `models:list` | ✅ | ✅ | ✅ | ✅ |
-| `health:check` | ✅ | ✅ | ✅ | ✅ |
-| `auth:*` (login/refresh/register/logout/me) | ✅ | ✅ | ✅ | ✅ |
+| Action                                      | admin | expert | user | read_only |
+|---------------------------------------------|-------|--------|------|-----------|
+| `admin:config`                              | ✅     | ❌      | ❌    | ❌         |
+| `admin:users`                               | ✅     | ❌      | ❌    | ❌         |
+| `admin:stats`                               | ✅     | ❌      | ❌    | ❌         |
+| `admin:metrics`                             | ✅     | ❌      | ❌    | ❌         |
+| `admin:warmup`                              | ✅     | ❌      | ❌    | ❌         |
+| `feedback`, `feedback:submit`               | ✅     | ✅      | ❌    | ❌         |
+| `feedback:review`                           | ✅     | ✅      | ❌    | ❌         |
+| `enrichment:trigger`                        | ✅     | ✅      | ❌    | ❌         |
+| `chat`, `chat:stream`                       | ✅     | ✅      | ✅    | ❌         |
+| `widget:access`                             | ✅     | ✅      | ✅    | ❌         |
+| `models:list`                               | ✅     | ✅      | ✅    | ✅         |
+| `health:check`                              | ✅     | ✅      | ✅    | ✅         |
+| `auth:*` (login/refresh/register/logout/me) | ✅     | ✅      | ✅    | ✅         |
 
 ### 3.3 Role Enforcement in Endpoints
 
@@ -319,18 +322,19 @@ When RBAC check fails, the response is:
   "detail": "Role 'user' is not sufficient. Required: 'expert'"
 }
 ```
+
 HTTP status: `403 Forbidden`.
 
 ### 3.4 Tool Visibility Levels
 
 Tools (agentic tool calling) have visibility levels matching the RBAC model:
 
-| Visibility | Accessible By | Usage |
-|---|---|---|
-| `public` | All authenticated users | General knowledge retrieval |
-| `user` | user+ | Team-specific tools |
-| `internal` | expert+ | Debugging, internal APIs |
-| `admin` | admin only | System configuration, model management |
+| Visibility | Accessible By           | Usage                                  |
+|------------|-------------------------|----------------------------------------|
+| `public`   | All authenticated users | General knowledge retrieval            |
+| `user`     | user+                   | Team-specific tools                    |
+| `internal` | expert+                 | Debugging, internal APIs               |
+| `admin`    | admin only              | System configuration, model management |
 
 ---
 
@@ -340,12 +344,12 @@ Tools (agentic tool calling) have visibility levels matching the RBAC model:
 
 Every document and chunk in Qdrant carries an `access_level` field:
 
-| Level | Description | Who Can See |
-|---|---|---|
-| `public` | Accessible to all users | Everyone (even anonymous) |
-| `internal` | All employees | All authenticated users |
+| Level          | Description                   | Who Can See               |
+|----------------|-------------------------------|---------------------------|
+| `public`       | Accessible to all users       | Everyone (even anonymous) |
+| `internal`     | All employees                 | All authenticated users   |
 | `confidential` | Restricted to specific groups | Users in `allowed_groups` |
-| `restricted` | Named individuals only | Users in `allowed_users` |
+| `restricted`   | Named individuals only        | Users in `allowed_users`  |
 
 ### 4.2 Qdrant Payload Format
 
@@ -422,32 +426,33 @@ context = build_context(visible_chunks)
 
 ### 5.1 Public vs Authenticated Endpoints
 
-| Endpoint | Auth Required | Notes |
-|---|---|---|
-| `GET /v1/health`, `/v1/health/live`, `/v1/health/ready` | No | Liveness/readiness probes |
-| `GET /metrics` | No | Prometheus scraping |
-| `GET /v1/models` | No | Model listing |
-| `GET /v1/widget`, `/v1/widget.js` | No | Embeddable chat widget |
-| `POST /v1/auth/login` | No | Token generation |
-| `POST /v1/auth/register` | No | Self-registration |
-| `POST /v1/auth/refresh` | No | Token refresh |
-| `POST /v1/auth/logout` | Optional | Revokes tokens if authenticated |
-| `GET /v1/auth/me` | **Yes** | Current user context |
-| `POST /v1/chat/completions` | **Yes** | RAG chat (when AUTH_ENABLED=true) |
-| `GET /v1/tools`, `/v1/tools/{name}` | Optional | Tool discovery |
-| `POST /v1/feedback` | **Yes** (expert+) | Expert feedback |
-| `POST /v1/admin/*` | **Yes** (admin) | Admin panel, model evolution, canary |
+| Endpoint                                                | Auth Required     | Notes                                |
+|---------------------------------------------------------|-------------------|--------------------------------------|
+| `GET /v1/health`, `/v1/health/live`, `/v1/health/ready` | No                | Liveness/readiness probes            |
+| `GET /metrics`                                          | No                | Prometheus scraping                  |
+| `GET /v1/models`                                        | No                | Model listing                        |
+| `GET /v1/widget`, `/v1/widget.js`                       | No                | Embeddable chat widget               |
+| `POST /v1/auth/login`                                   | No                | Token generation                     |
+| `POST /v1/auth/register`                                | No                | Self-registration                    |
+| `POST /v1/auth/refresh`                                 | No                | Token refresh                        |
+| `POST /v1/auth/logout`                                  | Optional          | Revokes tokens if authenticated      |
+| `GET /v1/auth/me`                                       | **Yes**           | Current user context                 |
+| `POST /v1/chat/completions`                             | **Yes**           | RAG chat (when AUTH_ENABLED=true)    |
+| `GET /v1/tools`, `/v1/tools/{name}`                     | Optional          | Tool discovery                       |
+| `POST /v1/feedback`                                     | **Yes** (expert+) | Expert feedback                      |
+| `POST /v1/admin/*`                                      | **Yes** (admin)   | Admin panel, model evolution, canary |
 
 ### 5.2 Rate Limiting
 
 When `RATE_LIMIT_ENABLED=true`, a **token bucket** algorithm is applied:
 
-| Config | Default | Description |
-|---|---|---|
-| `RATE_LIMIT_PER_MINUTE` | 60 | Sustained requests/minute per key |
-| `RATE_LIMIT_BURST` | 10 | Maximum burst capacity |
+| Config                  | Default | Description                       |
+|-------------------------|---------|-----------------------------------|
+| `RATE_LIMIT_PER_MINUTE` | 60      | Sustained requests/minute per key |
+| `RATE_LIMIT_BURST`      | 10      | Maximum burst capacity            |
 
 **Key extraction priority:**
+
 1. If `Authorization: Bearer <token>` is present → `apikey:<token>`
 2. If `X-Forwarded-For` header is present → `ip:<client-ip>` (first entry)
 3. Fallback → `ip:<direct-ip>`
@@ -459,6 +464,7 @@ When `RATE_LIMIT_ENABLED=true`, a **token bucket** algorithm is applied:
   "error": "Rate limit exceeded"
 }
 ```
+
 HTTP status: `429 Too Many Requests`, with `Retry-After` header.
 
 ### 5.3 CORS Configuration
@@ -523,6 +529,7 @@ KEYCLOAK_CLIENT_ID=rag-proxy     # OIDC client ID registered in Keycloak
 ```
 
 When `KEYCLOAK_URL` is set:
+
 - The proxy fetches JWKS from `{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs`
 - Token validation uses RS256 with the fetched public keys
 - JWKS is cached for 1 hour
@@ -555,6 +562,7 @@ BCRYPT_ROUNDS=12                 # Bcrypt cost factor (higher = slower but more 
 ```
 
 The SQLite database is auto-created on first access. Schema includes:
+
 - `users` — user records with bcrypt hashes
 - `refresh_tokens` — token hashes with revocation status
 - `token_blacklist` — JWT IDs of logged-out tokens
@@ -588,12 +596,12 @@ RATE_LIMIT_BURST=10              # Burst capacity
 
 All user-provided inputs pass through sanitization layers:
 
-| Input Type | Max Length | Protections |
-|---|---|---|
-| Chat queries | 8,000 chars | SQL injection, HTML tags, control chars, whitespace collapse |
-| Feedback text | 32,000 chars | XSS, script/iframe tags, event handlers, JS protocols, entity encoding |
-| URL query params | 4,096 chars per value | HTML tags, control chars |
-| Header values | 256 chars (keys) | — |
+| Input Type       | Max Length            | Protections                                                            |
+|------------------|-----------------------|------------------------------------------------------------------------|
+| Chat queries     | 8,000 chars           | SQL injection, HTML tags, control chars, whitespace collapse           |
+| Feedback text    | 32,000 chars          | XSS, script/iframe tags, event handlers, JS protocols, entity encoding |
+| URL query params | 4,096 chars per value | HTML tags, control chars                                               |
+| Header values    | 256 chars (keys)      | —                                                                      |
 
 ### 7.2 SQL Injection Prevention
 
@@ -666,21 +674,21 @@ Before any data is written to logs, it passes through log sanitization:
 
 ### 8.1 What Gets Logged
 
-| Event | Log Level | Fields |
-|---|---|---|
-| Failed login attempt | WARNING | username, client IP, reason |
-| Successful login | INFO | username, client IP |
-| Token refresh | INFO | user_id, client IP |
-| Token logout / revocation | INFO | user_id |
-| LDAP bind failure | WARNING | username, error |
-| LDAP auto-user creation | INFO | username |
-| User registration | INFO | username, user_id |
-| User deletion | INFO | user_id |
-| Role/permission denied (403) | WARNING | user_id, required_role, actual_role, endpoint |
-| Auth failure (401) | WARNING | client IP, endpoint, reason |
-| Rate limit exceeded (429) | WARNING | key (masked), endpoint |
-| HTTP 4xx errors | WARNING | method, path, status, client_ip |
-| HTTP 5xx errors | ERROR | method, path, status, client_ip |
+| Event                        | Log Level | Fields                                        |
+|------------------------------|-----------|-----------------------------------------------|
+| Failed login attempt         | WARNING   | username, client IP, reason                   |
+| Successful login             | INFO      | username, client IP                           |
+| Token refresh                | INFO      | user_id, client IP                            |
+| Token logout / revocation    | INFO      | user_id                                       |
+| LDAP bind failure            | WARNING   | username, error                               |
+| LDAP auto-user creation      | INFO      | username                                      |
+| User registration            | INFO      | username, user_id                             |
+| User deletion                | INFO      | user_id                                       |
+| Role/permission denied (403) | WARNING   | user_id, required_role, actual_role, endpoint |
+| Auth failure (401)           | WARNING   | client IP, endpoint, reason                   |
+| Rate limit exceeded (429)    | WARNING   | key (masked), endpoint                        |
+| HTTP 4xx errors              | WARNING   | method, path, status, client_ip               |
+| HTTP 5xx errors              | ERROR     | method, path, status, client_ip               |
 
 ### 8.2 Log Format
 
@@ -907,6 +915,7 @@ NAMESPACE_ISOLATION_ENABLED=true
 ```
 
 Users will only see chunks with a matching namespace. The namespace is determined by:
+
 1. `namespace` claim in JWT
 2. First `groups` entry if namespace is empty
 3. Empty string (global) if neither is set
@@ -917,25 +926,25 @@ Users will only see chunks with a matching namespace. The namespace is determine
 
 ### 10.1 Production Hardening
 
-| # | Item | Verification Command |
-|---|---|---|
-| 1 | **JWT secret is strong** (≥32 random bytes) | `echo ${#JWT_SECRET}` — should be ≥64 chars for hex |
-| 2 | **AUTH_ENABLED=true** in production | Check `.env`: `grep AUTH_ENABLED proxy/.env` |
-| 3 | **RBAC_ENABLED=true** | Check `.env`: `grep RBAC_ENABLED proxy/.env` |
-| 4 | **BCRYPT_ROUNDS ≥ 12** | Check `.env`: `grep BCRYPT_ROUNDS proxy/.env` |
-| 5 | **Short access token TTL** (≤ 30 min) | Check: `grep ACCESS_TOKEN_MINUTES proxy/.env` |
-| 6 | **Refresh token rotation enabled** | Default — tokens are consumed on use |
-| 7 | **RATE_LIMIT_ENABLED=true** | Check `.env`: `grep RATE_LIMIT_ENABLED proxy/.env` |
-| 8 | **CORS restricted** (not `*`) | Check `.env`: `grep CORS_ORIGINS proxy/.env` — should be specific origins |
-| 9 | **HTTPS enforced** (via reverse proxy) | `curl -I https://your-proxy/v1/health` — should return `Strict-Transport-Security` header |
-| 10 | **LOG_FORMAT=json** for structured logging | Check `.env`: `grep LOG_FORMAT proxy/.env` |
-| 11 | **SANITIZE_INPUT=true** | Default is `true` — verify: `grep SANITIZE_INPUT proxy/.env` |
-| 12 | **AUDIT_ENABLED=true** | Default is `true` — verify: `grep AUDIT_ENABLED proxy/.env` |
-| 13 | **No secrets in version control** | `git log --all --full-history -- '*.env' '*.pem' '*.key'` — should be empty |
-| 14 | **SQLite DB on persistent volume** | Check Docker/K8s mount: `USER_DB_PATH` should be on a volume |
-| 15 | **Token blacklist has reasonable limit** | Check: `grep TOKEN_BLACKLIST_MAX_ENTRIES proxy/.env` |
-| 16 | **Health endpoints NOT behind auth** | `curl http://proxy/v1/health` — should return 200 without token |
-| 17 | **Admin endpoints behind auth + RBAC** | `curl http://proxy/v1/admin/models` — should return 401 or 403 without admin token |
+| #  | Item                                        | Verification Command                                                                      |
+|----|---------------------------------------------|-------------------------------------------------------------------------------------------|
+| 1  | **JWT secret is strong** (≥32 random bytes) | `echo ${#JWT_SECRET}` — should be ≥64 chars for hex                                       |
+| 2  | **AUTH_ENABLED=true** in production         | Check `.env`: `grep AUTH_ENABLED proxy/.env`                                              |
+| 3  | **RBAC_ENABLED=true**                       | Check `.env`: `grep RBAC_ENABLED proxy/.env`                                              |
+| 4  | **BCRYPT_ROUNDS ≥ 12**                      | Check `.env`: `grep BCRYPT_ROUNDS proxy/.env`                                             |
+| 5  | **Short access token TTL** (≤ 30 min)       | Check: `grep ACCESS_TOKEN_MINUTES proxy/.env`                                             |
+| 6  | **Refresh token rotation enabled**          | Default — tokens are consumed on use                                                      |
+| 7  | **RATE_LIMIT_ENABLED=true**                 | Check `.env`: `grep RATE_LIMIT_ENABLED proxy/.env`                                        |
+| 8  | **CORS restricted** (not `*`)               | Check `.env`: `grep CORS_ORIGINS proxy/.env` — should be specific origins                 |
+| 9  | **HTTPS enforced** (via reverse proxy)      | `curl -I https://your-proxy/v1/health` — should return `Strict-Transport-Security` header |
+| 10 | **LOG_FORMAT=json** for structured logging  | Check `.env`: `grep LOG_FORMAT proxy/.env`                                                |
+| 11 | **SANITIZE_INPUT=true**                     | Default is `true` — verify: `grep SANITIZE_INPUT proxy/.env`                              |
+| 12 | **AUDIT_ENABLED=true**                      | Default is `true` — verify: `grep AUDIT_ENABLED proxy/.env`                               |
+| 13 | **No secrets in version control**           | `git log --all --full-history -- '*.env' '*.pem' '*.key'` — should be empty               |
+| 14 | **SQLite DB on persistent volume**          | Check Docker/K8s mount: `USER_DB_PATH` should be on a volume                              |
+| 15 | **Token blacklist has reasonable limit**    | Check: `grep TOKEN_BLACKLIST_MAX_ENTRIES proxy/.env`                                      |
+| 16 | **Health endpoints NOT behind auth**        | `curl http://proxy/v1/health` — should return 200 without token                           |
+| 17 | **Admin endpoints behind auth + RBAC**      | `curl http://proxy/v1/admin/models` — should return 401 or 403 without admin token        |
 
 ### 10.2 Quick Security Audit Script
 
@@ -1009,28 +1018,30 @@ head -c 32 /dev/urandom | base64 | tr -d '='
 
 ### 10.5 Common Pitfalls
 
-| Problem | Cause | Solution |
-|---|---|---|
-| 401 on all endpoints | `AUTH_ENABLED=true` but no token sent | Include `Authorization: Bearer <token>` header |
-| 403 on chat | `RBAC_ENABLED=true` but user has no `user` role | Ensure JWT claim includes `"roles": ["user"]` |
-| "Invalid token" error | Wrong `JWT_SECRET` or `JWT_ALGORITHM` mismatch | Check `.env` values match the token issuer |
-| Keycloak tokens rejected | Proxy using local JWT_SECRET instead of Keycloak JWKS | Set `KEYCLOAK_URL`; proxy auto-switches to RS256 |
-| LDAP bind fails | Wrong DN template | Test DN: `ldapsearch -x -H ldap://dc:389 -D "cn=user,..." -w pass -b "dc=..."` |
-| Registration fails | Username already exists (unique constraint) | Use a different username |
-| Refresh returns "invalid" | Token was already consumed or expired | Get a new pair via login |
-| Rate limited | Exceeded RATE_LIMIT_PER_MINUTE | Increase limit or wait for bucket refill |
-| No audit logs | `AUDIT_ENABLED=false` or `LOG_FORMAT` not configured | Set `AUDIT_ENABLED=true`, `LOG_FORMAT=json` |
+| Problem                   | Cause                                                 | Solution                                                                       |
+|---------------------------|-------------------------------------------------------|--------------------------------------------------------------------------------|
+| 401 on all endpoints      | `AUTH_ENABLED=true` but no token sent                 | Include `Authorization: Bearer <token>` header                                 |
+| 403 on chat               | `RBAC_ENABLED=true` but user has no `user` role       | Ensure JWT claim includes `"roles": ["user"]`                                  |
+| "Invalid token" error     | Wrong `JWT_SECRET` or `JWT_ALGORITHM` mismatch        | Check `.env` values match the token issuer                                     |
+| Keycloak tokens rejected  | Proxy using local JWT_SECRET instead of Keycloak JWKS | Set `KEYCLOAK_URL`; proxy auto-switches to RS256                               |
+| LDAP bind fails           | Wrong DN template                                     | Test DN: `ldapsearch -x -H ldap://dc:389 -D "cn=user,..." -w pass -b "dc=..."` |
+| Registration fails        | Username already exists (unique constraint)           | Use a different username                                                       |
+| Refresh returns "invalid" | Token was already consumed or expired                 | Get a new pair via login                                                       |
+| Rate limited              | Exceeded RATE_LIMIT_PER_MINUTE                        | Increase limit or wait for bucket refill                                       |
+| No audit logs             | `AUDIT_ENABLED=false` or `LOG_FORMAT` not configured  | Set `AUDIT_ENABLED=true`, `LOG_FORMAT=json`                                    |
 
 ---
 
 ## Appendix A: Full JWT Token Example (HS256)
 
 **Decoded header:**
+
 ```json
 {"alg": "HS256", "typ": "JWT"}
 ```
 
 **Decoded payload:**
+
 ```json
 {
   "sub": "usr-alice-001",
@@ -1047,6 +1058,7 @@ head -c 32 /dev/urandom | base64 | tr -d '='
 ```
 
 **Complete token (for testing; secret: `test-secret-key-for-unit-tests`):**
+
 ```
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3ItYWxpY2UtMDAxIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYWxpY2UiLCJyb2xlcyI6WyJ1c2VyIl0sImdyb3VwcyI6WyJlbmdpbmVlcmluZyIsInBsYXRmb3JtIl0sImFjY2Vzc19sZXZlbCI6ImludGVybmFsIiwibmFtZXNwYWNlIjoiZW5naW5lZXJpbmciLCJpYXQiOjE3MTkwMDAwMDAsImV4cCI6MTcxOTA4NjQwMCwianRpIjoiYTFiMmMzZDRlNWY2YTdiOGM5ZDBlMWYyYTNiNGM1ZDYiLCJ0eXBlIjoiYWNjZXNzIn0.signature_here
 ```

@@ -8,12 +8,12 @@ Thank you for your interest in contributing! This guide covers everything you ne
 
 ### Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Python | 3.11+ | Runtime |
-| Docker | 24.0+ | Infrastructure services |
-| Git | 2.30+ | Version control |
-| Make | 4.0+ | Build automation |
+| Tool   | Version | Purpose                 |
+|--------|---------|-------------------------|
+| Python | 3.11+   | Runtime                 |
+| Docker | 24.0+   | Infrastructure services |
+| Git    | 2.30+   | Version control         |
+| Make   | 4.0+    | Build automation        |
 
 ### Quick Setup
 
@@ -82,13 +82,13 @@ The project uses Ruff for all Python linting and formatting. Key rules:
 
 ### Naming Conventions
 
-| Type | Convention | Example |
-|------|-----------|---------|
-| Module | snake_case | `retrieval.py` |
-| Class | PascalCase | `HybridRetriever` |
-| Function | snake_case | `search_documents()` |
-| Constant | UPPER_SNAKE | `MAX_CHUNK_SIZE` |
-| Private | Leading underscore | `_internal_method()` |
+| Type     | Convention         | Example              |
+|----------|--------------------|----------------------|
+| Module   | snake_case         | `retrieval.py`       |
+| Class    | PascalCase         | `HybridRetriever`    |
+| Function | snake_case         | `search_documents()` |
+| Constant | UPPER_SNAKE        | `MAX_CHUNK_SIZE`     |
+| Private  | Leading underscore | `_internal_method()` |
 
 ### Type Annotations
 
@@ -201,16 +201,16 @@ async def test_retrieve_returns_empty_when_qdrant_down(mock_qdrant):
 
 ### Types
 
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `style` | Formatting, no code change |
-| `refactor` | Code restructuring |
-| `test` | Adding/fixing tests |
-| `chore` | Build, CI, tooling |
-| `perf` | Performance improvement |
+| Type       | Description                |
+|------------|----------------------------|
+| `feat`     | New feature                |
+| `fix`      | Bug fix                    |
+| `docs`     | Documentation only         |
+| `style`    | Formatting, no code change |
+| `refactor` | Code restructuring         |
+| `test`     | Adding/fixing tests        |
+| `chore`    | Build, CI, tooling         |
+| `perf`     | Performance improvement    |
 
 ### Examples
 
@@ -332,15 +332,15 @@ Screenshots, references, examples.
 
 Before contributing, familiarize yourself with the architecture:
 
-| Layer | Directory | Purpose |
-|-------|-----------|---------|
-| **Proxy** | `proxy/app/` | FastAPI application, retrieval, generation |
-| **ETL** | `etl/` | Data extraction, chunking, embedding |
-| **Federation** | `federation/app/` | Multi-silo RAG proxy |
-| **MCP** | `mcp_server/` | Model Context Protocol server |
-| **Dashboard** | `hitl_dashboard/` | Streamlit expert review |
-| **Tests** | `tests/` | All test suites |
-| **Docs** | `docs/` | Documentation (EN + RU) |
+| Layer          | Directory         | Purpose                                    |
+|----------------|-------------------|--------------------------------------------|
+| **Proxy**      | `proxy/app/`      | FastAPI application, retrieval, generation |
+| **ETL**        | `etl/`            | Data extraction, chunking, embedding       |
+| **Federation** | `federation/app/` | Multi-silo RAG proxy                       |
+| **MCP**        | `mcp_server/`     | Model Context Protocol server              |
+| **Dashboard**  | `hitl_dashboard/` | Streamlit expert review                    |
+| **Tests**      | `tests/`          | All test suites                            |
+| **Docs**       | `docs/`           | Documentation (EN + RU)                    |
 
 See [Architecture Decision Records](docs/en/adr/) for design rationale.
 

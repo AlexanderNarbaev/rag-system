@@ -2,7 +2,8 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-10
 
-Practical examples for every RAG System API endpoint using **curl**, **Python (httpx)**, and **JavaScript (fetch)**. All examples assume the proxy is running at `http://localhost:8080`.
+Practical examples for every RAG System API endpoint using **curl**, **Python (httpx)**, and **JavaScript (fetch)**. All
+examples assume the proxy is running at `http://localhost:8080`.
 
 ---
 
@@ -146,13 +147,13 @@ Authorization: Bearer <access_token>
 
 ### RAG-Specific Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `rag_version` | `string` | `null` | Request a specific document version |
-| `rag_force_refresh` | `bool` | `false` | Bypass response cache for fresh results |
-| `rag_top_k` | `int` | `null` | Override the number of retrieved chunks |
-| `rag_skip_generation` | `bool` | `false` | Return retrieved chunks without LLM generation |
-| `rag_return_chunks` | `bool` | `false` | Include raw chunks in the response |
+| Parameter             | Type     | Default | Description                                    |
+|-----------------------|----------|---------|------------------------------------------------|
+| `rag_version`         | `string` | `null`  | Request a specific document version            |
+| `rag_force_refresh`   | `bool`   | `false` | Bypass response cache for fresh results        |
+| `rag_top_k`           | `int`    | `null`  | Override the number of retrieved chunks        |
+| `rag_skip_generation` | `bool`   | `false` | Return retrieved chunks without LLM generation |
+| `rag_return_chunks`   | `bool`   | `false` | Include raw chunks in the response             |
 
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -185,7 +186,8 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ### Tools / Function Calling
 
-Pass `tools` in the request to enable agentic tool calling. The proxy selects and invokes tools automatically via the orchestrator.
+Pass `tools` in the request to enable agentic tool calling. The proxy selects and invokes tools automatically via the
+orchestrator.
 
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -546,7 +548,9 @@ curl -X POST http://localhost:8080/v1/feedback \
 ```
 
 !!! note
-    The `feedback_id` comes from the `rag_feedback_id` field in the chat completion response. The `correction` field (singular) provides the corrected answer text. The `comment` field is an optional expert note. Requires `expert` or `admin` role.
+The `feedback_id` comes from the `rag_feedback_id` field in the chat completion response. The `correction` field (
+singular) provides the corrected answer text. The `comment` field is an optional expert note. Requires `expert` or
+`admin` role.
 
 ---
 
@@ -555,7 +559,8 @@ curl -X POST http://localhost:8080/v1/feedback \
 The files API provides upload, download, list, and delete operations backed by MinIO. Requires `user` role or above.
 
 !!! info
-    The files API requires MinIO/S3 to be configured. Install `boto3` (`pip install boto3`) and set the `MINIO_*` environment variables in `proxy/.env`.
+The files API requires MinIO/S3 to be configured. Install `boto3` (`pip install boto3`) and set the `MINIO_*`
+environment variables in `proxy/.env`.
 
 ### Upload File
 
@@ -687,7 +692,7 @@ curl -X DELETE http://localhost:8080/v1/files/<file_id> \
 ```
 
 !!! warning
-    Deleting files requires `expert` or `admin` role.
+Deleting files requires `expert` or `admin` role.
 
 ---
 
@@ -873,18 +878,18 @@ curl http://localhost:8080/v1/widget.js
 
 ### Common HTTP Status Codes
 
-| Code | Meaning | Typical Cause |
-|------|---------|---------------|
-| `200` | Success | Request completed |
-| `400` | Bad Request | Invalid JSON or missing required fields |
-| `401` | Unauthorized | Missing or expired JWT token |
-| `403` | Forbidden | Insufficient RBAC role |
-| `404` | Not Found | Endpoint or resource does not exist |
-| `422` | Validation Error | Request body fails schema validation |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Internal Server Error | Unexpected server failure |
-| `502` | Bad Gateway | LLM backend unreachable |
-| `503` | Service Unavailable | Proxy not ready or overloaded |
+| Code  | Meaning               | Typical Cause                           |
+|-------|-----------------------|-----------------------------------------|
+| `200` | Success               | Request completed                       |
+| `400` | Bad Request           | Invalid JSON or missing required fields |
+| `401` | Unauthorized          | Missing or expired JWT token            |
+| `403` | Forbidden             | Insufficient RBAC role                  |
+| `404` | Not Found             | Endpoint or resource does not exist     |
+| `422` | Validation Error      | Request body fails schema validation    |
+| `429` | Too Many Requests     | Rate limit exceeded                     |
+| `500` | Internal Server Error | Unexpected server failure               |
+| `502` | Bad Gateway           | LLM backend unreachable                 |
+| `503` | Service Unavailable   | Proxy not ready or overloaded           |
 
 ### Error Response Format
 

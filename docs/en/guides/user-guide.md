@@ -4,20 +4,23 @@ How to use the RAG Knowledge Assistant: authentication, roles, feedback, and how
 
 ## Overview
 
-The RAG system is designed to learn from user interactions. Every query, every response rating, and every expert correction feeds back into the system to improve future results. This guide explains how to interact with the system effectively and how your feedback drives continuous improvement.
+The RAG system is designed to learn from user interactions. Every query, every response rating, and every expert
+correction feeds back into the system to improve future results. This guide explains how to interact with the system
+effectively and how your feedback drives continuous improvement.
 
 ## User Roles
 
 The system implements role-based access control (RBAC) with four hierarchical roles:
 
-| Role | Permissions | Typical User |
-|------|------------|--------------|
-| **admin** | All endpoints: chat, feedback, user management, configuration, metrics | System administrators |
-| **expert** | Chat + feedback submission + review + enrichment triggers | Domain experts, knowledge curators |
-| **user** | Chat + widget access | Regular users |
-| **read_only** | Models list + health check + auth endpoints | API consumers, monitoring |
+| Role          | Permissions                                                            | Typical User                       |
+|---------------|------------------------------------------------------------------------|------------------------------------|
+| **admin**     | All endpoints: chat, feedback, user management, configuration, metrics | System administrators              |
+| **expert**    | Chat + feedback submission + review + enrichment triggers              | Domain experts, knowledge curators |
+| **user**      | Chat + widget access                                                   | Regular users                      |
+| **read_only** | Models list + health check + auth endpoints                            | API consumers, monitoring          |
 
-Roles are hierarchical — a higher role inherits all permissions of lower roles. When RBAC is disabled (`RBAC_ENABLED=false`), all authenticated users have full access.
+Roles are hierarchical — a higher role inherits all permissions of lower roles. When RBAC is disabled (
+`RBAC_ENABLED=false`), all authenticated users have full access.
 
 ## Authentication
 
@@ -69,7 +72,8 @@ Alternatively, use the `X-Auth-Token` header (no `Bearer` prefix).
 
 ### Token Refresh
 
-Access tokens expire after `ACCESS_TOKEN_MINUTES` (default: 60 minutes). Use the refresh token to obtain a new token pair:
+Access tokens expire after `ACCESS_TOKEN_MINUTES` (default: 60 minutes). Use the refresh token to obtain a new token
+pair:
 
 ```bash
 curl -X POST http://localhost:8080/v1/auth/refresh \
@@ -103,18 +107,18 @@ curl http://localhost:8080/v1/chat/completions \
 
 ### RAG-Specific Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `rag_version` | string | Request a specific document version |
+| Parameter           | Type    | Description                           |
+|---------------------|---------|---------------------------------------|
+| `rag_version`       | string  | Request a specific document version   |
 | `rag_force_refresh` | boolean | Bypass response cache and re-retrieve |
 
 Response extensions (in `x-rag-*` headers or response metadata):
 
-| Extension | Description |
-|-----------|-------------|
+| Extension         | Description                                    |
+|-------------------|------------------------------------------------|
 | `rag_feedback_id` | Use this ID to submit feedback on the response |
-| `rag_confidence` | Confidence score (0.0–1.0) |
-| `rag_sources` | List of source documents used |
+| `rag_confidence`  | Confidence score (0.0–1.0)                     |
+| `rag_sources`     | List of source documents used                  |
 
 ### Streaming
 
@@ -132,7 +136,8 @@ curl http://localhost:8080/v1/chat/completions \
 
 ## Providing Feedback
 
-Feedback is the primary mechanism for improving system quality. Every chat response includes a `rag_feedback_id` that you use to rate the answer.
+Feedback is the primary mechanism for improving system quality. Every chat response includes a `rag_feedback_id` that
+you use to rate the answer.
 
 ### Positive Feedback
 
@@ -191,7 +196,8 @@ When `ENRICHMENT_ENABLED=true`:
 3. The pair is chunked and embedded
 4. The new chunk is indexed into Qdrant
 
-This means future queries similar to the original will find this confirmed-good answer as a retrieval candidate, improving recall for that topic.
+This means future queries similar to the original will find this confirmed-good answer as a retrieval candidate,
+improving recall for that topic.
 
 ### Negative Feedback → Reranker Fine-Tuning
 
@@ -235,21 +241,21 @@ Every response includes a confidence score between 0.0 and 1.0. This score is co
 
 ### Score Components
 
-| Signal | Weight | Description |
-|--------|--------|-------------|
-| Context presence | Base | Penalty if retrieved context is empty or very short |
-| Context-to-answer ratio | 0.2 | Penalty if context is much shorter than the answer |
-| Uncertainty phrases | 0.2 | Penalty for hedging language ("I'm not sure", "possibly") |
-| Answer length | 0.15 | Penalty for very short answers |
-| NLI grounding | 0.4 | How many answer claims are supported by the context |
+| Signal                  | Weight | Description                                               |
+|-------------------------|--------|-----------------------------------------------------------|
+| Context presence        | Base   | Penalty if retrieved context is empty or very short       |
+| Context-to-answer ratio | 0.2    | Penalty if context is much shorter than the answer        |
+| Uncertainty phrases     | 0.2    | Penalty for hedging language ("I'm not sure", "possibly") |
+| Answer length           | 0.15   | Penalty for very short answers                            |
+| NLI grounding           | 0.4    | How many answer claims are supported by the context       |
 
 ### Interpreting Scores
 
-| Score Range | Meaning | Recommended Action |
-|-------------|---------|-------------------|
-| 0.8–1.0 | High confidence | Trust the answer |
-| 0.5–0.8 | Moderate confidence | Verify important details |
-| 0.0–0.5 | Low confidence | Answer may contain hallucinations; rephrase your query or consult a human |
+| Score Range | Meaning             | Recommended Action                                                        |
+|-------------|---------------------|---------------------------------------------------------------------------|
+| 0.8–1.0     | High confidence     | Trust the answer                                                          |
+| 0.5–0.8     | Moderate confidence | Verify important details                                                  |
+| 0.0–0.5     | Low confidence      | Answer may contain hallucinations; rephrase your query or consult a human |
 
 ### NLI Grounding
 
@@ -275,26 +281,32 @@ If retrieval quality is poor, consider rephrasing your query to be more specific
 
 ### Q: What happens when auth is disabled?
 
-When `AUTH_ENABLED=false` (default), all endpoints are accessible without authentication. The system operates in anonymous mode with full access. This is suitable for local development and internal deployments behind a VPN.
+When `AUTH_ENABLED=false` (default), all endpoints are accessible without authentication. The system operates in
+anonymous mode with full access. This is suitable for local development and internal deployments behind a VPN.
 
 ### Q: Can I use the system without Keycloak?
 
 Yes. The system supports two authentication modes:
 
-1. **Local mode** (default): Uses HS256 with `JWT_SECRET`. User registration and login via `/v1/auth/register` and `/v1/auth/login`.
-2. **Keycloak/OIDC mode**: When `KEYCLOAK_URL` is set, the system auto-discovers OIDC configuration and validates RS256 tokens from Keycloak.
+1. **Local mode** (default): Uses HS256 with `JWT_SECRET`. User registration and login via `/v1/auth/register` and
+   `/v1/auth/login`.
+2. **Keycloak/OIDC mode**: When `KEYCLOAK_URL` is set, the system auto-discovers OIDC configuration and validates RS256
+   tokens from Keycloak.
 
 ### Q: How do I get expert role?
 
-By default, new registrations get the `user` role. An admin must promote users to `expert` via the user database. In local mode, you can configure initial users via the `AUTH_VALID_USERS` environment variable.
+By default, new registrations get the `user` role. An admin must promote users to `expert` via the user database. In
+local mode, you can configure initial users via the `AUTH_VALID_USERS` environment variable.
 
 ### Q: Is my feedback stored permanently?
 
-Interaction logs and feedback are stored as JSONL files in the configured `LOG_DIR`. Files are automatically rotated when they exceed the size limit (10 MB for interactions, 5 MB for feedback), with up to 5 backup files retained.
+Interaction logs and feedback are stored as JSONL files in the configured `LOG_DIR`. Files are automatically rotated
+when they exceed the size limit (10 MB for interactions, 5 MB for feedback), with up to 5 backup files retained.
 
 ### Q: Can I use the widget without authentication?
 
-Yes. The widget endpoint (`/v1/widget`) and JavaScript (`/v1/widget.js`) are public endpoints that work without authentication. They are listed as public in the auth middleware.
+Yes. The widget endpoint (`/v1/widget`) and JavaScript (`/v1/widget.js`) are public endpoints that work without
+authentication. They are listed as public in the auth middleware.
 
 ### Q: How does the system handle sensitive data?
 

@@ -2,7 +2,8 @@
 
 **Version:** v2.0 | **Last Updated:** 2026-07-06
 
-Comprehensive troubleshooting reference for the RAG Knowledge Assistant. Covers startup, query, retrieval, LLM, embedding, auth, cache, graph, performance, deployment, federation, and model evolution issues.
+Comprehensive troubleshooting reference for the RAG Knowledge Assistant. Covers startup, query, retrieval, LLM,
+embedding, auth, cache, graph, performance, deployment, federation, and model evolution issues.
 
 ---
 
@@ -38,10 +39,12 @@ ss -tlnp | grep 8080
 ### 1.1 Proxy Won't Start — Port Already in Use
 
 **Symptom:**
+
 ```
 OSError: [Errno 98] Address already in use
 ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8080)
 ```
+
 ```
 docker logs rag-proxy | grep -i "address already in use"
 ```
@@ -49,6 +52,7 @@ docker logs rag-proxy | grep -i "address already in use"
 **Root cause:** Another process is already bound to port 8080.
 
 **Solution:**
+
 ```bash
 # Find the offending process
 ss -tlnp | grep 8080
@@ -73,15 +77,19 @@ docker-compose -f proxy/docker-compose.yml up -d rag-proxy
 ### 1.2 Qdrant Connection Refused
 
 **Symptom:**
+
 ```
 qdrant_client.http.exceptions.ResponseHandlingException: Failed to connect
 ConnectionRefusedError: [Errno 111] Connection refused
 ```
+
 Proxy health: `"qdrant": "unhealthy"`.
 
-**Root cause:** Qdrant is not running, not reachable at the configured host/port, or the proxy's `.env` does not match the Docker service name.
+**Root cause:** Qdrant is not running, not reachable at the configured host/port, or the proxy's `.env` does not match
+the Docker service name.
 
 **Solution:**
+
 ```bash
 # 1. Verify Qdrant is running
 docker ps | grep qdrant
@@ -107,15 +115,18 @@ docker exec rag-proxy curl -s http://qdrant:6333/health
 ### 1.3 Model File Not Found (LLM Backend)
 
 **Symptom:**
+
 ```
 vLLM error: model '/models/model.gguf' not found
 OSError: [Errno 2] No such file or directory: '/models/model.gguf'
 ```
+
 `docker logs rag-vllm | tail -20`
 
 **Root cause:** The model file path is incorrect, the volume mount is wrong, or the model has not been downloaded.
 
 **Solution:**
+
 ```bash
 # 1. Check what's in the mounted volume
 docker exec rag-vllm ls -la /models/
@@ -139,6 +150,7 @@ ls -la /path/to/models/
 ### 1.4 Permission Denied — Model Cache / Logs
 
 **Symptom:**
+
 ```
 PermissionError: [Errno 13] Permission denied: '/app/cache'
 PermissionError: [Errno 13] Permission denied: '/app/logs'
@@ -147,6 +159,7 @@ PermissionError: [Errno 13] Permission denied: '/app/logs'
 **Root cause:** The container user (UID 1000 by default) cannot write to the mounted host directories.
 
 **Solution:**
+
 ```bash
 # Fix permissions on the host side
 sudo chown -R 1000:1000 /path/to/model_cache
@@ -162,6 +175,7 @@ docker exec rag-proxy touch /app/logs/test && docker exec rag-proxy rm /app/logs
 ### 1.5 Missing Dependencies / ModuleNotFoundError
 
 **Symptom:**
+
 ```
 ModuleNotFoundError: No module named 'fastapi'
 ModuleNotFoundError: No module named 'langgraph'
@@ -171,6 +185,7 @@ ModuleNotFoundError: No module named 'qdrant_client'
 **Root cause:** Docker image was not rebuilt after requirements change, or `requirements_proxy.txt` is outdated.
 
 **Solution:**
+
 ```bash
 # Rebuild the image from scratch
 docker-compose -f proxy/docker-compose.yml build --no-cache rag-proxy
@@ -185,6 +200,7 @@ docker exec rag-proxy pip list | grep -E 'fastapi|qdrant|langgraph'
 ### 1.6 Configuration Errors — Proxy Exits Immediately
 
 **Symptom:** Container starts and exits in < 5 seconds with exit code 1.
+
 ```
 docker logs rag-proxy
 # KeyError / ValueError in config parsing
@@ -193,6 +209,7 @@ docker logs rag-proxy
 **Root cause:** `.env` file has syntax errors, missing required variables, or the file is not mounted.
 
 **Solution:**
+
 ```bash
 # 1. Print config (safely, secrets masked)
 docker run --rm -v $(pwd)/proxy/.env:/app/.env:ro rag-proxy \
@@ -218,6 +235,7 @@ grep -E '^(LLM_ENDPOINT|LLM_MODEL_NAME|EMBEDDER_MODEL)' proxy/.env
 ### 1.7 Database Initialization Failure (SQLite)
 
 **Symptom:**
+
 ```
 sqlite3.OperationalError: unable to open database file
 sqlite3.OperationalError: database is locked
@@ -226,6 +244,7 @@ sqlite3.OperationalError: database is locked
 **Root cause:** The SQLite DB directory does not exist, is not writable, or another process has an exclusive lock.
 
 **Solution:**
+
 ```bash
 # 1. Ensure the data directory exists and is writable
 mkdir -p proxy/data
@@ -252,14 +271,18 @@ docker-compose -f proxy/docker-compose.yml restart rag-proxy
 ### 2.1 Empty Results / No Chunks Found
 
 **Symptom:**
+
 ```json
 {"choices":[{"message":{"content":"I don't have enough information to answer this question."}}]}
 ```
+
 Proxy response has `rag_confidence: 0` or `rag_sources: []`.
 
-**Root cause:** No matching chunks in Qdrant. Collections may be empty, embeddings may not match the query, or filter conditions are too restrictive.
+**Root cause:** No matching chunks in Qdrant. Collections may be empty, embeddings may not match the query, or filter
+conditions are too restrictive.
 
 **Solution:**
+
 ```bash
 # 1. Check if the collection has any vectors
 curl -s http://localhost:6333/collections/knowledge_base | python3 -c "
@@ -297,9 +320,11 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 **Symptom:** p95 latency exceeds the 5-second SLO. `rag_request_duration_seconds` histogram shows high values.
 
-**Root cause:** LLM backend overloaded, Qdrant disk I/O bottleneck, reranker processing too many chunks, or embedding on CPU.
+**Root cause:** LLM backend overloaded, Qdrant disk I/O bottleneck, reranker processing too many chunks, or embedding on
+CPU.
 
 **Solution:**
+
 ```bash
 # 1. Check latency breakdown from metrics
 curl -s http://localhost:8080/metrics | grep -E 'rag_request_duration_seconds|rag_phase'
@@ -338,16 +363,19 @@ curl -X POST http://localhost:6333/collections/knowledge_base/optimizers \
 ### 2.3 Timeout Errors (504 / Read Timed Out)
 
 **Symptom:**
+
 ```
 aiohttp.client_exceptions.ServerTimeoutError
 asyncio.TimeoutError
 Read timed out
 ```
+
 Proxy returns `{"error": "LLM request failed after 3 attempts: ..."}`.
 
 **Root cause:** LLM backend taking too long to generate, `REQUEST_TIMEOUT` too short, or backend overloaded.
 
 **Solution:**
+
 ```bash
 # 1. Increase timeout in proxy/.env
 REQUEST_TIMEOUT=300   # 5 minutes (was 120)
@@ -376,9 +404,11 @@ docker logs rag-vllm | grep -i 'model loaded'
 
 **Symptom:** SSE stream stops partway, client waits indefinitely. `curl -N` hangs.
 
-**Root cause:** LLM backend crashed mid-generation, network buffer overflow, or proxy connection closed before stream completes.
+**Root cause:** LLM backend crashed mid-generation, network buffer overflow, or proxy connection closed before stream
+completes.
 
 **Solution:**
+
 ```bash
 # 1. Check LLM backend for OOM / crash during generation
 docker logs rag-vllm --tail 50 | grep -iE 'error|killed|oom|segfault'
@@ -405,14 +435,17 @@ docker-compose -f proxy/docker-compose.yml restart vllm
 ### 2.5 500 Internal Server Error
 
 **Symptom:**
+
 ```
 HTTP 500 Internal Server Error
 {"detail": "Internal server error"}
 ```
 
-**Root cause:** Unhandled exception in proxy code — often a missing dependency, config issue, or external service failure.
+**Root cause:** Unhandled exception in proxy code — often a missing dependency, config issue, or external service
+failure.
 
 **Solution:**
+
 ```bash
 # 1. Get full traceback from proxy logs
 docker logs rag-proxy --tail 100 | grep -A 20 'Traceback'
@@ -442,6 +475,7 @@ for v in required:
 ### 2.6 Rate Limit Exceeded (429)
 
 **Symptom:**
+
 ```
 HTTP 429 Too Many Requests
 {"error": "Rate limit exceeded"}
@@ -451,6 +485,7 @@ Retry-After: 5
 **Root cause:** Client is sending requests faster than `RATE_LIMIT_PER_MINUTE` allows.
 
 **Solution:**
+
 ```bash
 # 1. Increase limits in .env
 RATE_LIMIT_ENABLED=true
@@ -478,6 +513,7 @@ RATE_LIMIT_ENABLED=false
 **Root cause:** Version filter mismatch, namespace isolation filtering out results, or RRF fusion dropping all results.
 
 **Solution:**
+
 ```bash
 # 1. Check if version filter is the cause — search without it
 curl -X POST http://localhost:6333/collections/knowledge_base/points/search \
@@ -501,9 +537,11 @@ curl -s http://localhost:6333/collections/knowledge_base | \
 
 **Symptom:** Chunks returned but RRF scores < 0.01, reranker scores < -5.
 
-**Root cause:** Wrong embedding model, mismatch between query language and document language, embedding dimension mismatch, or outdated index.
+**Root cause:** Wrong embedding model, mismatch between query language and document language, embedding dimension
+mismatch, or outdated index.
 
 **Solution:**
+
 ```bash
 # 1. Verify embedder model matches collection creation
 grep EMBEDDER_MODEL proxy/.env
@@ -544,9 +582,11 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --full
 
 **Symptom:** Search returns documents from wrong projects, teams, or time periods.
 
-**Root cause:** Filter conditions are wrong or missing, namespace isolation not configured, or RBAC access filter is too permissive.
+**Root cause:** Filter conditions are wrong or missing, namespace isolation not configured, or RBAC access filter is too
+permissive.
 
 **Solution:**
+
 ```bash
 # 1. Check RBAC and namespace isolation
 grep -E 'RBAC_ENABLED|NAMESPACE_ISOLATION_ENABLED|AUTH_ENABLED' proxy/.env
@@ -574,9 +614,11 @@ curl -s http://localhost:6333/collections/knowledge_base/points/scroll \
 
 **Symptom:** Old document version showing in results. Newly indexed documents not appearing.
 
-**Root cause:** WAL-based incremental indexing didn't reindex modified documents. Content hash unchanged due to whitespace-only change.
+**Root cause:** WAL-based incremental indexing didn't reindex modified documents. Content hash unchanged due to
+whitespace-only change.
 
 **Solution:**
+
 ```bash
 # 1. Force full reindex to pick up all changes
 python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --full
@@ -605,15 +647,18 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml \
 ### 3.5 Circuit Breaker Open on Qdrant
 
 **Symptom:**
+
 ```
 WARNING: Qdrant circuit breaker OPEN — returning empty dense results
 CircuitBreakerOpenError: Circuit breaker 'qdrant' is OPEN
 ```
+
 Prometheus: `circuit_breaker_state{name="qdrant"} 1`
 
 **Root cause:** Qdrant has failed 5+ consecutive calls. Network issue, Qdrant OOM, or collection corruption.
 
 **Solution:**
+
 ```bash
 # 1. Check Qdrant health directly
 curl -s http://localhost:6333/health
@@ -638,6 +683,7 @@ watch -n 2 'curl -s http://localhost:8080/metrics | grep circuit_breaker_state'
 ### 4.1 LLM Connection Refused
 
 **Symptom:**
+
 ```
 aiohttp.client_exceptions.ClientConnectorError: Cannot connect to host vllm:8000
 ConnectionRefusedError: [Errno 111] Connection refused
@@ -647,6 +693,7 @@ LLMError: LLM request failed after 3 attempts
 **Root cause:** LLM backend (vLLM, llama.cpp, etc.) is not running or not reachable at `LLM_ENDPOINT`.
 
 **Solution:**
+
 ```bash
 # 1. Check LLM backend status
 docker ps | grep vllm
@@ -677,15 +724,18 @@ docker logs rag-vllm -f | grep -i 'model loaded\|ready\|Uvicorn running'
 ### 4.2 Context Length Exceeded
 
 **Symptom:**
+
 ```
 LLM returned 400: This model's maximum context length is 8192 tokens.
 However, you requested 12000 tokens.
 LLMError: context length exceeded
 ```
 
-**Root cause:** The assembled context (system prompt + retrieved chunks + conversation history) exceeds the model's `max_model_len`.
+**Root cause:** The assembled context (system prompt + retrieved chunks + conversation history) exceeds the model's
+`max_model_len`.
 
 **Solution:**
+
 ```bash
 # 1. Reduce chunks retrieved and kept after rerank
 MAX_CHUNKS_RETRIEVAL=20    # was 50
@@ -710,14 +760,17 @@ grep COMPRESSION_STRATEGY proxy/.env
 ### 4.3 Invalid Model Name
 
 **Symptom:**
+
 ```
 LLM returned 400: The model `rag-proxy` does not exist.
 LLM returned 404: Model not found
 ```
 
-**Root cause:** `LLM_MODEL_NAME` in `.env` does not match any model loaded in the backend. The proxy passes `rag-proxy` as the model name to the LLM backend.
+**Root cause:** `LLM_MODEL_NAME` in `.env` does not match any model loaded in the backend. The proxy passes `rag-proxy`
+as the model name to the LLM backend.
 
 **Solution:**
+
 ```bash
 # 1. List models available in the backend
 curl -s http://localhost:8000/v1/models | python3 -m json.tool
@@ -737,6 +790,7 @@ docker-compose -f proxy/docker-compose.yml restart rag-proxy
 ### 4.4 Provider Type Mismatch
 
 **Symptom:**
+
 ```
 Unknown provider type 'xyz', falling back to openai
 LLM returned 400: Invalid request format
@@ -746,6 +800,7 @@ LLMError: Failed to extract content
 **Root cause:** `LLM_PROVIDER_TYPE` is set incorrectly, or the adapter sends the wrong request format for the backend.
 
 **Solution:**
+
 ```bash
 # 1. Check current provider type
 grep LLM_PROVIDER_TYPE proxy/.env
@@ -772,17 +827,21 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 ### 4.5 LLM Backend Out of Memory
 
 **Symptom:**
+
 ```
 docker logs rag-vllm:
 CUDA out of memory. Tried to allocate 2.00 GiB
 RuntimeError: CUDA out of memory
 torch.cuda.OutOfMemoryError
 ```
+
 Container exits with code 137 (OOMKilled by kernel).
 
-**Root cause:** Model + KV cache exceeds available GPU VRAM. Large batch sizes or long context windows consume too much memory.
+**Root cause:** Model + KV cache exceeds available GPU VRAM. Large batch sizes or long context windows consume too much
+memory.
 
 **Solution:**
+
 ```bash
 # 1. Check GPU memory
 nvidia-smi
@@ -814,6 +873,7 @@ docker stats rag-vllm --no-stream
 ### 5.1 Embedding Model File Not Found
 
 **Symptom:**
+
 ```
 OSError: [Errno 2] No such file or directory: 'BAAI/bge-m3'
 OSError: model not found
@@ -823,6 +883,7 @@ sentence_transformers.SentenceTransformer.__init__: model not found
 **Root cause:** Model not downloaded. Air-gapped environment without pre-cached models.
 
 **Solution:**
+
 ```bash
 # 1. Download models on a machine with internet access
 python scripts/download_models_offline.py
@@ -853,15 +914,18 @@ EMBEDDER_FALLBACK_LOCAL=false  # don't fall back to local
 ### 5.2 CUDA Out of Memory During Embedding
 
 **Symptom:**
+
 ```
 RuntimeError: CUDA out of memory. Tried to allocate 256.00 MiB
 torch.cuda.OutOfMemoryError: CUDA out of memory.
 ```
+
 Embedding fails during bulk indexing or large batch retrieval.
 
 **Root cause:** Embedding model loaded on GPU competes with LLM for VRAM. Large batch sizes exhaust memory.
 
 **Solution:**
+
 ```bash
 # 1. Move embedder to CPU
 EMBEDDER_DEVICE=cpu
@@ -891,14 +955,17 @@ EMBEDDER_FALLBACK_LOCAL=false
 ### 5.3 Dimension Mismatch
 
 **Symptom:**
+
 ```
 Qdrant error: Wrong input: Vector dimension 768 does not match collection dimension 1024
 qdrant_client.http.exceptions.UnexpectedResponse: dimension mismatch
 ```
 
-**Root cause:** The embedding model produces vectors of a different dimension than what the Qdrant collection was created with.
+**Root cause:** The embedding model produces vectors of a different dimension than what the Qdrant collection was
+created with.
 
 **Solution:**
+
 ```bash
 # 1. Check current collection vector dimension
 curl -s http://localhost:6333/collections/knowledge_base | \
@@ -931,6 +998,7 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --full
 **Root cause:** Embedding model on CPU, no batching, or disk-swapping due to memory pressure.
 
 **Solution:**
+
 ```bash
 # 1. Move embedder to GPU
 EMBEDDER_DEVICE=cuda
@@ -960,6 +1028,7 @@ lsblk -d -o name,rota,size,type | grep disk
 ### 6.1 Invalid Token (401 Unauthorized)
 
 **Symptom:**
+
 ```json
 {"detail": "Invalid token: Signature verification failed"}
 {"detail": "Invalid token: Not enough segments"}
@@ -969,6 +1038,7 @@ lsblk -d -o name,rota,size,type | grep disk
 **Root cause:** Token is malformed, signed with wrong key, or algorithm mismatch (`HS256` vs `RS256`).
 
 **Solution:**
+
 ```bash
 # 1. Check AUTH_ENABLED and JWT config
 grep -E 'AUTH_ENABLED|JWT_SECRET|JWT_ALGORITHM|JWT_PUBLIC_KEY' proxy/.env
@@ -1010,6 +1080,7 @@ curl -X POST http://localhost:8080/v1/auth/login \
 ### 6.2 Token Expired
 
 **Symptom:**
+
 ```json
 {"detail": "Token has expired"}
 ```
@@ -1017,6 +1088,7 @@ curl -X POST http://localhost:8080/v1/auth/login \
 **Root cause:** Access token TTL (`ACCESS_TOKEN_MINUTES`, default 60) has elapsed.
 
 **Solution:**
+
 ```bash
 # 1. Refresh using the refresh token
 REFRESH_TOKEN='your-refresh-token'
@@ -1043,6 +1115,7 @@ print(f'Remaining: {(exp - now).total_seconds():.0f}s')
 ### 6.3 Refresh Token Failed
 
 **Symptom:**
+
 ```json
 {"detail": "Invalid refresh token"}
 {"detail": "Refresh token not found or already used"}
@@ -1051,6 +1124,7 @@ print(f'Remaining: {(exp - now).total_seconds():.0f}s')
 **Root cause:** Refresh token has been consumed (one-time use), expired, or the user DB entry was deleted.
 
 **Solution:**
+
 ```bash
 # 1. Refresh tokens are one-time use — get a new pair by re-authenticating
 curl -X POST http://localhost:8080/v1/auth/login \
@@ -1069,15 +1143,18 @@ docker-compose -f proxy/docker-compose.yml restart rag-proxy
 ### 6.4 Keycloak Unreachable
 
 **Symptom:**
+
 ```
 WARNING: Failed to fetch JWKS from Keycloak: timed out
 WARNING: Failed to fetch JWKS from Keycloak: [Errno 111] Connection refused
 ```
+
 Token validation falls back to `JWT_PUBLIC_KEY`.
 
 **Root cause:** Keycloak server is down, network unreachable, or config (URL/realm) is wrong.
 
 **Solution:**
+
 ```bash
 # 1. Verify Keycloak connectivity
 curl -s http://keycloak:8080/auth/realms/your-realm/.well-known/openid-configuration
@@ -1101,6 +1178,7 @@ docker-compose -f proxy/docker-compose.yml restart rag-proxy
 ### 6.5 LDAP/AD Timeout
 
 **Symptom:**
+
 ```
 LDAP connection timeout (5s)
 ldap.SERVER_DOWN: {'desc': "Can't contact LDAP server"}
@@ -1109,6 +1187,7 @@ ldap.SERVER_DOWN: {'desc': "Can't contact LDAP server"}
 **Root cause:** AD/LDAP server unreachable, wrong URL, or network latency.
 
 **Solution:**
+
 ```bash
 # 1. Check AD config
 grep -E 'AD_ENABLED|AD_URL|AD_BASE_DN|AD_USER_DN_TEMPLATE' proxy/.env
@@ -1129,6 +1208,7 @@ docker exec rag-proxy timeout 3 nc -zv ad-server 389
 ### 6.6 Permission Denied (403 Forbidden)
 
 **Symptom:**
+
 ```json
 {"detail": "Role 'user' is not sufficient. Required: 'admin'"}
 {"detail": "Role 'read_only' is not sufficient. Required: 'expert'"}
@@ -1137,6 +1217,7 @@ docker exec rag-proxy timeout 3 nc -zv ad-server 389
 **Root cause:** User's role does not meet the endpoint's minimum role requirement.
 
 **Solution:**
+
 ```bash
 # 1. Check your current role
 curl -s http://localhost:8080/v1/auth/me \
@@ -1174,15 +1255,18 @@ print(token)
 ### 7.1 Redis Connection Refused
 
 **Symptom:**
+
 ```
 redis.exceptions.ConnectionError: Error 111 connecting to redis:6379. Connection refused.
 Failed to connect to Redis at redis://redis:6379
 ```
+
 Cache calls silently fall back to in-memory cache.
 
 **Root cause:** Redis is not running, wrong URL, or network issue.
 
 **Solution:**
+
 ```bash
 # 1. Check Redis status
 docker ps | grep redis
@@ -1209,9 +1293,11 @@ USE_REDIS=false
 
 **Symptom:** Proxy returns cached responses even after documents were updated. `rag_force_refresh` doesn't help.
 
-**Root cause:** Cache TTL is too long, cache key doesn't include version/namespace, or `rag_force_refresh` is not being honored.
+**Root cause:** Cache TTL is too long, cache key doesn't include version/namespace, or `rag_force_refresh` is not being
+honored.
 
 **Solution:**
+
 ```bash
 # 1. Force bypass cache on a specific request
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -1235,14 +1321,17 @@ curl -s http://localhost:8080/metrics | grep rag_cache
 ### 7.3 Redis Memory Limit Reached
 
 **Symptom:**
+
 ```
 redis.exceptions.ResponseError: OOM command not allowed when used memory > 'maxmemory'
 ```
+
 Redis logs: `Can't save in background: fork: Cannot allocate memory`.
 
 **Root cause:** Redis has exceeded its `maxmemory` and the eviction policy is `noeviction`.
 
 **Solution:**
+
 ```bash
 # 1. Check current memory usage
 docker exec rag-redis redis-cli INFO memory | grep -E 'used_memory_human|maxmemory_human|maxmemory_policy'
@@ -1268,6 +1357,7 @@ docker exec rag-redis redis-cli XTRIM etl:events MAXLEN ~ 10000
 ### 7.4 Redis AOF Corruption
 
 **Symptom:**
+
 ```
 Redis log: Bad file format reading the append only file
 Redis log: AOF file is corrupted
@@ -1277,6 +1367,7 @@ Redis fails to start or starts with empty data.
 **Root cause:** Unclean shutdown, disk full during AOF write, or filesystem corruption.
 
 **Solution:**
+
 ```bash
 # 1. Check and repair the AOF file
 docker exec rag-redis redis-check-aof --fix /data/appendonly.aof
@@ -1303,6 +1394,7 @@ docker exec rag-redis redis-cli INFO persistence | grep -E 'aof_current_size|aof
 ### 8.1 Neo4j Connection Refused
 
 **Symptom:**
+
 ```
 neo4j.exceptions.ServiceUnavailable: Unable to retrieve routing information
 neo4j.exceptions.ServiceUnavailable: Connection to neo4j:7687 refused
@@ -1312,6 +1404,7 @@ WARNING: Neo4j connection failed: ... Graph expansion disabled.
 **Root cause:** Neo4j is not running, not reachable, or credentials are wrong.
 
 **Solution:**
+
 ```bash
 # 1. Check Neo4j status
 docker ps | grep neo4j
@@ -1342,6 +1435,7 @@ docker exec rag-neo4j cypher-shell -u neo4j -p neo4j "ALTER CURRENT USER SET PAS
 ### 8.2 APOC Not Installed
 
 **Symptom:**
+
 ```
 There is no procedure with the name apoc.meta.graph
 Unknown function 'apoc.text.levenshteinSimilarity'
@@ -1350,6 +1444,7 @@ Unknown function 'apoc.text.levenshteinSimilarity'
 **Root cause:** The APOC plugin library is not installed in the Neo4j container.
 
 **Solution:**
+
 ```bash
 # 1. Check installed plugins
 docker exec rag-neo4j ls /plugins/
@@ -1381,6 +1476,7 @@ docker exec rag-neo4j cypher-shell -u neo4j -p password \
 **Root cause:** Large graph, missing indexes, or complex Cypher queries scanning all nodes.
 
 **Solution:**
+
 ```bash
 # 1. Check if graph expansion is the bottleneck — disable temporarily
 USE_GRAPH_EXPANSION=false
@@ -1412,6 +1508,7 @@ NEO4J_dbms_memory_pagecache_size=2G
 ### 8.4 Entity Extraction Failures
 
 **Symptom:**
+
 ```
 WARNING: Entity extraction returned 0 entities
 graph_expand_query returns ""
@@ -1420,6 +1517,7 @@ graph_expand_query returns ""
 **Root cause:** SLM/routing model not configured, text too short for entity extraction, or non-English content.
 
 **Solution:**
+
 ```bash
 # 1. Check SLM configuration
 grep -E 'SLM_ENDPOINT|SLM_MODEL_NAME' proxy/.env
@@ -1451,6 +1549,7 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --steps grap
 **Root cause:** LLM backend overloaded, Qdrant disk I/O, reranker processing too many chunks, or network latency.
 
 **Solution:**
+
 ```bash
 # 1. Identify bottleneck from phase timing
 #    Each phase has its own metric. Check:
@@ -1483,13 +1582,16 @@ grep COMPRESSION_ENABLED proxy/.env
 ### 9.2 Memory Leak
 
 **Symptom:** Proxy/Reranker memory usage grows over hours/days without decreasing.
+
 ```
 docker stats rag-proxy  # Watch RES column
 ```
 
-**Root cause:** Embedding cache growing unbounded, Python objects accumulating in LangGraph state, or unreleased GPU tensors.
+**Root cause:** Embedding cache growing unbounded, Python objects accumulating in LangGraph state, or unreleased GPU
+tensors.
 
 **Solution:**
+
 ```bash
 # 1. Check memory growth pattern
 watch -n 30 'docker stats rag-proxy --no-stream'
@@ -1521,6 +1623,7 @@ grep WORKERS proxy/.env
 **Root cause:** Dense encoding on CPU, reranker processing large batches, or compression on large responses.
 
 **Solution:**
+
 ```bash
 # 1. Check CPU usage by container
 docker stats --no-stream
@@ -1552,6 +1655,7 @@ RATE_LIMIT_PER_MINUTE=60
 **Root cause:** Qdrant optimizing segments, SQLite WAL checkpointing, or logs filling disk.
 
 **Solution:**
+
 ```bash
 # 1. Check disk utilization
 iostat -x 1 5
@@ -1585,6 +1689,7 @@ sqlite3 proxy/data/users.db "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;"
 **Root cause:** Many small segment files from incremental indexing. Optimizer hasn't merged them.
 
 **Solution:**
+
 ```bash
 # 1. Check segment count
 curl -s http://localhost:6333/collections/knowledge_base | \
@@ -1611,14 +1716,17 @@ curl -X PATCH http://localhost:6333/collections/knowledge_base \
 ### 10.1 Image Pull Errors
 
 **Symptom:**
+
 ```
 ErrImagePull: pull access denied for rag-proxy
 ImagePullBackOff: repository does not exist or may require 'docker login'
 ```
 
-**Root cause:** Docker can't pull the image — either it's local-only (not pushed), wrong tag, or private registry requires authentication.
+**Root cause:** Docker can't pull the image — either it's local-only (not pushed), wrong tag, or private registry
+requires authentication.
 
 **Solution:**
+
 ```bash
 # 1. Build locally instead of pulling
 docker-compose -f proxy/docker-compose.yml build rag-proxy
@@ -1643,6 +1751,7 @@ docker pull your-registry/rag-proxy:v2.0
 ### 10.2 CrashLoopBackOff
 
 **Symptom (K8s):**
+
 ```
 kubectl get pods
 NAME         READY   STATUS             RESTARTS   AGE
@@ -1652,6 +1761,7 @@ rag-proxy-0  0/1     CrashLoopBackOff   6          10m
 **Root cause:** Container exits immediately after starting — config error, missing volume, or dependency not ready.
 
 **Solution:**
+
 ```bash
 # 1. Get logs from the crashing pod
 kubectl logs rag-proxy-0 --previous
@@ -1677,16 +1787,19 @@ docker-compose -f proxy/docker-compose.yml up rag-proxy  # run in foreground to 
 ### 10.3 OOMKilled
 
 **Symptom:**
+
 ```
 State: Terminated
   Reason: OOMKilled
   Exit Code: 137
 ```
+
 Container killed by kernel OOM killer.
 
 **Root cause:** Container exceeded its memory limit. LLM model too large, embedding cache unbounded, or memory leak.
 
 **Solution:**
+
 ```bash
 # 1. Check memory limits in deployment
 # K8s:
@@ -1718,6 +1831,7 @@ docker stats rag-proxy --no-stream
 ### 10.4 PVC Binding Issues
 
 **Symptom (K8s):**
+
 ```
 Warning: FailedScheduling: pod has unbound immediate PersistentVolumeClaims
 Warning: ProvisioningFailed: storageclass.storage.k8s.io "fast-ssd" not found
@@ -1726,6 +1840,7 @@ Warning: ProvisioningFailed: storageclass.storage.k8s.io "fast-ssd" not found
 **Root cause:** PersistentVolumeClaim cannot be bound — no matching PV, wrong storage class, or access mode mismatch.
 
 **Solution:**
+
 ```bash
 # 1. Check PVC status
 kubectl get pvc
@@ -1753,6 +1868,7 @@ docker system df
 **Root cause:** Proxy pod is not ready, connection refused, or request timeout.
 
 **Solution:**
+
 ```bash
 # 1. Check proxy pod status
 kubectl get pods -l app=rag-proxy
@@ -1782,6 +1898,7 @@ kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail 50
 ### 11.1 Silo Unreachable
 
 **Symptom:**
+
 ```
 FederationError: Silo 'europe-west' is unreachable
 ConnectionError: Failed to connect to silo at http://rag-eu-west.example.com
@@ -1790,6 +1907,7 @@ ConnectionError: Failed to connect to silo at http://rag-eu-west.example.com
 **Root cause:** Remote RAG instance is down, DNS resolution fails, or network partition.
 
 **Solution:**
+
 ```bash
 # 1. Check silo health
 curl -s http://rag-eu-west.example.com/v1/health
@@ -1812,14 +1930,17 @@ grep -E 'FEDERATION|SILO' proxy/.env
 ### 11.2 Circuit Breaker Open on Silo
 
 **Symptom:**
+
 ```
 FederationCircuitBreakerError: Circuit breaker for silo 'europe-west' is OPEN
 All silos returned errors — federated query failed
 ```
 
-**Root cause:** Silo has failed 5+ consecutive calls. The circuit breaker is protecting the system from cascading failures.
+**Root cause:** Silo has failed 5+ consecutive calls. The circuit breaker is protecting the system from cascading
+failures.
 
 **Solution:**
+
 ```bash
 # 1. Check the silo's availability
 curl -s http://rag-eu-west.example.com/v1/health
@@ -1840,6 +1961,7 @@ curl -s http://localhost:8080/metrics | grep circuit_breaker_state
 ### 11.3 Federation Merge Returned 0 Chunks
 
 **Symptom:**
+
 ```
 WARNING: Federation merge returned 0 chunks from 3 silos
 Question answered with "I don't have enough information"
@@ -1848,6 +1970,7 @@ Question answered with "I don't have enough information"
 **Root cause:** All silos returned empty results. Query may have no matches, or all silos have empty collections.
 
 **Solution:**
+
 ```bash
 # 1. Check each silo individually
 for silo in rag-us rag-eu rag-asia; do
@@ -1872,6 +1995,7 @@ done
 ### 11.4 JWT Extraction Failure
 
 **Symptom:**
+
 ```
 AuthError: Failed to extract user context from JWT in federated request
 Authorization header missing in forwarded request to silo
@@ -1880,6 +2004,7 @@ Authorization header missing in forwarded request to silo
 **Root cause:** JWT token is not being forwarded to remote silos, or the silo can't validate it.
 
 **Solution:**
+
 ```bash
 # 1. Check if Authorization header is forwarded
 #    Federation proxy should include:
@@ -1909,6 +2034,7 @@ done
 ### 12.1 Training Job Stuck
 
 **Symptom:**
+
 ```
 POST /v1/admin/models/train returns 202
 GET /v1/admin/models/status/{job_id}: status "running" for > 1 hour
@@ -1917,6 +2043,7 @@ GET /v1/admin/models/status/{job_id}: status "running" for > 1 hour
 **Root cause:** Training process hung, GPU allocation failed, or data loading is stuck.
 
 **Solution:**
+
 ```bash
 # 1. Check training job status
 curl -s http://localhost:8080/v1/admin/models/status/<job_id> | python3 -m json.tool
@@ -1946,6 +2073,7 @@ dmesg | grep -i 'out of memory' | tail -5
 ### 12.2 MLflow Unreachable
 
 **Symptom:**
+
 ```
 requests.exceptions.ConnectionError: Failed to connect to mlflow:5000
 MLflow tracking URI http://localhost:5000 is not reachable
@@ -1954,6 +2082,7 @@ MLflow tracking URI http://localhost:5000 is not reachable
 **Root cause:** MLflow server is down, wrong URI, or MinIO dependency not healthy.
 
 **Solution:**
+
 ```bash
 # 1. Check MLflow status
 docker ps | grep mlflow
@@ -1979,6 +2108,7 @@ docker-compose -f proxy/docker-compose.yml restart minio  # if needed
 ### 12.3 MinIO Access Denied
 
 **Symptom:**
+
 ```
 botocore.exceptions.ClientError: AccessDenied
 S3 operation error: The Access Key Id you provided does not exist
@@ -1987,6 +2117,7 @@ S3 operation error: The Access Key Id you provided does not exist
 **Root cause:** MinIO credentials are wrong, bucket doesn't exist, or IAM policy restricts access.
 
 **Solution:**
+
 ```bash
 # 1. Verify MinIO credentials
 grep -E 'MINIO_ACCESS_KEY|MINIO_SECRET_KEY|MINIO_ENDPOINT|MINIO_BUCKET' proxy/.env
@@ -2014,15 +2145,18 @@ docker-compose -f proxy/docker-compose.yml up -d minio minio-create-bucket
 ### 12.4 OOM During Training
 
 **Symptom:**
+
 ```
 torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB
 RuntimeError: CUDA out of memory
 ```
+
 Training exits with error, MLflow run marked as `FAILED`.
 
 **Root cause:** Training batch size too large for available GPU memory, or model + optimizer + gradients exceed VRAM.
 
 **Solution:**
+
 ```bash
 # 1. Reduce training batch size
 #    In the training config (via API request or env):
@@ -2058,16 +2192,19 @@ nvidia-smi --query-gpu=memory.free --format=csv
 ### 12.5 EvalGate Threshold Not Met
 
 **Symptom:**
+
 ```
 EvalGateError: Training failed quality gate
   - LLM BERTScore 0.65 < minimum 0.70
   - Reranker MRR 0.68 < minimum 0.75
 ```
+
 Model cannot be promoted because it doesn't meet quality thresholds.
 
 **Root cause:** Training run produced a model with lower quality than the baseline.
 
 **Solution:**
+
 ```bash
 # 1. Check which thresholds failed
 curl -s http://localhost:8080/v1/admin/models/status/<job_id> | \
@@ -2095,6 +2232,7 @@ curl -X POST http://localhost:8080/v1/admin/models/promote \
 ### 12.6 Adapter Hot-Reload Failure
 
 **Symptom:**
+
 ```
 AdapterError: Failed to load adapter from /models/adapters/checkpoint-1000
 AdapterError: Version mismatch — adapter requires base model v3 but v2 is loaded
@@ -2103,6 +2241,7 @@ AdapterError: Version mismatch — adapter requires base model v3 but v2 is load
 **Root cause:** Adapter checkpoint is incompatible with the currently loaded base model.
 
 **Solution:**
+
 ```bash
 # 1. Check current active adapter
 curl -s http://localhost:8080/v1/admin/models | \
@@ -2129,6 +2268,7 @@ grep -E 'HOT_RELOAD_ENABLED|HOT_RELOAD_WATCH_INTERVAL' proxy/.env
 ### 12.7 Canary Rollout Stuck
 
 **Symptom:**
+
 ```
 CanaryController: Phase 25% not progressing — waiting for metric validation
 CanaryController: Cooldown active — cannot advance phase
@@ -2137,6 +2277,7 @@ CanaryController: Cooldown active — cannot advance phase
 **Root cause:** Canary metrics haven't stabilized, error rate is elevated, or cooldown period hasn't elapsed.
 
 **Solution:**
+
 ```bash
 # 1. Check canary status
 curl -s http://localhost:8080/v1/admin/models/canary/status | python3 -m json.tool
@@ -2224,25 +2365,25 @@ docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep rag-
 
 ## Appendix C: Common Fixes Quick Reference
 
-| Problem | Symptom | Quick Fix |
-|---------|---------|-----------|
-| Proxy won't start | `Address already in use` | `kill $(lsof -ti:8080)` or change PORT |
-| Qdrant unreachable | `Connection refused` | `docker-compose up -d qdrant` |
-| Empty search results | `0 chunks` | Run ETL: `python etl/scheduler/run_etl.py` |
-| Slow queries (>5s) | p95 latency high | Reduce `MAX_CHUNKS_RETRIEVAL` to 20 |
-| LLM timeout | `Read timed out` | Increase `REQUEST_TIMEOUT` to 300 |
-| CUDA OOM | `OutOfMemoryError` | Set `EMBEDDER_DEVICE=cpu` |
-| 401 Unauthorized | `Invalid token` | Check `JWT_SECRET` or re-login |
-| 403 Forbidden | `Role not sufficient` | Request higher role from admin |
-| 429 Rate limited | `Rate limit exceeded` | Wait or increase `RATE_LIMIT_PER_MINUTE` |
-| Redis connection refused | `Error 111` | `docker-compose restart redis` |
-| Neo4j unreachable | `ServiceUnavailable` | Wait for Neo4j boot, check credentials |
-| Qdrant segments high | `segments_count > 200` | Lower `indexing_threshold` to merge |
-| ImagePullBackOff | `pull access denied` | `docker-compose build` instead |
-| CrashLoopBackOff | Repeated restarts | `kubectl logs <pod> --previous` |
-| OOMKilled | Exit code 137 | Increase memory limit or reduce usage |
-| Training stuck | Status "running" for > 1h | Check GPU: `nvidia-smi` |
-| MLflow unreachable | Connection refused | `docker-compose restart mlflow` |
-| MinIO access denied | `AccessDenied` | Check credentials, create bucket |
-| Cache stale | Old results | `docker exec rag-redis redis-cli FLUSHDB` |
-| Circuit breaker open | `OPEN` state | Fix underlying service, then reset |
+| Problem                  | Symptom                   | Quick Fix                                  |
+|--------------------------|---------------------------|--------------------------------------------|
+| Proxy won't start        | `Address already in use`  | `kill $(lsof -ti:8080)` or change PORT     |
+| Qdrant unreachable       | `Connection refused`      | `docker-compose up -d qdrant`              |
+| Empty search results     | `0 chunks`                | Run ETL: `python etl/scheduler/run_etl.py` |
+| Slow queries (>5s)       | p95 latency high          | Reduce `MAX_CHUNKS_RETRIEVAL` to 20        |
+| LLM timeout              | `Read timed out`          | Increase `REQUEST_TIMEOUT` to 300          |
+| CUDA OOM                 | `OutOfMemoryError`        | Set `EMBEDDER_DEVICE=cpu`                  |
+| 401 Unauthorized         | `Invalid token`           | Check `JWT_SECRET` or re-login             |
+| 403 Forbidden            | `Role not sufficient`     | Request higher role from admin             |
+| 429 Rate limited         | `Rate limit exceeded`     | Wait or increase `RATE_LIMIT_PER_MINUTE`   |
+| Redis connection refused | `Error 111`               | `docker-compose restart redis`             |
+| Neo4j unreachable        | `ServiceUnavailable`      | Wait for Neo4j boot, check credentials     |
+| Qdrant segments high     | `segments_count > 200`    | Lower `indexing_threshold` to merge        |
+| ImagePullBackOff         | `pull access denied`      | `docker-compose build` instead             |
+| CrashLoopBackOff         | Repeated restarts         | `kubectl logs <pod> --previous`            |
+| OOMKilled                | Exit code 137             | Increase memory limit or reduce usage      |
+| Training stuck           | Status "running" for > 1h | Check GPU: `nvidia-smi`                    |
+| MLflow unreachable       | Connection refused        | `docker-compose restart mlflow`            |
+| MinIO access denied      | `AccessDenied`            | Check credentials, create bucket           |
+| Cache stale              | Old results               | `docker exec rag-redis redis-cli FLUSHDB`  |
+| Circuit breaker open     | `OPEN` state              | Fix underlying service, then reset         |

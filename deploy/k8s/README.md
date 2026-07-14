@@ -37,16 +37,16 @@ kubectl exec -it deploy/rag-system-proxy -n rag-system -- curl -s localhost:8080
 
 All configuration is in `values.yaml`. Key settings:
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `proxy.replicaCount` | Number of proxy replicas | `2` |
-| `proxy.env.llmEndpoint` | LLM backend URL | `""` |
-| `proxy.env.llmModelName` | LLM model name | `""` |
-| `proxy.env.useRedis` | Enable Redis cache | `false` |
-| `proxy.env.graphEnabled` | Enable Neo4j graph | `false` |
-| `qdrant.persistence.size` | Qdrant storage size | `50Gi` |
-| `neo4j.persistence.size` | Neo4j storage size | `20Gi` |
-| `redis.persistence.size` | Redis storage size | `10Gi` |
+| Parameter                 | Description              | Default |
+|---------------------------|--------------------------|---------|
+| `proxy.replicaCount`      | Number of proxy replicas | `2`     |
+| `proxy.env.llmEndpoint`   | LLM backend URL          | `""`    |
+| `proxy.env.llmModelName`  | LLM model name           | `""`    |
+| `proxy.env.useRedis`      | Enable Redis cache       | `false` |
+| `proxy.env.graphEnabled`  | Enable Neo4j graph       | `false` |
+| `qdrant.persistence.size` | Qdrant storage size      | `50Gi`  |
+| `neo4j.persistence.size`  | Neo4j storage size       | `20Gi`  |
+| `redis.persistence.size`  | Redis storage size       | `10Gi`  |
 
 ## Production Overrides
 

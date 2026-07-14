@@ -1,6 +1,7 @@
 # MCP Server
 
-The Model Context Protocol (MCP) server exposes RAG system tools to MCP-compatible clients such as OpenCode, Claude Desktop, and other AI assistants.
+The Model Context Protocol (MCP) server exposes RAG system tools to MCP-compatible clients such as OpenCode, Claude
+Desktop, and other AI assistants.
 
 ## Overview
 
@@ -65,12 +66,12 @@ Add to `claude_desktop_config.json`:
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `search_knowledge_base` | Hybrid search across all indexed documents |
-| `get_document` | Retrieve a specific document by ID |
-| `list_sources` | List available data sources and their sync status |
-| `health_check` | Check proxy and dependency health |
+| Tool                    | Description                                       |
+|-------------------------|---------------------------------------------------|
+| `search_knowledge_base` | Hybrid search across all indexed documents        |
+| `get_document`          | Retrieve a specific document by ID                |
+| `list_sources`          | List available data sources and their sync status |
+| `health_check`          | Check proxy and dependency health                 |
 
 ## Transport Modes
 

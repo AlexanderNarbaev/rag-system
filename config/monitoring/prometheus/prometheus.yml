@@ -12,9 +12,9 @@ global:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: []
-  alert_relabel_configs: []
-  alertmanager_config: []
+        - targets: [ ]
+  alert_relabel_configs: [ ]
+  alertmanager_config: [ ]
 
 rule_files:
   - "alert_rules.yml"

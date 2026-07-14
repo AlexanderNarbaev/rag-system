@@ -1,14 +1,17 @@
 # Agentic Tools — OpenAPI Discovery Guide
 
-**Implementation Status:** Implemented in Beyond v2.0. The `OpenAPIDiscovery` module automatically converts OpenAPI/Swagger specs into `ToolDefinition` objects with auto and LLM-driven modes.
+**Implementation Status:** Implemented in Beyond v2.0. The `OpenAPIDiscovery` module automatically converts
+OpenAPI/Swagger specs into `ToolDefinition` objects with auto and LLM-driven modes.
 
 ---
 
 ## 1. Overview
 
-OpenAPI auto-discovery eliminates manual tool definition for REST APIs. Point the discovery engine at an OpenAPI spec URL or file, and it generates ready-to-use RAG tools for every endpoint.
+OpenAPI auto-discovery eliminates manual tool definition for REST APIs. Point the discovery engine at an OpenAPI spec
+URL or file, and it generates ready-to-use RAG tools for every endpoint.
 
 Two discovery modes are supported:
+
 - **Auto mode** — heuristically maps GET endpoints → search tools, POST/PUT/DELETE → action tools
 - **LLM-driven mode** — sends the spec to the LLM for intelligent tool selection (future)
 
@@ -46,24 +49,24 @@ for tool in tools:
 
 ### 3.1 Auto Mode
 
-| HTTP Method | Tool Type | Category | Description |
-|-------------|-----------|----------|-------------|
-| `GET` | Search tool | `api_search` | Retrieves data; parameters become tool params |
-| `POST` | Action tool | `api_action` | Creates resources |
-| `PUT` | Action tool | `api_action` | Updates resources |
-| `PATCH` | Action tool | `api_action` | Partial updates |
-| `DELETE` | Action tool | `api_action` | Removes resources |
-| `HEAD` / `OPTIONS` | Skipped | — | Not converted to tools |
+| HTTP Method        | Tool Type   | Category     | Description                                   |
+|--------------------|-------------|--------------|-----------------------------------------------|
+| `GET`              | Search tool | `api_search` | Retrieves data; parameters become tool params |
+| `POST`             | Action tool | `api_action` | Creates resources                             |
+| `PUT`              | Action tool | `api_action` | Updates resources                             |
+| `PATCH`            | Action tool | `api_action` | Partial updates                               |
+| `DELETE`           | Action tool | `api_action` | Removes resources                             |
+| `HEAD` / `OPTIONS` | Skipped     | —            | Not converted to tools                        |
 
 ### 3.2 Naming Convention
 
 Tools are named by slugifying the OpenAPI path:
 
-| OpenAPI Path | Tool Name |
-|-------------|-----------|
-| `/pets/{petId}` | `pets_petId` |
+| OpenAPI Path                             | Tool Name                           |
+|------------------------------------------|-------------------------------------|
+| `/pets/{petId}`                          | `pets_petId`                        |
 | `/store/orders/{orderId}/items/{itemId}` | `store_orders_orderId_items_itemId` |
-| `/search` | `search` |
+| `/search`                                | `search`                            |
 
 ### 3.3 Parameter Mapping
 
@@ -91,7 +94,8 @@ ToolParam(name="query", type="string", required=True, description="Search query 
 ToolParam(name="limit", type="integer", required=False, default=10)
 ```
 
-Parameter location (`in: query`, `in: path`, `in: header`) is reflected in the description but does not change the tool interface (all become tool parameters).
+Parameter location (`in: query`, `in: path`, `in: header`) is reflected in the description but does not change the tool
+interface (all become tool parameters).
 
 ---
 
@@ -114,6 +118,7 @@ registry.add_provider(provider)
 ```
 
 The provider automatically:
+
 - Discovers tools at startup
 - Periodically refreshes (configurable interval)
 - Handles spec URL changes gracefully
@@ -181,13 +186,16 @@ provider = OpenAPIProvider(
 )
 ```
 
-The `ToolVisibilityFilter` (in `proxy/app/tools/security.py`) enforces this at runtime — non-admin users cannot see or call admin-visible tools.
+The `ToolVisibilityFilter` (in `proxy/app/tools/security.py`) enforces this at runtime — non-admin users cannot see or
+call admin-visible tools.
 
 ---
 
 ## 7. LLM-Driven Mode (Future)
 
-When `DiscoveryMode.LLM_DRIVEN` is specified, the spec is sent to the LLM for intelligent tool selection instead of converting every endpoint. This is a stub in the current implementation — the LLM integration will be provided in a future release.
+When `DiscoveryMode.LLM_DRIVEN` is specified, the spec is sent to the LLM for intelligent tool selection instead of
+converting every endpoint. This is a stub in the current implementation — the LLM integration will be provided in a
+future release.
 
 ```python
 provider = OpenAPIProvider(
@@ -211,12 +219,12 @@ provider = OpenAPIProvider(
 
 ## 9. Error Handling
 
-| Scenario | Behavior |
-|----------|----------|
+| Scenario             | Behavior                         |
+|----------------------|----------------------------------|
 | Spec URL unreachable | Logs warning, returns empty list |
-| Invalid spec format | Logs error, returns empty list |
-| Unresolvable `$ref` | Skips the endpoint, logs warning |
-| Duplicate tool names | Last one wins (warning logged) |
+| Invalid spec format  | Logs error, returns empty list   |
+| Unresolvable `$ref`  | Skips the endpoint, logs warning |
+| Duplicate tool names | Last one wins (warning logged)   |
 
 All errors are logged but non-fatal — the proxy continues to start with zero discovered tools.
 

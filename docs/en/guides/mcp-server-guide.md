@@ -1,20 +1,26 @@
 # MCP Server Guide
 
-**Implementation Status:** Implemented. The MCP server provides IDE integration via the Model Context Protocol, exposing RAG tools to OpenCode, Claude Desktop, and other MCP-compatible clients.
+**Implementation Status:** Implemented. The MCP server provides IDE integration via the Model Context Protocol, exposing
+RAG tools to OpenCode, Claude Desktop, and other MCP-compatible clients.
 
 ---
 
 ## 1. What is MCP (Model Context Protocol)
 
-The Model Context Protocol (MCP) is an open protocol that enables AI assistants and IDE tools to interact with external data sources and tools through a standardized interface. Instead of building custom integrations for each AI tool, MCP provides a single server that any compatible client can connect to.
+The Model Context Protocol (MCP) is an open protocol that enables AI assistants and IDE tools to interact with external
+data sources and tools through a standardized interface. Instead of building custom integrations for each AI tool, MCP
+provides a single server that any compatible client can connect to.
 
 **Key concepts:**
+
 - **Tools** — callable functions the AI can invoke (e.g., search the knowledge base)
 - **Resources** — data the AI can read (e.g., document contents, configuration)
 - **Prompts** — pre-defined prompt templates for common tasks
 - **Transports** — communication methods (STDIO for local, HTTP for remote)
 
-The RAG system's MCP server exposes the knowledge base search and retrieval capabilities as MCP tools, allowing IDE-integrated AI assistants to search corporate documentation, retrieve specific documents, and provide context-aware answers.
+The RAG system's MCP server exposes the knowledge base search and retrieval capabilities as MCP tools, allowing
+IDE-integrated AI assistants to search corporate documentation, retrieve specific documents, and provide context-aware
+answers.
 
 ---
 
@@ -50,12 +56,12 @@ python -m mcp_server.server --transport http --port 8081
 
 The MCP server reads configuration from environment variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RAG_PROXY_URL` | `http://localhost:8080/v1` | RAG proxy API endpoint |
-| `MCP_TRANSPORT` | `stdio` | Transport type: `stdio` or `http` |
-| `MCP_PORT` | `8081` | HTTP port (when using HTTP transport) |
-| `MCP_HOST` | `0.0.0.0` | HTTP bind address |
+| Variable        | Default                    | Description                           |
+|-----------------|----------------------------|---------------------------------------|
+| `RAG_PROXY_URL` | `http://localhost:8080/v1` | RAG proxy API endpoint                |
+| `MCP_TRANSPORT` | `stdio`                    | Transport type: `stdio` or `http`     |
+| `MCP_PORT`      | `8081`                     | HTTP port (when using HTTP transport) |
+| `MCP_HOST`      | `0.0.0.0`                  | HTTP bind address                     |
 
 ---
 
@@ -67,12 +73,12 @@ The MCP server exposes the following tools to connected clients:
 
 Hybrid search (dense + sparse with RRF fusion) across all indexed documents.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | `string` | yes | Search query text |
-| `top_k` | `integer` | no | Number of results (default: 5) |
-| `namespace` | `string` | no | Tenant namespace filter |
-| `version` | `string` | no | Document version filter |
+| Parameter   | Type      | Required | Description                    |
+|-------------|-----------|----------|--------------------------------|
+| `query`     | `string`  | yes      | Search query text              |
+| `top_k`     | `integer` | no       | Number of results (default: 5) |
+| `namespace` | `string`  | no       | Tenant namespace filter        |
+| `version`   | `string`  | no       | Document version filter        |
 
 **Example usage in IDE:**
 > "Search the knowledge base for authentication architecture decisions"
@@ -81,9 +87,9 @@ Hybrid search (dense + sparse with RRF fusion) across all indexed documents.
 
 Retrieve a specific document by its source ID.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `doc_id` | `string` | yes | Document ID (chunk hash or source ID) |
+| Parameter | Type     | Required | Description                           |
+|-----------|----------|----------|---------------------------------------|
+| `doc_id`  | `string` | yes      | Document ID (chunk hash or source ID) |
 
 **Example usage in IDE:**
 > "Get the document with ID CONFL-12345"
@@ -101,10 +107,10 @@ No parameters required.
 
 Retrieve Neo4j graph context for an entity (requires `GRAPH_ENABLED=true`).
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `entity` | `string` | yes | Entity name to look up |
-| `depth` | `integer` | no | Graph traversal depth (default: 2) |
+| Parameter | Type      | Required | Description                        |
+|-----------|-----------|----------|------------------------------------|
+| `entity`  | `string`  | yes      | Entity name to look up             |
+| `depth`   | `integer` | no       | Graph traversal depth (default: 2) |
 
 **Example usage in IDE:**
 > "What's the graph context around the 'AuthService' entity?"
@@ -113,20 +119,20 @@ Retrieve Neo4j graph context for an entity (requires `GRAPH_ENABLED=true`).
 
 Submit expert feedback for HITL quality improvement.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `feedback_id` | `string` | yes | Feedback ID from a previous response |
-| `rating` | `string` | yes | `positive` or `negative` |
-| `correction` | `string` | no | Corrected answer text |
+| Parameter     | Type     | Required | Description                          |
+|---------------|----------|----------|--------------------------------------|
+| `feedback_id` | `string` | yes      | Feedback ID from a previous response |
+| `rating`      | `string` | yes      | `positive` or `negative`             |
+| `correction`  | `string` | no       | Corrected answer text                |
 
 ### 3.6 `get_confidence`
 
 Get confidence score for a query-answer pair.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | `string` | yes | Original query |
-| `answer` | `string` | yes | Generated answer |
+| Parameter | Type     | Required | Description      |
+|-----------|----------|----------|------------------|
+| `query`   | `string` | yes      | Original query   |
+| `answer`  | `string` | yes      | Generated answer |
 
 ---
 
@@ -134,11 +140,11 @@ Get confidence score for a query-answer pair.
 
 The MCP server also exposes read-only resources:
 
-| Resource URI | Description |
-|-------------|-------------|
-| `rag://config` | Current proxy configuration (non-sensitive) |
-| `rag://health` | System health status |
-| `rag://stats` | Knowledge base statistics (document counts, source breakdown) |
+| Resource URI   | Description                                                   |
+|----------------|---------------------------------------------------------------|
+| `rag://config` | Current proxy configuration (non-sensitive)                   |
+| `rag://health` | System health status                                          |
+| `rag://stats`  | Knowledge base statistics (document counts, source breakdown) |
 
 ---
 
@@ -265,11 +271,13 @@ MCP_LOG_LEVEL=DEBUG python -m mcp_server.server
 ### 7.2 Client Can't Connect
 
 **STDIO transport:**
+
 - Verify the `command` and `args` are correct in the client config
 - Check that the Python path is correct (use full path if needed)
 - Ensure `RAG_PROXY_URL` is reachable from the MCP server process
 
 **HTTP transport:**
+
 ```bash
 # Test the HTTP endpoint directly
 curl http://localhost:8081/mcp
@@ -306,13 +314,13 @@ grep GRAPH_ENABLED proxy/.env
 
 ### 7.5 Common Error Messages
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `Connection refused` | Proxy not running | Start the proxy: `docker-compose up -d` |
-| `Tool not found` | Tools not enabled | Set `TOOLS_ENABLED=true` in `.env` |
-| `401 Unauthorized` | API key mismatch | Verify `RAG_API_KEY` matches proxy config |
-| `504 Gateway Timeout` | LLM backend slow | Increase `REQUEST_TIMEOUT` in `.env` |
-| `Neo4j not available` | Graph disabled | Set `GRAPH_ENABLED=true` and configure Neo4j |
+| Error                 | Cause             | Fix                                          |
+|-----------------------|-------------------|----------------------------------------------|
+| `Connection refused`  | Proxy not running | Start the proxy: `docker-compose up -d`      |
+| `Tool not found`      | Tools not enabled | Set `TOOLS_ENABLED=true` in `.env`           |
+| `401 Unauthorized`    | API key mismatch  | Verify `RAG_API_KEY` matches proxy config    |
+| `504 Gateway Timeout` | LLM backend slow  | Increase `REQUEST_TIMEOUT` in `.env`         |
+| `Neo4j not available` | Graph disabled    | Set `GRAPH_ENABLED=true` and configure Neo4j |
 
 ---
 

@@ -7,10 +7,10 @@ The RAG System is deployed as two separate components that communicate over the 
 
 ## Guides
 
-| Guide | Description |
-|-------|-------------|
+| Guide                                  | Description                                                         |
+|----------------------------------------|---------------------------------------------------------------------|
 | [Proxy Deployment](../deploy_proxy.md) | Docker Compose setup, configuration, scaling, air-gapped deployment |
-| [ETL Deployment](../deploy_etl.md) | Pipeline configuration, scheduling, source system setup |
+| [ETL Deployment](../deploy_etl.md)     | Pipeline configuration, scheduling, source system setup             |
 
 ## Architecture
 
@@ -32,4 +32,5 @@ The RAG System is deployed as two separate components that communicate over the 
 └──────────────────────┘         └──────────────────────┘
 ```
 
-The ETL machine writes to the same Qdrant and Neo4j instances that the proxy reads from. In a typical setup, both components run on separate machines but share the Qdrant and Neo4j endpoints via internal network.
+The ETL machine writes to the same Qdrant and Neo4j instances that the proxy reads from. In a typical setup, both
+components run on separate machines but share the Qdrant and Neo4j endpoints via internal network.

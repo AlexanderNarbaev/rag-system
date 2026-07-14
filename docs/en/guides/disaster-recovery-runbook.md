@@ -8,7 +8,8 @@
 
 ## Overview
 
-This runbook covers step-by-step recovery procedures for all failure scenarios in the RAG System production deployment. Each scenario includes detection methods, impact assessment, recovery steps, and verification criteria.
+This runbook covers step-by-step recovery procedures for all failure scenarios in the RAG System production deployment.
+Each scenario includes detection methods, impact assessment, recovery steps, and verification criteria.
 
 ### Prerequisites
 
@@ -19,12 +20,12 @@ This runbook covers step-by-step recovery procedures for all failure scenarios i
 
 ### Backup Schedule Reference
 
-| Component | Frequency | Retention | Location |
-|-----------|-----------|-----------|----------|
+| Component        | Frequency     | Retention                    | Location                  |
+|------------------|---------------|------------------------------|---------------------------|
 | Qdrant snapshots | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `s3://backup-rag/qdrant/` |
-| Neo4j dumps | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `s3://backup-rag/neo4j/` |
-| Redis RDB | Every 1 hour | 24 hourly, 7 daily | `s3://backup-rag/redis/` |
-| ETL WAL state | Every 30 min | 7 daily | `s3://backup-rag/etl/` |
+| Neo4j dumps      | Every 6 hours | 7 daily, 4 weekly, 3 monthly | `s3://backup-rag/neo4j/`  |
+| Redis RDB        | Every 1 hour  | 24 hourly, 7 daily           | `s3://backup-rag/redis/`  |
+| ETL WAL state    | Every 30 min  | 7 daily                      | `s3://backup-rag/etl/`    |
 
 ---
 
@@ -33,12 +34,14 @@ This runbook covers step-by-step recovery procedures for all failure scenarios i
 ### 1. Qdrant Data Loss
 
 **Detection:**
+
 - Qdrant collections report 0 vectors (`curl localhost:6333/collections/<name>`)
 - Proxy health check shows `qdrant: "degraded"` or `"unhealthy"`
 - All retrieval fails, proxy returns empty contexts
 - Prometheus alert: `QdrantUnhealthy` (critical)
 
-**Impact:** All retrieval fails. Proxy returns empty contexts with `rag_confidence: 0`. Users receive "I don't have enough information" responses.
+**Impact:** All retrieval fails. Proxy returns empty contexts with `rag_confidence: 0`. Users receive "I don't have
+enough information" responses.
 
 **Recovery Steps:**
 
@@ -77,12 +80,14 @@ systemctl start rag-etl
 ### 2. Neo4j Data Loss
 
 **Detection:**
+
 - Neo4j returns 0 nodes (`MATCH (n) RETURN count(n)` → 0)
 - Proxy health check shows `neo4j: "degraded"` or `"unhealthy"`
 - Graph expansion produces empty results
 - Prometheus alert: `Neo4jUnhealthy` (warning — proxy degrades gracefully)
 
-**Impact:** Graph expansion skipped. Agentic queries lose entity context (~500 tokens). Non-agentic queries unaffected. Proxy automatically skips graph enrichment per graceful degradation design.
+**Impact:** Graph expansion skipped. Agentic queries lose entity context (~500 tokens). Non-agentic queries unaffected.
+Proxy automatically skips graph enrichment per graceful degradation design.
 
 **Recovery Steps:**
 
@@ -110,14 +115,17 @@ systemctl start rag-etl
 ### 3. Redis Data Loss
 
 **Detection:**
+
 - `redis-cli DBSIZE` → 0
 - Proxy health check shows `redis: "degraded"`
 - Cache hit ratio drops to 0 (`rag_cache_hit_ratio{cache_type="response"} == 0`)
 - Prometheus alert: `RedisDown` (warning)
 
-**Impact:** Cache miss only. No data loss — all data is recomputable. Latency increases temporarily (embedding re-computation, re-retrieval from Qdrant). No user-facing errors. Proxy automatically falls back to in-memory cache.
+**Impact:** Cache miss only. No data loss — all data is recomputable. Latency increases temporarily (embedding
+re-computation, re-retrieval from Qdrant). No user-facing errors. Proxy automatically falls back to in-memory cache.
 
 **Recovery:**
+
 - **No recovery needed.** Redis is a cache-only component. The proxy automatically falls back to in-memory LRU cache.
 - Cache will self-repopulate from normal traffic.
 - To speed up recovery: run warm-up endpoint `curl -X POST localhost:8080/v1/admin/warmup`
@@ -134,12 +142,14 @@ curl -s localhost:8080/metrics | grep rag_cache_hit_ratio
 ### 4. Node Failure (Compute)
 
 **Detection:**
+
 - Node unreachable via SSH/kubectl
 - Kubernetes: Pod status `Pending` or `CrashLoopBackOff`
 - Prometheus alert: `NodeDown` (critical)
 - Grafana: node CPU/memory metrics flatline
 
-**Impact (K8s):** Minimal. Pods automatically rescheduled to healthy nodes by Kubernetes scheduler. Brief interruption during reschedule (< 30s).
+**Impact (K8s):** Minimal. Pods automatically rescheduled to healthy nodes by Kubernetes scheduler. Brief interruption
+during reschedule (< 30s).
 
 **Impact (Docker Compose):** Full outage of services on the failed node. Manual restart required.
 
@@ -180,12 +190,14 @@ curl localhost:8080/v1/health
 ### 5. Network Partition
 
 **Detection:**
+
 - Proxy cannot reach Qdrant/Neo4j/Redis (connection refused or timeout)
 - Health check shows components as `"unhealthy"`
 - Prometheus alert: `QdrantUnhealthy` (critical), `Neo4jUnhealthy` (warning)
 - Logs show `ConnectionError` or `TimeoutError` for internal services
 
 **Impact:** Graceful degradation kicks in:
+
 - Qdrant unreachable → 503 on `/v1/chat/completions`
 - Neo4j unreachable → skip graph expansion
 - Redis unreachable → fall back to in-memory cache
@@ -222,6 +234,7 @@ curl localhost:8080/v1/health | jq '.components'
 ### 6. Complete Outage (All Services Down)
 
 **Detection:**
+
 - All services unreachable
 - `/v1/health` returns 503 or connection refused
 - All Prometheus alerts firing simultaneously
@@ -288,12 +301,14 @@ kubectl get cronjob -n rag-system | grep backup
 ### 7. LLM Backend Failure
 
 **Detection:**
+
 - LLM inference server unreachable (connection refused / timeout)
 - Proxy health check shows `llm: "unhealthy"`
 - `/v1/chat/completions` returns 503
 - Prometheus alert: `LLMDown` (critical)
 
-**Impact:** No generation possible. All chat completion requests return 503. Health and metrics endpoints remain available. `/v1/models` still works if cached.
+**Impact:** No generation possible. All chat completion requests return 503. Health and metrics endpoints remain
+available. `/v1/models` still works if cached.
 
 **Recovery Steps:**
 
@@ -332,12 +347,14 @@ curl localhost:8080/v1/health | jq '.llm'
 ### 8. Disk Full
 
 **Detection:**
+
 - Prometheus alert: `DiskNearFull` (warning at 85%, critical at 95%)
 - Grafana dashboard shows disk usage trending up
 - Qdrant write errors: "No space left on device"
 - Proxy logs show `OSError: [Errno 28] No space left on device`
 
-**Impact:** Services stop writing. Qdrant upserts fail. ETL stalls. Read operations may continue if enough space for temporary files.
+**Impact:** Services stop writing. Qdrant upserts fail. ETL stalls. Read operations may continue if enough space for
+temporary files.
 
 **Recovery Steps:**
 
@@ -380,12 +397,15 @@ systemctl restart rag-etl
 
 After any recovery procedure, run this verification checklist:
 
-- [ ] Qdrant collection has expected vector count: `curl localhost:6333/collections | jq '.result.collections[].vectors_count'`
+- [ ] Qdrant collection has expected vector count:
+  `curl localhost:6333/collections | jq '.result.collections[].vectors_count'`
 - [ ] Neo4j has expected node count: `cypher-shell "MATCH (n) RETURN count(n)"`
 - [ ] Redis is accepting connections: `redis-cli PING` → `PONG`
 - [ ] Proxy health check returns 200: `curl -s -o /dev/null -w "%{http_code}" localhost:8080/v1/health`
-- [ ] All components healthy: `curl localhost:8080/v1/health | jq '.components | to_entries | map(select(.value != "healthy"))'` → `[]`
-- [ ] Test query returns confidence > 0.5: `curl -X POST localhost:8080/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"rag","messages":[{"role":"user","content":"What is the RAG system?"}]}' | jq '.rag_confidence'`
+- [ ] All components healthy:
+  `curl localhost:8080/v1/health | jq '.components | to_entries | map(select(.value != "healthy"))'` → `[]`
+- [ ] Test query returns confidence > 0.5:
+  `curl -X POST localhost:8080/v1/chat/completions -H "Content-Type: application/json" -d '{"model":"rag","messages":[{"role":"user","content":"What is the RAG system?"}]}' | jq '.rag_confidence'`
 - [ ] Prometheus metrics accessible: `curl -s localhost:8080/metrics | grep rag_cache_hit_ratio`
 - [ ] Grafana dashboard shows healthy metrics (no gaps, values in normal range)
 - [ ] Backup schedule active: `systemctl status rag-backup.timer` or `kubectl get cronjob rag-backup`
@@ -395,18 +415,18 @@ After any recovery procedure, run this verification checklist:
 
 ## Emergency Contacts
 
-| Role | Contact | Escalation |
-|------|---------|------------|
-| Primary on-call | See PagerDuty schedule | After 15 min: secondary |
-| DevOps lead | See team roster | After 30 min: engineering manager |
-| Infrastructure | See team roster | After 45 min: CTO |
+| Role            | Contact                | Escalation                        |
+|-----------------|------------------------|-----------------------------------|
+| Primary on-call | See PagerDuty schedule | After 15 min: secondary           |
+| DevOps lead     | See team roster        | After 30 min: engineering manager |
+| Infrastructure  | See team roster        | After 45 min: CTO                 |
 
 ---
 
 ## DR Drill Schedule
 
-| Frequency | Scope | Duration Target |
-|-----------|-------|-----------------|
-| Monthly | Single component failure (Qdrant or Neo4j restore) | < 1 hour |
-| Quarterly | Full stack restore from S3 backups | < 2 hours |
-| Annually | Complete datacenter failure simulation | < 4 hours |
+| Frequency | Scope                                              | Duration Target |
+|-----------|----------------------------------------------------|-----------------|
+| Monthly   | Single component failure (Qdrant or Neo4j restore) | < 1 hour        |
+| Quarterly | Full stack restore from S3 backups                 | < 2 hours       |
+| Annually  | Complete datacenter failure simulation             | < 4 hours       |

@@ -122,13 +122,13 @@ This runbook provides operational procedures for maintaining the RAG System in p
 ### First Monday of Month
 
 - [ ] **Performance baseline review**
-  - Compare current metrics with previous month
-  - Identify trends in latency, throughput, error rates
+    - Compare current metrics with previous month
+    - Identify trends in latency, throughput, error rates
 
 - [ ] **Capacity planning**
-  - Review storage growth (Qdrant, Neo4j, Redis)
-  - Estimate when scaling will be needed
-  - Check model storage requirements
+    - Review storage growth (Qdrant, Neo4j, Redis)
+    - Estimate when scaling will be needed
+    - Check model storage requirements
 
 - [ ] **Security audit**
   ```bash
@@ -139,26 +139,26 @@ This runbook provides operational procedures for maintaining the RAG System in p
   ```
 
 - [ ] **Backup strategy review**
-  - Verify backup retention policy (7 daily, 4 weekly, 3 monthly)
-  - Test full restoration procedure
-  - Update backup scripts if needed
+    - Verify backup retention policy (7 daily, 4 weekly, 3 monthly)
+    - Test full restoration procedure
+    - Update backup scripts if needed
 
 - [ ] **Documentation updates**
-  - Update runbook with new procedures
-  - Review and update escalation contacts
-  - Update architecture diagrams if changes were made
+    - Update runbook with new procedures
+    - Review and update escalation contacts
+    - Update architecture diagrams if changes were made
 
 ### Quarterly
 
 - [ ] **Disaster recovery drill**
-  - Simulate full system failure
-  - Practice restoration from backups
-  - Document recovery time actuals vs. targets
+    - Simulate full system failure
+    - Practice restoration from backups
+    - Document recovery time actuals vs. targets
 
 - [ ] **Model performance evaluation**
-  - Run evaluation pipeline on held-out test set
-  - Compare with previous quarter metrics
-  - Decide if retraining is needed
+    - Run evaluation pipeline on held-out test set
+    - Compare with previous quarter metrics
+    - Decide if retraining is needed
 
 ---
 
@@ -166,12 +166,12 @@ This runbook provides operational procedures for maintaining the RAG System in p
 
 ### Severity Levels
 
-| Level | Description | Response Time | Example |
-|-------|-------------|---------------|---------|
-| **P1 - Critical** | System down, data loss | 15 minutes | All services unresponsive, data corruption |
-| **P2 - High** | Major feature broken | 1 hour | LLM not responding, search returning errors |
-| **P3 - Medium** | Degraded performance | 4 hours | High latency, intermittent failures |
-| **P4 - Low** | Minor issue | 24 hours | UI glitch, non-critical log errors |
+| Level             | Description            | Response Time | Example                                     |
+|-------------------|------------------------|---------------|---------------------------------------------|
+| **P1 - Critical** | System down, data loss | 15 minutes    | All services unresponsive, data corruption  |
+| **P2 - High**     | Major feature broken   | 1 hour        | LLM not responding, search returning errors |
+| **P3 - Medium**   | Degraded performance   | 4 hours       | High latency, intermittent failures         |
+| **P4 - Low**      | Minor issue            | 24 hours      | UI glitch, non-critical log errors          |
 
 ### Incident Response Procedure
 
@@ -197,6 +197,7 @@ docker stats --no-stream
 #### 3. Mitigate (15-60 minutes)
 
 **If LLM backend is down:**
+
 ```bash
 # Check LLM endpoint
 curl -s http://localhost:8000/v1/models
@@ -206,6 +207,7 @@ docker-compose -f proxy/docker-compose.yml restart llm
 ```
 
 **If Qdrant is unresponsive:**
+
 ```bash
 # Check Qdrant status
 curl -s http://localhost:6333/healthz
@@ -215,6 +217,7 @@ docker-compose -f proxy/docker-compose.yml restart qdrant
 ```
 
 **If Redis is down:**
+
 ```bash
 # Check Redis
 docker exec redis redis-cli ping
@@ -224,6 +227,7 @@ docker-compose -f proxy/docker-compose.yml restart redis
 ```
 
 **If Neo4j is down:**
+
 ```bash
 # Check Neo4j
 docker exec neo4j cypher-shell "RETURN 1;"
@@ -305,20 +309,20 @@ docker-compose -f proxy/docker-compose.yml start proxy
 
 ### Internal Escalation
 
-| Level | Contact | When to Escalate |
-|-------|---------|------------------|
-| **L1 - On-call** | Current on-call engineer | Initial response, basic troubleshooting |
-| **L2 - Senior** | Senior backend engineer | Complex issues, service failures |
-| **L3 - Lead** | Tech lead / Architect | Architecture decisions, data loss |
-| **L4 - Management** | Engineering manager | Extended outages, customer impact |
+| Level               | Contact                  | When to Escalate                        |
+|---------------------|--------------------------|-----------------------------------------|
+| **L1 - On-call**    | Current on-call engineer | Initial response, basic troubleshooting |
+| **L2 - Senior**     | Senior backend engineer  | Complex issues, service failures        |
+| **L3 - Lead**       | Tech lead / Architect    | Architecture decisions, data loss       |
+| **L4 - Management** | Engineering manager      | Extended outages, customer impact       |
 
 ### External Escalation
 
-| Service | Contact | When to Escalate |
-|---------|---------|------------------|
-| **Cloud Provider** | Support ticket | Infrastructure issues, network problems |
-| **LLM Provider** | API support | Model availability, rate limiting |
-| **Database Vendor** | Enterprise support | Data corruption, performance issues |
+| Service             | Contact            | When to Escalate                        |
+|---------------------|--------------------|-----------------------------------------|
+| **Cloud Provider**  | Support ticket     | Infrastructure issues, network problems |
+| **LLM Provider**    | API support        | Model availability, rate limiting       |
+| **Database Vendor** | Enterprise support | Data corruption, performance issues     |
 
 ### Communication Channels
 
@@ -336,6 +340,7 @@ docker-compose -f proxy/docker-compose.yml start proxy
 **Symptoms**: Nginx/reverse proxy returns 502
 
 **Diagnosis**:
+
 ```bash
 # Check if proxy is running
 docker-compose -f proxy/docker-compose.yml ps proxy
@@ -348,6 +353,7 @@ netstat -tlnp | grep 8080
 ```
 
 **Resolution**:
+
 ```bash
 # Restart proxy
 docker-compose -f proxy/docker-compose.yml restart proxy
@@ -361,6 +367,7 @@ cat proxy/.env | grep -E "^(HOST|PORT|WORKERS)"
 **Symptoms**: Slow or failed embedding requests
 
 **Diagnosis**:
+
 ```bash
 # Check embedding service health
 curl -s http://localhost:8080/v1/health | jq '.embedding_service'
@@ -370,6 +377,7 @@ nvidia-smi
 ```
 
 **Resolution**:
+
 ```bash
 # Restart embedding service
 docker-compose -f proxy/docker-compose.yml restart embedder
@@ -383,6 +391,7 @@ docker-compose -f proxy/docker-compose.yml restart embedder
 **Symptoms**: Search returns empty results
 
 **Diagnosis**:
+
 ```bash
 # List collections
 curl -s http://localhost:6333/collections | jq .
@@ -392,6 +401,7 @@ curl -s http://localhost:6333/collections/{collection_name} | jq .
 ```
 
 **Resolution**:
+
 ```bash
 # Reinitialize collections
 python scripts/init_collections.py
@@ -514,13 +524,13 @@ free -h
 
 ## Contact Information
 
-| Role | Name | Contact |
-|------|------|---------|
-| **Primary On-call** | [Name] | [Phone/Slack] |
-| **Secondary On-call** | [Name] | [Phone/Slack] |
-| **Tech Lead** | [Name] | [Phone/Slack] |
+| Role                    | Name   | Contact       |
+|-------------------------|--------|---------------|
+| **Primary On-call**     | [Name] | [Phone/Slack] |
+| **Secondary On-call**   | [Name] | [Phone/Slack] |
+| **Tech Lead**           | [Name] | [Phone/Slack] |
 | **Engineering Manager** | [Name] | [Phone/Slack] |
-| **DevOps/SRE** | [Name] | [Phone/Slack] |
+| **DevOps/SRE**          | [Name] | [Phone/Slack] |
 
 ---
 
@@ -549,14 +559,14 @@ free -h
 
 ### Key Metrics to Watch
 
-| Metric | Warning Threshold | Critical Threshold |
-|--------|-------------------|-------------------|
-| Response time (p95) | >2s | >5s |
-| Error rate | >1% | >5% |
-| CPU usage | >70% | >90% |
-| Memory usage | >80% | >95% |
-| Disk usage | >75% | >90% |
-| Qdrant load | >70% | >90% |
+| Metric              | Warning Threshold | Critical Threshold |
+|---------------------|-------------------|--------------------|
+| Response time (p95) | >2s               | >5s                |
+| Error rate          | >1%               | >5%                |
+| CPU usage           | >70%              | >90%               |
+| Memory usage        | >80%              | >95%               |
+| Disk usage          | >75%              | >90%               |
+| Qdrant load         | >70%              | >90%               |
 
 ---
 

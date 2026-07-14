@@ -2,7 +2,8 @@
 
 **Version:** v2.0.0 | **Last Updated:** 2026-07-10
 
-This guide covers setting up a development environment, running tests, code style conventions, and contributing to the RAG System.
+This guide covers setting up a development environment, running tests, code style conventions, and contributing to the
+RAG System.
 
 ---
 
@@ -224,14 +225,14 @@ python -m pytest tests/ -m "not slow and not e2e and not benchmark"
 
 ### Test Markers
 
-| Marker | Description | Requires |
-|--------|-------------|----------|
-| `e2e` | End-to-end tests | Running services |
-| `benchmark` | Performance and load tests | Running services |
-| `chaos` | Resilience and chaos engineering tests | Running services |
-| `asyncio` | Tests using asyncio | Nothing extra |
-| `slow` | Tests taking >5 seconds | Nothing extra |
-| `integration` | Tests requiring external services | Qdrant, Neo4j, Redis |
+| Marker        | Description                            | Requires             |
+|---------------|----------------------------------------|----------------------|
+| `e2e`         | End-to-end tests                       | Running services     |
+| `benchmark`   | Performance and load tests             | Running services     |
+| `chaos`       | Resilience and chaos engineering tests | Running services     |
+| `asyncio`     | Tests using asyncio                    | Nothing extra        |
+| `slow`        | Tests taking >5 seconds                | Nothing extra        |
+| `integration` | Tests requiring external services      | Qdrant, Neo4j, Redis |
 
 ### Writing Tests
 
@@ -422,13 +423,13 @@ async def my_provider_completion(
 
 ### Branches
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Production-ready code |
-| `develop` | Integration branch |
-| `feature/*` | Feature development |
-| `fix/*` | Bug fixes |
-| `release/*` | Release preparation |
+| Branch      | Purpose               |
+|-------------|-----------------------|
+| `main`      | Production-ready code |
+| `develop`   | Integration branch    |
+| `feature/*` | Feature development   |
+| `fix/*`     | Bug fixes             |
+| `release/*` | Release preparation   |
 
 ### Commit Messages
 
@@ -445,6 +446,7 @@ Follow conventional commits:
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 Examples:
+
 ```
 feat(proxy): add federated search endpoint
 fix(etl): handle empty Confluence pages gracefully

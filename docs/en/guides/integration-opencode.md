@@ -2,7 +2,8 @@
 
 ## Architecture Overview
 
-The RAG system exposes an OpenAI-compatible API at `http://localhost:8080/v1`. OpenCode connects to it as a drop-in LLM provider, leveraging the corporate knowledge base (Confluence, Jira, GitLab) for context-aware code assistance.
+The RAG system exposes an OpenAI-compatible API at `http://localhost:8080/v1`. OpenCode connects to it as a drop-in LLM
+provider, leveraging the corporate knowledge base (Confluence, Jira, GitLab) for context-aware code assistance.
 
 ```
 ┌──────────┐   OpenAI-compatible API    ┌──────────────┐
@@ -18,7 +19,9 @@ The RAG system exposes an OpenAI-compatible API at `http://localhost:8080/v1`. O
                      └────────┘          └────────┘          └────────┘
 ```
 
-The proxy intercepts each chat completion request, performs hybrid retrieval from Qdrant, reranks results, builds a context-augmented prompt, and forwards it to the LLM. OpenCode sees standard OpenAI API responses — no special client code needed.
+The proxy intercepts each chat completion request, performs hybrid retrieval from Qdrant, reranks results, builds a
+context-augmented prompt, and forwards it to the LLM. OpenCode sees standard OpenAI API responses — no special client
+code needed.
 
 ## MCP Server Configuration
 
@@ -68,7 +71,8 @@ export RAG_API_KEY="your-secure-api-key"
 
 ### Standard Code Query
 
-When OpenCode sends a request about code in your organization's repositories, the RAG system automatically enriches it with relevant context:
+When OpenCode sends a request about code in your organization's repositories, the RAG system automatically enriches it
+with relevant context:
 
 ```
 User: How is the authentication middleware implemented in the backend service?
@@ -116,12 +120,12 @@ and was tracked in [Jira: DEV-1423].
 
 The knowledge base grows through the ETL pipeline, making OpenCode progressively smarter:
 
-| Cycle | Data Source | Update Frequency | Impact |
-|-------|-------------|------------------|--------|
-| **Daily** | Jira updates, new comments | Every 4 hours | Issue status, decisions |
-| **Weekly** | Confluence page changes | Every 24 hours | Architecture docs, runbooks |
-| **On push** | GitLab commits, merge requests | Near real-time | Code changes, review context |
-| **Manual** | Chat history, uploaded docs | On demand | Expert knowledge, meeting notes |
+| Cycle       | Data Source                    | Update Frequency | Impact                          |
+|-------------|--------------------------------|------------------|---------------------------------|
+| **Daily**   | Jira updates, new comments     | Every 4 hours    | Issue status, decisions         |
+| **Weekly**  | Confluence page changes        | Every 24 hours   | Architecture docs, runbooks     |
+| **On push** | GitLab commits, merge requests | Near real-time   | Code changes, review context    |
+| **Manual**  | Chat history, uploaded docs    | On demand        | Expert knowledge, meeting notes |
 
 ### WAL-Based Incremental Updates
 
@@ -191,13 +195,13 @@ server {
 
 ### Expected Latency
 
-| Operation | Cold (no cache) | Warm (cache hit) |
-|-----------|-----------------|-------------------|
-| Embedding | 50–100 ms | 5–10 ms (Redis) |
-| Qdrant search | 20–50 ms | — |
-| Reranking (20 docs) | 100–200 ms | 50–100 ms (Redis) |
-| LLM generation | 2–10 s | 1–5 s (response cache) |
-| **Total round-trip** | **3–12 s** | **1–5 s** |
+| Operation            | Cold (no cache) | Warm (cache hit)       |
+|----------------------|-----------------|------------------------|
+| Embedding            | 50–100 ms       | 5–10 ms (Redis)        |
+| Qdrant search        | 20–50 ms        | —                      |
+| Reranking (20 docs)  | 100–200 ms      | 50–100 ms (Redis)      |
+| LLM generation       | 2–10 s          | 1–5 s (response cache) |
+| **Total round-trip** | **3–12 s**      | **1–5 s**              |
 
 ### Caching Behavior
 
@@ -289,6 +293,7 @@ The RAG system includes an MCP (Model Context Protocol) server at `mcp_server/se
 ### Usage in OpenCode
 
 Once configured, OpenCode can use RAG tools directly:
+
 - "Search the knowledge base for the authentication architecture"
 - "Get the document with source ID CONFL-12345"
 - "List all available data sources"

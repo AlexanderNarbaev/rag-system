@@ -3,27 +3,12 @@
 
 from proxy.app.auth.api_keys import ApiKey, ApiKeyManager, api_key_manager
 from proxy.app.auth.jwt import (
-    AuthMiddleware,
-    UserContext,
-    create_token,
-    get_auth_context,
-    get_optional_auth_context,
-    verify_token,
+  AuthMiddleware, UserContext, create_token, get_auth_context, get_optional_auth_context, verify_token,
 )
 from proxy.app.auth.rbac import Role, require_role
 from proxy.app.shared.config import AUTH_ENABLED
 
 __all__ = [
-    "AUTH_ENABLED",
-    "ApiKey",
-    "ApiKeyManager",
-    "AuthMiddleware",
-    "UserContext",
-    "Role",
-    "api_key_manager",
-    "create_token",
-    "get_auth_context",
-    "get_optional_auth_context",
-    "require_role",
-    "verify_token",
+    "AUTH_ENABLED", "ApiKey", "ApiKeyManager", "AuthMiddleware", "UserContext", "Role", "api_key_manager",
+    "create_token", "get_auth_context", "get_optional_auth_context", "require_role", "verify_token",
 ]

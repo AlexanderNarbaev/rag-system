@@ -1,18 +1,20 @@
 # Proxy Deployment Guide
 
-The RAG Proxy is the core serving layer — a FastAPI application exposing an OpenAI-compatible API. It connects to Qdrant (vector search), Neo4j (knowledge graph), Redis (cache), and an LLM backend (vLLM, llama.cpp, or any OpenAI-compatible endpoint).
+The RAG Proxy is the core serving layer — a FastAPI application exposing an OpenAI-compatible API. It connects to
+Qdrant (vector search), Neo4j (knowledge graph), Redis (cache), and an LLM backend (vLLM, llama.cpp, or any
+OpenAI-compatible endpoint).
 
 ---
 
 ## Prerequisites
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **Docker** | 24.0+ | 27.0+ |
-| **Docker Compose** | v2.20+ | v2.30+ |
-| **NVIDIA Driver** | 535+ | 550+ |
-| **NVIDIA Container Toolkit** | 1.14+ | 1.17+ |
-| **Python** (bare-metal only) | 3.11 | 3.12 |
+| Component                    | Minimum | Recommended |
+|------------------------------|---------|-------------|
+| **Docker**                   | 24.0+   | 27.0+       |
+| **Docker Compose**           | v2.20+  | v2.30+      |
+| **NVIDIA Driver**            | 535+    | 550+        |
+| **NVIDIA Container Toolkit** | 1.14+   | 1.17+       |
+| **Python** (bare-metal only) | 3.11    | 3.12        |
 
 ### Verify GPU Access
 
@@ -39,15 +41,16 @@ sudo systemctl restart docker
 
 ## Infrastructure Requirements
 
-| Resource | Minimum | Recommended (Production) |
-|----------|---------|---------------------------|
-| **CPU** | 8 cores | 16+ cores |
-| **RAM** | 32 GB | 64+ GB |
-| **GPU VRAM** | 24 GB (quantized GGUF) | 48+ GB (full precision) |
-| **Disk** | 100 GB SSD | 500+ GB NVMe |
-| **Network** | 1 Gbps | 10 Gbps (internal) |
+| Resource     | Minimum                | Recommended (Production) |
+|--------------|------------------------|--------------------------|
+| **CPU**      | 8 cores                | 16+ cores                |
+| **RAM**      | 32 GB                  | 64+ GB                   |
+| **GPU VRAM** | 24 GB (quantized GGUF) | 48+ GB (full precision)  |
+| **Disk**     | 100 GB SSD             | 500+ GB NVMe             |
+| **Network**  | 1 Gbps                 | 10 Gbps (internal)       |
 
 **Disk breakdown:**
+
 - Qdrant vectors: ~30 GB
 - Neo4j graph: ~10 GB
 - Model files: ~20 GB
@@ -216,14 +219,14 @@ The `docker-compose.yml` defines these services:
 
 ### Service Details
 
-| Service | Image | Port | GPU | Purpose |
-|---------|-------|------|-----|---------|
-| **qdrant** | `qdrant/qdrant:latest` | 6333, 6334 | No | Vector database for hybrid search |
-| **redis** | `redis:7-alpine` | 6379 | No | Multi-tier cache (embeddings, rerank, responses) |
-| **neo4j** | `neo4j:5-enterprise` | 7474, 7687 | No | Knowledge graph for entity relationships |
-| **llm** | Custom or `vllm/vllm-openai:latest` | 8000 | **Yes** | LLM inference server (your model) |
-| **rag-proxy** | Custom (FastAPI) | 8080 | No | OpenAI-compatible API with RAG pipeline |
-| **hitl-dashboard** | Custom (Streamlit) | 8501 | No | Expert review and feedback dashboard |
+| Service            | Image                               | Port       | GPU     | Purpose                                          |
+|--------------------|-------------------------------------|------------|---------|--------------------------------------------------|
+| **qdrant**         | `qdrant/qdrant:latest`              | 6333, 6334 | No      | Vector database for hybrid search                |
+| **redis**          | `redis:7-alpine`                    | 6379       | No      | Multi-tier cache (embeddings, rerank, responses) |
+| **neo4j**          | `neo4j:5-enterprise`                | 7474, 7687 | No      | Knowledge graph for entity relationships         |
+| **llm**            | Custom or `vllm/vllm-openai:latest` | 8000       | **Yes** | LLM inference server (your model)                |
+| **rag-proxy**      | Custom (FastAPI)                    | 8080       | No      | OpenAI-compatible API with RAG pipeline          |
+| **hitl-dashboard** | Custom (Streamlit)                  | 8501       | No      | Expert review and feedback dashboard             |
 
 ---
 
@@ -231,13 +234,13 @@ The `docker-compose.yml` defines these services:
 
 The proxy is designed to never crash on component failure. Each dependency fails independently:
 
-| Component Unavailable | Behavior |
-|-----------------------|----------|
-| **Qdrant** | Retrieval returns empty results; LLM responds without context |
-| **Neo4j** | Graph expansion skipped; retrieval falls back to vector-only |
-| **Redis** | Falls back to in-memory cache; no persistence, lower hit rate |
-| **LLM backend** | `/v1/health` returns 503; all completions fail with 503 |
-| **Reranker OOM** | Uses raw hybrid scores instead of cross-encoder scores |
+| Component Unavailable | Behavior                                                      |
+|-----------------------|---------------------------------------------------------------|
+| **Qdrant**            | Retrieval returns empty results; LLM responds without context |
+| **Neo4j**             | Graph expansion skipped; retrieval falls back to vector-only  |
+| **Redis**             | Falls back to in-memory cache; no persistence, lower hit rate |
+| **LLM backend**       | `/v1/health` returns 503; all completions fail with 503       |
+| **Reranker OOM**      | Uses raw hybrid scores instead of cross-encoder scores        |
 
 Health check (`/v1/health`) reports degraded status with per-component details.
 
@@ -406,7 +409,8 @@ docker-compose up -d --scale rag-proxy=3
 #   }
 ```
 
-**Note:** The LLM backend handles concurrency internally (up to 16 concurrent sequences). The proxy can scale horizontally, but each replica must share Redis for cache coherence.
+**Note:** The LLM backend handles concurrency internally (up to 16 concurrent sequences). The proxy can scale
+horizontally, but each replica must share Redis for cache coherence.
 
 ---
 

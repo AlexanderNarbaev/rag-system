@@ -25,30 +25,30 @@ python tui/app.py
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `q` | Quit |
-| `r` | Refresh status |
-| `l` | View logs |
-| `c` | Edit configuration |
-| `d` | Clear cache |
-| `t` | Run tests |
+| Key      | Action                |
+|----------|-----------------------|
+| `q`      | Quit                  |
+| `r`      | Refresh status        |
+| `l`      | View logs             |
+| `c`      | Edit configuration    |
+| `d`      | Clear cache           |
+| `t`      | Run tests             |
 | `Escape` | Close modal / Go back |
-| `Ctrl+S` | Save configuration |
+| `Ctrl+S` | Save configuration    |
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PROXY_URL` | `http://localhost:8080` | RAG proxy endpoint |
-| `QDRANT_HOST` | `localhost` | Qdrant server host |
-| `QDRANT_PORT` | `6333` | Qdrant server port |
-| `NEO4J_HOST` | `localhost` | Neo4j server host |
-| `NEO4J_HTTP_PORT` | `7474` | Neo4j HTTP port |
-| `REDIS_HOST` | `localhost` | Redis server host |
-| `REDIS_PORT` | `6379` | Redis server port |
-| `LLM_ENDPOINT` | `http://localhost:8000/v1` | LLM API endpoint |
-| `LOG_DIR` | `./proxy/logs` | Log directory path |
+| Variable          | Default                    | Description        |
+|-------------------|----------------------------|--------------------|
+| `PROXY_URL`       | `http://localhost:8080`    | RAG proxy endpoint |
+| `QDRANT_HOST`     | `localhost`                | Qdrant server host |
+| `QDRANT_PORT`     | `6333`                     | Qdrant server port |
+| `NEO4J_HOST`      | `localhost`                | Neo4j server host  |
+| `NEO4J_HTTP_PORT` | `7474`                     | Neo4j HTTP port    |
+| `REDIS_HOST`      | `localhost`                | Redis server host  |
+| `REDIS_PORT`      | `6379`                     | Redis server port  |
+| `LLM_ENDPOINT`    | `http://localhost:8000/v1` | LLM API endpoint   |
+| `LOG_DIR`         | `./proxy/logs`             | Log directory path |
 
 ## Architecture
 

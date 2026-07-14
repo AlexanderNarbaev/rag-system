@@ -2,7 +2,8 @@
 
 <div class="hero" markdown>
 
-**Production-ready self-correcting RAG system.** Deploy on-prem, air-gapped. Query Confluence, Jira, GitLab — get answers with hallucination detection, NLI verification, and agentic tool integration.
+**Production-ready self-correcting RAG system.** Deploy on-prem, air-gapped. Query Confluence, Jira, GitLab — get
+answers with hallucination detection, NLI verification, and agentic tool integration.
 
 [Quick Start](#quick-start){ .md-button .md-button--primary }
 [API Reference](api_reference.md){ .md-button }
@@ -154,26 +155,26 @@ curl -X POST http://localhost:8081/v1/search \
 └──────────────────────────────────────────────────────┘
 ```
 
-| Component | Technology | Role |
-|-----------|-----------|------|
-| **Orchestrator** | LangGraph, 10 nodes | Agentic query pipeline with self-correction |
-| **Retrieval** | Qdrant hybrid (dense+sparse+ColBERT) | Multi-vector search, RRF fusion |
-| **Reranker** | Cross-encoder (MiniLM-L-6-v2) | Precision filtering, fine-tunable |
-| **Graph** | Neo4j (10 entity types, 9 relations) | Entity extraction, multi-hop traversal |
-| **Cache** | Redis multi-tier | Embedding, rerank, response caching |
-| **LLM** | vLLM / llama.cpp / OpenAI-compatible / Anthropic | Response generation |
-| **SLM** | ~2-3B params: Llama, Gemma, Qwen | Intent classification, entity extraction |
-| **Auth** | JWT + Keycloak OIDC + LDAP/AD | SSO, RBAC (4 roles), token pairs |
+| Component        | Technology                                       | Role                                        |
+|------------------|--------------------------------------------------|---------------------------------------------|
+| **Orchestrator** | LangGraph, 10 nodes                              | Agentic query pipeline with self-correction |
+| **Retrieval**    | Qdrant hybrid (dense+sparse+ColBERT)             | Multi-vector search, RRF fusion             |
+| **Reranker**     | Cross-encoder (MiniLM-L-6-v2)                    | Precision filtering, fine-tunable           |
+| **Graph**        | Neo4j (10 entity types, 9 relations)             | Entity extraction, multi-hop traversal      |
+| **Cache**        | Redis multi-tier                                 | Embedding, rerank, response caching         |
+| **LLM**          | vLLM / llama.cpp / OpenAI-compatible / Anthropic | Response generation                         |
+| **SLM**          | ~2-3B params: Llama, Gemma, Qwen                 | Intent classification, entity extraction    |
+| **Auth**         | JWT + Keycloak OIDC + LDAP/AD                    | SSO, RBAC (4 roles), token pairs            |
 
 ### RAG Maturity: Level 5 — Self-Correcting
 
-| Level | Capability | Status |
-|-------|-----------|--------|
-| 1 | Naive RAG — single dense retrieval | ✅ Exceeded |
-| 2 | Advanced RAG — hybrid, rerank, dedup, versioning | ✅ Implemented |
-| 3 | GraphRAG — Neo4j entity extraction, multi-hop | ✅ Implemented |
-| 4 | Agentic — 10-node LangGraph, retrieval loops, tool calling | ✅ Implemented |
-| 5 | Self-Correcting — CRAG, HyDE, self-reflection, NLI | ✅ Implemented |
+| Level | Capability                                                 | Status        |
+|-------|------------------------------------------------------------|---------------|
+| 1     | Naive RAG — single dense retrieval                         | ✅ Exceeded    |
+| 2     | Advanced RAG — hybrid, rerank, dedup, versioning           | ✅ Implemented |
+| 3     | GraphRAG — Neo4j entity extraction, multi-hop              | ✅ Implemented |
+| 4     | Agentic — 10-node LangGraph, retrieval loops, tool calling | ✅ Implemented |
+| 5     | Self-Correcting — CRAG, HyDE, self-reflection, NLI         | ✅ Implemented |
 
 **Composite score: 4.5/5.0.** [Full assessment →](guides/rag-maturity-assessment.md)
 
@@ -183,78 +184,78 @@ curl -X POST http://localhost:8081/v1/search \
 
 ### Getting Started
 
-| I want to... | Go to... |
-|-------------|---------|
-| Understand the architecture | [Architecture](architecture.md) |
-| Deploy the proxy | [Proxy Deployment](deploy_proxy.md) |
-| Deploy the ETL pipeline | [ETL Deployment](deploy_etl.md) |
-| Call the API | [API Reference](api_reference.md) |
-| Set up a dev environment | [Development Guide](guides/development-guide.md) |
-| Integrate with IDE | [OpenCode Integration](guides/integration-opencode.md) |
-| Set up air-gapped | [Deployment Guide](guides/deployment-guide.md) |
+| I want to...                | Go to...                                               |
+|-----------------------------|--------------------------------------------------------|
+| Understand the architecture | [Architecture](architecture.md)                        |
+| Deploy the proxy            | [Proxy Deployment](deploy_proxy.md)                    |
+| Deploy the ETL pipeline     | [ETL Deployment](deploy_etl.md)                        |
+| Call the API                | [API Reference](api_reference.md)                      |
+| Set up a dev environment    | [Development Guide](guides/development-guide.md)       |
+| Integrate with IDE          | [OpenCode Integration](guides/integration-opencode.md) |
+| Set up air-gapped           | [Deployment Guide](guides/deployment-guide.md)         |
 
 ### Deep Dives
 
-| I want to... | Go to... |
-|-------------|---------|
-| Understand architecture decisions | [Architecture Decision Records](adr/index.md) |
-| See visual architecture | [C4 Diagrams](diagrams/index.md) |
-| Understand knowledge graph | [Knowledge Graph Strategy](guides/knowledge-graph-strategy.md) |
-| Understand access control | [Access Control & RBAC](guides/access-control-rbac.md) |
-| Assess retrieval quality | [RAG Maturity Assessment](guides/rag-maturity-assessment.md) |
-| Assess production readiness | [Production Checklist](guides/best-practices-checklist.md) |
+| I want to...                      | Go to...                                                       |
+|-----------------------------------|----------------------------------------------------------------|
+| Understand architecture decisions | [Architecture Decision Records](adr/index.md)                  |
+| See visual architecture           | [C4 Diagrams](diagrams/index.md)                               |
+| Understand knowledge graph        | [Knowledge Graph Strategy](guides/knowledge-graph-strategy.md) |
+| Understand access control         | [Access Control & RBAC](guides/access-control-rbac.md)         |
+| Assess retrieval quality          | [RAG Maturity Assessment](guides/rag-maturity-assessment.md)   |
+| Assess production readiness       | [Production Checklist](guides/best-practices-checklist.md)     |
 
 ### Features
 
-| I want to... | Go to... |
-|-------------|---------|
-| Define custom tools (Python) | [Agentic Tools SDK](guides/agentic-tools-sdk.md) |
-| Define tools in YAML/JSON | [Declarative Tools](guides/agentic-tools-declarative.md) |
-| Auto-discover API tools | [OpenAPI Discovery](guides/agentic-tools-openapi.md) |
-| Set up federated search | Deployment Guide |
-| Fine-tune models | [Model Evolution](#) |
-| Add a data source | [Extensibility Guide](guides/extensibility-data-sources.md) |
+| I want to...                 | Go to...                                                    |
+|------------------------------|-------------------------------------------------------------|
+| Define custom tools (Python) | [Agentic Tools SDK](guides/agentic-tools-sdk.md)            |
+| Define tools in YAML/JSON    | [Declarative Tools](guides/agentic-tools-declarative.md)    |
+| Auto-discover API tools      | [OpenAPI Discovery](guides/agentic-tools-openapi.md)        |
+| Set up federated search      | Deployment Guide                                            |
+| Fine-tune models             | [Model Evolution](#)                                        |
+| Add a data source            | [Extensibility Guide](guides/extensibility-data-sources.md) |
 
 ### Operations
 
-| I want to... | Go to... |
-|-------------|---------|
-| Monitor in production | [Operations Guide](guides/operations-guide.md) |
-| Tune performance | [Performance & Quality](guides/performance-quality.md) |
-| Recover from failure | [Disaster Recovery Runbook](guides/disaster-recovery-runbook.md) |
-| Debug an issue | [Troubleshooting](guides/troubleshooting.md) |
-| See what's coming | [Roadmap](guides/roadmap.md) |
+| I want to...          | Go to...                                                         |
+|-----------------------|------------------------------------------------------------------|
+| Monitor in production | [Operations Guide](guides/operations-guide.md)                   |
+| Tune performance      | [Performance & Quality](guides/performance-quality.md)           |
+| Recover from failure  | [Disaster Recovery Runbook](guides/disaster-recovery-runbook.md) |
+| Debug an issue        | [Troubleshooting](guides/troubleshooting.md)                     |
+| See what's coming     | [Roadmap](guides/roadmap.md)                                     |
 
 ---
 
 ## API at a Glance
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/v1/chat/completions` | Optional | Main RAG endpoint (streaming + non-streaming) |
-| `GET` | `/v1/models` | No | Available models |
-| `GET` | `/v1/health` | No | Health (Qdrant + LLM status) |
-| `GET` | `/v1/health/live` | No | K8s liveness probe |
-| `GET` | `/v1/health/ready` | No | K8s readiness probe |
-| `POST` | `/v1/feedback` | Expert | Expert feedback submission |
-| `POST` | `/v1/auth/register` | No | Self-registration |
-| `POST` | `/v1/auth/login` | No | JWT access + refresh tokens |
-| `POST` | `/v1/auth/refresh` | JWT | Refresh token exchange |
-| `POST` | `/v1/auth/logout` | JWT | Token revocation |
-| `GET` | `/v1/auth/me` | JWT | User context |
-| `GET` | `/v1/widget` | No | Embeddable chat widget (HTML) |
-| `GET` | `/v1/widget.js` | No | Widget JavaScript |
-| `GET` | `/v1/tools` | Optional | List tools (with filters) |
-| `GET` | `/v1/tools/{name}` | Optional | Tool details |
-| `POST` | `/v1/admin/models/train` | Admin | Trigger training |
-| `GET` | `/v1/admin/models/status/{id}` | Admin | Training progress |
-| `GET` | `/v1/admin/models` | Admin | Model registry |
-| `POST` | `/v1/admin/models/promote` | Admin | Promote version |
-| `POST` | `/v1/admin/models/rollback` | Admin | Rollback version |
-| `POST` | `/v1/admin/models/evaluate` | Admin | Evaluate quality |
-| `POST` | `/v1/admin/models/canary/split` | Admin | Canary traffic |
-| `GET` | `/v1/admin/models/canary/status` | Admin | Canary status |
-| `GET` | `/metrics` | No | Prometheus metrics |
+| Method | Endpoint                         | Auth     | Description                                   |
+|--------|----------------------------------|----------|-----------------------------------------------|
+| `POST` | `/v1/chat/completions`           | Optional | Main RAG endpoint (streaming + non-streaming) |
+| `GET`  | `/v1/models`                     | No       | Available models                              |
+| `GET`  | `/v1/health`                     | No       | Health (Qdrant + LLM status)                  |
+| `GET`  | `/v1/health/live`                | No       | K8s liveness probe                            |
+| `GET`  | `/v1/health/ready`               | No       | K8s readiness probe                           |
+| `POST` | `/v1/feedback`                   | Expert   | Expert feedback submission                    |
+| `POST` | `/v1/auth/register`              | No       | Self-registration                             |
+| `POST` | `/v1/auth/login`                 | No       | JWT access + refresh tokens                   |
+| `POST` | `/v1/auth/refresh`               | JWT      | Refresh token exchange                        |
+| `POST` | `/v1/auth/logout`                | JWT      | Token revocation                              |
+| `GET`  | `/v1/auth/me`                    | JWT      | User context                                  |
+| `GET`  | `/v1/widget`                     | No       | Embeddable chat widget (HTML)                 |
+| `GET`  | `/v1/widget.js`                  | No       | Widget JavaScript                             |
+| `GET`  | `/v1/tools`                      | Optional | List tools (with filters)                     |
+| `GET`  | `/v1/tools/{name}`               | Optional | Tool details                                  |
+| `POST` | `/v1/admin/models/train`         | Admin    | Trigger training                              |
+| `GET`  | `/v1/admin/models/status/{id}`   | Admin    | Training progress                             |
+| `GET`  | `/v1/admin/models`               | Admin    | Model registry                                |
+| `POST` | `/v1/admin/models/promote`       | Admin    | Promote version                               |
+| `POST` | `/v1/admin/models/rollback`      | Admin    | Rollback version                              |
+| `POST` | `/v1/admin/models/evaluate`      | Admin    | Evaluate quality                              |
+| `POST` | `/v1/admin/models/canary/split`  | Admin    | Canary traffic                                |
+| `GET`  | `/v1/admin/models/canary/status` | Admin    | Canary status                                 |
+| `GET`  | `/metrics`                       | No       | Prometheus metrics                            |
 
 [Full API Reference →](api_reference.md)
 
@@ -262,17 +263,17 @@ curl -X POST http://localhost:8081/v1/search \
 
 ## Project Status
 
-| Dimension | Ready | Details |
-|-----------|-------|---------|
-| **Code Quality** | 90% | ruff, mypy strict, pre-commit hooks, type hints |
-| **Testing** | 80% | 2196 tests, 0 failures, 80% coverage |
-| **Security** | 90% | JWT + RBAC + LDAP + input sanitization + pip-audit + CodeQL |
-| **Observability** | 90% | Prometheus + Grafana + OpenTelemetry + structured logging |
-| **Reliability** | 90% | Circuit breakers, exponential backoff, graceful degradation |
-| **Performance** | 80% | Benchmarks, caching, connection pooling |
-| **Operations** | 90% | K8s Helm, deploy scripts, backup/restore, runbook |
-| **Documentation** | 100% | 11 ADRs, 25+ EN guides, 25+ RU guides, API examples |
-| **Overall** | **89%** (71/80) | Production-ready |
+| Dimension         | Ready           | Details                                                     |
+|-------------------|-----------------|-------------------------------------------------------------|
+| **Code Quality**  | 90%             | ruff, mypy strict, pre-commit hooks, type hints             |
+| **Testing**       | 80%             | 2196 tests, 0 failures, 80% coverage                        |
+| **Security**      | 90%             | JWT + RBAC + LDAP + input sanitization + pip-audit + CodeQL |
+| **Observability** | 90%             | Prometheus + Grafana + OpenTelemetry + structured logging   |
+| **Reliability**   | 90%             | Circuit breakers, exponential backoff, graceful degradation |
+| **Performance**   | 80%             | Benchmarks, caching, connection pooling                     |
+| **Operations**    | 90%             | K8s Helm, deploy scripts, backup/restore, runbook           |
+| **Documentation** | 100%            | 11 ADRs, 25+ EN guides, 25+ RU guides, API examples         |
+| **Overall**       | **89%** (71/80) | Production-ready                                            |
 
 [Full assessment →](guides/best-practices-checklist.md)
 

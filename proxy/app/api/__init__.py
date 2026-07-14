@@ -12,13 +12,6 @@ from proxy.app.api.tools import router as tools_router
 from proxy.app.api.widget import router as widget_router
 
 __all__ = [
-    "admin_router",
-    "auth_router",
-    "chat_router",
-    "feedback_router",
-    "files_router",
-    "health_router",
-    "metrics_router",
-    "tools_router",
-    "widget_router",
+    "admin_router", "auth_router", "chat_router", "feedback_router", "files_router", "health_router", "metrics_router",
+    "tools_router", "widget_router",
 ]

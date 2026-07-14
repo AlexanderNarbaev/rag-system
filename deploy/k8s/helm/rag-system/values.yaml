@@ -13,7 +13,7 @@ global:
   # -- Docker image registry
   imageRegistry: ""
   # -- Image pull secrets
-  imagePullSecrets: []
+  imagePullSecrets: [ ]
   # -- Storage class for PVCs (empty = default StorageClass)
   storageClass: ""
   # -- Namespace all resources are deployed into
@@ -35,12 +35,12 @@ proxy:
     tag: ""
 
   # -- Image pull secrets for the proxy container
-  imagePullSecrets: []
+  imagePullSecrets: [ ]
 
   # -- Additional pod annotations
-  podAnnotations: {}
+  podAnnotations: { }
   # -- Additional pod labels
-  podLabels: {}
+  podLabels: { }
 
   # Pod security context
   podSecurityContext:
@@ -408,9 +408,9 @@ ingress:
   # -- Ingress class name (e.g. nginx, traefik)
   className: "nginx"
   # -- Additional annotations (e.g. cert-manager)
-  annotations: {}
+  annotations: { }
     # kubernetes.io/ingress.class: nginx
-    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  # cert-manager.io/cluster-issuer: letsencrypt-prod
   # -- TLS configuration
   tls:
     enabled: false
@@ -458,7 +458,7 @@ serviceAccount:
   # -- Service account name (empty = fullname)
   name: ""
   # -- Service account annotations
-  annotations: {}
+  annotations: { }
   # -- Service account automount token
   automount: true
 
@@ -477,10 +477,10 @@ podDisruptionBudget:
 # Node selector, tolerations, affinity
 # =============================================================================
 # -- Node selector for all pods
-nodeSelector: {}
+nodeSelector: { }
 
 # -- Tolerations for all pods
-tolerations: []
+tolerations: [ ]
 
 # -- Affinity rules for all pods
-affinity: {}
+affinity: { }

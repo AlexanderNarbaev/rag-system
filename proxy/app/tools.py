@@ -16,8 +16,5 @@ For enhanced registry:
 
 import warnings
 
-warnings.warn(
-    "proxy.app.tools module is deprecated. Import from proxy.app.tools package instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)
+warnings.warn ("proxy.app.tools module is deprecated. Import from proxy.app.tools package instead.", DeprecationWarning,
+    stacklevel = 2, )
