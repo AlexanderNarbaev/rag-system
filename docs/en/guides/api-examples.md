@@ -809,6 +809,89 @@ curl -X POST http://localhost:8080/v1/admin/models/evaluate \
 
 ---
 
+## Knowledge Base Administration
+
+Manage multiple knowledge bases with isolated Qdrant collections. Each KB has its own
+collection, embedding config, and ETL task tracking.
+
+### Create Knowledge Base
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/kb/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{
+    "name": "Production Docs",
+    "description": "Production documentation and runbooks",
+    "embedding_model": "BAAI/bge-m3",
+    "dense_vector_size": 1024
+  }'
+```
+
+### List Knowledge Bases
+
+```bash
+curl http://localhost:8080/v1/admin/kb/ \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Get Knowledge Base Details
+
+```bash
+curl http://localhost:8080/v1/admin/kb/<kb_id> \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Update Knowledge Base
+
+```bash
+curl -X PUT http://localhost:8080/v1/admin/kb/<kb_id> \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{
+    "name": "Updated KB Name",
+    "description": "Updated description"
+  }'
+```
+
+### Delete Knowledge Base
+
+```bash
+# Soft delete (default)
+curl -X DELETE http://localhost:8080/v1/admin/kb/<kb_id> \
+  -H "Authorization: Bearer <admin_token>"
+
+# Hard delete (removes Qdrant collection)
+curl -X DELETE "http://localhost:8080/v1/admin/kb/<kb_id>?hard=true" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+### Create ETL Task
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/kb/<kb_id>/tasks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{
+    "source_type": "confluence",
+    "source_id": "page-12345"
+  }'
+```
+
+### List ETL Tasks
+
+```bash
+# All tasks for a KB
+curl http://localhost:8080/v1/admin/kb/<kb_id>/tasks \
+  -H "Authorization: Bearer <admin_token>"
+
+# Filter by status
+curl "http://localhost:8080/v1/admin/kb/<kb_id>/tasks?status=completed" \
+  -H "Authorization: Bearer <admin_token>"
+```
+
+---
+
 ## Metrics
 
 ### Prometheus Metrics
