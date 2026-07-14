@@ -103,6 +103,11 @@ Expected output:
 !!! note "First Start"
 The first startup takes 1-2 minutes as Docker images are downloaded. Subsequent starts take ~10 seconds.
 
+!!! tip "Auto-Provisioning"
+The proxy automatically creates the default Qdrant collection (`knowledge_base`) on startup.
+You do **not** need to run `scripts/init_collections.py` manually — the proxy handles this.
+To create additional knowledge bases, use the [Admin KB API](api-examples.md#knowledge-base-administration).
+
 ### Verify Services
 
 ```bash
