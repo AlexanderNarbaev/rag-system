@@ -81,6 +81,7 @@ logger = logging.getLogger ("rag-proxy")
 cache_manager = None
 orchestrator = None
 audit_logger = None
+kb_manager = None
 request_tracker = RequestTracker ()
 token_optimizer = TokenOptimizer ()
 retrieval_evaluator = RetrievalEvaluator ()
@@ -143,7 +144,7 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   Initializes cache, orchestrator, tools, and warm-up on startup.
   Drains in-flight requests and closes connections on shutdown.
   """
-  global cache_manager, orchestrator, audit_logger
+  global cache_manager, orchestrator, audit_logger, kb_manager
   setup_logging ()
   logger.info ("Starting RAG Proxy...")
   init_metrics ()
@@ -177,6 +178,15 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
     logger.info ("Retrieval subsystem initialized")
   except Exception as e:
     logger.warning ("Retrieval initialization failed (degraded mode): %s", e)
+  # Initialize Knowledge Base Manager
+  try:
+    from proxy.app.core.kb_manager import KnowledgeBaseManager
+    from proxy.app.core.retrieval import qdrant_client as _qc
+    
+    kb_manager = KnowledgeBaseManager (db_path = "data/knowledge_bases.db", qdrant_client = _qc)
+    logger.info ("Knowledge Base Manager initialized")
+  except Exception as e:
+    logger.warning ("KB Manager initialization failed: %s", e)
   # Initialize LangGraph orchestrator (if enabled)
   if USE_LANGGRAPH:
     from proxy.app.core.orchestrator import get_orchestrator
@@ -603,6 +613,7 @@ from proxy.app.api import (  # noqa: E402
   admin_router, auth_router, chat_router, feedback_router, files_router, health_router, metrics_router, tools_router,
   widget_router,
 )
+from proxy.app.api.admin_kb import router as admin_kb_router  # noqa: E402
 
 app.include_router (metrics_router)
 app.include_router (health_router)
@@ -613,6 +624,7 @@ app.include_router (tools_router)
 app.include_router (feedback_router)
 app.include_router (widget_router)
 app.include_router (admin_router)
+app.include_router (admin_kb_router)
 
 # ---------------------------------------------------------------------------
 # Backward-compatible re-exports for tests (proxy.app.main.*)
