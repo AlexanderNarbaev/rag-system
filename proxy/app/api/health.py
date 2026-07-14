@@ -15,30 +15,69 @@ logger = logging.getLogger ("rag-proxy")
 router = APIRouter (tags = ["health"])
 
 
-@router.get ("/v1/health")
-async def health () -> JSONResponse:
-  """Check proxy and dependency health."""
-  status: dict [str, Any] = {"status": "ok", "timestamp": datetime.now (UTC).isoformat (), "components": {}}
+def _check_qdrant () -> tuple [str, dict]:
+  """Check Qdrant connectivity and collection count."""
   try:
     from proxy.app.core.retrieval import qdrant_client
     
-    if qdrant_client is not None:
-      qdrant_client.get_collections ()
-    status ["components"] ["qdrant"] = "ok"
+    if qdrant_client is None:
+      return "unavailable", {"reason": "client not initialized"}
+    collections = qdrant_client.get_collections ()
+    return "ok", {"collections": len (collections.collections)}
   except Exception as e:
-    status ["components"] ["qdrant"] = f"error: {str (e)}"
-    status ["status"] = "degraded"
+    return f"error: {e}", {}
+
+
+def _check_llm () -> tuple [str, dict]:
+  """Check LLM endpoint connectivity."""
   try:
     import requests
     
     resp = requests.get (f"{LLM_ENDPOINT}/health", timeout = 2)
     if resp.status_code == 200:
-      status ["components"] ["llm"] = "ok"
-    else:
-      status ["components"] ["llm"] = "unhealthy"
+      return "ok", {"endpoint": LLM_ENDPOINT}
+    return "unhealthy", {"status_code": resp.status_code}
   except Exception as e:
-    status ["components"] ["llm"] = f"error: {str (e)}"
+    return f"error: {e}", {}
+
+
+def _check_kb_manager () -> tuple [str, dict]:
+  """Check Knowledge Base Manager status."""
+  try:
+    from proxy.app.main import kb_manager
+    
+    if kb_manager is None:
+      return "unavailable", {"reason": "not initialized"}
+    kbs = kb_manager.list_kbs ()
+    return "ok", {"knowledge_bases": len (kbs)}
+  except Exception as e:
+    return f"error: {e}", {}
+
+
+@router.get ("/v1/health")
+async def health () -> JSONResponse:
+  """Check proxy and dependency health."""
+  status: dict [str, Any] = {"status": "ok", "timestamp": datetime.now (UTC).isoformat (), "components": {}}
+  
+  qdrant_status, qdrant_info = _check_qdrant ()
+  status ["components"] ["qdrant"] = qdrant_status
+  if qdrant_info:
+    status ["components"] ["qdrant_info"] = qdrant_info
+  if qdrant_status != "ok":
     status ["status"] = "degraded"
+  
+  llm_status, llm_info = _check_llm ()
+  status ["components"] ["llm"] = llm_status
+  if llm_info:
+    status ["components"] ["llm_info"] = llm_info
+  if llm_status != "ok":
+    status ["status"] = "degraded"
+  
+  kb_status, kb_info = _check_kb_manager ()
+  status ["components"] ["kb_manager"] = kb_status
+  if kb_info:
+    status ["components"] ["kb_manager_info"] = kb_info
+  
   return JSONResponse (status_code = 200 if status ["status"] == "ok" else 503, content = status)
 
 
@@ -52,26 +91,16 @@ async def health_live () -> JSONResponse:
 async def health_ready () -> JSONResponse:
   """Readiness probe — checks Qdrant and LLM connectivity."""
   status: dict [str, Any] = {"status": "ready", "timestamp": datetime.now (UTC).isoformat (), "components": {}}
-  try:
-    from proxy.app.core.retrieval import qdrant_client
-    
-    if qdrant_client is not None:
-      qdrant_client.get_collections ()
-    status ["components"] ["qdrant"] = "ok"
-  except Exception:
-    status ["components"] ["qdrant"] = "unavailable"
+  
+  qdrant_status, _ = _check_qdrant ()
+  status ["components"] ["qdrant"] = qdrant_status
+  if qdrant_status != "ok":
     status ["status"] = "not_ready"
-  try:
-    import requests
-    
-    resp = requests.get (f"{LLM_ENDPOINT}/health", timeout = 2)
-    if resp.status_code == 200:
-      status ["components"] ["llm"] = "ok"
-    else:
-      status ["components"] ["llm"] = "unavailable"
-      status ["status"] = "not_ready"
-  except Exception:
-    status ["components"] ["llm"] = "unavailable"
+  
+  llm_status, _ = _check_llm ()
+  status ["components"] ["llm"] = llm_status
+  if llm_status != "ok":
     status ["status"] = "not_ready"
+  
   http_code = 200 if status ["status"] == "ready" else 503
   return JSONResponse (status_code = http_code, content = status)
