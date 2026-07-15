@@ -223,6 +223,10 @@ class MultiProviderRouter:
           return translated
       except (TimeoutError, ClientError, LLMError) as e:
         logger.warning (f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
+        # Do not retry client errors (4xx) — they indicate a request problem that won't resolve
+        if "LLM returned 400" in str (e) or "LLM returned 401" in str (e) or "LLM returned 403" in str (e):
+          _record_llm_failure ()
+          raise LLMError (f"LLM request failed with non-retryable error: {e}") from e
         if attempt < retry:
           delay = _get_config ("RETRY_DELAY", _DEFAULT_RETRY_DELAY) * (attempt + 1)
           await asyncio.sleep (delay)
