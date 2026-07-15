@@ -132,8 +132,13 @@ def hyde_search (
     from proxy.app.core.retrieval import _get_dense_vector_name  # type: ignore[attr-defined]
 
     _dense_vector_name = _get_dense_vector_name (qdrant_client)
-    response = qdrant_client.query_points (collection_name = COLLECTION_NAME, query = hyp_vec,
-        using = _dense_vector_name, limit = top_k, query_filter = q_filter, with_payload = True, )
+    _dense_kwargs: dict [str, Any] = {
+        "collection_name": COLLECTION_NAME, "query": hyp_vec,
+        "limit": top_k, "query_filter": q_filter, "with_payload": True,
+    }
+    if _dense_vector_name is not None:
+        _dense_kwargs ["using"] = _dense_vector_name
+    response = qdrant_client.query_points (**_dense_kwargs)
     results = response.points
 
     logger.info (f"HyDE search returned {len (results)} chunks for query: '{query [:60]}...'")

@@ -62,10 +62,10 @@ _DENSE_VECTOR_NAME: str | None = None
 _DENSE_VECTOR_NAME_LOCK: Any = None
 
 
-def _get_dense_vector_name(client: Any) -> str:
+def _get_dense_vector_name(client: Any) -> str | None:
     """Detect the correct dense vector name from the Qdrant collection schema.
 
-    Returns the name of the first dense vector found, or empty string for the
+    Returns the name of the first dense vector found, or None for the
     default (anonymous) vector. Caches the result for the process lifetime.
     """
     global _DENSE_VECTOR_NAME, _DENSE_VECTOR_NAME_LOCK
@@ -87,17 +87,18 @@ def _get_dense_vector_name(client: Any) -> str:
             config = collection_info.config
             params = config.params
             if hasattr(params, 'vectors') and params.vectors:
-                # Named vectors: find the first dense vector name
-                for name, vec_params in params.vectors.items():
-                    if hasattr(vec_params, 'size') and vec_params.size:
-                        _DENSE_VECTOR_NAME = name
-                        logger.info(
-                            "Detected dense vector name '%s' from collection %s",
-                            name, COLLECTION_NAME,
-                        )
-                        return name
-            # Default: anonymous vector (empty string name)
-            _DENSE_VECTOR_NAME = ""
+                if isinstance(params.vectors, dict):
+                    # Named vectors: find the first dense vector name
+                    for name, vec_params in params.vectors.items():
+                        if hasattr(vec_params, 'size') and vec_params.size:
+                            _DENSE_VECTOR_NAME = name
+                            logger.info(
+                                "Detected dense vector name '%s' from collection %s",
+                                name, COLLECTION_NAME,
+                            )
+                            return name
+            # Default: anonymous vector — use None (Qdrant uses default when using=None)
+            _DENSE_VECTOR_NAME = None
             logger.info(
                 "Using default (anonymous) vector for collection %s",
                 COLLECTION_NAME,
@@ -436,18 +437,22 @@ list [Any]:
   assert qdrant_client is not None, "qdrant_client must be initialized"
   _qc = qdrant_client
   _dense_vector_name = _get_dense_vector_name (_qc)
+  _dense_kwargs: dict [str, Any] = {
+      "collection_name": COLLECTION_NAME, "query": dense_vec,
+      "limit": top_k, "query_filter": q_filter, "with_payload": True,
+  }
+  if _dense_vector_name is not None:
+    _dense_kwargs ["using"] = _dense_vector_name
   if _get_cb is not None:
     try:
       dense_response = _get_cb ("qdrant").call_sync (
-          lambda: _qc.query_points (collection_name = COLLECTION_NAME, query = dense_vec,
-              using = _dense_vector_name, limit = top_k, query_filter = q_filter, with_payload = True, ))
+          lambda: _qc.query_points (**_dense_kwargs))
       dense_results = dense_response.points
     except CircuitBreakerOpenError:
       logger.warning ("Qdrant circuit breaker OPEN — returning empty dense results")
       dense_results = []
   else:
-    dense_response = _qc.query_points (collection_name = COLLECTION_NAME, query = dense_vec,
-        using = _dense_vector_name, limit = top_k, query_filter = q_filter, with_payload = True, )
+    dense_response = _qc.query_points (**_dense_kwargs)
     dense_results = dense_response.points
 
   # Sparse поиск (если поддерживается)
