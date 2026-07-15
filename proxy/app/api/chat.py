@@ -271,6 +271,14 @@ async def chat_completions (
             version = version, force_refresh = request.rag_force_refresh or False,
             temperature = request.temperature or 0.2, max_tokens = request.max_tokens or 4096, stream = True,
             other_messages = other_messages, user_context = user, top_k_override = request.rag_top_k, )
+        # If retrieval failed and we got a refusal (empty messages), return it directly
+        if isinstance (messages_for_llm, str) or not messages_for_llm:
+          refusal_text = messages_for_llm if isinstance (messages_for_llm, str) else str (messages_for_llm)
+          yield optimizer.format_chunk ({
+              "choices": [{"delta": {"content": refusal_text}, "index": 0, "finish_reason": "stop"}],
+          })
+          yield "data: [DONE]\n\n"
+          return
         async for chunk in _main.stream_completion (  # type: ignore[attr-defined,arg-type]
             messages_for_llm, request.temperature or 0.2, request.max_tokens or 4096):
           choices = chunk.get ("choices", [])

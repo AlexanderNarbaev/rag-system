@@ -351,7 +351,9 @@ class KnowledgeBaseManager:
         return
       self.qdrant_client.create_collection (
           collection_name = collection_name,
-          vectors_config = qmodels.VectorParams (size = vector_size, distance = qmodels.Distance.COSINE),
+          vectors_config = {
+              "dense": qmodels.VectorParams (size = vector_size, distance = qmodels.Distance.COSINE),
+          },
           optimizers_config = qmodels.OptimizersConfigDiff (indexing_threshold = 20000),
       )
       # Create payload indexes

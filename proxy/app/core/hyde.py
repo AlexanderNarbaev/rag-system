@@ -129,8 +129,11 @@ def hyde_search (
     
     # Dense search with hypothetical embedding
     assert qdrant_client is not None, "qdrant_client must be initialized"
-    response = qdrant_client.query_points (collection_name = COLLECTION_NAME, query = hyp_vec, using = "dense",
-        limit = top_k, query_filter = q_filter, with_payload = True, )
+    from proxy.app.core.retrieval import _get_dense_vector_name  # type: ignore[attr-defined]
+    
+    _dense_vector_name = _get_dense_vector_name (qdrant_client)
+    response = qdrant_client.query_points (collection_name = COLLECTION_NAME, query = hyp_vec,
+        using = _dense_vector_name, limit = top_k, query_filter = q_filter, with_payload = True, )
     results = response.points
     
     logger.info (f"HyDE search returned {len (results)} chunks for query: '{query [:60]}...'")

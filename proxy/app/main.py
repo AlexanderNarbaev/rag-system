@@ -115,12 +115,14 @@ def _ensure_qdrant_collection () -> None:
     if COLLECTION_NAME in existing:
       logger.info ("Qdrant collection '%s' already exists", COLLECTION_NAME)
       return
-    # Create collection with dense vector config (matches ETL indexer)
+    # Create collection with named dense vector (matches ETL indexer schema)
     from qdrant_client.http import models as qmodels
     
     qdrant_client.create_collection (
         collection_name = COLLECTION_NAME,
-        vectors_config = qmodels.VectorParams (size = 1024, distance = qmodels.Distance.COSINE),
+        vectors_config = {
+            "dense": qmodels.VectorParams (size = 1024, distance = qmodels.Distance.COSINE),
+        },
         optimizers_config = qmodels.OptimizersConfigDiff (indexing_threshold = 20000),
     )
     # Create payload indexes for common filter fields
