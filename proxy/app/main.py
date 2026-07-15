@@ -67,6 +67,7 @@ from proxy.app.shared.config import (
   GRACEFUL_SHUTDOWN_ENABLED,
   LLM_MODEL_NAME,
   LOG_DIR,  # noqa: F401 — re-export for test patching
+  LOG_REQUESTS,  # noqa: F401 — re-export for test patching
   MAX_CHUNKS_AFTER_RERANK,
   MAX_CHUNKS_RETRIEVAL,
   OTEL_ENABLED,
