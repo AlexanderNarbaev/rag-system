@@ -151,7 +151,7 @@ BCRYPT_ROUNDS = int (os.getenv ("BCRYPT_ROUNDS", "12"))
 # ── Auth startup validation ──
 if AUTH_ENABLED and not JWT_SECRET:
   import warnings
-  
+
   warnings.warn (
       "AUTH_ENABLED is true but JWT_SECRET is empty — token signing will fail. Set JWT_SECRET in your environment.",
       stacklevel = 2, )

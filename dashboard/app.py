@@ -141,7 +141,7 @@ def write_env_file (env_vars: dict [str, str]) -> None:
   else:
     for key, value in env_vars.items ():
       lines.append (f"{key}={value}\n")
-  
+
   with open (ENV_FILE, "w") as f:
     f.writelines (lines)
 
@@ -151,11 +151,11 @@ def get_recent_logs (n: int = 100) -> list [str]:
   log_dir = Path (os.getenv ("LOG_DIR", PROJECT_ROOT / "proxy" / "logs"))
   if not log_dir.exists ():
     return ["Log directory not found"]
-  
+
   log_files = sorted (log_dir.glob ("*.log"), key = lambda p: p.stat ().st_mtime, reverse = True)
   if not log_files:
     return ["No log files found"]
-  
+
   try:
     with open (log_files [0]) as f:
       lines = f.readlines ()
@@ -172,14 +172,14 @@ def get_recent_logs (n: int = 100) -> list [str]:
 def main ():
   st.set_page_config (page_title = "RAG System Dashboard", page_icon = "🤖", layout = "wide",
       initial_sidebar_state = "expanded", )
-  
+
   st.title ("🤖 RAG System Dashboard")
   st.caption ("System management and monitoring interface")
-  
+
   # Sidebar navigation
   page = st.sidebar.radio ("Navigation",
       ["🏠 System Status", "📊 Metrics", "⚙️ Configuration", "💬 Feedback", "🔧 Tools", "📋 Logs"], index = 0, )
-  
+
   if page == "🏠 System Status":
     show_system_status ()
   elif page == "📊 Metrics":
@@ -202,33 +202,33 @@ def main ():
 def show_system_status ():
   """System Status page — show health of all services."""
   st.header ("System Status")
-  
+
   col1, col2 = st.columns ([1, 1])
-  
+
   with col1:
     st.subheader ("Proxy Health")
     health = get_proxy_health ()
     status = health.get ("status", "unknown")
-    
+
     if status == "ok":
       st.success ("✅ Proxy is healthy")
     elif status == "offline":
       st.error (f"❌ Proxy is offline: {health.get ('error', 'Unknown error')}")
     else:
       st.warning (f"⚠️ Proxy status: {status}")
-    
+
     if "components" in health:
       for comp, comp_status in health ["components"].items ():
         icon = "✅" if comp_status == "ok" else "⚠️"
         st.text (f"{icon} {comp}: {comp_status}")
-  
+
   with col2:
     st.subheader ("Service Health")
     for name, svc in SERVICES.items ():
       result = check_service_health (name, svc ["url"], svc ["method"])
       status = result ["status"]
       latency = result.get ("latency_ms")
-      
+
       if status == "healthy":
         icon = "✅"
         latency_str = f" ({latency:.0f}ms)" if latency else ""
@@ -239,7 +239,7 @@ def show_system_status ():
         st.warning (f"⏱️ {name}: Timeout")
       else:
         st.warning (f"⚠️ {name}: {status}")
-  
+
   # Refresh button
   if st.button ("🔄 Refresh Status"):
     st.rerun ()
@@ -248,13 +248,13 @@ def show_system_status ():
 def show_metrics ():
   """Metrics page — show key metrics from Prometheus endpoint."""
   st.header ("System Metrics")
-  
+
   col1, col2 = st.columns ([1, 1])
-  
+
   with col1:
     st.subheader ("Prometheus Metrics")
     metrics_text = get_proxy_metrics ()
-    
+
     # Parse key metrics
     metrics_data = {}
     for line in metrics_text.split ("\n"):
@@ -264,21 +264,21 @@ def show_metrics ():
       if len (parts) == 2:
         name, value = parts
         metrics_data [name] = value
-    
+
     # Display key metrics
     key_metrics = {
         "Total Requests": "rag_proxy_requests_total", "Avg Latency (s)": "rag_proxy_request_duration_seconds_sum",
         "Cache Hits": "rag_proxy_cache_hits_total", "Retrieval Count": "rag_proxy_retrieval_chunks_total",
     }
-    
+
     for label, metric_name in key_metrics.items ():
       value = metrics_data.get (metric_name, "N/A")
       st.metric (label, value)
-  
+
   with col2:
     st.subheader ("Raw Metrics")
     st.code (metrics_text [:3000] if len (metrics_text) > 3000 else metrics_text, language = "text")
-  
+
   # Auto-refresh
   auto_refresh = st.checkbox ("Auto-refresh (30s)")
   if auto_refresh:
@@ -289,14 +289,14 @@ def show_metrics ():
 def show_configuration ():
   """Configuration page — view and edit .env settings."""
   st.header ("Configuration")
-  
+
   env_vars = read_env_file ()
-  
+
   if not env_vars:
     st.warning ("No .env file found or file is empty")
     st.info (f"Expected location: {ENV_FILE}")
     return
-  
+
   # Group settings by category
   categories: dict [str, dict [str, str]] = {}
   for key, value in env_vars.items ():
@@ -304,17 +304,17 @@ def show_configuration ():
     if category not in categories:
       categories [category] = {}
     categories [category] [key] = value
-  
+
   # Sensitive keys to mask
   sensitive_patterns = ["API_KEY", "PASSWORD", "SECRET", "TOKEN"]
-  
+
   # Edit mode toggle
   edit_mode = st.toggle ("Edit Mode", value = False)
-  
+
   if edit_mode:
     st.subheader ("Edit Configuration")
     st.warning ("⚠️ Changes will modify the .env file. Restart proxy to apply.")
-    
+
     edited_vars: dict [str, str] = {}
     for category in sorted (categories.keys ()):
       with st.expander (f"📁 {category.upper ()}", expanded = False):
@@ -324,7 +324,7 @@ def show_configuration ():
             edited_vars [key] = st.text_input (key, value = "***", type = "password", key = f"edit_{key}")
           else:
             edited_vars [key] = st.text_input (key, value = value, key = f"edit_{key}")
-    
+
     if st.button ("💾 Save Configuration"):
       # Restore sensitive values if not changed
       for key, value in edited_vars.items ():
@@ -346,13 +346,13 @@ def show_configuration ():
 def show_feedback ():
   """Feedback page — view and manage user feedback."""
   st.header ("User Feedback")
-  
+
   feedback = get_feedback_list ()
-  
+
   if not feedback:
     st.info ("No feedback entries found")
     return
-  
+
   # Feedback statistics
   col1, col2, col3 = st.columns (3)
   with col1:
@@ -363,15 +363,15 @@ def show_feedback ():
   with col3:
     negative = sum (1 for f in feedback if f.get ("rating") == "negative")
     st.metric ("Negative", negative)
-  
+
   st.divider ()
-  
+
   # Feedback list
   for entry in feedback [:20]:
     rating = entry.get ("rating", "unknown")
     icon = "👍" if rating == "positive" else "👎" if rating == "negative" else "❓"
     timestamp = entry.get ("timestamp", "N/A")
-    
+
     with st.expander (f"{icon} {timestamp} — {entry.get ('query', 'N/A') [:50]}..."):
       st.text (f"Query: {entry.get ('query', 'N/A')}")
       st.text (f"Rating: {rating}")
@@ -384,25 +384,25 @@ def show_feedback ():
 def show_tools ():
   """Tools page — list and test registered tools."""
   st.header ("Registered Tools")
-  
+
   tools = get_tools_list ()
-  
+
   if not tools:
     st.info ("No tools registered or tools endpoint unavailable")
     return
-  
+
   st.metric ("Total Tools", len (tools))
-  
+
   for tool in tools:
     with st.expander (f"🔧 {tool.get ('name', 'Unknown')}"):
       st.text (f"Description: {tool.get ('description', 'N/A')}")
       st.text (f"Category: {tool.get ('category', 'N/A')}")
       st.text (f"Provider: {tool.get ('provider', 'N/A')}")
-      
+
       params = tool.get ("parameters", {})
       if params:
         st.json (params)
-      
+
       # Test button
       if st.button (f"Test {tool.get ('name', 'Tool')}", key = f"test_{tool.get ('name')}"):
         st.info ("Tool testing not yet implemented")
@@ -411,33 +411,33 @@ def show_tools ():
 def show_logs ():
   """Logs page — view recent log entries."""
   st.header ("System Logs")
-  
+
   col1, col2 = st.columns ([3, 1])
   with col1:
     log_lines = st.slider ("Lines to show", min_value = 50, max_value = 500, value = 100, step = 50)
   with col2:
     auto_refresh = st.checkbox ("Auto-refresh")
-  
+
   logs = get_recent_logs (log_lines)
-  
+
   # Filter by log level
   level_filter = st.multiselect ("Filter by level", ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
       default = ["INFO", "WARNING", "ERROR", "CRITICAL"], )
-  
+
   filtered_logs = []
   for line in logs:
     if any (level in line for level in level_filter):
       filtered_logs.append (line)
-  
+
   # Display logs
   log_text = "".join (filtered_logs [-log_lines:])
   st.code (log_text, language = "text")
-  
+
   # Download logs
   if st.button ("📥 Download Logs"):
     st.download_button (label = "Download Log File", data = log_text,
         file_name = f"rag_logs_{datetime.now ().strftime ('%Y%m%d_%H%M%S')}.txt", mime = "text/plain", )
-  
+
   if auto_refresh:
     time.sleep (10)
     st.rerun ()

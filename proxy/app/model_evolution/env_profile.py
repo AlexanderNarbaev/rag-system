@@ -6,7 +6,7 @@ from typing import Any
 
 class EnvProfile (Enum):
   """Training environment profile."""
-  
+
   DEV = "dev"  # CPU only, small batch, fp32
   PROD = "prod"  # GPU, full batch, bf16
   CI = "ci"  # No GPU, smoke test, 1 epoch

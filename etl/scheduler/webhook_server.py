@@ -58,11 +58,11 @@ def create_app (
   app.state.stream_key = stream_key
   app.state.webhook_enabled = webhook_enabled
   app.state.producer = StreamProducer (redis_client) if redis_client else None
-  
+
   @app.get ("/health")
   async def health ():
     return {"status": "ok", "service": "webhook-server"}
-  
+
   async def _process_event (source: str, event_type: str, payload: dict):
     producer = app.state.producer
     if not producer or not producer.redis:
@@ -78,7 +78,7 @@ def create_app (
     if result is None:
       logger.warning ("Failed to produce event to stream")
       raise HTTPException (status_code = 503, detail = "Streaming backend unavailable")
-  
+
   async def _verify_signature (request: Request) -> bytes:
     body = await request.body ()
     sig_header = request.headers.get ("X-Hub-Signature-256", "")
@@ -89,7 +89,7 @@ def create_app (
     if not hmac.compare_digest (computed_sig, expected_sig):
       raise HTTPException (status_code = 401, detail = "Invalid signature")
     return body
-  
+
   @app.post ("/webhook/confluence")
   async def webhook_confluence (request: Request):
     if not app.state.webhook_enabled:
@@ -103,7 +103,7 @@ def create_app (
     await _process_event ("confluence", event_type, payload)
     return JSONResponse (status_code = 202,
         content = {"status": "accepted", "source": "confluence", "event": event_type}, )
-  
+
   @app.post ("/webhook/gitlab")
   async def webhook_gitlab (request: Request):
     if not app.state.webhook_enabled:
@@ -116,38 +116,38 @@ def create_app (
     event_type = payload.get ("object_kind", payload.get ("event_name", "unknown"))
     await _process_event ("gitlab", event_type, payload)
     return JSONResponse (status_code = 202, content = {"status": "accepted", "source": "gitlab", "event": event_type}, )
-  
+
   return app
 
 
 def main ():
   import argparse
-  
+
   parser = argparse.ArgumentParser (description = "RAG Webhook Server")
   parser.add_argument ("--config", type = Path, default = Path ("etl/config/etl_config.yaml"))
   parser.add_argument ("--host", type = str, default = None)
   parser.add_argument ("--port", type = int, default = None)
   args = parser.parse_args ()
-  
+
   config = _load_config (args.config) if args.config.exists () else {}
   streaming_cfg = config.get ("streaming", {})
-  
+
   webhook_enabled = streaming_cfg.get ("webhook_enabled", True)
   webhook_secret = os.environ.get ("WEBHOOK_SECRET", streaming_cfg.get ("webhook_secret", ""))
   webhook_host = args.host or os.environ.get ("WEBHOOK_HOST", streaming_cfg.get ("webhook_host", "0.0.0.0"))
   webhook_port = args.port or int (os.environ.get ("WEBHOOK_PORT", streaming_cfg.get ("webhook_port", 9000)))
-  
+
   redis_host = os.environ.get ("REDIS_HOST", streaming_cfg.get ("redis_host", "localhost"))
   redis_port = int (os.environ.get ("REDIS_PORT", streaming_cfg.get ("redis_port", 6379)))
-  
+
   stream_key = os.environ.get ("REDIS_STREAM_KEY", streaming_cfg.get ("redis_stream_key", DEFAULT_STREAM_KEY))
-  
+
   rclient = get_redis_client (redis_host, redis_port)
   app = create_app (redis_client = rclient, webhook_secret = webhook_secret, stream_key = stream_key,
       webhook_enabled = webhook_enabled, )
-  
+
   import uvicorn
-  
+
   logger.info ("Starting webhook server on %s:%d", webhook_host, webhook_port)
   logger.info ("Redis: %s:%d  Stream: %s  Webhook: %s", redis_host, redis_port, stream_key,
       "enabled" if webhook_enabled else "disabled", )  # noqa: E501

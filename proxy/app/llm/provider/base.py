@@ -36,7 +36,7 @@ from proxy.app.tools.definition import ToolCall, ToolDefinition, ToolResult
 def _get_config (attr: str, default: Any) -> Any:
   """Get config value, checking provider package level first for test monkeypatching."""
   import proxy.app.llm.provider as _pkg
-  
+
   return getattr (_pkg, attr, default)
 
 
@@ -50,7 +50,7 @@ def _record_llm_success () -> None:
   """Record a successful LLM call to the circuit breaker."""
   try:
     from proxy.app.shared.circuit_breaker import get_breaker as _llm_cb
-    
+
     _llm_cb ("llm_backend").success ()
   except (ImportError, Exception):
     pass
@@ -60,7 +60,7 @@ def _record_llm_failure () -> None:
   """Record a failed LLM call to the circuit breaker."""
   try:
     from proxy.app.shared.circuit_breaker import get_breaker as _llm_cb
-    
+
     _llm_cb ("llm_backend").failure ()
   except (ImportError, Exception):
     pass
@@ -68,7 +68,7 @@ def _record_llm_failure () -> None:
 
 class ProviderType (StrEnum):
   """Supported AI provider types."""
-  
+
   OPENAI = "openai"
   ANTHROPIC = "anthropic"
   OLLAMA = "ollama"
@@ -83,21 +83,21 @@ class ProviderAdapter:
   - Messages: [{"role": "...", "content": "...", "tool_calls": [...], "tool_call_id": "..."}]
   - Streaming: SSE chunks with "data: " prefix
   """
-  
+
   def translate_request (
       self, messages: list [dict [str, Any]], temperature: float = 0.2, max_tokens: int = 4096,
       tools: list [ToolDefinition] | None = None, stream: bool = False, ) -> dict [str, Any]:
     """Convert internal request to provider-specific payload."""
     raise NotImplementedError
-  
+
   def translate_response (self, response_data: dict [str, Any]) -> dict [str, Any]:
     """Convert provider response to OpenAI-compatible format."""
     raise NotImplementedError
-  
+
   def translate_stream_chunk (self, chunk: bytes) -> dict [str, Any] | None:
     """Convert a raw stream chunk to OpenAI-compatible SSE chunk."""
     raise NotImplementedError
-  
+
   @property
   def headers (self) -> dict [str, str]:
     """HTTP headers for the provider."""
@@ -110,17 +110,20 @@ class MultiProviderRouter:
   Handles streaming and non-streaming with transparent translation.
   Supports per-request provider_type override for multi-provider routing.
   """
-  
+
   def __init__ (self, provider_type: str | None = None):
     from proxy.app.llm.provider.openai import (
-      AnthropicAdapter, GenericAdapter, OllamaAdapter, OpenAIAdapter,
+      AnthropicAdapter,
+      GenericAdapter,
+      OllamaAdapter,
+      OpenAIAdapter,
     )
-    
+
     self.ADAPTERS = {
         ProviderType.OPENAI: OpenAIAdapter, ProviderType.ANTHROPIC: AnthropicAdapter,
         ProviderType.OLLAMA: OllamaAdapter, ProviderType.GENERIC: GenericAdapter,
     }
-    
+
     provider_cfg = _get_config ("LLM_PROVIDER_TYPE", _DEFAULT_LLM_PROVIDER_TYPE)
     provider_str = (provider_type or provider_cfg or "openai").lower ()
     try:
@@ -133,31 +136,31 @@ class MultiProviderRouter:
     self.api_key = _get_config ("LLM_API_KEY", _DEFAULT_LLM_API_KEY)
     # Cache of per-provider-type adapters for per-request overrides
     self._adapter_cache: dict [ProviderType, ProviderAdapter] = {}
-  
+
   def _resolve_provider (self, provider_type: str | None = None) -> tuple [ProviderAdapter, ProviderType]:
     """Resolve the adapter and provider type for a request."""
     if not provider_type:
       return self.adapter, self.provider_type
-    
+
     pt_str = provider_type.lower ()
     try:
       pt = ProviderType (pt_str)
     except ValueError:
       logger.warning (f"Unknown per-request provider type '{pt_str}', using default")
       return self.adapter, self.provider_type
-    
+
     if pt == self.provider_type:
       return self.adapter, self.provider_type
-    
+
     if pt not in self._adapter_cache:
       adapter_cls = self.ADAPTERS.get (pt)
       if adapter_cls is None:
         logger.warning (f"No adapter for '{pt}', using default")
         return self.adapter, self.provider_type
       self._adapter_cache [pt] = adapter_cls ()
-    
+
     return self._adapter_cache [pt], pt
-  
+
   async def _send_request (
       self, messages: list [dict [str, Any]], temperature: float = 0.2, max_tokens: int = 4096, stream: bool = False,
       tools: list [ToolDefinition] | None = None, tool_results: list [ToolResult] | None = None,
@@ -169,14 +172,14 @@ class MultiProviderRouter:
     try:
       from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError as _CBOE  # noqa: N814
       from proxy.app.shared.circuit_breaker import get_breaker as _llm_cb
-      
+
       if _llm_cb ("llm_backend").state.name == "OPEN":
         raise _CBOE ("LLM backend circuit breaker is OPEN")
     except ImportError:
       pass
     except _CBOE:
       raise
-    
+
     # Resolve adapter for this request
     adapter, pt = self._resolve_provider (provider_type)
     # Inject tool results into messages if provided
@@ -186,17 +189,17 @@ class MultiProviderRouter:
         messages.append ({
             "role": "tool", "tool_call_id": tr.tool_call_id, "name": tr.name, "content": tr.content,
         })
-    
+
     payload = adapter.translate_request (messages, temperature, max_tokens, tools, stream)
     headers = adapter.headers
     url = f"{self.endpoint}/chat/completions"
-    
+
     # Anthropic uses a different endpoint path
     if pt == ProviderType.ANTHROPIC:
       url = f"{self.endpoint}/messages"
-    
+
     timeout = ClientTimeout (total = _get_config ("REQUEST_TIMEOUT", _DEFAULT_REQUEST_TIMEOUT))
-    
+
     for attempt in range (retry + 1):
       try:
         session = aiohttp.ClientSession ()
@@ -207,7 +210,7 @@ class MultiProviderRouter:
           await session.close ()
           logger.error (f"LLM API error {response.status}: {error_text}")
           raise LLMError (f"LLM returned {response.status}: {error_text}")
-        
+
         if stream:
           _record_llm_success ()
           return session, response, adapter
@@ -233,14 +236,14 @@ class MultiProviderRouter:
         else:
           _record_llm_failure ()
           raise LLMError (f"LLM request failed after {retry + 1} attempts: {e}") from e
-  
+
   async def stream_completion (
       self, messages: list [dict [str, Any]], temperature: float = 0.2, max_tokens: int = 4096,
       tools: list [ToolDefinition] | None = None, provider_type: str | None = None, ) -> AsyncIterator [
     dict [str, Any]]:
     session, response, adapter = await self._send_request (messages, temperature, max_tokens, stream = True,
         tools = tools, provider_type = provider_type, )
-    
+
     try:
       async for raw_line in response.content:
         chunk = adapter.translate_stream_chunk (raw_line)
@@ -252,7 +255,7 @@ class MultiProviderRouter:
     finally:
       response.close ()
       await session.close ()
-  
+
   async def non_stream_completion (
       self, messages: list [dict [str, Any]], temperature: float = 0.2, max_tokens: int = 4096,
       tools: list [ToolDefinition] | None = None, tool_results: list [ToolResult] | None = None,
@@ -261,7 +264,7 @@ class MultiProviderRouter:
     result: dict [str, Any] = await self._send_request (messages, temperature, max_tokens, stream = False,
         tools = tools, tool_results = tool_results, provider_type = provider_type, )
     return result
-  
+
   async def non_stream_completion_text (
       self, messages: list [dict [str, Any]], temperature: float = 0.2, max_tokens: int = 4096,
       provider_type: str | None = None, ) -> str:
@@ -272,7 +275,7 @@ class MultiProviderRouter:
     except (KeyError, IndexError) as e:
       logger.error (f"Unexpected LLM response structure: {data}")
       raise LLMError (f"Failed to extract content: {e}") from e
-  
+
   async def tool_use_completion (
       self, messages: list [dict [str, Any]], tools: list [ToolDefinition], temperature: float = 0.2,
       max_tokens: int = 4096, provider_type: str | None = None, ) -> list [ToolCall]:
@@ -288,7 +291,7 @@ class MultiProviderRouter:
     except (KeyError, IndexError, json.JSONDecodeError) as e:
       logger.error (f"Failed to parse tool calls: {e}")
       return []
-  
+
   def non_stream_completion_sync (
       self, messages: list [dict [str, str]], temperature: float = 0.2, max_tokens: int = 4096,
       provider_type: str | None = None, ) -> str:

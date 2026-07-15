@@ -26,9 +26,9 @@ def app_client ():
       "proxy.app.main.LOG_REQUESTS", False), patch ("proxy.app.main.LLM_MODEL_NAME", "test-model"), patch (
       "proxy.app.auth.jwt.AUTH_ENABLED", False), ):
     from fastapi.testclient import TestClient
-    
+
     from proxy.app.main import app
-    
+
     client = TestClient (app)
     yield client
 
@@ -56,18 +56,18 @@ def _mock_llm_response (status_code = 200):
 
 class TestLivenessProbe:
   """Tests for GET /v1/health/live — must always return 200."""
-  
+
   def test_live_always_returns_200 (self, app_client):
     """Liveness probe returns 200 regardless of component health."""
     response = app_client.get ("/v1/health/live")
     assert response.status_code == 200
-  
+
   def test_live_returns_alive_status (self, app_client):
     """Liveness probe response contains status='alive'."""
     response = app_client.get ("/v1/health/live")
     data = response.json ()
     assert data ["status"] == "alive"
-  
+
   def test_live_includes_timestamp (self, app_client):
     """Liveness probe response includes an ISO timestamp."""
     response = app_client.get ("/v1/health/live")
@@ -75,7 +75,7 @@ class TestLivenessProbe:
     assert "timestamp" in data
     # Basic ISO format check
     assert "T" in data ["timestamp"]
-  
+
   def test_live_returns_200_even_when_qdrant_down (self, app_client):
     """Liveness probe returns 200 even when Qdrant is completely down."""
     with patch ("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_fail ("Qdrant down")):
@@ -86,7 +86,7 @@ class TestLivenessProbe:
 
 class TestReadinessProbe:
   """Tests for GET /v1/health/ready — checks component connectivity."""
-  
+
   def test_ready_returns_200_when_all_components_ok (self, app_client):
     """Readiness probe returns 200 when Qdrant and LLM are reachable."""
     with (
@@ -99,7 +99,7 @@ class TestReadinessProbe:
       assert data ["status"] == "ready"
       assert data ["components"] ["qdrant"] == "ok"
       assert data ["components"] ["llm"] == "ok"
-  
+
   def test_ready_returns_503_when_qdrant_unavailable (self, app_client):
     """Readiness probe returns 503 when Qdrant is unreachable."""
     with (
@@ -111,7 +111,7 @@ class TestReadinessProbe:
       data = response.json ()
       assert data ["status"] == "not_ready"
       assert data ["components"] ["qdrant"] == "unavailable"
-  
+
   def test_ready_returns_503_when_llm_unavailable (self, app_client):
     """Readiness probe returns 503 when LLM endpoint is unreachable."""
     with (
@@ -123,7 +123,7 @@ class TestReadinessProbe:
       data = response.json ()
       assert data ["status"] == "not_ready"
       assert data ["components"] ["llm"] == "unavailable"
-  
+
   def test_ready_returns_503_when_both_down (self, app_client):
     """Readiness probe returns 503 when both Qdrant and LLM are down."""
     with (
@@ -136,7 +136,7 @@ class TestReadinessProbe:
       assert data ["status"] == "not_ready"
       assert data ["components"] ["qdrant"] == "unavailable"
       assert data ["components"] ["llm"] == "unavailable"
-  
+
   def test_ready_includes_timestamp (self, app_client):
     """Readiness probe response includes a timestamp."""
     with (
@@ -150,7 +150,7 @@ class TestReadinessProbe:
 
 class TestHealthEndpoint:
   """Tests for GET /v1/health — detailed component status."""
-  
+
   def test_health_ok_when_all_services_up (self, app_client):
     """Health returns 200 with status='ok' when Qdrant and LLM respond."""
     with (
@@ -163,7 +163,7 @@ class TestHealthEndpoint:
       assert data ["status"] == "ok"
       assert data ["components"] ["qdrant"] == "ok"
       assert data ["components"] ["llm"] == "ok"
-  
+
   def test_health_degraded_when_qdrant_unavailable (self, app_client):
     """Health returns 503 with status='degraded' when Qdrant check fails."""
     with (
@@ -176,7 +176,7 @@ class TestHealthEndpoint:
       data = response.json ()
       assert data ["status"] == "degraded"
       assert "error" in data ["components"] ["qdrant"]
-  
+
   def test_health_degraded_when_llm_unavailable (self, app_client):
     """Health returns 503 with status='degraded' when LLM check fails."""
     with (
@@ -188,7 +188,7 @@ class TestHealthEndpoint:
       data = response.json ()
       assert data ["status"] == "degraded"
       assert "error" in data ["components"] ["llm"]
-  
+
   def test_health_degraded_when_llm_returns_non_200 (self, app_client):
     """Health reports LLM as unhealthy when it returns a non-200 status.
 
@@ -203,7 +203,7 @@ class TestHealthEndpoint:
       response = app_client.get ("/v1/health")
       data = response.json ()
       assert data ["components"] ["llm"] == "unhealthy"
-  
+
   def test_health_includes_timestamp (self, app_client):
     """Health response includes an ISO-formatted timestamp."""
     with (
@@ -214,7 +214,7 @@ class TestHealthEndpoint:
       data = response.json ()
       assert "timestamp" in data
       assert "T" in data ["timestamp"]
-  
+
   def test_health_has_components_dict (self, app_client):
     """Health response always includes a components dictionary."""
     with (
@@ -231,18 +231,18 @@ class TestHealthEndpoint:
 
 class TestHealthEndpointAuthBypass:
   """Test that health endpoints bypass authentication when AUTH_ENABLED=true."""
-  
+
   def test_health_live_bypasses_auth (self, app_client):
     """GET /v1/health/live works without auth even in the public paths list."""
     # This test verifies the _PUBLIC_PATHS whitelist in AuthMiddleware
     response = app_client.get ("/v1/health/live")
     assert response.status_code == 200
-  
+
   def test_health_bypasses_auth (self, app_client):
     """GET /v1/health works without auth."""
     response = app_client.get ("/v1/health")
     assert response.status_code in (200, 503)
-  
+
   def test_health_ready_bypasses_auth (self, app_client):
     """GET /v1/health/ready works without auth."""
     response = app_client.get ("/v1/health/ready")
@@ -251,13 +251,13 @@ class TestHealthEndpointAuthBypass:
 
 class TestHealthEndpointFormats:
   """Test response format consistency across health endpoints."""
-  
+
   def test_all_health_endpoints_return_json (self, app_client):
     """All health endpoints return JSON content type."""
     for path in ["/v1/health", "/v1/health/live", "/v1/health/ready"]:
       response = app_client.get (path)
       assert "application/json" in response.headers.get ("content-type", "")
-  
+
   def test_health_response_schema (self, app_client):
     """Health response has consistent schema with required fields."""
     with (
@@ -266,19 +266,19 @@ class TestHealthEndpointFormats:
                                                                                        200)), ):
       response = app_client.get ("/v1/health")
       data = response.json ()
-      
+
       # Required fields
       assert "status" in data
       assert "timestamp" in data
       assert "components" in data
-      
+
       # Status must be one of expected values
       assert data ["status"] in ("ok", "degraded")
-      
+
       # Components must have qdrant and llm
       assert "qdrant" in data ["components"]
       assert "llm" in data ["components"]
-  
+
   def test_live_response_schema (self, app_client):
     """Live response has consistent schema."""
     response = app_client.get ("/v1/health/live")
@@ -286,7 +286,7 @@ class TestHealthEndpointFormats:
     assert "status" in data
     assert "timestamp" in data
     assert data ["status"] == "alive"
-  
+
   def test_ready_response_schema (self, app_client):
     """Ready response has consistent schema with components."""
     with (

@@ -32,7 +32,7 @@ def client ():
 @pytest.mark.chaos
 class TestQdrantUnavailable:
   """Verify proxy returns 200 (degraded mode) when Qdrant is down."""
-  
+
   def test_qdrant_unavailable_chat (self, client):
     """Qdrant down -> chat still returns 200 (no context, LLM-only fallback)."""
     with (
@@ -47,7 +47,7 @@ class TestQdrantUnavailable:
       assert data ["choices"] [0] ["message"] ["role"] == "assistant"
       assert len (data ["choices"] [0] ["message"] ["content"]) > 0
       assert "rag_feedback_id" in data
-  
+
   def test_qdrant_unavailable_health (self, client):
     """Qdrant down -> health returns 503 degraded."""
     with patch ("proxy.app.core.retrieval.qdrant_client") as mock_qdrant:
@@ -57,7 +57,7 @@ class TestQdrantUnavailable:
       data = resp.json ()
       assert data ["status"] == "degraded"
       assert "qdrant" in data ["components"]
-  
+
   def test_qdrant_unavailable_ready (self, client):
     """Qdrant down -> readiness probe returns 503 not_ready."""
     with patch ("proxy.app.core.retrieval.qdrant_client") as mock_qdrant:
@@ -71,7 +71,7 @@ class TestQdrantUnavailable:
 @pytest.mark.chaos
 class TestNeo4jUnavailable:
   """Verify proxy skips graph expansion when Neo4j is down."""
-  
+
   def test_neo4j_unavailable_chat (self, client):
     """Neo4j down -> chat still returns 200 (graph expansion skipped)."""
     with (
@@ -89,7 +89,7 @@ class TestNeo4jUnavailable:
       }
       hit.score = 0.9
       mock_search.return_value = [hit]
-      
+
       resp = client.post ("/v1/chat/completions", json = {
           "model": "rag-proxy", "messages": [{"role": "user", "content": "What is RAG?"}], "stream": False,
       }, )
@@ -102,7 +102,7 @@ class TestNeo4jUnavailable:
 @pytest.mark.chaos
 class TestRedisUnavailable:
   """Verify proxy falls back to in-memory cache when Redis is down."""
-  
+
   def test_redis_unavailable_chat (self, client):
     """Redis down -> chat still returns 200 (in-memory cache fallback)."""
     with (
@@ -116,7 +116,7 @@ class TestRedisUnavailable:
           "model": "rag-proxy", "messages": [{"role": "user", "content": "Cache fallback test"}], "stream": False,
       }, )
       assert resp.status_code == 200
-  
+
   def test_redis_unavailable_health_ok (self, client):
     """Redis down -> liveness probe still returns 200."""
     resp = client.get ("/v1/health/live")
@@ -127,7 +127,7 @@ class TestRedisUnavailable:
 @pytest.mark.chaos
 class TestLLMTimeout:
   """Verify proxy gracefully handles LLM timeouts."""
-  
+
   def test_llm_timeout_non_streaming (self, client):
     """LLM timeout -> non-streaming returns 500 with error."""
     with (
@@ -144,7 +144,7 @@ class TestLLMTimeout:
         assert resp.status_code in (200, 500)
       except Exception:
         pass  # Transport-layer exception is expected for simulated timeouts
-  
+
   def test_llm_timeout_streaming (self, client):
     """LLM timeout during streaming -> stream returns error event."""
     with (
@@ -165,13 +165,13 @@ class TestLLMTimeout:
 @pytest.mark.chaos
 class TestRapidRestart:
   """Verify proxy handles rapid startup/shutdown gracefully."""
-  
+
   def test_health_after_lifespan_simulated_restart (self, client):
     """Liveness probe returns 200 before and after simulated restart."""
     resp = client.get ("/v1/health/live")
     assert resp.status_code == 200
     assert resp.json () ["status"] == "alive"
-  
+
   def test_chat_after_simulated_failure_recovery (self, client):
     """After Qdrant failure is resolved, proxy recovers."""
     # First: simulate Qdrant failure -> degraded
@@ -183,7 +183,7 @@ class TestRapidRestart:
           "model": "rag-proxy", "messages": [{"role": "user", "content": "During failure"}], "stream": False,
       }, )
       assert resp1.status_code == 200
-    
+
     # Second: Qdrant recovered -> normal operation
     hit = MagicMock ()
     hit.payload = {
@@ -191,7 +191,7 @@ class TestRapidRestart:
         "version": "1.0",
     }
     hit.score = 0.95
-    
+
     with (
       patch ("proxy.app.main.hybrid_search", return_value = [hit]), patch ("proxy.app.main.rerank_chunks",
                                                                            return_value = [0]), patch (
@@ -210,7 +210,7 @@ class TestRapidRestart:
 @pytest.mark.chaos
 class TestCombinedFailures:
   """Verify proxy survives multiple simultaneous failures."""
-  
+
   def test_multiple_services_down (self, client):
     """Qdrant + Redis + Neo4j all down -> proxy still serves via LLM."""
     with (
@@ -223,7 +223,7 @@ class TestCombinedFailures:
       assert resp.status_code == 200, "Proxy must survive total infrastructure failure"
       data = resp.json ()
       assert data ["choices"] [0] ["message"] ["role"] == "assistant"
-  
+
   def test_combined_failure_health (self, client):
     """Multiple services down -> health returns degraded."""
     with patch ("proxy.app.core.retrieval.qdrant_client") as mock_qdrant:

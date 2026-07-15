@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -67,39 +66,39 @@ def sample_chunks ():
 
 class TestQdrantHybridIndexerCollections:
   """Test collection creation and management."""
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_create_collection_when_not_exists (self, mock_client_cls, mock_st, mock_qdrant_client):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_st.return_value = MagicMock ()
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",
     )
     # Collection doesn't exist yet
     mock_qdrant_client.get_collections.return_value = MagicMock (collections = [])
-    
+
     # create_collection should call the client
     indexer.create_collection ()
     mock_qdrant_client.create_collection.assert_called_once ()
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_create_collection_skips_when_exists (self, mock_client_cls, mock_st, mock_qdrant_client):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_st.return_value = MagicMock ()
-    
+
     # Collection already exists
     existing = MagicMock ()
     existing.name = "test_kb"
     mock_qdrant_client.get_collections.return_value = MagicMock (collections = [existing])
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",
@@ -116,36 +115,36 @@ class TestQdrantHybridIndexerCollections:
 
 class TestQdrantHybridIndexerIndexing:
   """Test chunk indexing functionality."""
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_index_chunks_calls_upsert (self, mock_client_cls, mock_st, mock_qdrant_client, sample_chunks):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_embedder = MagicMock ()
     mock_embedder.encode.return_value = MagicMock (tolist = lambda: [0.1] * 1024)
     mock_st.return_value = mock_embedder
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",
     )
     count = indexer.index_chunks (sample_chunks)
-    
+
     assert count == 2
     mock_qdrant_client.upsert.assert_called_once ()
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_index_chunks_skips_empty_text (self, mock_client_cls, mock_st, mock_qdrant_client):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_embedder = MagicMock ()
     mock_embedder.encode.return_value = MagicMock (tolist = lambda: [0.1] * 1024)
     mock_st.return_value = mock_embedder
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",
@@ -155,17 +154,17 @@ class TestQdrantHybridIndexerIndexing:
     count = indexer.index_chunks (bad_chunks)
     assert count == 0
     mock_qdrant_client.upsert.assert_not_called ()
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_index_chunks_skips_missing_hash (self, mock_client_cls, mock_st, mock_qdrant_client):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_embedder = MagicMock ()
     mock_embedder.encode.return_value = MagicMock (tolist = lambda: [0.1] * 1024)
     mock_st.return_value = mock_embedder
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",
@@ -184,36 +183,36 @@ class TestQdrantHybridIndexerIndexing:
 
 class TestQdrantHybridIndexerConversion:
   """Test chunk-to-point conversion logic."""
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_chunk_to_point_creates_valid_point (self, mock_client_cls, mock_st, mock_qdrant_client, sample_chunks):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_embedder = MagicMock ()
     mock_embedder.encode.return_value = MagicMock (tolist = lambda: [0.1] * 1024)
     mock_st.return_value = mock_embedder
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",
     )
     point = indexer._chunk_to_point (sample_chunks [0])
-    
+
     assert point is not None
     assert point.id == "abc123"
     assert "text" in point.payload
     assert point.payload ["source_type"] == "confluence"
-  
+
   @patch ("etl.indexer.qdrant_hybrid.SentenceTransformer")
   @patch ("etl.indexer.qdrant_hybrid.QdrantClient")
   def test_chunk_to_point_returns_none_for_empty (self, mock_client_cls, mock_st, mock_qdrant_client):
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-    
+
     mock_client_cls.return_value = mock_qdrant_client
     mock_st.return_value = MagicMock ()
-    
+
     indexer = QdrantHybridIndexer (
         host = "localhost", port = 6333, collection_name = "test_kb",
         embedder_model_name = "BAAI/bge-m3",

@@ -45,13 +45,13 @@ class InteractionLogger:
   Логирует взаимодействия пользователя с системой.
   Сохраняет: запрос, контекст, ответ, временные метки, метаданные.
   """
-  
+
   def __init__ (self, log_dir: Path | None = None) -> None:
     self.log_dir = Path (log_dir or LOG_DIR or "./logs/hitl")
     self.log_dir.mkdir (parents = True, exist_ok = True)
     self.interactions_file = self.log_dir / "interactions.jsonl"
     self.feedback_file = self.log_dir / "feedback.jsonl"
-  
+
   @staticmethod
   def _rotate_if_needed (filepath: Path, max_size: int, max_backups: int = _MAX_BACKUP_COUNT) -> Path:
     """Rotate JSONL file if it exceeds max_size. Returns the active file path.
@@ -71,7 +71,7 @@ class InteractionLogger:
         return filepath
     except OSError:
       return filepath
-    
+
     # Shift existing backups: file.N → file.N+1, delete oldest
     for i in range (max_backups, 0, -1):
       old_backup = Path (f"{filepath}.{i}")
@@ -80,12 +80,12 @@ class InteractionLogger:
         new_backup.unlink (missing_ok = True)
       if old_backup.exists ():
         old_backup.rename (new_backup)
-    
+
     # Rename current file to .1
     first_backup = Path (f"{filepath}.1")
     shutil.move (str (filepath), str (first_backup))
     return filepath
-  
+
   def log_interaction (
       self, request_id: str, user_query: str, context: str, response: str, metadata: dict [str, Any] | None = None,
       user_feedback: FeedbackType | None = None, corrected_response: str | None = None, ) -> None:
@@ -101,7 +101,7 @@ class InteractionLogger:
       record ["user_feedback"] = user_feedback.value
     if corrected_response:
       record ["corrected_response"] = corrected_response
-    
+
     try:
       active_file = self._rotate_if_needed (self.interactions_file, _DEFAULT_MAX_INTERACTIONS_SIZE)
       with open (active_file, "a", encoding = "utf-8") as f:
@@ -109,7 +109,7 @@ class InteractionLogger:
       logger.debug (f"Logged interaction {request_id}")
     except Exception as e:
       logger.error (f"Failed to log interaction: {e}")
-  
+
   def log_feedback (
       self, request_id: str, feedback_type: FeedbackType, comment: str | None = None,
       corrected_response: str | None = None, expert_id: str | None = None, ) -> None:
@@ -127,7 +127,7 @@ class InteractionLogger:
       logger.info (f"Feedback recorded for {request_id}: {feedback_type.value}")
     except Exception as e:
       logger.error (f"Failed to log feedback: {e}")
-  
+
   def get_interactions (self, limit: int = 100) -> list [dict [str, Any]]:
     """Читает последние взаимодействия (обратный порядок)."""
     interactions = []
@@ -163,7 +163,7 @@ async def log_interaction (
   logger = get_logger ()
   # Можно выполнить в отдельном потоке, чтобы не блокировать ответ
   import asyncio
-  
+
   await asyncio.to_thread (logger.log_interaction, request_id = request_id, user_query = user_query, context = context,
       response = response, metadata = metadata, )
 
@@ -188,21 +188,21 @@ def export_training_dataset (output_path: Path, min_length: int = 50, use_proces
   """
   if use_processor:
     from proxy.app.model_evolution.data_processor import DataProcessor
-    
+
     processor = DataProcessor ()
     processor.export_training_dataset (str (output_path))
     return
-  
+
   interaction_logger = get_logger ()
   interactions = interaction_logger.get_interactions (limit = 10000)
-  
+
   training_pairs = []
   for item in interactions:
     if "corrected_response" in item:
       training_pairs.append ({"prompt": item ["user_query"], "completion": item ["corrected_response"]})
     elif item.get ("user_feedback") == "positive":
       training_pairs.append ({"prompt": item ["user_query"], "completion": item ["response"]})
-  
+
   with open (output_path, "w", encoding = "utf-8") as f:
     for pair in training_pairs:
       f.write (json.dumps (pair, ensure_ascii = False) + "\n")
@@ -220,15 +220,15 @@ def export_intent_dataset (output_path: Path, limit: int = 10000, use_multilingu
       (поддержка DE/FR/ZH) вместо classify_intent.
   """
   from proxy.app.llm.slm import classify_intent, classify_intent_multilingual
-  
+
   classify_fn = classify_intent_multilingual if use_multilingual else classify_intent
-  
+
   interaction_logger = get_logger ()
   interactions = interaction_logger.get_interactions (limit = limit)
-  
+
   # get_interactions returns newest first; reverse to chronological order
   interactions = list (reversed (interactions))
-  
+
   intent_pairs = []
   for item in interactions:
     query = (item.get ("user_query") or "").strip ()
@@ -236,7 +236,7 @@ def export_intent_dataset (output_path: Path, limit: int = 10000, use_multilingu
       continue
     intent, _ = classify_fn (query)
     intent_pairs.append ({"query": query, "intent": intent.value})
-  
+
   with open (output_path, "w", encoding = "utf-8") as f:
     for pair in intent_pairs:
       f.write (json.dumps (pair, ensure_ascii = False) + "\n")

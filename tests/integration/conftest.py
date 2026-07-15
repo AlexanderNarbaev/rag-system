@@ -31,9 +31,9 @@ def app_client ():
       "proxy.app.main.LOG_REQUESTS", False), patch ("proxy.app.main.LLM_MODEL_NAME", "test-model"), patch (
       "proxy.app.auth.jwt.AUTH_ENABLED", False), ):
     from fastapi.testclient import TestClient
-    
+
     from proxy.app.main import app
-    
+
     client = TestClient (app)
     yield client
 

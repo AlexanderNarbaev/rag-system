@@ -34,7 +34,7 @@ SPACY_DATA_DIR = os.environ.get ("SPACY_DATA_DIR", str (Path.home () / ".cache/s
 def download_sentence_transformer (model_name: str):
   """Downloads a sentence-transformers model."""
   from sentence_transformers import SentenceTransformer
-  
+
   logger.info (f"Downloading sentence-transformers model: {model_name}")
   model = SentenceTransformer (model_name)
   save_path = Path (SENTENCE_TRANSFORMERS_HOME) / model_name.replace ("/", "_")
@@ -46,7 +46,7 @@ def download_sentence_transformer (model_name: str):
 def download_cross_encoder (model_name: str):
   """Downloads a cross-encoder model."""
   from sentence_transformers import CrossEncoder
-  
+
   logger.info (f"Downloading cross-encoder model: {model_name}")
   _ = CrossEncoder (model_name)  # noqa: F841 — triggers download/cache
   logger.info (f"Model cached at {HF_HOME}")
@@ -69,7 +69,7 @@ def download_spacy_model (model_name: str):
 def download_huggingface_model (model_id: str, save_dir: Path):
   """Downloads any HuggingFace model using transformers."""
   from transformers import AutoModel, AutoTokenizer
-  
+
   logger.info (f"Downloading HF model: {model_id}")
   # trust_remote_code=False: only execute code from trusted HF repos
   model = AutoModel.from_pretrained (model_id, trust_remote_code = False)
@@ -84,7 +84,7 @@ def download_huggingface_model (model_id: str, save_dir: Path):
 def download_gguf_model (url: str, output_path: Path):
   """Downloads a GGUF model file."""
   import requests
-  
+
   logger.info (f"Downloading GGUF model from {url}")
   response = requests.get (url, stream = True, timeout = 300)
   response.raise_for_status ()
@@ -110,16 +110,16 @@ def main ():
   parser.add_argument ("--gguf-url", type = str, default = "", help = "URL for GGUF LLM download")
   parser.add_argument ("--gguf-output", type = str, default = "llm-model.gguf", help = "Output filename for GGUF file")
   args = parser.parse_args ()
-  
+
   output_dir = args.output_dir
   output_dir.mkdir (parents = True, exist_ok = True)
   cache_dir = output_dir / "cache"
   cache_dir.mkdir (exist_ok = True)
-  
+
   os.environ ["HF_HOME"] = str (cache_dir / "huggingface")
   os.environ ["SENTENCE_TRANSFORMERS_HOME"] = str (cache_dir / "sentence-transformers")
   os.environ ["TRANSFORMERS_CACHE"] = str (cache_dir / "transformers")
-  
+
   if "embedder" in args.models:
     model = args.embedder_model or os.getenv ("EMBEDDER_MODEL", "")
     if model:
@@ -147,7 +147,7 @@ def main ():
   if "llm_gguf" in args.models and args.gguf_url:
     gguf_path = output_dir / args.gguf_output
     download_gguf_model (args.gguf_url, gguf_path)
-  
+
   logger.info (f"All models downloaded to cache directory: {cache_dir}")
   logger.info ("Copy the entire 'offline_models' folder to the target environment.")
   logger.info ("Then set environment variables: HF_HOME, SENTENCE_TRANSFORMERS_HOME to point to the cache directory.")

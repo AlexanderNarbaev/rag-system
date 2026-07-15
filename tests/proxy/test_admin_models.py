@@ -91,7 +91,7 @@ def clean_registry ():
   with tempfile.NamedTemporaryFile (suffix = ".json", delete = False) as f:
     tmp_path = f.name
   from proxy.app.model_evolution.model_registry import ModelRegistry
-  
+
   registry = ModelRegistry (store_path = tmp_path)
   yield registry
   # Cleanup
@@ -101,10 +101,10 @@ def clean_registry ():
 
 def _override_auth (user_context):
   """Set FastAPI dependency override for get_auth_context."""
-  
+
   async def _mock_get_auth (request = None, credentials = None):
     return user_context
-  
+
   app.dependency_overrides [get_auth_context] = _mock_get_auth
 
 
@@ -115,7 +115,7 @@ def _override_auth (user_context):
 
 class TestTrainEndpoint:
   """Tests for POST /v1/admin/models/train."""
-  
+
   def test_train_requires_admin (self, client, mock_user_auth):
     """Regular users get 403."""
     _override_auth (mock_user_auth)
@@ -123,7 +123,7 @@ class TestTrainEndpoint:
         "trainer_type": "slm", "base_model": "bert-base-uncased", "profile": "dev",
     }, )
     assert response.status_code in (403, 200)
-  
+
   def test_train_slm_accepted (self, client, mock_admin_auth):
     """Admin can trigger SLM training."""
     _override_auth (mock_admin_auth)
@@ -132,7 +132,7 @@ class TestTrainEndpoint:
     }, )
     # Training may fail due to missing deps, but should not be 403
     assert response.status_code in (200, 202, 400, 500)
-  
+
   def test_train_missing_trainer_type (self, client, mock_admin_auth):
     """Missing trainer_type returns 422."""
     _override_auth (mock_admin_auth)
@@ -140,7 +140,7 @@ class TestTrainEndpoint:
         "base_model": "some-model",
     }, )
     assert response.status_code == 422
-  
+
   def test_train_invalid_trainer_type (self, client, mock_admin_auth):
     """Invalid trainer_type returns 422."""
     _override_auth (mock_admin_auth)
@@ -148,7 +148,7 @@ class TestTrainEndpoint:
         "trainer_type": "invalid_trainer", "base_model": "some-model",
     }, )
     assert response.status_code == 422
-  
+
   def test_train_returns_job_id (self, client, mock_admin_auth):
     """Training request returns a job_id."""
     _override_auth (mock_admin_auth)
@@ -167,13 +167,13 @@ class TestTrainEndpoint:
 
 class TestTrainingStatusEndpoint:
   """Tests for GET /v1/admin/models/status/{job_id}."""
-  
+
   def test_unknown_job_returns_404 (self, client, mock_admin_auth):
     """Non-existent job returns 404."""
     _override_auth (mock_admin_auth)
     response = client.get ("/v1/admin/models/status/nonexistent-job-id")
     assert response.status_code == 404
-  
+
   def test_known_job_returns_status (self, client, mock_admin_auth):
     """Known job returns its status."""
     _override_auth (mock_admin_auth)
@@ -194,7 +194,7 @@ class TestTrainingStatusEndpoint:
 
 class TestListModelsEndpoint:
   """Tests for GET /v1/admin/models."""
-  
+
   def test_returns_list (self, client, mock_admin_auth):
     """Returns a JSON list of models."""
     _override_auth (mock_admin_auth)
@@ -203,13 +203,13 @@ class TestListModelsEndpoint:
     if response.status_code == 200:
       data = response.json ()
       assert "models" in data or isinstance (data, list)
-  
+
   def test_requires_admin (self, client, mock_user_auth):
     """Regular users are denied."""
     _override_auth (mock_user_auth)
     response = client.get ("/v1/admin/models")
     assert response.status_code in (403, 200)
-  
+
   def test_register_then_list (self, client, mock_admin_auth, clean_registry):
     """After registering a model, it should appear in the list."""
     clean_registry.register (name = "test-model", artifact_path = "/tmp/test.bin", version = "1")
@@ -229,7 +229,7 @@ class TestListModelsEndpoint:
 
 class TestPromoteEndpoint:
   """Tests for POST /v1/admin/models/promote."""
-  
+
   def test_promote_requires_admin (self, client, mock_user_auth):
     """Regular users get 403."""
     _override_auth (mock_user_auth)
@@ -238,13 +238,13 @@ class TestPromoteEndpoint:
     }, )
     # 403 from RBAC bypass, 404 when mock doesn't intercept dependency injection
     assert response.status_code in (403, 404)
-  
+
   def test_promote_missing_fields (self, client, mock_admin_auth):
     """Missing model_name returns 422."""
     _override_auth (mock_admin_auth)
     response = client.post ("/v1/admin/models/promote", json = {})
     assert response.status_code == 422
-  
+
   def test_promote_nonexistent_model (self, client, mock_admin_auth):
     """Promoting a nonexistent model returns 404."""
     _override_auth (mock_admin_auth)
@@ -252,7 +252,7 @@ class TestPromoteEndpoint:
         "model_name": "nonexistent-model", "version": "1",
     }, )
     assert response.status_code == 404
-  
+
   def test_promote_existing_model (self, client, mock_admin_auth, clean_registry):
     """Promote a registered model."""
     clean_registry.register (name = "promote-model", artifact_path = "/tmp/test.bin", version = "1")
@@ -274,7 +274,7 @@ class TestPromoteEndpoint:
 
 class TestRollbackEndpoint:
   """Tests for POST /v1/admin/models/rollback."""
-  
+
   def test_rollback_requires_admin (self, client, mock_user_auth):
     """Regular users get 403."""
     _override_auth (mock_user_auth)
@@ -283,7 +283,7 @@ class TestRollbackEndpoint:
     }, )
     # 403 from RBAC bypass, 404 when mock doesn't intercept dependency injection
     assert response.status_code in (403, 404)
-  
+
   def test_rollback_nonexistent_model (self, client, mock_admin_auth):
     """Rollback nonexistent model returns 404."""
     _override_auth (mock_admin_auth)
@@ -291,7 +291,7 @@ class TestRollbackEndpoint:
         "model_name": "nonexistent-model",
     }, )
     assert response.status_code == 404
-  
+
   def test_rollback_missing_name (self, client, mock_admin_auth):
     """Missing model_name returns 422."""
     _override_auth (mock_admin_auth)
@@ -306,7 +306,7 @@ class TestRollbackEndpoint:
 
 class TestEvaluateEndpoint:
   """Tests for POST /v1/admin/models/evaluate."""
-  
+
   def test_evaluate_requires_admin (self, client, mock_user_auth):
     """Regular users get 403."""
     _override_auth (mock_user_auth)
@@ -314,7 +314,7 @@ class TestEvaluateEndpoint:
         "model_name": "test-model", "version": "1", "metrics": {"accuracy": 0.92, "weighted_f1": 0.88},
     }, )
     assert response.status_code in (403, 200)
-  
+
   def test_evaluate_passing_metrics (self, client, mock_admin_auth):
     """Passing metrics return PASS status."""
     _override_auth (mock_admin_auth)
@@ -325,7 +325,7 @@ class TestEvaluateEndpoint:
     if response.status_code == 200:
       data = response.json ()
       assert data ["status"] in ("PASS", "WARN", "FAIL")
-  
+
   def test_evaluate_failing_metrics (self, client, mock_admin_auth):
     """Failing metrics return FAIL status."""
     _override_auth (mock_admin_auth)
@@ -336,7 +336,7 @@ class TestEvaluateEndpoint:
     if response.status_code == 200:
       data = response.json ()
       assert data ["status"] == "FAIL"
-  
+
   def test_evaluate_missing_metrics (self, client, mock_admin_auth):
     """Missing metrics returns 422."""
     _override_auth (mock_admin_auth)
@@ -353,7 +353,7 @@ class TestEvaluateEndpoint:
 
 class TestCanarySplitEndpoint:
   """Tests for POST /v1/admin/models/canary/split."""
-  
+
   def test_canary_split_requires_admin (self, client, mock_user_auth):
     """Regular users get 403."""
     _override_auth (mock_user_auth)
@@ -361,7 +361,7 @@ class TestCanarySplitEndpoint:
         "model_name": "test-model", "traffic_split": 0.1,
     }, )
     assert response.status_code in (403, 200)
-  
+
   def test_canary_split_valid (self, client, mock_admin_auth):
     """Valid canary split request returns success."""
     _override_auth (mock_admin_auth)
@@ -373,7 +373,7 @@ class TestCanarySplitEndpoint:
       data = response.json ()
       assert data ["model_name"] == "test-model"
       assert "traffic_split" in data
-  
+
   def test_canary_split_invalid_range (self, client, mock_admin_auth):
     """Traffic split outside 0-1 returns 422."""
     _override_auth (mock_admin_auth)
@@ -385,7 +385,7 @@ class TestCanarySplitEndpoint:
 
 class TestCanaryStatusEndpoint:
   """Tests for GET /v1/admin/models/canary/status."""
-  
+
   def test_canary_status_returns_data (self, client, mock_admin_auth):
     """Canary status returns current state."""
     _override_auth (mock_admin_auth)

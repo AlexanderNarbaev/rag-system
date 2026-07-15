@@ -24,7 +24,11 @@ from urllib.parse import urlparse
 import aiohttp
 
 from .definition import (
-  _UNSET, RetryPolicy, ToolDefinition, ToolParam, ToolVisibility,
+  _UNSET,
+  RetryPolicy,
+  ToolDefinition,
+  ToolParam,
+  ToolVisibility,
 )
 from .registry import ToolProvider
 
@@ -44,7 +48,7 @@ def _interpolate_variables (
   Resolution order: params → context (CONTEXT.xxx) → env vars.
   Unresolved placeholders are left as-is.
   """
-  
+
   def _replacer (match: re.Match [str]) -> str:
     key = match.group (1)
     parts = key.split (".", 1)
@@ -57,7 +61,7 @@ def _interpolate_variables (
     if key in env_vars:
       return env_vars [key]
     return f"{{{{{key}}}}}"
-  
+
   return str (_VAR_PATTERN.sub (_replacer, template))
 
 
@@ -70,17 +74,17 @@ def _make_http_handler (
     method: str, url_template: str, headers: dict [str, str] | None = None, body_template: str | None = None,
     response_path: str | None = None, allowed_hosts: list [str] | None = None, ) -> Any:
   """Create an async HTTP handler callable for a declarative tool."""
-  
+
   _method = method
   _url_template = url_template
   _headers = headers or {}
   _body_template = body_template
   _response_path = response_path
   _allowed_hosts = allowed_hosts or []
-  
+
   def _get_env () -> dict [str, str]:
     return dict (os.environ)
-  
+
   def _resolve (params: dict [str, Any]) -> tuple [str, dict [str, str], str | None]:
     env = _get_env ()
     url = _interpolate_variables (_url_template, params, env, {})
@@ -91,19 +95,19 @@ def _make_http_handler (
     if _body_template:
       body = _interpolate_variables (_body_template, params, env, {})
     return url, resolved_headers, body
-  
+
   def _check_allowed_host (url: str) -> bool:
     if not _allowed_hosts:
       return True
     hostname = urlparse (url).hostname or ""
     return any (hostname == h or hostname.endswith (f".{h}") for h in _allowed_hosts)
-  
+
   async def _http_handler (**params: Any) -> str:
     url, resolved_headers, body = _resolve (params)
-    
+
     if not _check_allowed_host (url):
       return "Error: URL host not in allowed_hosts list"
-    
+
     timeout = aiohttp.ClientTimeout (total = 30)
     try:
       async with aiohttp.ClientSession (timeout = timeout) as session:
@@ -129,7 +133,7 @@ def _make_http_handler (
           return text
     except Exception as exc:
       return f"HTTP error: {exc}"
-  
+
   return _http_handler
 
 
@@ -137,13 +141,13 @@ def _make_shell_handler (
     command: str, allowed_commands: list [str], allowed_paths: list [str] | None = None, working_dir: str = "/tmp",
     env_whitelist: list [str] | None = None, ) -> Any:
   """Create a shell command handler callable with safety checks."""
-  
+
   _command = command
   _allowed_commands = allowed_commands
   _allowed_paths = allowed_paths or []
   _working_dir = working_dir
   _env_whitelist = env_whitelist or []
-  
+
   def _check_params (params: dict [str, Any]) -> str | None:
     for key, value in params.items ():
       str_value = str (value)
@@ -152,25 +156,25 @@ def _make_shell_handler (
                 f"shell metacharacters in value: {str_value!r}. "
                 f"Characters ;&&|`$() are not allowed.")
     return None
-  
+
   def _check_command (resolved_cmd: str) -> str | None:
     first_word = resolved_cmd.strip ().split () [0] if resolved_cmd.strip () else ""
     first_cmd = os.path.basename (first_word)
     if first_cmd not in _allowed_commands:
       return f"Blocked: command '{first_cmd}' is not in allowed_commands: {_allowed_commands}"
     return None
-  
+
   def _shell_handler (**params: Any) -> str:
     check = _check_params (params)
     if check is not None:
       return check
-    
+
     resolved_cmd = _interpolate_variables (_command, params, dict (os.environ), {})
-    
+
     cmd_check = _check_command (resolved_cmd)
     if cmd_check is not None:
       return cmd_check
-    
+
     try:
       result = subprocess.run (resolved_cmd, shell = True,
           # nosec B602 — mitigated by allowed_commands whitelist + metacharacter check
@@ -183,7 +187,7 @@ def _make_shell_handler (
       return "Error: command timed out"
     except Exception as exc:
       return f"Error executing command: {exc}"
-  
+
   return _shell_handler
 
 
@@ -206,7 +210,7 @@ def _build_retry_policy (raw: dict [str, Any] | None) -> RetryPolicy | None:
 
 class DeclarativeToolSchema:
   """JSON Schema-based validation for declarative tool definitions."""
-  
+
   _SCHEMA: dict [str, Any] = {
       "$schema": "https://json-schema.org/draft/2020-12/schema", "title": "DeclarativeToolFile", "type": "object",
       "properties": {
@@ -253,7 +257,7 @@ class DeclarativeToolSchema:
           },
       },
   }
-  
+
   @staticmethod
   def validate_single (tool_data: dict [str, Any]) -> bool:
     """Validate a single tool dict against the schema. Returns True if valid."""
@@ -290,7 +294,7 @@ class DeclarativeToolLoader:
   Supports JSON Schema validation, variable interpolation, and
   auto-generated handlers for HTTP and shell tools.
   """
-  
+
   def load_from_file (self, filepath: str) -> list [ToolDefinition]:
     """Load tool definitions from a YAML or JSON file.
 
@@ -305,7 +309,7 @@ class DeclarativeToolLoader:
       logger.warning ("Invalid tools file: 'tools' must be a list in %s", filepath)
       return []
     return self._parse_tools (tools_data)
-  
+
   def load_from_dir (self, directory: str) -> list [ToolDefinition]:
     """Load all tool definitions from a directory (YAML/JSON files)."""
     all_tools: list [ToolDefinition] = []
@@ -315,7 +319,7 @@ class DeclarativeToolLoader:
       for filepath in glob (os.path.join (directory, "**", ext), recursive = True):
         all_tools.extend (self.load_from_file (filepath))
     return all_tools
-  
+
   def _read_file (self, filepath: str) -> dict [str, Any] | None:
     """Read and parse a YAML or JSON file."""
     try:
@@ -324,11 +328,11 @@ class DeclarativeToolLoader:
     except (OSError, UnicodeDecodeError) as exc:
       logger.warning ("Failed to read tool file %s: %s", filepath, exc)
       return None
-    
+
     if filepath.endswith ((".yaml", ".yml")):
       try:
         import yaml
-        
+
         data = yaml.safe_load (content)
         return data if isinstance (data, dict) else None
       except ImportError:
@@ -337,7 +341,7 @@ class DeclarativeToolLoader:
       except Exception as exc:
         logger.warning ("Failed to parse YAML file %s: %s", filepath, exc)
         return None
-    
+
     if filepath.endswith (".json"):
       try:
         data = json.loads (content)
@@ -345,10 +349,10 @@ class DeclarativeToolLoader:
       except json.JSONDecodeError as exc:
         logger.warning ("Failed to parse JSON file %s: %s", filepath, exc)
         return None
-    
+
     logger.warning ("Unsupported file format: %s", filepath)
     return None
-  
+
   def _parse_tools (self, tools_data: list [dict [str, Any]]) -> list [ToolDefinition]:
     """Parse and validate a list of raw tool dicts into ToolDefinitions."""
     result: list [ToolDefinition] = []
@@ -359,15 +363,15 @@ class DeclarativeToolLoader:
       if tool is not None:
         result.append (tool)
     return result
-  
+
   def _parse_single (self, raw: dict [str, Any]) -> ToolDefinition | None:
     """Parse a single tool dict into a ToolDefinition, or None if invalid."""
     if not DeclarativeToolSchema.validate_single (raw):
       logger.warning ("Schema validation failed for tool: %s", raw.get ("name", "(unnamed)"))
       return None
-    
+
     tool_type = raw ["type"]
-    
+
     if tool_type == "http":
       http_cfg = raw.get ("http", {})
       handler = _make_http_handler (method = http_cfg.get ("method", "GET"),
@@ -381,20 +385,20 @@ class DeclarativeToolLoader:
         logger.warning ("Shell tool '%s' rejected: allowed_commands whitelist is required",
             raw.get ("name", "(unnamed)"), )
         return None
-      
+
       handler = _make_shell_handler (command = shell_cfg.get ("command", ""), allowed_commands = allowed_commands,
           allowed_paths = shell_cfg.get ("allowed_paths"), working_dir = shell_cfg.get ("working_dir", "/tmp"),
           env_whitelist = shell_cfg.get ("env_whitelist"), )
     else:
       logger.warning ("Unknown tool type: %s", tool_type)
       return None
-    
+
     visibility_str = raw.get ("visibility", "public")
     try:
       visibility = ToolVisibility (visibility_str)
     except ValueError:
       visibility = ToolVisibility.PUBLIC
-    
+
     return ToolDefinition (name = raw ["name"], description = raw.get ("description", ""),
         parameters = _build_params (raw.get ("parameters", {})), handler = handler if tool_type == "shell" else None,
         async_handler = handler if tool_type == "http" else None, category = raw.get ("category", "declarative"),
@@ -409,11 +413,11 @@ class DeclarativeProvider (ToolProvider):
   Scans TOOLS_DECLARATIVE_DIR for *.yaml, *.yml, and *.json files
   and loads tool definitions from them.
   """
-  
+
   @property
   def provider_name (self) -> str:
     return "declarative"
-  
+
   async def discover (self) -> list [ToolDefinition]:
     """Scan TOOLS_DECLARATIVE_DIR and load all declarative tools."""
     loader = DeclarativeToolLoader ()

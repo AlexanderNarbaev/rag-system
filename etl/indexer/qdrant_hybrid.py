@@ -19,16 +19,18 @@ try:
   from qdrant_client import QdrantClient
   from qdrant_client.http import models
   from qdrant_client.http.models import (
-    CollectionInfo, Distance, PointStruct,
+    CollectionInfo,
+    Distance,
+    PointStruct,
   )
-  
+
   QDRANT_AVAILABLE = True
 except ImportError:
   QDRANT_AVAILABLE = False
 
 try:
   from sentence_transformers import SentenceTransformer
-  
+
   ST_AVAILABLE = True
 except ImportError:
   ST_AVAILABLE = False
@@ -43,7 +45,7 @@ class QdrantHybridIndexer:
   """
   Индексатор для Qdrant с гибридным поиском (dense + sparse).
   """
-  
+
   def __init__ (
       self, host: str = "localhost", port: int = 6333, grpc_port: int | None = None, prefer_grpc: bool = False,
       https: bool = False, api_key: str | None = None, collection_name: str = "knowledge_base",
@@ -68,7 +70,7 @@ class QdrantHybridIndexer:
       raise ImportError ("qdrant-client is required. Install: pip install qdrant-client")
     if not ST_AVAILABLE:
       raise ImportError ("sentence-transformers is required. Install: pip install sentence-transformers")
-    
+
     # Подключение к Qdrant
     self.client = QdrantClient (host = host, port = port, grpc_port = grpc_port, prefer_grpc = prefer_grpc,
         https = https, api_key = api_key)
@@ -78,16 +80,16 @@ class QdrantHybridIndexer:
     self.dense_vector_size = dense_vector_size
     self.sparse_index_on_disk = sparse_index_on_disk
     self.batch_size = batch_size
-    
+
     # Загрузка модели эмбеддера
     self.embedder = SentenceTransformer (embedder_model_name, device = embedder_device)
     logger.info (f"Loaded embedder {embedder_model_name} on {embedder_device}")
-    
+
     # Проверяем, поддерживает ли модель sparse векторы
     self.supports_sparse = hasattr (self.embedder, "encode_sparse") or hasattr (self.embedder, "tokenizer")
     if not self.supports_sparse:
       logger.warning ("Embedder does not support native sparse vectors. Sparse indexing will use TF-IDF fallback.")
-  
+
   def create_collection (self, recreate: bool = False) -> bool:
     """
     Создаёт коллекцию с поддержкой dense и sparse векторов.
@@ -96,12 +98,12 @@ class QdrantHybridIndexer:
     """
     collections = self.client.get_collections ().collections
     exists = any (c.name == self.collection_name for c in collections)
-    
+
     if exists and recreate:
       self.client.delete_collection (self.collection_name)
       logger.info (f"Deleted existing collection {self.collection_name}")
       exists = False
-    
+
     if not exists:
       # Конфигурация dense вектора
       dense_config = models.VectorParams (size = self.dense_vector_size, distance = Distance.COSINE)
@@ -116,16 +118,16 @@ class QdrantHybridIndexer:
     else:
       logger.info (f"Collection {self.collection_name} already exists")
       return False
-  
+
   def get_collection_info (self) -> CollectionInfo:
     """Возвращает информацию о коллекции."""
     return self.client.get_collection (self.collection_name)
-  
+
   def _compute_dense_vector (self, text: str) -> list [float]:
     """Вычисляет dense вектор через bge-m3 (нормализованный)."""
     vec = self.embedder.encode (text, normalize_embeddings = True)
     return vec.tolist ()
-  
+
   def _compute_sparse_vector (self, text: str) -> models.SparseVector | None:
     """
     Вычисляет sparse вектор.
@@ -148,10 +150,10 @@ class QdrantHybridIndexer:
         return models.SparseVector (indices = indices.tolist (), values = values.tolist ())
     except Exception:
       pass
-    
+
     # Если модель не поддерживает sparse, возвращаем None (только dense)
     return None
-  
+
   def _chunk_to_point (self, chunk: dict [str, Any]) -> PointStruct | None:
     """
     Преобразует чанк (словарь) в PointStruct для Qdrant.
@@ -161,16 +163,16 @@ class QdrantHybridIndexer:
     if not point_id:
       logger.warning ("Chunk missing 'hash' field, skipping")
       return None
-    
+
     text = chunk.get ("text", "")
     if not text:
       logger.warning (f"Chunk {point_id} has empty text, skipping")
       return None
-    
+
     # Векторы
     dense_vec = self._compute_dense_vector (text)
     sparse_vec = self._compute_sparse_vector (text)
-    
+
     # Поля для payload (метаданные)
     payload = {
         "text": text, "title": chunk.get ("title", ""), "source_type": chunk.get ("source_type", ""),
@@ -182,13 +184,13 @@ class QdrantHybridIndexer:
     }
     # Очищаем None значения
     payload = {k: v for k, v in payload.items () if v is not None}
-    
+
     vectors = {"dense": dense_vec}
     if sparse_vec is not None:
       vectors ["sparse"] = sparse_vec
-    
+
     return PointStruct (id = point_id, vector = vectors, payload = payload)
-  
+
   def index_chunks (self, chunks: list [dict [str, Any]]) -> int:
     """
     Индексирует список чанков в Qdrant (пакетно).
@@ -218,7 +220,7 @@ class QdrantHybridIndexer:
               logger.error (f"Failed to upsert point {point.id}: {single_e}")
     logger.info (f"Indexed {total} chunks into {self.collection_name}")
     return total
-  
+
   def delete_chunks (self, chunk_ids: list [str]) -> int:
     """
     Удаляет чанки по списку ID (хешей).
@@ -233,7 +235,7 @@ class QdrantHybridIndexer:
     except Exception as e:
       logger.error (f"Failed to delete chunks: {e}")
       return 0
-  
+
   def collection_exists (self) -> bool:
     """Проверяет существование коллекции."""
     try:
@@ -241,17 +243,17 @@ class QdrantHybridIndexer:
       return True
     except Exception:
       return False
-  
+
   def get_chunk_count (self) -> int:
     """Возвращает количество точек в коллекции."""
     info = self.client.get_collection (self.collection_name)
     return info.points_count
-  
+
   def delete_collection (self):
     """Удаляет коллекцию целиком."""
     self.client.delete_collection (self.collection_name)
     logger.info (f"Deleted collection {self.collection_name}")
-  
+
   def _compute_colbert_vectors (self, text: str) -> list [list [float]]:
     """Compute ColBERT-style multi-vectors using bge-m3 token embeddings.
 
@@ -260,7 +262,7 @@ class QdrantHybridIndexer:
     """
     if not COLBERT_ENABLED:
       return [self._compute_dense_vector (text)]
-    
+
     try:
       output = self.embedder.encode (text, normalize_embeddings = False, output_value = "token_embeddings")
       if hasattr (output, "tolist"):  # noqa: SIM108
@@ -271,9 +273,9 @@ class QdrantHybridIndexer:
         return token_vecs if isinstance (token_vecs [0], list) else [token_vecs]
     except Exception as e:
       logger.debug ("ColBERT token embeddings failed, falling back to dense: %s", e)
-    
+
     return [self._compute_dense_vector (text)]
-  
+
   def index_with_colbert (self, chunk_text: str, colbert_vectors: list [list [float]] | None = None) -> bool:
     """Index a chunk with ColBERT multi-vector representation.
 
@@ -286,14 +288,14 @@ class QdrantHybridIndexer:
     if not COLBERT_ENABLED:
       logger.debug ("ColBERT indexing disabled")
       return False
-    
+
     import hashlib
-    
+
     chunk_id = hashlib.sha256 (chunk_text.encode ()).hexdigest ()
-    
+
     if colbert_vectors is None:
       colbert_vectors = self._compute_colbert_vectors (chunk_text)
-    
+
     try:
       self.client.upsert (collection_name = self.collection_name, points = [
           PointStruct (id = chunk_id, vector = {"colbert": colbert_vectors}, payload = {"text": chunk_text}, )
@@ -303,7 +305,7 @@ class QdrantHybridIndexer:
     except Exception as e:
       logger.error ("ColBERT index failed: %s", e)
       return False
-  
+
   def live_upsert (self, chunk: dict) -> bool:
     """Atomic upsert of a single chunk into Qdrant.
 
@@ -323,7 +325,7 @@ class QdrantHybridIndexer:
     except Exception as e:
       logger.error ("Live upsert failed for chunk %s: %s", point.id, e)
       return False
-  
+
   def live_delete (self, chunk_id: str) -> bool:
     """Atomic delete of a single chunk from Qdrant by point ID.
 
@@ -341,7 +343,7 @@ class QdrantHybridIndexer:
     except Exception as e:
       logger.error ("Live delete failed for chunk %s: %s", chunk_id, e)
       return False
-  
+
   def search_colbert (self, query: str, limit: int = 10) -> list [dict]:
     """Search using ColBERT late interaction scoring.
 
@@ -354,9 +356,9 @@ class QdrantHybridIndexer:
     if not COLBERT_ENABLED:
       logger.warning ("ColBERT search is disabled")
       return []
-    
+
     query_vectors = self._compute_colbert_vectors (query)
-    
+
     try:
       results = self.client.search (collection_name = self.collection_name, query_vector = ("colbert", query_vectors),
           limit = limit, with_payload = True, )
@@ -384,13 +386,13 @@ def batch_index_from_json_files (indexer: QdrantHybridIndexer, chunks_dir: Path,
 if __name__ == "__main__":
   # Пример использования
   import os
-  
+
   indexer = QdrantHybridIndexer (host = os.getenv ("QDRANT_HOST", "localhost"),
       port = int (os.getenv ("QDRANT_PORT", 6333)), collection_name = "test_collection", embedder_device = "cpu", )
-  
+
   # Создаём коллекцию
   indexer.create_collection (recreate = True)
-  
+
   # Пример чанка
   sample_chunks = [
       {

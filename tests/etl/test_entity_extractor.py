@@ -2,7 +2,10 @@
 from unittest.mock import MagicMock
 
 from etl.graph_builder.entity_extractor import (
-  Entity, EntityRelationExtractor, Relation, entities_to_cypher,
+  Entity,
+  EntityRelationExtractor,
+  Relation,
+  entities_to_cypher,
 )
 
 
@@ -14,7 +17,7 @@ class TestEntityDataclass:
     assert e.type == "PERSON"
     assert e.source_id == "doc_1"
     assert e.properties == {}
-  
+
   def test_entity_with_properties (self):
     e = Entity (id = "e2", name = "Acme Corp", type = "ORGANIZATION", source_id = "doc_2",
         properties = {"founded": 1990, "industry": "tech"}, )
@@ -28,7 +31,7 @@ class TestRelationDataclass:
     assert r.target == "e2"
     assert r.type == "WORKS_FOR"
     assert r.properties == {}
-  
+
   def test_relation_with_properties (self):
     r = Relation (source = "e1", target = "e2", type = "DEPENDS_ON",
         properties = {"description": "System A depends on System B"}, )
@@ -41,12 +44,12 @@ class TestEntityRelationExtractorInit:
     extractor = EntityRelationExtractor (use_spacy = True)
     assert extractor.use_spacy is False
     assert extractor.nlp is None
-  
+
   def test_init_with_cache_dir (self, tmp_path):
     cache = tmp_path / "entity_cache"
     EntityRelationExtractor (use_spacy = False, use_slm = False, cache_dir = cache)
     assert cache.is_dir ()
-  
+
   def test_init_with_slm_endpoint (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = True,
         slm_endpoint = "http://localhost:8080/v1/completions", )
@@ -59,7 +62,7 @@ class TestExtractEntitiesSpacy:
     extractor.nlp = None
     result = extractor.extract_entities_spacy ("some text")
     assert result == []
-  
+
   def test_with_mocked_spacy (self):
     extractor = EntityRelationExtractor (use_spacy = False)
     mock_nlp = MagicMock ()
@@ -82,7 +85,7 @@ class TestExtractEntitiesSpacy:
     assert "Alice" in names
     assert "Google" in names
     assert "London" in names
-  
+
   def test_deduplication_by_name (self):
     extractor = EntityRelationExtractor (use_spacy = False)
     mock_nlp = MagicMock ()
@@ -98,7 +101,7 @@ class TestExtractEntitiesSpacy:
     extractor.nlp = mock_nlp
     entities = extractor.extract_entities_spacy ("John and John")
     assert len (entities) == 1
-  
+
   def test_entity_type_mapping (self):
     extractor = EntityRelationExtractor (use_spacy = False)
     mock_nlp = MagicMock ()
@@ -128,14 +131,14 @@ class TestExtractFromChunk:
     entities, relations = extractor.extract_from_chunk ("Python is great", source_id = "doc_42")
     assert len (entities) >= 1
     assert entities [0].source_id == "doc_42"
-  
+
   def test_extract_from_chunk_no_spacy (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False)
     extractor.nlp = None
     entities, relations = extractor.extract_from_chunk ("text", source_id = "x")
     assert entities == []
     assert relations == []
-  
+
   def test_extract_from_chunk_with_metadata (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False)
     mock_nlp = MagicMock ()
@@ -171,13 +174,13 @@ class TestExtractBatch:
     # Deduplication should merge same entities by id
     assert len (entities) >= 1
     assert len (relations) >= 0
-  
+
   def test_extract_batch_empty (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False)
     entities, relations = extractor.extract_batch ([])
     assert entities == []
     assert relations == []
-  
+
   def test_extract_batch_with_prefix (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False)
     extractor.nlp = None
@@ -199,7 +202,7 @@ class TestEntitiesToCypher:
     assert len (queries) == 3  # 2 entity MERGE + 1 relation MERGE
     assert "MERGE" in queries [0] or "MERGE" in queries [1]
     assert "DEPENDS_ON" in queries [2]
-  
+
   def test_empty_lists (self):
     queries = entities_to_cypher ([], [])
     assert queries == []
@@ -219,23 +222,23 @@ class TestCacheOperations:
     assert len (loaded_entities) == 1
     assert loaded_entities [0].name == "Test"
     assert len (loaded_relations) == 1
-  
+
   def test_cache_load_nonexistent (self, tmp_path):
     cache = tmp_path / "cache"
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False, cache_dir = cache)
     result = extractor._load_from_cache ("nonexistent_key")
     assert result is None
-  
+
   def test_cache_load_no_cache_dir (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False)
     result = extractor._load_from_cache ("any_key")
     assert result is None
-  
+
   def test_cache_save_no_cache_dir (self):
     extractor = EntityRelationExtractor (use_spacy = False, use_slm = False)
     # Should not raise
     extractor._save_to_cache ("key", [], [])
-  
+
   def test_cache_key_deterministic (self):
     extractor = EntityRelationExtractor (use_spacy = False)
     key1 = extractor._get_cache_key ("hello world")

@@ -1,7 +1,7 @@
 # tests/proxy/test_health.py
 """Tests for health check endpoints."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 def client ():
   """Create a TestClient for health endpoints."""
   from fastapi import FastAPI
-  
+
   from proxy.app.api.health import router
-  
+
   app = FastAPI ()
   app.include_router (router)
   return TestClient (app)
@@ -21,7 +21,7 @@ def client ():
 
 class TestHealthLive:
   """Test /v1/health/live endpoint."""
-  
+
   def test_live_returns_200 (self, client):
     response = client.get ("/v1/health/live")
     assert response.status_code == 200
@@ -32,7 +32,7 @@ class TestHealthLive:
 
 class TestHealthReady:
   """Test /v1/health/ready endpoint."""
-  
+
   @patch ("proxy.app.api.health._check_llm", return_value = ("ok", {}))
   @patch ("proxy.app.api.health._check_qdrant", return_value = ("ok", {"collections": 3}))
   def test_ready_when_all_ok (self, mock_qdrant, mock_llm, client):
@@ -42,7 +42,7 @@ class TestHealthReady:
     assert data ["status"] == "ready"
     assert data ["components"] ["qdrant"] == "ok"
     assert data ["components"] ["llm"] == "ok"
-  
+
   @patch ("proxy.app.api.health._check_llm", return_value = ("error: timeout", {}))
   @patch ("proxy.app.api.health._check_qdrant", return_value = ("ok", {}))
   def test_not_ready_when_llm_down (self, mock_qdrant, mock_llm, client):
@@ -51,7 +51,7 @@ class TestHealthReady:
     data = response.json ()
     assert data ["status"] == "not_ready"
     assert data ["components"] ["llm"] == "error: timeout"
-  
+
   @patch ("proxy.app.api.health._check_llm", return_value = ("ok", {}))
   @patch ("proxy.app.api.health._check_qdrant", return_value = ("unavailable", {}))
   def test_not_ready_when_qdrant_down (self, mock_qdrant, mock_llm, client):
@@ -64,7 +64,7 @@ class TestHealthReady:
 
 class TestHealthFull:
   """Test /v1/health endpoint."""
-  
+
   @patch ("proxy.app.api.health._check_kb_manager", return_value = ("ok", {"knowledge_bases": 2}))
   @patch ("proxy.app.api.health._check_llm", return_value = ("ok", {"endpoint": "http://llm:8000"}))
   @patch ("proxy.app.api.health._check_qdrant", return_value = ("ok", {"collections": 5}))
@@ -77,7 +77,7 @@ class TestHealthFull:
     assert data ["components"] ["llm"] == "ok"
     assert data ["components"] ["kb_manager"] == "ok"
     assert data ["components"] ["qdrant_info"] ["collections"] == 5
-  
+
   @patch ("proxy.app.api.health._check_kb_manager", return_value = ("ok", {}))
   @patch ("proxy.app.api.health._check_llm", return_value = ("error: connection refused", {}))
   @patch ("proxy.app.api.health._check_qdrant", return_value = ("ok", {}))

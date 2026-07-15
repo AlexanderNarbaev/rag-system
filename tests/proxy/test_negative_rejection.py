@@ -9,28 +9,29 @@ Covers:
 from unittest.mock import patch
 
 from proxy.app.core.confidence import (
-  RetrievalQualityReport, evaluate_retrieval_quality, should_generate_answer,
+  RetrievalQualityReport,
+  evaluate_retrieval_quality,
+  should_generate_answer,
 )
-
 
 # ── Unit Tests: should_generate_answer ──────────────────────────────────────
 
 
 class TestShouldGenerateAnswer:
   """Test the negative rejection logic in should_generate_answer."""
-  
+
   def test_no_chunks_returns_false (self):
     """When no chunks retrieved, should refuse to generate."""
     should_gen, reason = should_generate_answer ([])
     assert should_gen is False
     assert "No relevant documents" in reason
-  
+
   def test_none_equivalent_empty_list (self):
     """Empty list is equivalent to no results."""
     should_gen, reason = should_generate_answer ([])
     assert should_gen is False
     assert "knowledge base" in reason.lower ()
-  
+
   def test_insufficient_strong_sources_returns_false (self):
     """When < 2 chunks have score >= 0.32, should refuse to generate."""
     chunks = [
@@ -39,7 +40,7 @@ class TestShouldGenerateAnswer:
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
     assert "insufficient" in reason.lower () or "no sufficiently" in reason.lower ()
-  
+
   def test_no_strong_sources_returns_false_with_specific_message (self):
     """When zero chunks above threshold, message says 'No sufficiently relevant'."""
     chunks = [
@@ -48,7 +49,7 @@ class TestShouldGenerateAnswer:
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
     assert "No sufficiently relevant" in reason
-  
+
   def test_one_strong_source_returns_false (self):
     """One strong source is not enough (default min=2)."""
     chunks = [
@@ -57,7 +58,7 @@ class TestShouldGenerateAnswer:
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
     assert "Only 1 relevant source" in reason
-  
+
   def test_sufficient_strong_sources_returns_true (self):
     """When >= 2 chunks have score >= 0.32, should generate answer."""
     chunks = [
@@ -66,7 +67,7 @@ class TestShouldGenerateAnswer:
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is True
     assert "Sufficient" in reason
-  
+
   def test_exactly_two_strong_sources_returns_true (self):
     """Exactly at the default threshold of 2 strong sources."""
     chunks = [
@@ -75,7 +76,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_mixed_scores_with_enough_strong (self):
     """Mix of strong and borderline scores with enough strong."""
     chunks = [
@@ -84,7 +85,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_mixed_scores_without_enough_strong (self):
     """Mix of scores but only one above threshold."""
     chunks = [
@@ -93,7 +94,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
-  
+
   def test_only_borderline_returns_false (self):
     """Only borderline scores (0.25–0.31) should refuse."""
     chunks = [
@@ -101,7 +102,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
-  
+
   def test_all_zeros_returns_false (self):
     """All zero scores should refuse."""
     chunks = [
@@ -109,7 +110,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
-  
+
   def test_perfect_scores_returns_true (self):
     """All perfect scores should accept."""
     chunks = [
@@ -117,7 +118,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_missing_score_key_defaults_to_zero (self):
     """Chunks without 'score' key should default to 0."""
     chunks = [
@@ -125,7 +126,7 @@ class TestShouldGenerateAnswer:
     ]
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is False
-  
+
   def test_mixed_missing_and_present_scores (self):
     """Mix of chunks with and without score keys."""
     chunks = [
@@ -137,7 +138,7 @@ class TestShouldGenerateAnswer:
 
 class TestCustomMinStrongSources:
   """Tests for the min_strong_sources parameter."""
-  
+
   def test_custom_min_strong_sources_1 (self):
     """With min=1, a single strong source is enough."""
     chunks = [
@@ -145,7 +146,7 @@ class TestCustomMinStrongSources:
     ]
     should_gen, _ = should_generate_answer (chunks, min_strong_sources = 1)
     assert should_gen is True
-  
+
   def test_custom_min_strong_sources_3 (self):
     """With min=3, two strong sources are not enough."""
     chunks = [
@@ -153,7 +154,7 @@ class TestCustomMinStrongSources:
     ]
     should_gen, _ = should_generate_answer (chunks, min_strong_sources = 3)
     assert should_gen is False
-  
+
   def test_custom_min_strong_sources_3_met (self):
     """With min=3, three strong sources should pass."""
     chunks = [
@@ -161,7 +162,7 @@ class TestCustomMinStrongSources:
     ]
     should_gen, _ = should_generate_answer (chunks, min_strong_sources = 3)
     assert should_gen is True
-  
+
   def test_custom_min_zero (self):
     """With min=0, any chunks (even weak) should pass."""
     chunks = [
@@ -169,7 +170,7 @@ class TestCustomMinStrongSources:
     ]
     should_gen, _ = should_generate_answer (chunks, min_strong_sources = 0)
     assert should_gen is True
-  
+
   def test_default_min_is_2 (self):
     """Default min_strong_sources should be 2."""
     chunks = [
@@ -178,7 +179,7 @@ class TestCustomMinStrongSources:
     # Default: min_strong_sources=2
     should_gen, _ = should_generate_answer (chunks)
     assert should_gen is False
-    
+
     # Explicit min=2 gives same result
     should_gen, _ = should_generate_answer (chunks, min_strong_sources = 2)
     assert should_gen is False
@@ -186,7 +187,7 @@ class TestCustomMinStrongSources:
 
 class TestEmptyTextChunks:
   """Edge cases around chunk text content."""
-  
+
   def test_empty_text_chunks_with_high_scores (self):
     """Chunks with empty text but high scores still count as strong."""
     chunks = [
@@ -195,7 +196,7 @@ class TestEmptyTextChunks:
     # should_generate_answer only checks score, not text content
     should_gen, reason = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_whitespace_only_text_with_high_scores (self):
     """Chunks with whitespace-only text still count by score."""
     chunks = [
@@ -203,7 +204,7 @@ class TestEmptyTextChunks:
     ]
     should_gen, _ = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_none_text_with_score (self):
     """Chunks with None text should not crash."""
     chunks = [
@@ -216,7 +217,7 @@ class TestEmptyTextChunks:
 
 class TestScoreBoundaryPrecision:
   """Precision boundary tests around the 0.32 threshold."""
-  
+
   def test_exactly_at_threshold (self):
     """Score exactly 0.32 should count as strong."""
     chunks = [
@@ -224,7 +225,7 @@ class TestScoreBoundaryPrecision:
     ]
     should_gen, _ = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_just_below_threshold (self):
     """Score 0.319 should NOT count as strong."""
     chunks = [
@@ -232,7 +233,7 @@ class TestScoreBoundaryPrecision:
     ]
     should_gen, _ = should_generate_answer (chunks)
     assert should_gen is False
-  
+
   def test_just_above_threshold (self):
     """Score 0.321 should count as strong."""
     chunks = [
@@ -240,7 +241,7 @@ class TestScoreBoundaryPrecision:
     ]
     should_gen, _ = should_generate_answer (chunks)
     assert should_gen is True
-  
+
   def test_negative_scores (self):
     """Negative scores should not count as strong."""
     chunks = [
@@ -255,7 +256,7 @@ class TestScoreBoundaryPrecision:
 
 class TestEvaluateRetrievalQuality:
   """Tests for CRAG-style retrieval quality evaluation."""
-  
+
   def test_no_chunks_returns_incorrect (self):
     """No chunks → Incorrect classification."""
     report = evaluate_retrieval_quality ("test query", [])
@@ -263,7 +264,7 @@ class TestEvaluateRetrievalQuality:
     assert report.total_count == 0
     assert report.correct_rate == 0.0
     assert len (report.recommendations) > 0
-  
+
   def test_highly_relevant_chunks (self):
     """Chunks with strong keyword overlap → Correct classification.
 
@@ -278,7 +279,7 @@ class TestEvaluateRetrievalQuality:
     assert report.classification == "Correct"
     assert report.correct_count >= 1
     assert report.correct_rate >= 0.5
-  
+
   def test_irrelevant_chunks (self):
     """Chunks with no keyword overlap → Incorrect classification."""
     chunks = [
@@ -288,7 +289,7 @@ class TestEvaluateRetrievalQuality:
     report = evaluate_retrieval_quality ("What is Python?", chunks)
     assert report.classification == "Incorrect"
     assert report.correct_count == 0
-  
+
   def test_mixed_relevance_chunks (self):
     """Mix of relevant and irrelevant → Ambiguous classification."""
     chunks = [
@@ -299,7 +300,7 @@ class TestEvaluateRetrievalQuality:
     # One chunk has strong overlap → correct; the other is irrelevant → incorrect
     assert report.classification in ("Ambiguous", "Correct")
     assert report.total_count == 2
-  
+
   def test_report_has_all_fields (self):
     """Report must have all required fields populated."""
     report = evaluate_retrieval_quality ("query", [{"text": "some text"}])
@@ -312,7 +313,7 @@ class TestEvaluateRetrievalQuality:
     assert hasattr (report, "correct_rate")
     assert hasattr (report, "recommendations")
     assert isinstance (report.recommendations, list)
-  
+
   def test_correct_rate_is_ratio (self):
     """correct_rate should be between 0.0 and 1.0."""
     chunks = [
@@ -321,7 +322,7 @@ class TestEvaluateRetrievalQuality:
     ]
     report = evaluate_retrieval_quality ("Python programming", chunks)
     assert 0.0 <= report.correct_rate <= 1.0
-  
+
   def test_single_highly_relevant_chunk (self):
     """Single chunk with excellent match should classify as Correct."""
     chunks = [
@@ -341,26 +342,26 @@ class TestNegativeRejectionIntegration:
   These verify that the refusal path is correctly wired — when
   should_generate_answer returns False, the pipeline must NOT call the LLM.
   """
-  
+
   @patch ("proxy.app.main.should_generate_answer")
   def test_refusal_path_returns_early (self, mock_should_gen):
     """When should_generate_answer returns False, pipeline must return refusal."""
     mock_should_gen.return_value = (False, "No relevant documents found in knowledge base")
-    
+
     # Verify the mock is wired correctly
     should_gen, reason = mock_should_gen ([])
     assert should_gen is False
     assert "No relevant documents" in reason
-  
+
   @patch ("proxy.app.main.should_generate_answer")
   def test_acceptance_path_continues (self, mock_should_gen):
     """When should_generate_answer returns True, pipeline continues."""
     mock_should_gen.return_value = (True, "Sufficient relevant sources found")
-    
+
     should_gen, reason = mock_should_gen ([{"score": 0.5}])
     assert should_gen is True
     assert "Sufficient" in reason
-  
+
   def test_refusal_message_contains_reason (self):
     """The refusal message format from main.py should include the reason."""
     # Simulate the refusal message construction from main.py lines 397-400
@@ -369,7 +370,7 @@ class TestNegativeRejectionIntegration:
       refusal = f"I don't have enough relevant information to answer this question reliably. {reason}"
       assert "I don't have enough" in refusal
       assert "No relevant documents" in refusal
-  
+
   def test_refusal_message_for_weak_sources (self):
     """Refusal message for weak sources includes 'insufficient' context."""
     chunks = [
@@ -386,7 +387,7 @@ class TestNegativeRejectionIntegration:
 
 class TestRetrievalQualityReport:
   """Direct tests for the RetrievalQualityReport dataclass."""
-  
+
   def test_dataclass_fields (self):
     """All fields should be settable and retrievable."""
     report = RetrievalQualityReport (classification = "Correct", correct_count = 3, incorrect_count = 1,
@@ -398,7 +399,7 @@ class TestRetrievalQualityReport:
     assert report.total_count == 5
     assert report.correct_rate == 0.6
     assert report.recommendations == ["Looks good"]
-  
+
   def test_default_recommendations_is_empty_list (self):
     """recommendations should default to empty list."""
     report = RetrievalQualityReport (classification = "Incorrect", correct_count = 0, incorrect_count = 0,

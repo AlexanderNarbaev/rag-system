@@ -22,29 +22,29 @@ def decompose_to_strips (
   """
   if not chunks_with_scores:
     return []
-  
+
   strips = []
   for chunk_idx, (chunk, score) in enumerate (chunks_with_scores):
     text = chunk.get ("text", "").strip ()
     if not text:
       continue
-    
+
     source_type = chunk.get ("source_type", "unknown")
     doc_title = chunk.get ("doc_title", "")
-    
+
     sentences = re.split (r"(?<=[.!?])\s+", text)
     for sent_idx, sentence in enumerate (sentences):
       sentence = sentence.strip ()
       if len (sentence) < 10:
         continue
-      
+
       strip = KnowledgeStrip (text = sentence, score = score, source_type = source_type, doc_title = doc_title,
           chunk_index = chunk_idx, sentence_index = sent_idx, )
       strips.append (strip)
-  
+
   if relevance_threshold > 0:
     strips = [s for s in strips if s.score >= relevance_threshold]
-  
+
   logger.debug (f"CRAG decomposition: {len (chunks_with_scores)} chunks -> {len (strips)} strips")
   return strips
 
@@ -66,23 +66,23 @@ def assemble_multimodal_context (
   """
   if not MULTI_MODAL_ENABLED:
     return "\n\n".join (chunks)
-  
+
   images = images or []
   tables = tables or []
   code_blocks = code_blocks or []
-  
+
   total_items = len (chunks) + len (images) + len (tables) + len (code_blocks)
   if total_items == 0:
     return ""
-  
+
   sections = []
-  
+
   text_budget = int (max_tokens * 0.5)
   table_budget = int (max_tokens * 0.2)
   code_budget = int (max_tokens * 0.2)
-  
+
   current_tokens = 0
-  
+
   for chunk in chunks:
     tokens = estimate_tokens (chunk)
     if current_tokens + tokens > text_budget:
@@ -91,7 +91,7 @@ def assemble_multimodal_context (
       break
     sections.append (chunk)
     current_tokens += tokens
-  
+
   table_start = 0
   for table in tables:
     tokens = estimate_tokens (table)
@@ -99,7 +99,7 @@ def assemble_multimodal_context (
       break
     sections.append (table)
     table_start += tokens
-  
+
   code_start = 0
   for code in code_blocks:
     tokens = estimate_tokens (code)
@@ -108,10 +108,10 @@ def assemble_multimodal_context (
     framed = f"```\n{code}\n```"
     sections.append (framed)
     code_start += tokens
-  
+
   for img in images:
     tokens = estimate_tokens (img)
     if tokens < 20:
       sections.append (img)
-  
+
   return "\n\n".join (sections)

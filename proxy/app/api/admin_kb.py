@@ -24,7 +24,7 @@ router = APIRouter (prefix = "/v1/admin/kb", tags = ["admin-kb"])
 
 class KBCreateRequest (BaseModel):
   """Request to create a knowledge base."""
-  
+
   name: str = Field (..., min_length = 1, max_length = 128, description = "Knowledge base name")
   description: str = Field ("", description = "KB description")
   embedding_model: str = Field ("BAAI/bge-m3", description = "Embedding model name")
@@ -34,7 +34,7 @@ class KBCreateRequest (BaseModel):
 
 class KBUpdateRequest (BaseModel):
   """Request to update a knowledge base."""
-  
+
   name: str | None = None
   description: str | None = None
   embedding_model: str | None = None
@@ -43,7 +43,7 @@ class KBUpdateRequest (BaseModel):
 
 class KBResponse (BaseModel):
   """Knowledge base response."""
-  
+
   id: str
   name: str
   description: str
@@ -61,14 +61,14 @@ class KBResponse (BaseModel):
 
 class TaskCreateRequest (BaseModel):
   """Request to create an ETL task."""
-  
+
   source_type: str = Field (..., description = "Source type: confluence, jira, gitlab, file")
   source_id: str = Field (..., description = "Source identifier (page ID, issue key, etc.)")
 
 
 class TaskResponse (BaseModel):
   """ETL task response."""
-  
+
   id: str
   kb_id: str
   source_type: str
@@ -82,14 +82,14 @@ class TaskResponse (BaseModel):
 
 class KBListResponse (BaseModel):
   """List of knowledge bases."""
-  
+
   knowledge_bases: list [KBResponse]
   total: int
 
 
 class TaskListResponse (BaseModel):
   """List of ETL tasks."""
-  
+
   tasks: list [TaskResponse]
   total: int
 
@@ -102,7 +102,7 @@ class TaskListResponse (BaseModel):
 def _get_kb_manager ():
   """Get the KB manager from the main app state."""
   from proxy.app.main import kb_manager
-  
+
   if kb_manager is None:
     raise HTTPException (status_code = 503, detail = "Knowledge base manager not initialized")
   return kb_manager

@@ -53,7 +53,11 @@ from etl.graph_builder.neo4j_loader import Neo4jLoader  # noqa: E402
 from etl.indexer.live_vector_lake import LiveVectorLake  # noqa: E402
 from etl.indexer.qdrant_hybrid import QdrantHybridIndexer  # noqa: E402
 from etl.indexer.wal_manager import (  # noqa: E402
-  PIPELINE_CONFLUENCE, PIPELINE_GITLAB, PIPELINE_INDEXING, PIPELINE_JIRA, WALManager,
+  PIPELINE_CONFLUENCE,
+  PIPELINE_GITLAB,
+  PIPELINE_INDEXING,
+  PIPELINE_JIRA,
+  WALManager,
 )
 
 logging.basicConfig (level = logging.INFO, format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -132,13 +136,13 @@ def collect_all_documents (extract_dirs: list [Path]) -> list [dict]:
   """
   documents = []
   source_names = ["confluence", "jira", "gitlab"]
-  
+
   for source_dir, source_name in zip (extract_dirs, source_names, strict = False):
     if not source_dir.exists ():
       logger.warning (f"Directory for {source_name} does not exist: {source_dir} — skipping")
       continue
     logger.info (f"Collecting documents from {source_name}: {source_dir}")
-    
+
     if source_name == "confluence":
       for conflu_dir in source_dir.glob ("*"):
         if not conflu_dir.is_dir ():
@@ -159,7 +163,7 @@ def collect_all_documents (extract_dirs: list [Path]) -> list [dict]:
                   "url": f"{conflu_dir.name}",
               },
           })
-    
+
     elif source_name == "jira":
       for jira_dir in source_dir.glob ("*"):
         if not jira_dir.is_dir ():
@@ -181,7 +185,7 @@ def collect_all_documents (extract_dirs: list [Path]) -> list [dict]:
                   "created": data.get ("created", ""), "updated": data.get ("updated", ""),
               },
           })
-    
+
     elif source_name == "gitlab":
       for gitlab_dir in source_dir.glob ("*"):
         if not gitlab_dir.is_dir ():
@@ -239,7 +243,7 @@ def collect_all_documents (extract_dirs: list [Path]) -> list [dict]:
                     "path": code_file.stem, "project_id": project_id, "namespace": namespace, "visibility": visibility,
                 },
             })
-  
+
   return documents
 
 
@@ -340,40 +344,40 @@ def main ():
   parser.add_argument ("--webhook-only", action = "store_true", help = "Start only webhook server")
   parser.add_argument ("--consumer-only", action = "store_true", help = "Start only stream consumer")
   args = parser.parse_args ()
-  
+
   # Загрузка конфигурации
   config = load_config (args.config)
-  
+
   # Override timeout from command line
   if args.timeout is not None:
     for source in ["confluence", "jira", "gitlab"]:
       if source in config:
         config [source] ["timeout"] = args.timeout
     logger.info (f"Timeout overridden to {args.timeout}s")
-  
+
   # Test connection mode
   if args.test_connection:
     logger.info ("=== Testing connections ===")
     results = {}
-    
+
     # Test Confluence
     confluence_config = config.get ("confluence", {})
     if confluence_config.get ("url"):
       try:
         from etl.extractors.confluence import ConfluenceExtractor
-        
+
         extractor = ConfluenceExtractor (confluence_config)
         results ["confluence"] = extractor.test_connection ()
       except Exception as e:
         logger.error (f"Confluence: {e}")
         results ["confluence"] = False
-    
+
     # Test Jira
     jira_config = config.get ("jira", {})
     if jira_config.get ("url"):
       try:
         from etl.extractors.jira import JiraExtractor
-        
+
         extractor = JiraExtractor (jira_config)
         logger.info (f"Testing Jira connection to {jira_config ['url']}...")
         resp = extractor._request ("/rest/api/2/myself")
@@ -382,13 +386,13 @@ def main ():
       except Exception as e:
         logger.error (f"❌ Jira: {e}")
         results ["jira"] = False
-    
+
     # Test GitLab
     gitlab_config = config.get ("gitlab", {})
     if gitlab_config.get ("url"):
       try:
         from etl.extractors.gitlab import GitLabExtractor
-        
+
         extractor = GitLabExtractor (gitlab_config)
         logger.info (f"Testing GitLab connection to {gitlab_config ['url']}...")
         resp = extractor._request ("/api/v4/user")
@@ -397,26 +401,26 @@ def main ():
       except Exception as e:
         logger.error (f"❌ GitLab: {e}")
         results ["gitlab"] = False
-    
+
     # Summary
     logger.info ("=== Connection Test Results ===")
     for source, ok in results.items ():
       status = "✅ OK" if ok else "❌ FAILED"
       logger.info (f"  {source}: {status}")
-    
+
     if all (results.values ()):
       logger.info ("All connections OK!")
     else:
       logger.error ("Some connections failed. Check logs above.")
     return
-  
+
   # Инициализация WAL
   wal_path = Path (config.get ("wal", {}).get ("wal_file", "./wal/etl_wal.json"))
   wal = WALManager (wal_path, use_lock = True)
   if args.reset_wal:
     wal.reset_all ()
     logger.info ("WAL has been reset")
-  
+
   # 1. Извлечение (параллельно с graceful degradation)
   extract_dirs = []
   if not args.skip_extract:
@@ -428,7 +432,7 @@ def main ():
       extractors_to_run.append (("jira", run_extract_jira))
     if config.get ("gitlab", {}).get ("url"):
       extractors_to_run.append (("gitlab", run_extract_gitlab))
-    
+
     if not extractors_to_run:
       logger.warning ("No extractors configured (confluence/jira/gitlab URLs missing)")
     else:
@@ -440,7 +444,7 @@ def main ():
           "jira": Path (config.get ("jira", {}).get ("output_dir", "./raw_data/jira")),
           "gitlab": Path (config.get ("gitlab", {}).get ("output_dir", "./raw_data/gitlab")),
       }
-      
+
       with ThreadPoolExecutor (max_workers = len (extractors_to_run), thread_name_prefix = "etl") as pool:
         futures = {pool.submit (_run_extractor_safe, name, fn, config, wal): name for name, fn in extractors_to_run}
         for future in as_completed (futures):
@@ -455,7 +459,7 @@ def main ():
             extract_dirs.append (default_dirs [name])
           else:
             extract_dirs.append (output_dir)
-      
+
       if failed_extractors:
         failed_names = [f [0] for f in failed_extractors]
         logger.warning (f"=== {len (failed_extractors)} extractor(s) failed: {failed_names} ===")
@@ -473,11 +477,11 @@ def main ():
         Path (config.get ("jira", {}).get ("output_dir", "./raw_data/jira")),
         Path (config.get ("gitlab", {}).get ("output_dir", "./raw_data/gitlab")),
     ]
-  
+
   # 2. Сбор документов
   documents = collect_all_documents (extract_dirs)
   logger.info (f"Collected {len (documents)} documents from extractors")
-  
+
   # 3. Чанкинг (если нужен)
   if not args.skip_chunk:
     chunker_config = config.get ("chunking", {})
@@ -499,7 +503,7 @@ def main ():
     else:
       logger.error ("No chunks found and --skip-chunk is set. Exiting.")
       sys.exit (1)
-  
+
   # 4. Граф знаний (опционально)
   if not args.skip_graph and config.get ("graph", {}).get ("enabled", False):
     graph_config = config.get ("graph", {})
@@ -517,7 +521,7 @@ def main ():
     run_graph_extraction (all_chunks, entity_extractor, neo4j_loader)
     if neo4j_loader:
       neo4j_loader.close ()
-  
+
   # 5. Индексация в Qdrant
   if not args.skip_index:
     index_config = config.get ("indexing", {})
@@ -528,7 +532,7 @@ def main ():
         embedder_device = index_config.get ("embedder_device", "cpu"),
         batch_size = index_config.get ("batch_size", 100), )
     qdrant_idx.create_collection (recreate = args.force_reindex)
-    
+
     version_store = ChunkVersionStore (hot_dir = Path (index_config.get ("hot_dir", "./hot_chunks")),
         cold_dir = Path (index_config.get ("cold_dir", "./cold_chunks")),
         wal_path = Path (index_config.get ("version_wal", "./wal/version_wal.json")), )
@@ -536,7 +540,7 @@ def main ():
         cold_storage_dir = Path (index_config.get ("lake_dir", "./cold_lake")),
         use_delta = index_config.get ("use_delta", False), )
     run_indexing (all_chunks, live_lake, wal)
-  
+
   # 6. Streaming mode (optional)
   streaming_cfg = config.get ("streaming", {})
   streaming_enabled = (
@@ -544,7 +548,7 @@ def main ():
   live_upsert_enabled = index_config.get ("live_upsert_enabled", False)
   if live_upsert_enabled:
     logger.info ("Live upsert enabled: atomic chunk-level updates in Qdrant")
-  
+
   if streaming_enabled:
     logger.info ("=== Starting streaming ETL ===")
     try:
@@ -552,14 +556,14 @@ def main ():
     except ImportError:
       logger.error ("redis package not installed, streaming disabled")
       streaming_enabled = False
-    
+
     if streaming_enabled:
       redis_host = os.environ.get ("REDIS_HOST", streaming_cfg.get ("redis_host", "localhost"))
       redis_port = int (os.environ.get ("REDIS_PORT", streaming_cfg.get ("redis_port", 6379)))
       stream_key = os.environ.get ("REDIS_STREAM_KEY", streaming_cfg.get ("redis_stream_key", "etl:events"))
       consumer_group = os.environ.get ("REDIS_CONSUMER_GROUP",
           streaming_cfg.get ("redis_consumer_group", "etl-workers"))  # noqa: E501
-      
+
       try:
         rclient = redis.Redis (host = redis_host, port = redis_port, socket_connect_timeout = 2)
         rclient.ping ()
@@ -567,34 +571,34 @@ def main ():
       except Exception as e:
         logger.warning ("Redis unavailable: %s. Falling back to batch mode.", e)
         rclient = None
-      
+
       if args.webhook_only or (args.streaming and not args.consumer_only):
         from etl.scheduler.webhook_server import create_app as create_webhook_app
-        
+
         webhook_secret = os.environ.get ("WEBHOOK_SECRET", streaming_cfg.get ("webhook_secret", ""))
         webhook_host = os.environ.get ("WEBHOOK_HOST", streaming_cfg.get ("webhook_host", "0.0.0.0"))
         webhook_port = int (os.environ.get ("WEBHOOK_PORT", streaming_cfg.get ("webhook_port", 9000)))
-        
+
         webhook_app = create_webhook_app (redis_client = rclient, webhook_secret = webhook_secret,
             stream_key = stream_key, webhook_enabled = streaming_cfg.get ("webhook_enabled", True), )
         logger.info ("Webhook server configured on %s:%d", webhook_host, webhook_port)
-        
+
         if args.webhook_only:
           import uvicorn
-          
+
           logger.info ("Starting webhook-only mode")
           uvicorn.run (webhook_app, host = webhook_host, port = webhook_port)
           return
-      
+
       if args.consumer_only or (args.streaming and not args.webhook_only):
         from etl.scheduler.stream_consumer import StreamConsumer
-        
+
         consumer = StreamConsumer (redis_client = rclient, stream_key = stream_key, consumer_group = consumer_group, )
         logger.info ("Starting stream consumer on stream %s", stream_key)
         if args.consumer_only:
           consumer.run_forever ()
           return
-  
+
   logger.info ("ETL pipeline completed successfully")
 
 

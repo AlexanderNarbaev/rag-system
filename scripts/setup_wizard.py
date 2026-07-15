@@ -61,11 +61,11 @@ def ask (prompt: str, default: str = "", required: bool = False) -> str:
         return default
     else:
       value = input (f"  {prompt}: ").strip ()
-    
+
     if required and not value:
       error ("This field is required. Please enter a value.")
       continue
-    
+
     return value
 
 
@@ -148,7 +148,7 @@ def test_tcp (host: str, port: int, timeout: float = 3.0) -> bool:
 def test_http (url: str, timeout: float = 5.0) -> bool:
   """Test HTTP connectivity."""
   import urllib.request
-  
+
   try:
     req = urllib.request.Request (url, method = "GET")
     with urllib.request.urlopen (req, timeout = timeout) as resp:
@@ -165,15 +165,15 @@ def step_llm () -> dict [str, str]:
   header ("1. LLM Backend Configuration")
   info ("Configure the LLM endpoint (vLLM, llama.cpp, Ollama, OpenAI-compatible)")
   print ()
-  
+
   endpoint = ask ("LLM endpoint URL", default = "http://localhost:8000/v1", required = True, )
-  
+
   model_name = ask ("Model name (e.g., gemma-4-26b-it, llama-3.1-70b)", required = True, )
-  
+
   api_key = ask ("API key (leave empty if none)")
-  
+
   provider = ask_choice ("LLM provider:", ["vllm", "llama_cpp", "openai_compatible", "ollama"], default = "vllm", )
-  
+
   return {
       "LLM_ENDPOINT": endpoint, "LLM_MODEL_NAME": model_name, "LLM_API_KEY": api_key, "LLM_PROVIDER": provider,
   }
@@ -184,11 +184,11 @@ def step_qdrant () -> dict [str, str]:
   header ("2. Qdrant Configuration")
   info ("Qdrant is the vector database for hybrid search")
   print ()
-  
+
   host = ask ("Qdrant host", default = "localhost", required = True)
   port = ask ("Qdrant HTTP port", default = "6333", required = True)
   collection = ask ("Collection name", default = "knowledge_base")
-  
+
   return {
       "QDRANT_HOST": host, "QDRANT_PORT": port, "COLLECTION_NAME": collection,
   }
@@ -199,11 +199,11 @@ def step_embedder () -> dict [str, str]:
   header ("3. Embedding Model Configuration")
   info ("BGE-M3 provides dense + sparse multilingual embeddings")
   print ()
-  
+
   model = ask ("Embedder model", default = "BAAI/bge-m3", required = True, )
-  
+
   device = ask_choice ("Embedding device:", ["cpu", "cuda"], default = "cpu", )
-  
+
   return {
       "EMBEDDER_MODEL": model, "EMBEDDER_DEVICE": device,
   }
@@ -214,9 +214,9 @@ def step_reranker () -> dict [str, str]:
   header ("4. Reranker Configuration")
   info ("Cross-encoder for reranking retrieved chunks")
   print ()
-  
+
   model = ask ("Reranker model", default = "cross-encoder/ms-marco-MiniLM-L-6-v2", required = True, )
-  
+
   return {
       "RERANKER_MODEL": model,
   }
@@ -227,9 +227,9 @@ def step_features () -> dict [str, str]:
   header ("5. Optional Features")
   info ("Enable or disable optional components")
   print ()
-  
+
   config: dict [str, str] = {}
-  
+
   # Redis
   if ask_bool ("Enable Redis caching?", default = False):
     config ["USE_REDIS"] = "true"
@@ -237,7 +237,7 @@ def step_features () -> dict [str, str]:
     config ["REDIS_URL"] = redis_url
   else:
     config ["USE_REDIS"] = "false"
-  
+
   # Neo4j
   if ask_bool ("Enable Neo4j knowledge graph?", default = False):
     config ["GRAPH_ENABLED"] = "true"
@@ -251,24 +251,24 @@ def step_features () -> dict [str, str]:
   else:
     config ["GRAPH_ENABLED"] = "false"
     config ["USE_GRAPH_EXPANSION"] = "false"
-  
+
   # LangGraph
   if ask_bool ("Enable LangGraph agentic orchestration?", default = False):
     config ["USE_LANGGRAPH"] = "true"
   else:
     config ["USE_LANGGRAPH"] = "false"
-  
+
   # Authentication
   if ask_bool ("Enable JWT authentication?", default = False):
     config ["AUTH_ENABLED"] = "true"
     import secrets
-    
+
     jwt_secret = secrets.token_urlsafe (48)
     config ["JWT_SECRET"] = jwt_secret
     info (f"Generated JWT secret: {jwt_secret [:16]}...")
   else:
     config ["AUTH_ENABLED"] = "false"
-  
+
   # Rate limiting
   if ask_bool ("Enable rate limiting?", default = False):
     config ["RATE_LIMIT_ENABLED"] = "true"
@@ -276,13 +276,13 @@ def step_features () -> dict [str, str]:
     config ["RATE_LIMIT_PER_MINUTE"] = rpm
   else:
     config ["RATE_LIMIT_ENABLED"] = "false"
-  
+
   # Metrics
   if ask_bool ("Enable Prometheus metrics?", default = True):
     config ["METRICS_ENABLED"] = "true"
   else:
     config ["METRICS_ENABLED"] = "false"
-  
+
   return config
 
 
@@ -290,27 +290,27 @@ def step_validation (config: dict [str, str]) -> None:
   """Validate configuration."""
   header ("6. Configuration Validation")
   log ("Validating configuration...")
-  
+
   errors: list [str] = []
-  
+
   # Validate URLs
   for key in ("LLM_ENDPOINT",):
     if key in config and not validate_url (config [key]):
       errors.append (f"Invalid URL: {key}={config [key]}")
-  
+
   # Validate hosts
   if "QDRANT_HOST" in config and not validate_host (config ["QDRANT_HOST"]):
     errors.append (f"Invalid host: QDRANT_HOST={config ['QDRANT_HOST']}")
-  
+
   # Validate ports
   if "QDRANT_PORT" in config and not validate_port (config ["QDRANT_PORT"]):
     errors.append (f"Invalid port: QDRANT_PORT={config ['QDRANT_PORT']}")
-  
+
   # Required fields
   for key in ("LLM_MODEL_NAME", "EMBEDDER_MODEL", "RERANKER_MODEL"):
     if not config.get (key):
       errors.append (f"Required field missing: {key}")
-  
+
   if errors:
     for err in errors:
       error (f"  {err}")
@@ -324,9 +324,9 @@ def step_connectivity (config: dict [str, str]) -> None:
   header ("7. Connectivity Test")
   info ("Testing connections to configured services...")
   print ()
-  
+
   results: list [tuple [str, bool]] = []
-  
+
   # Qdrant
   qdrant_host = config.get ("QDRANT_HOST", "localhost")
   qdrant_port = int (config.get ("QDRANT_PORT", "6333"))
@@ -334,7 +334,7 @@ def step_connectivity (config: dict [str, str]) -> None:
   results.append ((f"Qdrant ({qdrant_host}:{qdrant_port})", ok))
   status = f"{GREEN}✓{NC}" if ok else f"{RED}✗{NC}"
   print (f"  {status} Qdrant ({qdrant_host}:{qdrant_port})")
-  
+
   # LLM
   llm_endpoint = config.get ("LLM_ENDPOINT", "")
   if llm_endpoint:
@@ -344,7 +344,7 @@ def step_connectivity (config: dict [str, str]) -> None:
     results.append ((f"LLM ({llm_endpoint})", ok))
     status = f"{GREEN}✓{NC}" if ok else f"{RED}✗{NC}"
     print (f"  {status} LLM ({llm_endpoint})")
-  
+
   # Redis
   if config.get ("USE_REDIS") == "true":
     redis_url = config.get ("REDIS_URL", "redis://localhost:6379")
@@ -355,7 +355,7 @@ def step_connectivity (config: dict [str, str]) -> None:
     results.append ((f"Redis ({redis_host}:{redis_port})", ok))
     status = f"{GREEN}✓{NC}" if ok else f"{RED}✗{NC}"
     print (f"  {status} Redis ({redis_host}:{redis_port})")
-  
+
   # Neo4j
   if config.get ("GRAPH_ENABLED") == "true":
     neo4j_uri = config.get ("NEO4J_URI", "bolt://localhost:7687")
@@ -366,7 +366,7 @@ def step_connectivity (config: dict [str, str]) -> None:
     results.append ((f"Neo4j ({neo4j_host}:{neo4j_port})", ok))
     status = f"{GREEN}✓{NC}" if ok else f"{RED}✗{NC}"
     print (f"  {status} Neo4j ({neo4j_host}:{neo4j_port})")
-  
+
   print ()
   passed = sum (1 for _, ok in results if ok)
   total = len (results)
@@ -487,7 +487,7 @@ TOOLS_MAX_CONCURRENCY=10
 def generate_env (config: dict [str, str], output_path: Path) -> None:
   """Generate .env file from configuration."""
   from datetime import datetime
-  
+
   # Defaults for optional fields
   defaults = {
       "LLM_API_KEY": "", "LLM_PROVIDER": "vllm", "USE_REDIS": "false", "REDIS_URL": "redis://localhost:6379",
@@ -496,12 +496,12 @@ def generate_env (config: dict [str, str], output_path: Path) -> None:
       "JWT_SECRET": "change-me-in-production", "METRICS_ENABLED": "true", "RATE_LIMIT_ENABLED": "false",
       "RATE_LIMIT_PER_MINUTE": "60", "EMBEDDER_DEVICE": "cpu",
   }
-  
+
   merged = {**defaults, **config}
   merged ["date"] = datetime.now ().strftime ("%Y-%m-%d %H:%M:%S")
-  
+
   content = ENV_TEMPLATE.format (**merged)
-  
+
   output_path.parent.mkdir (parents = True, exist_ok = True)
   output_path.write_text (content)
   log (f"Configuration saved to {output_path}")
@@ -519,35 +519,35 @@ def main () -> None:
   info ("This wizard will guide you through configuring the RAG proxy.")
   info ("Press Enter to accept defaults shown in [brackets].")
   print ()
-  
+
   # Determine project root
   script_dir = Path (__file__).resolve ().parent
   project_root = script_dir.parent
   env_path = project_root / "proxy" / ".env"
-  
+
   # Check if .env already exists
   if env_path.exists ():
     warn (f"{env_path} already exists.")
     if not ask_bool ("Overwrite existing configuration?", default = False):
       info ("Keeping existing configuration. Exiting.")
       return
-  
+
   # Collect configuration
   config: dict [str, str] = {}
-  
+
   config.update (step_llm ())
   config.update (step_qdrant ())
   config.update (step_embedder ())
   config.update (step_reranker ())
   config.update (step_features ())
-  
+
   # Validate
   step_validation (config)
-  
+
   # Test connectivity
   if ask_bool ("Run connectivity tests?", default = True):
     step_connectivity (config)
-  
+
   # Generate .env
   print ()
   if ask_bool (f"Save configuration to {env_path}?", default = True):

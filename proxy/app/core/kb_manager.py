@@ -30,7 +30,7 @@ _DEFAULT_DB_PATH = "data/knowledge_bases.db"
 @dataclass
 class KnowledgeBase:
   """Represents a single knowledge base."""
-  
+
   id: str
   name: str
   description: str = ""
@@ -49,7 +49,7 @@ class KnowledgeBase:
 @dataclass
 class ETLTask:
   """Represents an ETL processing task."""
-  
+
   id: str
   kb_id: str
   source_type: str  # confluence, jira, gitlab, file
@@ -63,14 +63,14 @@ class ETLTask:
 
 class KnowledgeBaseManager:
   """Manages knowledge bases with SQLite metadata and Qdrant collections."""
-  
+
   def __init__ (self, db_path: str = _DEFAULT_DB_PATH, qdrant_client: Any = None):
     self.db_path = db_path
     self.qdrant_client = qdrant_client
     # Ensure parent directory exists
     Path (db_path).parent.mkdir (parents = True, exist_ok = True)
     self._init_db ()
-  
+
   def _get_conn (self) -> sqlite3.Connection:
     """Get a database connection."""
     conn = sqlite3.connect (self.db_path)
@@ -78,7 +78,7 @@ class KnowledgeBaseManager:
     conn.execute ("PRAGMA journal_mode=WAL")
     conn.execute ("PRAGMA foreign_keys=ON")
     return conn
-  
+
   def _init_db (self) -> None:
     """Initialize database schema."""
     conn = self._get_conn ()
@@ -121,11 +121,11 @@ class KnowledgeBaseManager:
       logger.info ("Knowledge base database initialized at %s", self.db_path)
     finally:
       conn.close ()
-  
+
   # -----------------------------------------------------------------------
   # Knowledge Base CRUD
   # -----------------------------------------------------------------------
-  
+
   def create_kb (
       self, name: str, description: str = "", embedding_model: str = "BAAI/bge-m3",
       dense_vector_size: int = 1024, parser_config: dict | None = None,
@@ -134,7 +134,7 @@ class KnowledgeBaseManager:
     kb_id = str (uuid.uuid4 ())
     collection_name = f"kb_{name.lower ().replace (' ', '_').replace ('-', '_')}"
     now = time.time ()
-    
+
     conn = self._get_conn ()
     try:
       conn.execute (
@@ -149,10 +149,10 @@ class KnowledgeBaseManager:
       raise ValueError (f"Knowledge base '{name}' already exists") from e
     finally:
       conn.close ()
-    
+
     # Create Qdrant collection
     self._ensure_qdrant_collection (collection_name, dense_vector_size)
-    
+
     kb = KnowledgeBase (
         id = kb_id, name = name, description = description, collection_name = collection_name,
         embedding_model = embedding_model, dense_vector_size = dense_vector_size,
@@ -160,7 +160,7 @@ class KnowledgeBaseManager:
     )
     logger.info ("Created knowledge base '%s' (id=%s, collection=%s)", name, kb_id, collection_name)
     return kb
-  
+
   def get_kb (self, kb_id: str) -> KnowledgeBase | None:
     """Get a knowledge base by ID."""
     conn = self._get_conn ()
@@ -171,7 +171,7 @@ class KnowledgeBaseManager:
       return self._row_to_kb (row)
     finally:
       conn.close ()
-  
+
   def get_kb_by_name (self, name: str) -> KnowledgeBase | None:
     """Get a knowledge base by name."""
     conn = self._get_conn ()
@@ -182,7 +182,7 @@ class KnowledgeBaseManager:
       return self._row_to_kb (row)
     finally:
       conn.close ()
-  
+
   def list_kbs (self, include_deleted: bool = False) -> list [KnowledgeBase]:
     """List all knowledge bases."""
     conn = self._get_conn ()
@@ -194,34 +194,34 @@ class KnowledgeBaseManager:
       return [self._row_to_kb (row) for row in rows]
     finally:
       conn.close ()
-  
+
   def update_kb (self, kb_id: str, **kwargs: Any) -> KnowledgeBase:
     """Update a knowledge base."""
     allowed = {"name", "description", "embedding_model", "dense_vector_size", "parser_config", "status"}
     updates = {k: v for k, v in kwargs.items () if k in allowed}
     if not updates:
       raise ValueError ("No valid fields to update")
-    
+
     updates ["updated_at"] = time.time ()
     if "parser_config" in updates:
       updates ["parser_config"] = str (updates ["parser_config"])
-    
+
     set_clause = ", ".join (f"{k} = ?" for k in updates)
     values = list (updates.values ()) + [kb_id]
-    
+
     conn = self._get_conn ()
     try:
       conn.execute (f"UPDATE knowledge_bases SET {set_clause} WHERE id = ?", values)
       conn.commit ()
     finally:
       conn.close ()
-    
+
     kb = self.get_kb (kb_id)
     if kb is None:
       raise ValueError (f"Knowledge base {kb_id} not found")
     logger.info ("Updated knowledge base %s: %s", kb_id, list (updates.keys ()))
     return kb
-  
+
   def delete_kb (self, kb_id: str, hard: bool = False) -> bool:
     """Delete a knowledge base (soft by default)."""
     conn = self._get_conn ()
@@ -245,11 +245,11 @@ class KnowledgeBaseManager:
       return True
     finally:
       conn.close ()
-  
+
   # -----------------------------------------------------------------------
   # ETL Task management
   # -----------------------------------------------------------------------
-  
+
   def create_task (self, kb_id: str, source_type: str, source_id: str) -> ETLTask:
     """Create an ETL task."""
     task_id = str (uuid.uuid4 ())
@@ -265,7 +265,7 @@ class KnowledgeBaseManager:
     finally:
       conn.close ()
     return ETLTask (id = task_id, kb_id = kb_id, source_type = source_type, source_id = source_id, created_at = now)
-  
+
   def update_task (self, task_id: str, **kwargs: Any) -> None:
     """Update an ETL task."""
     allowed = {"status", "progress", "error_message"}
@@ -281,7 +281,7 @@ class KnowledgeBaseManager:
       conn.commit ()
     finally:
       conn.close ()
-  
+
   def list_tasks (self, kb_id: str | None = None, status: str | None = None) -> list [ETLTask]:
     """List ETL tasks with optional filters."""
     conn = self._get_conn ()
@@ -299,7 +299,7 @@ class KnowledgeBaseManager:
       return [self._row_to_task (row) for row in rows]
     finally:
       conn.close ()
-  
+
   def get_task (self, task_id: str) -> ETLTask | None:
     """Get an ETL task by ID."""
     conn = self._get_conn ()
@@ -310,11 +310,11 @@ class KnowledgeBaseManager:
       return self._row_to_task (row)
     finally:
       conn.close ()
-  
+
   # -----------------------------------------------------------------------
   # Statistics
   # -----------------------------------------------------------------------
-  
+
   def update_kb_stats (self, kb_id: str) -> None:
     """Recalculate doc_count, chunk_count, token_count for a KB."""
     conn = self._get_conn ()
@@ -332,11 +332,11 @@ class KnowledgeBaseManager:
       conn.commit ()
     finally:
       conn.close ()
-  
+
   # -----------------------------------------------------------------------
   # Qdrant collection management
   # -----------------------------------------------------------------------
-  
+
   def _ensure_qdrant_collection (self, collection_name: str, vector_size: int = 1024) -> None:
     """Create a Qdrant collection if it doesn't exist."""
     if self.qdrant_client is None:
@@ -344,7 +344,7 @@ class KnowledgeBaseManager:
       return
     try:
       from qdrant_client.http import models as qmodels
-      
+
       existing = {c.name for c in self.qdrant_client.get_collections ().collections}
       if collection_name in existing:
         logger.info ("Qdrant collection '%s' already exists", collection_name)
@@ -365,22 +365,22 @@ class KnowledgeBaseManager:
       logger.info ("Created Qdrant collection '%s'", collection_name)
     except Exception as e:
       logger.error ("Failed to create Qdrant collection '%s': %s", collection_name, e)
-  
+
   # -----------------------------------------------------------------------
   # Helpers
   # -----------------------------------------------------------------------
-  
+
   @staticmethod
   def _row_to_kb (row: sqlite3.Row) -> KnowledgeBase:
     """Convert a database row to a KnowledgeBase."""
     import ast
-    
+
     parser_config = {}
     try:
       parser_config = ast.literal_eval (row ["parser_config"]) if row ["parser_config"] else {}
     except (ValueError, SyntaxError):
       pass
-    
+
     return KnowledgeBase (
         id = row ["id"], name = row ["name"], description = row ["description"],
         collection_name = row ["collection_name"], embedding_model = row ["embedding_model"],
@@ -389,7 +389,7 @@ class KnowledgeBaseManager:
         token_count = row ["token_count"], status = row ["status"],
         created_at = row ["created_at"], updated_at = row ["updated_at"],
     )
-  
+
   @staticmethod
   def _row_to_task (row: sqlite3.Row) -> ETLTask:
     """Convert a database row to an ETLTask."""

@@ -15,7 +15,7 @@ def get_router () -> MultiProviderRouter:
   global _router
   # Check if test fixture reset the package-level _router
   import proxy.app.llm.provider as _pkg
-  
+
   pkg_router = getattr (_pkg, "_router", None)
   if pkg_router is None and _router is not None:
     _router = None  # Sync with package level

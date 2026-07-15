@@ -33,7 +33,7 @@ def _disable_auth (monkeypatch):
   """Disable authentication for all tests in this module."""
   import proxy.app.auth.jwt as _jwt
   import proxy.app.shared.config as _cfg
-  
+
   monkeypatch.setenv ("AUTH_ENABLED", "false")
   monkeypatch.setattr (_cfg, "AUTH_ENABLED", False)
   monkeypatch.setattr (_jwt, "AUTH_ENABLED", False)
@@ -43,9 +43,9 @@ def _disable_auth (monkeypatch):
 def app_client ():
   """Create a FastAPI TestClient with mocked external dependencies."""
   from fastapi.testclient import TestClient
-  
+
   from proxy.app.main import app
-  
+
   with TestClient (app) as client:
     yield client
 
@@ -85,7 +85,7 @@ def mock_rag_pipeline_with_context ():
       "text": "Hybrid search uses both dense and sparse vectors in Qdrant.", "source_type": "gitlab_commit",
       "title": "hybrid search commit", "doc_title": "Commit a1b2c3d", "version": "latest",
   }
-  
+
   with (
     patch ("proxy.app.main.hybrid_search") as mock_hybrid, patch (
       "proxy.app.main.rerank_chunks") as mock_rerank, patch ("proxy.app.main.deduplicate_chunks") as mock_dedup, patch (
@@ -139,14 +139,14 @@ def _make_mock_chunks (count: int = 3):
 
 class TestFullRAGPipeline:
   """E2E tests for the complete RAG pipeline."""
-  
+
   def test_health_check (self, app_client):
     """Health endpoint returns healthy status."""
     response = app_client.get ("/v1/health/live")
     assert response.status_code == 200
     data = response.json ()
     assert data ["status"] == "alive"
-  
+
   def test_models_endpoint (self, app_client):
     """Models endpoint returns available models."""
     response = app_client.get ("/v1/models")
@@ -154,24 +154,24 @@ class TestFullRAGPipeline:
     data = response.json ()
     assert "data" in data
     assert len (data ["data"]) > 0
-  
+
   def test_chat_completion_with_rag (self, app_client, mock_rag_pipeline):
     """Full chat completion with RAG context retrieval."""
     response = app_client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [{"role": "user", "content": "What is RAG?"}], "stream": False,
     }, )
-    
+
     assert response.status_code == 200
     data = response.json ()
     assert data ["object"] == "chat.completion"
     assert len (data ["choices"]) == 1
     assert "rag_feedback_id" in data
     assert "rag_sources" in data
-  
+
   def test_multi_turn_conversation (self, app_client, mock_rag_pipeline_with_context):
     """Multi-turn conversation preserves message history."""
     mock_rag_pipeline_with_context ["non_stream_completion"].return_value = "Follow-up answer."
-    
+
     response = app_client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [
             {"role": "user", "content": "What is RAG?"},
@@ -179,11 +179,11 @@ class TestFullRAGPipeline:
             {"role": "user", "content": "How does it work?"},
         ], "stream": False,
     }, )
-    
+
     assert response.status_code == 200
     data = response.json ()
     assert data ["choices"] [0] ["message"] ["content"] == "Follow-up answer."
-  
+
   def test_feedback_submission (self, app_client, mock_rag_pipeline, mock_feedback_logger):
     """Feedback endpoint accepts and stores feedback."""
     with patch ("proxy.app.shared.config.ENRICHMENT_ENABLED", False):
@@ -193,20 +193,20 @@ class TestFullRAGPipeline:
     assert response.status_code == 200
     data = response.json ()
     assert data ["status"] == "ok"
-  
+
   def test_error_handling (self, app_client, mock_rag_pipeline):
     """Invalid request returns proper error."""
     response = app_client.post ("/v1/chat/completions", json = {},  # Missing required fields
     )
     assert response.status_code == 422  # Validation error
-  
+
   def test_empty_messages (self, app_client, mock_rag_pipeline):
     """Empty messages list returns error."""
     response = app_client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [], "stream": False,
     }, )
     assert response.status_code in (400, 422)
-  
+
   def test_chat_with_retrieved_context_returns_sources (self, app_client, mock_rag_pipeline_with_context):
     """When retrieval finds chunks, response includes source citations."""
     response = app_client.post ("/v1/chat/completions", json = {
@@ -218,17 +218,17 @@ class TestFullRAGPipeline:
     source = data ["rag_sources"] [0]
     assert "title" in source
     assert "version" in source
-  
+
   def test_streaming_returns_sse_events (self, app_client, mock_rag_pipeline):
     """Streaming response returns Server-Sent Events format."""
-    
+
     async def mock_stream_gen (*args, **kwargs):
       yield {"id": "1", "choices": [{"delta": {"content": "RAG "}}]}
       yield {"id": "2", "choices": [{"delta": {"content": "is "}}]}
       yield {"id": "3", "choices": [{"delta": {"content": "great."}}]}
-    
+
     mock_rag_pipeline ["stream_completion"].side_effect = mock_stream_gen
-    
+
     response = app_client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [{"role": "user", "content": "What is RAG?"}], "stream": True,
     }, )
@@ -237,7 +237,7 @@ class TestFullRAGPipeline:
     assert "data:" in body
     assert "RAG" in body
     assert "[DONE]" in body
-  
+
   def test_chat_then_feedback_flow (self, app_client, mock_rag_pipeline, mock_feedback_logger):
     """Complete flow: chat -> get feedback_id -> submit feedback."""
     # Step 1: Chat request
@@ -248,7 +248,7 @@ class TestFullRAGPipeline:
     chat_data = chat_response.json ()
     feedback_id = chat_data ["rag_feedback_id"]
     assert feedback_id is not None
-    
+
     # Step 2: Submit feedback using the feedback_id
     with patch ("proxy.app.shared.config.ENRICHMENT_ENABLED", False):
       feedback_response = app_client.post ("/v1/feedback", json = {

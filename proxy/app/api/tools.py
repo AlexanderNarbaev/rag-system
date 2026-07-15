@@ -33,7 +33,7 @@ async def list_tools (
   """List available tools with optional filters. RBAC: visibility-filtered by user role."""
   # Deferred import — tests mock at proxy.app.main.get_enhanced_registry
   import proxy.app.main as _main
-  
+
   registry = _main.get_enhanced_registry ()  # type: ignore[attr-defined]
   user_role = _main._highest_role_from_user (user)  # type: ignore[attr-defined]
   tags = [tag] if tag else None
@@ -53,7 +53,7 @@ async def get_tool (
 ) -> dict [str, Any]:
   """Get a single tool's details by name. Never exposes handler code."""
   import proxy.app.main as _main
-  
+
   registry = _main.get_enhanced_registry ()  # type: ignore[attr-defined]
   tool = registry.get_tool (name)
   if tool is None:

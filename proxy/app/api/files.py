@@ -21,7 +21,7 @@ from proxy.app.shared.exceptions import StorageError
 
 try:
   from proxy.app.shared.minio_client import MinioClient
-  
+
   HAS_MINIO = True
 except ImportError:
   HAS_MINIO = False
@@ -105,32 +105,32 @@ async def upload_file (
     raise HTTPException (status_code = 400,
         detail = f"Content type '{content_type}' is not allowed. Allowed: "
                  f"{', '.join (sorted (ALLOWED_CONTENT_TYPES))}", )
-  
+
   # Read and validate size
   content = await file.read ()
   if len (content) > MAX_UPLOAD_SIZE:
     raise HTTPException (status_code = 413,
         detail = f"File size ({len (content)} bytes) exceeds maximum ({MAX_UPLOAD_SIZE} bytes)", )
-  
+
   # Generate unique object key
   file_id = f"uploads/{uuid.uuid4 ().hex}/{file.filename or 'unnamed'}"
   now = datetime.now (UTC).isoformat ()
-  
+
   metadata = {
       "original_filename": file.filename or "unnamed", "uploaded_by": user.username or "anonymous", "uploaded_at": now,
   }
-  
+
   try:
     import io
-    
+
     minio.upload_file (file_obj = io.BytesIO (content), object_name = file_id, content_type = content_type,
         metadata = metadata, )
   except StorageError as exc:
     logger.error ("File upload failed: %s", exc)
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   logger.info ("File uploaded: %s (%d bytes, user=%s)", file_id, len (content), user.username, )
-  
+
   return FileUploadResponse (id = file_id, filename = file.filename or "unnamed", size = len (content),
       content_type = content_type, bucket = MINIO_BUCKET, uploaded_at = now, )
 
@@ -150,10 +150,10 @@ async def list_files (
   except StorageError as exc:
     logger.error ("File listing failed: %s", exc)
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   files = [FileMetadata (id = f ["key"], size = f ["size"], last_modified = f ["last_modified"], content_type = "",
       metadata = {}, ) for f in raw_files]
-  
+
   return FileListResponse (files = files, total = len (files))
 
 
@@ -172,16 +172,16 @@ async def download_file (
     if "not found" in str (exc).lower ():
       raise HTTPException (status_code = 404, detail = f"File not found: {file_id}") from exc
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   try:
     content = minio.download_file (file_id)
   except StorageError as exc:
     logger.error ("File download failed: %s", exc)
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   filename = meta.get ("metadata", {}).get ("original_filename", file_id.split ("/") [-1])
   content_type = meta.get ("content_type", "application/octet-stream")
-  
+
   return StreamingResponse (iter ([content]), media_type = content_type, headers = {
       "Content-Disposition": f'attachment; filename="{filename}"', "Content-Length": str (len (content)),
   }, )
@@ -200,7 +200,7 @@ async def get_presigned_url (
   """
   if expiration < 60 or expiration > 604800:
     raise HTTPException (status_code = 400, detail = "Expiration must be between 60 and 604800 seconds", )
-  
+
   # Verify file exists
   try:
     minio.get_file_metadata (file_id)
@@ -208,13 +208,13 @@ async def get_presigned_url (
     if "not found" in str (exc).lower ():
       raise HTTPException (status_code = 404, detail = f"File not found: {file_id}") from exc
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   try:
     url = minio.generate_presigned_url (file_id, expiration = expiration)
   except StorageError as exc:
     logger.error ("Presigned URL generation failed: %s", exc)
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   return PresignedUrlResponse (url = url, expires_in = expiration)
 
 
@@ -231,7 +231,7 @@ async def get_file_metadata (
       raise HTTPException (status_code = 404, detail = f"File not found: {file_id}") from exc
     logger.error ("Failed to get file metadata: %s", exc)
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   return FileMetadata (id = meta ["key"], size = meta ["size"], last_modified = meta ["last_modified"],
       content_type = meta ["content_type"], metadata = meta ["metadata"], )
 
@@ -252,13 +252,13 @@ async def delete_file (
     if "not found" in str (exc).lower ():
       raise HTTPException (status_code = 404, detail = f"File not found: {file_id}") from exc
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   try:
     minio.delete_file (file_id)
   except StorageError as exc:
     logger.error ("File deletion failed: %s", exc)
     raise HTTPException (status_code = 500, detail = str (exc)) from exc
-  
+
   logger.info ("File deleted: %s (user=%s)", file_id, user.username)
-  
+
   return FileDeleteResponse (status = "ok", message = f"File '{file_id}' deleted successfully", id = file_id, )

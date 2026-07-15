@@ -14,20 +14,20 @@ logger = logging.getLogger (__name__)
 async def enrich_from_feedback (feedback_request: Any) -> bool:
   """Process a feedback request and enrich the knowledge base if applicable."""
   feedback_id = feedback_request.feedback_id
-  
+
   interaction = _find_interaction (feedback_id)
   if interaction is None:
     logger.warning (f"Interaction {feedback_id} not found for enrichment")
     return False
-  
+
   qa = extract_qa_pair (feedback_request, interaction)
   if qa is None:
     return False
-  
+
   chunk = chunk_qa_pair (qa)
   if chunk is None:
     return False
-  
+
   return await _index_chunk (chunk)
 
 
@@ -35,12 +35,12 @@ def extract_qa_pair (feedback_request: Any, interaction: dict [str, Any]) -> dic
   """Extract a Q&A pair from feedback + original interaction."""
   query = interaction.get ("query", "")
   response = interaction.get ("response", "")
-  
+
   answer = feedback_request.correction if feedback_request.correction else response
-  
+
   if not query or not answer:
     return None
-  
+
   return {
       "question": query.strip (), "answer": answer.strip (), "feedback_id": feedback_request.feedback_id,
       "rating": feedback_request.rating, "context": interaction.get ("context", ""),
@@ -51,7 +51,7 @@ def chunk_qa_pair (qa: dict [str, Any]) -> dict [str, Any] | None:
   """Convert a Q&A pair into a chunk for indexing."""
   text = f"Q: {qa ['question']}\nA: {qa ['answer']}"
   chunk_id = hashlib.sha256 (text.encode ()).hexdigest ()
-  
+
   return {
       "id": chunk_id, "text": text, "metadata": {
           "source": "user_feedback", "feedback_id": qa.get ("feedback_id", ""), "rating": qa.get ("rating", ""),
@@ -65,19 +65,19 @@ async def _index_chunk (chunk: dict [str, Any]) -> bool:
   try:
     from qdrant_client import QdrantClient
     from qdrant_client.models import PointStruct
-    
+
     from proxy.app.llm.remote_services import create_embedder
-    
+
     model = create_embedder ()
-    
+
     client = QdrantClient (host = QDRANT_HOST, port = QDRANT_PORT, check_compatibility = False)
-    
+
     embedding = model.encode (chunk ["text"]).tolist ()
-    
+
     point = PointStruct (id = chunk ["id"], vector = embedding, payload = {
         "text": chunk ["text"], **chunk ["metadata"],
     }, )
-    
+
     client.upsert (collection_name = COLLECTION_NAME, points = [point])
     logger.info (f"Enrichment: indexed chunk {chunk ['id'] [:12]} from feedback {chunk ['metadata'] ['feedback_id']}")
     return True
@@ -91,7 +91,7 @@ def _find_interaction (feedback_id: str) -> dict [str, Any] | None:
   log_path = Path ("logs/interactions.jsonl")
   if not log_path.exists ():
     return None
-  
+
   try:
     for line in log_path.read_text ().strip ().split ("\n"):
       if not line.strip ():
@@ -101,5 +101,5 @@ def _find_interaction (feedback_id: str) -> dict [str, Any] | None:
         return entry
   except Exception as e:
     logger.error (f"Error reading interaction log: {e}")
-  
+
   return None

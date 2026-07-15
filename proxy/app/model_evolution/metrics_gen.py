@@ -21,34 +21,34 @@ def compute_bleu (
     references: list [str], hypotheses: list [str], max_n: int = 4, ) -> dict [str, float]:
   import math
   from collections import Counter
-  
+
   matches = [0] * max_n
   total = [0] * max_n
   ref_len_total = 0
   hyp_len_total = 0
-  
+
   for ref, hyp in zip (references, hypotheses, strict = False):
     ref_tokens = ref.lower ().split ()
     hyp_tokens = hyp.lower ().split ()
     ref_len_total += len (ref_tokens)
     hyp_len_total += len (hyp_tokens)
-    
+
     for n in range (1, max_n + 1):
       ref_ngrams = Counter (tuple (ref_tokens [i: i + n]) for i in range (len (ref_tokens) - n + 1))
       hyp_ngrams = Counter (tuple (hyp_tokens [i: i + n]) for i in range (len (hyp_tokens) - n + 1))
       matches [n - 1] += sum ((ref_ngrams & hyp_ngrams).values ())
       total [n - 1] += max (1, sum (hyp_ngrams.values ()))
-  
+
   precisions = []
   for i in range (max_n):
     if total [i] > 0:
       precisions.append (matches [i] / total [i])
     else:
       precisions.append (0.0)
-  
+
   if all (p == 0.0 for p in precisions):
     return {f"bleu_{n}": 0.0 for n in range (1, max_n + 1)}
-  
+
   brevity = min (1.0, hyp_len_total / max (1, ref_len_total))
   log_sum = sum (math.log (max (p, 1e-10)) for p in precisions) / max_n
   result = {}
@@ -87,7 +87,7 @@ def compute_bertscore (
     references: list [str], hypotheses: list [str], model: str = "bert-base-uncased", ) -> dict [str, float]:
   try:
     from bert_score import score
-    
+
     P, R, F1 = score (hypotheses, references, model_type = model, verbose = False)  # noqa: N806
     return {
         "bertscore_precision": float (P.mean ()), "bertscore_recall": float (R.mean ()),
@@ -131,7 +131,7 @@ def compute_hallucination_rate (
 def compute_perplexity (
     log_likelihoods: list [float], ) -> float:
   import math
-  
+
   if not log_likelihoods:
     return float ("inf")
   avg_ll = sum (log_likelihoods) / len (log_likelihoods)

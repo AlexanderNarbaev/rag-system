@@ -23,7 +23,7 @@ DEFAULT_CONSUMER_NAME = "etl-consumer-1"
 
 class StreamConsumer:
   """Consumes real-time events from Redis Streams and processes them through ETL."""
-  
+
   def __init__ (
       self, redis_client = None, stream_key: str = DEFAULT_STREAM_KEY, consumer_group: str = DEFAULT_CONSUMER_GROUP,
       consumer_name: str = DEFAULT_CONSUMER_NAME, batch_size: int = 10, ):
@@ -33,7 +33,7 @@ class StreamConsumer:
     self.consumer_name = consumer_name
     self.batch_size = batch_size
     self.running = True
-  
+
   def _ensure_consumer_group (self) -> bool:
     """Create consumer group if it doesn't exist."""
     if not self.redis:
@@ -48,7 +48,7 @@ class StreamConsumer:
         return True
       logger.warning ("Failed to create consumer group: %s", e)
       return False
-  
+
   def claim_pending (self, min_idle_ms: int = 60000) -> int:
     """Claim pending messages from other consumers (crash recovery)."""
     if not self.redis:
@@ -58,7 +58,7 @@ class StreamConsumer:
       pending_count = pending_info.get ("pending", 0) if isinstance (pending_info, dict) else 0
       if pending_count == 0:
         return 0
-      
+
       claimed_messages, new_id = self.redis.xautoclaim (self.stream_key, self.consumer_group, self.consumer_name,
           min_idle_time = min_idle_ms, count = 100, )
       claimed_count = len (claimed_messages) if claimed_messages else 0
@@ -68,26 +68,26 @@ class StreamConsumer:
     except Exception as e:
       logger.error ("Failed to claim pending messages: %s", e)
       return 0
-  
+
   def process_event (self, event: dict) -> bool:
     """Process a single event: validate, extract content, chunk, index."""
     source = event.get ("source", "")
     event_type = event.get ("event_type", "")
     doc_id = event.get ("doc_id", "")
     payload_str = event.get ("payload", "{}")
-    
+
     if not source:
       logger.warning ("Unknown source in event, skipping")
       return False
-    
+
     try:
       payload = json.loads (payload_str) if isinstance (payload_str, str) else payload_str
     except (json.JSONDecodeError, TypeError):
       logger.warning ("Invalid payload JSON for event doc_id=%s", doc_id)
       return False
-    
+
     logger.info ("Processing event: source=%s type=%s doc_id=%s", source, event_type, doc_id, )
-    
+
     if source == "confluence":
       return self._process_confluence_event (event_type, doc_id, payload)
     elif source == "gitlab":
@@ -95,7 +95,7 @@ class StreamConsumer:
     else:
       logger.warning ("Unsupported source: %s", source)
       return False
-  
+
   def _process_confluence_event (self, event_type: str, doc_id: str, payload: dict) -> bool:
     """Process a Confluence event through chunk → embed → index.
 
@@ -116,7 +116,7 @@ class StreamConsumer:
                     "StreamConsumer needs chunker and indexer wired in. Returning failure.", event_type, doc_id,
         title, )
     return False
-  
+
   def _process_gitlab_event (self, event_type: str, doc_id: str, payload: dict) -> bool:
     """Process a GitLab event through chunk → embed → index.
 
@@ -147,14 +147,14 @@ class StreamConsumer:
       logger.warning ("GitLab event: type=%s project=%s — STUB: real chunk+index not implemented.", event_type,
           doc_id, )
     return False
-  
+
   def consume_batch (self, block_ms: int | None = 5000) -> int:
     """Consume a batch of messages from the stream."""
     if not self.redis:
       return 0
-    
+
     self._ensure_consumer_group ()
-    
+
     try:
       streams = {self.stream_key: ">"}
       results = self.redis.xreadgroup (self.consumer_group, self.consumer_name, streams, count = self.batch_size,
@@ -162,10 +162,10 @@ class StreamConsumer:
     except Exception as e:
       logger.error ("Failed to read from stream: %s", e)
       return 0
-    
+
     if not results:
       return 0
-    
+
     processed = 0
     for stream_name, messages in results:
       stream_name = stream_name.decode () if isinstance (stream_name, bytes) else stream_name
@@ -181,21 +181,21 @@ class StreamConsumer:
             logger.error ("Failed to acknowledge message %s: %s", msg_id, e)
         else:
           logger.warning ("Failed to process message %s, not acknowledging", msg_id)
-    
+
     return processed
-  
+
   def stop (self):
     """Signal the consumer to stop processing."""
     self.running = False
     logger.info ("Consumer %s stopping", self.consumer_name)
-  
+
   def run_forever (self, block_ms: int = 5000):
     """Run consumer loop: claim pending, then poll for new messages."""
     logger.info ("Stream consumer %s starting on stream %s group %s", self.consumer_name, self.stream_key,
         self.consumer_group, )
-    
+
     self.claim_pending ()
-    
+
     while self.running:
       try:
         processed = self.consume_batch (block_ms = block_ms)
@@ -206,43 +206,43 @@ class StreamConsumer:
         break
       except Exception as e:
         logger.error ("Unexpected error in consumer loop: %s", e)
-    
+
     logger.info ("Consumer %s stopped", self.consumer_name)
 
 
 def main ():
   import argparse
   import os
-  
+
   import yaml
-  
+
   parser = argparse.ArgumentParser (description = "RAG Stream Consumer")
   parser.add_argument ("--config", type = Path, default = Path ("etl/config/etl_config.yaml"))
   args = parser.parse_args ()
-  
+
   config = {}
   if args.config.exists ():
     with open (args.config, encoding = "utf-8") as f:
       config = yaml.safe_load (f)
-  
+
   streaming_cfg = config.get ("streaming", {})
-  
+
   redis_host = os.environ.get ("REDIS_HOST", streaming_cfg.get ("redis_host", "localhost"))
   redis_port = int (os.environ.get ("REDIS_PORT", streaming_cfg.get ("redis_port", 6379)))
   stream_key = os.environ.get ("REDIS_STREAM_KEY", streaming_cfg.get ("redis_stream_key", DEFAULT_STREAM_KEY))
   consumer_group = os.environ.get ("REDIS_CONSUMER_GROUP",
       streaming_cfg.get ("redis_consumer_group", DEFAULT_CONSUMER_GROUP))  # noqa: E501
-  
+
   try:
     import redis
-    
+
     rclient = redis.Redis (host = redis_host, port = redis_port, socket_connect_timeout = 2)
     rclient.ping ()
     logger.info ("Connected to Redis at %s:%d", redis_host, redis_port)
   except Exception as e:
     logger.warning ("Redis unavailable: %s. Falling back to batch mode.", e)
     rclient = None
-  
+
   consumer = StreamConsumer (redis_client = rclient, stream_key = stream_key, consumer_group = consumer_group, )
   consumer.run_forever ()
 

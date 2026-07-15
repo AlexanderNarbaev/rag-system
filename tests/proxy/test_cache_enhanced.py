@@ -13,13 +13,13 @@ class TestInMemoryCache:
     await cache.set ("key1", "value1", ttl = 10)
     result = await cache.get ("key1")
     assert result == "value1"
-  
+
   @pytest.mark.asyncio
   async def test_get_nonexistent (self):
     cache = InMemoryCache ()
     result = await cache.get ("no_such_key")
     assert result is None
-  
+
   @pytest.mark.asyncio
   async def test_delete_existing (self):
     cache = InMemoryCache ()
@@ -27,13 +27,13 @@ class TestInMemoryCache:
     result = await cache.delete ("key1")
     assert result is True
     assert await cache.get ("key1") is None
-  
+
   @pytest.mark.asyncio
   async def test_delete_nonexistent (self):
     cache = InMemoryCache ()
     result = await cache.delete ("no_key")
     assert result is False
-  
+
   @pytest.mark.asyncio
   async def test_clear (self):
     cache = InMemoryCache ()
@@ -42,14 +42,14 @@ class TestInMemoryCache:
     await cache.clear ()
     assert await cache.get ("k1") is None
     assert await cache.get ("k2") is None
-  
+
   @pytest.mark.asyncio
   async def test_ttl_expiration (self):
     cache = InMemoryCache ()
     await cache.set ("key", "value", ttl = 0)
     # With ttl=0, the entry should be expired immediately
     import time
-    
+
     time.sleep (0.01)
     result = await cache.get ("key")
     # Should be expired or still present depending on timing
@@ -63,21 +63,21 @@ class TestCacheManagerInMemory:
     await manager.set ("test", "data", ttl = 10)
     result = await manager.get ("test")
     assert result == "data"
-  
+
   @pytest.mark.asyncio
   async def test_delete (self):
     manager = CacheManager (use_redis = False)
     await manager.set ("key", "val", ttl = 10)
     result = await manager.delete ("key")
     assert result is True
-  
+
   @pytest.mark.asyncio
   async def test_clear (self):
     manager = CacheManager (use_redis = False)
     await manager.set ("k", "v", ttl = 10)
     await manager.clear ()
     assert await manager.get ("k") is None
-  
+
   @pytest.mark.asyncio
   async def test_close_no_redis (self):
     manager = CacheManager (use_redis = False)
@@ -89,7 +89,7 @@ class TestCacheManagerRedis:
   async def test_init_with_redis_url (self):
     manager = CacheManager (redis_url = "redis://localhost:6379", use_redis = True)
     assert manager.use_redis is True
-  
+
   @pytest.mark.asyncio
   async def test_init_redis_none_url (self):
     manager = CacheManager (redis_url = None, use_redis = True)
@@ -106,7 +106,7 @@ class TestSyncMethods:
       assert result == "sync_val" or result is None
     except RuntimeError:
       pass  # Expected in some async contexts
-  
+
   def test_delete_sync_inmemory (self):
     manager = CacheManager (use_redis = False)
     try:
@@ -115,7 +115,7 @@ class TestSyncMethods:
       assert isinstance (result, bool)
     except RuntimeError:
       pass
-  
+
   def test_set_sync_inmemory (self):
     manager = CacheManager (use_redis = False)
     try:

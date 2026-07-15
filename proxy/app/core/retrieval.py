@@ -27,7 +27,7 @@ import numpy as np
 try:
   from qdrant_client import QdrantClient
   from qdrant_client.http import models
-  
+
   QDRANT_AVAILABLE = True
 except ImportError:
   QDRANT_AVAILABLE = False
@@ -35,7 +35,15 @@ except ImportError:
 # Импорт конфигурации (будет создан отдельно)
 from proxy.app.shared.cache import CacheManager
 from proxy.app.shared.config import (
-  COLLECTION_NAME, GRAPH_ENABLED, NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER, QDRANT_HOST, QDRANT_PORT, REDIS_URL, USE_REDIS,
+  COLLECTION_NAME,
+  GRAPH_ENABLED,
+  NEO4J_PASSWORD,
+  NEO4J_URI,
+  NEO4J_USER,
+  QDRANT_HOST,
+  QDRANT_PORT,
+  REDIS_URL,
+  USE_REDIS,
 )
 
 logger = logging.getLogger (__name__)
@@ -135,26 +143,26 @@ class EmbeddingCache:
   1. Exact match: hash(query) -> embedding
   2. Semantic similarity: cosine(query, cached_queries) > 0.95 -> cached embedding
   """
-  
+
   def __init__ (self, max_size: int = 1000, similarity_threshold: float = 0.95):
     self.max_size = max_size
     self.similarity_threshold = similarity_threshold
     self._exact_cache: dict [str, list [float]] = {}
     self._query_embeddings: list [tuple [str, list [float]]] = []
-  
+
   def _hash_query (self, query: str) -> str:
     """Generate hash for exact match."""
     import hashlib
-    
+
     return hashlib.md5 (query.lower ().strip ().encode ()).hexdigest ()
-  
+
   def get (self, query: str) -> list [float] | None:
     """Get cached embedding for query."""
     # Level 1: Exact match
     query_hash = self._hash_query (query)
     if query_hash in self._exact_cache:
       return self._exact_cache [query_hash]
-    
+
     # Level 2: Semantic similarity
     if self._query_embeddings:
       query_lower = query.lower ()
@@ -166,24 +174,24 @@ class EmbeddingCache:
           overlap = len (words1 & words2) / max (len (words1), len (words2))
           if overlap >= self.similarity_threshold:
             return cached_embedding
-    
+
     return None
-  
+
   def set (self, query: str, embedding: list [float]) -> None:
     """Cache embedding for query."""
     query_hash = self._hash_query (query)
     self._exact_cache [query_hash] = embedding
-    
+
     # Store for semantic similarity
     self._query_embeddings.append ((query, embedding))
-    
+
     # Evict if over max size
     if len (self._exact_cache) > self.max_size:
       # Remove oldest entries
       keys_to_remove = list (self._exact_cache.keys ()) [: len (self._exact_cache) - self.max_size]
       for key in keys_to_remove:
         del self._exact_cache [key]
-      
+
       # Trim semantic cache
       self._query_embeddings = self._query_embeddings [-self.max_size:]
 
@@ -202,7 +210,7 @@ def initialize_retrieval () -> None:
   global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
   if not QDRANT_AVAILABLE:
     raise ImportError ("qdrant-client is required. Install with: pip install qdrant-client")
-  
+
   try:
     qdrant_client = QdrantClient (host = QDRANT_HOST, port = QDRANT_PORT, check_compatibility = False)
     # Quick connectivity probe — if Qdrant is unreachable we degrade gracefully
@@ -211,20 +219,20 @@ def initialize_retrieval () -> None:
   except Exception as exc:
     logger.warning ("Qdrant unavailable at %s:%s — degraded mode (%s)", QDRANT_HOST, QDRANT_PORT, exc)
     qdrant_client = None
-  
+
   # Use factory to select remote or local embedder
   from proxy.app.llm.remote_services import create_embedder
-  
+
   embedder = create_embedder ()
   embedder_name = getattr (embedder, "__class__", type (embedder)).__name__
   logger.info ("Embedder initialized: %s", embedder_name)
-  
+
   # Кэш (если используется Redis)
   if USE_REDIS and REDIS_URL:  # noqa: SIM108
     cache_manager = CacheManager (redis_url = REDIS_URL)  # Асинхронная инициализация будет вызвана в main.py
   else:
     cache_manager = CacheManager (use_redis = False)
-  
+
   # Граф Neo4j
   if _GRAPH_ENABLED:
     try:
@@ -243,7 +251,7 @@ def _compute_dense_embedding (text: str) -> list [float]:
   cached_embedding = _embedding_cache.get (text)
   if cached_embedding is not None:
     return cached_embedding
-  
+
   # Check Redis/in-memory cache
   if cache_manager:
     cached = cache_manager.get_sync (cache_key)
@@ -309,28 +317,28 @@ def knee_point_pruning (results: list [Any], sensitivity: float = 0.5) -> list [
   """
   if len (results) <= 2:
     return results
-  
+
   scores = np.array ([r.score for r in results])
   n = len (scores)
-  
+
   # Normalize scores to 0-1
   if scores.max () == scores.min ():
     return results [: max (2, int (n * sensitivity))]
-  
+
   y_norm = (scores - scores.min ()) / (scores.max () - scores.min ())
   x_norm = np.linspace (0, 1, n)
-  
+
   # Line from first to last point
   p1 = np.array ([x_norm [0], y_norm [0]])
   p2 = np.array ([x_norm [-1], y_norm [-1]])
   line_vec = p2 - p1
   line_len = np.linalg.norm (line_vec)
-  
+
   if line_len == 0:
     return results [: max (2, int (n * sensitivity))]
-  
+
   line_unit = line_vec / line_len
-  
+
   # Distance of each point from the line
   distances = []
   for i in range (n):
@@ -341,18 +349,18 @@ def knee_point_pruning (results: list [Any], sensitivity: float = 0.5) -> list [
     proj_point = p1 + proj_length * line_unit
     dist = np.linalg.norm (point - proj_point)
     distances.append (dist)
-  
+
   dist_arr = np.array (distances)
-  
+
   # Apply sensitivity: scale distances
   dist_arr = dist_arr * (1 + sensitivity)
-  
+
   # Knee point is where distance is maximum
   knee_idx_raw = int (np.argmax (dist_arr))
-  
+
   # Ensure minimum 2 results
   knee_idx = max (knee_idx_raw, 1)
-  
+
   return results [: knee_idx + 1]
 
 
@@ -366,10 +374,10 @@ def filter_results_by_score (results: list [Any]) -> tuple [list [Any], str]:
   """
   if not results:
     return [], "insufficient"
-  
+
   strong = [r for r in results if r.score >= STRONG_SCORE_THRESHOLD]
   borderline = [r for r in results if BORDERLINE_SCORE_THRESHOLD <= r.score < STRONG_SCORE_THRESHOLD]
-  
+
   if len (strong) >= MIN_STRONG_SOURCES:
     # Good quality — use strong + some borderline
     return strong + borderline [:2], "strong"
@@ -405,24 +413,24 @@ list [Any]:
   """
   if not qdrant_client or not embedder:
     initialize_retrieval ()
-  
+
   # If Qdrant is still unavailable after initialization, return empty results
   if qdrant_client is None:
     logger.warning ("Qdrant unavailable — returning empty search results")
     return []
-  
+
   if lang:
     logger.debug (f"Cross-lingual search: query language = {lang}")
-  
+
   # Build filter conditions
   filter_conditions = []
   if version:
     filter_conditions.append (models.FieldCondition (key = "version", match = models.MatchValue (value = version)))
   if namespace:
     filter_conditions.append (models.FieldCondition (key = "namespace", match = models.MatchValue (value = namespace)))
-  
+
   q_filter = models.Filter (must = list (filter_conditions)) if filter_conditions else None
-  
+
   # Dense поиск
   dense_vec = _compute_dense_embedding (query)
   assert qdrant_client is not None, "qdrant_client must be initialized"
@@ -441,7 +449,7 @@ list [Any]:
     dense_response = _qc.query_points (collection_name = COLLECTION_NAME, query = dense_vec,
         using = _dense_vector_name, limit = top_k, query_filter = q_filter, with_payload = True, )
     dense_results = dense_response.points
-  
+
   # Sparse поиск (если поддерживается)
   sparse_vec = _compute_sparse_embedding (query)
   sparse_results = []
@@ -458,23 +466,23 @@ list [Any]:
       sparse_response = _qc.query_points (collection_name = COLLECTION_NAME, query = sparse_vec, using = "sparse",
           limit = top_k, query_filter = q_filter, with_payload = True, )
       sparse_results = sparse_response.points
-  
+
   # Слияние
   if sparse_results:
     combined_results = reciprocal_rank_fusion (dense_results, sparse_results) [:top_k]
   else:
     combined_results = dense_results
-  
+
   # Apply two-level score filtering
   filtered_results, quality = filter_results_by_score (combined_results)
   if quality == "insufficient":
     logger.warning (f"No relevant sources found for query: {query [:50]}...")
-  
+
   # Apply knee-point pruning if enabled
   if USE_KNEE_POINT_PRUNING and len (filtered_results) > 5:
     filtered_results = knee_point_pruning (filtered_results, sensitivity = KNEE_SENSITIVITY)
     logger.debug (f"Knee-point pruning: kept {len (filtered_results)} results")
-  
+
   return filtered_results
 
 
@@ -485,13 +493,13 @@ def graph_expand_query (query: str, max_entities: int = 5) -> str:
   """
   if not _GRAPH_ENABLED or not neo4j_driver:
     return ""
-  
+
   # Извлекаем ключевые слова из запроса (простейшая эвристика)
   # В реальном применении лучше использовать NER или запрос к графу по full-text поиску
   keywords = [w for w in query.split () if len (w) > 3] [:3]
   if not keywords:
     return ""
-  
+
   # Cypher запрос: ищем сущности, связанные с этими ключевыми словами
   cypher = """
     MATCH (e:Entity)
@@ -529,13 +537,13 @@ class MultiHopGraphExplorer:
 
   Based on: Knowledge Graph RAG (arxiv:2404.16130)
   """
-  
+
   def __init__ (
       self, max_hops: int = 2, max_results_per_hop: int = 10, cycle_detection: bool = True, ):
     self.max_hops = max_hops
     self.max_results_per_hop = max_results_per_hop
     self.cycle_detection = cycle_detection
-  
+
   def explore (
       self, start_entities: list [str], entity_map: dict [str, list [str]], ) -> list [dict [str, Any]]:
     """
@@ -548,89 +556,89 @@ class MultiHopGraphExplorer:
     """
     if not start_entities or not entity_map:
       return []
-    
+
     visited: set [str] | None = set () if self.cycle_detection else None
     all_paths = []
-    
+
     for entity in start_entities:
       paths = self._bfs_explore (entity, entity_map, visited)
       all_paths.extend (paths)
-    
+
     # Sort by relevance (fewer hops + higher connectivity = better)
     all_paths.sort (key = lambda p: (-p ["score"], p ["hops"]))
     return all_paths [: self.max_results_per_hop * 2]
-  
+
   def _bfs_explore (
       self, start: str, entity_map: dict [str, list [str]], visited: set [str] | None, ) -> list [dict [str, Any]]:
     """BFS traversal from start entity."""
     from collections import deque
-    
+
     queue: deque [tuple [str, list [str], int]] = deque ([(start, [start], 0)])
     paths = []
-    
+
     while queue:
       current, path, hops = queue.popleft ()
-      
+
       if self.cycle_detection and visited is not None:
         if current in visited:
           continue
         visited.add (current)
-      
+
       # Get neighbors
       neighbors = entity_map.get (current, [])
-      
+
       if not neighbors:
         # Leaf node - record path
         paths.append ({
             "path": path, "score": self._score_path (path, entity_map), "hops": hops,
         })
         continue
-      
+
       if hops >= self.max_hops:
         # Max depth reached - record path
         paths.append ({
             "path": path, "score": self._score_path (path, entity_map), "hops": hops,
         })
         continue
-      
+
       # Explore neighbors
       for neighbor in neighbors [: self.max_results_per_hop]:
         if self.cycle_detection and neighbor in path:
           continue  # Skip cycles
         queue.append ((neighbor, path + [neighbor], hops + 1))
-    
+
     return paths
-  
+
   def _score_path (self, path: list [str], entity_map: dict [str, list [str]]) -> float:
     """Score a path by entity connectivity."""
     if not path:
       return 0.0
-    
+
     # Score by connectivity of each entity
     total_connectivity = 0
     for entity in path:
       connectivity = len (entity_map.get (entity, []))
       total_connectivity += min (connectivity, 10)  # Cap at 10
-    
+
     # Normalize
     max_possible = len (path) * 10
     connectivity_score = total_connectivity / max_possible if max_possible > 0 else 0
-    
+
     # Prefer shorter paths (less noise)
     length_penalty = 1.0 / (1.0 + len (path) * 0.1)
-    
+
     return connectivity_score * length_penalty
-  
+
   def format_context (self, paths: list [dict [str, Any]]) -> str:
     """Format multi-hop paths as context for LLM."""
     if not paths:
       return ""
-    
+
     context_parts = []
     for i, path_info in enumerate (paths [:5], 1):
       path_str = " → ".join (path_info ["path"])
       context_parts.append (f"[Path {i}] {path_str} (hops: {path_info ['hops']}, score: {path_info ['score']:.2f})")
-    
+
     return "\n".join (context_parts)
 
 
@@ -649,7 +657,7 @@ class CypherQueryGenerator:
       cypher = generator.generate("What projects does John work on?")
       # Returns: "MATCH (p:Person {name: 'John'})-[:WORKS_ON]->(proj:Project) RETURN proj"
   """
-  
+
   # Common query patterns
   PATTERNS = [
       {
@@ -669,7 +677,7 @@ class CypherQueryGenerator:
           "template": "MATCH (a:{entity1})-[r]->(b:{entity2}) RETURN a.name, type(r), b.name LIMIT 20",
       },
   ]
-  
+
   def generate (self, query: str) -> str | None:
     """
     Generate Cypher query from natural language.
@@ -677,7 +685,7 @@ class CypherQueryGenerator:
     Returns Cypher query string or None if no pattern matches.
     """
     query_lower = query.lower ().strip ()
-    
+
     for pattern_info in self.PATTERNS:
       match = re.search (pattern_info ["pattern"], query_lower)
       if match:
@@ -685,7 +693,7 @@ class CypherQueryGenerator:
         cypher = pattern_info ["template"].format (entity = entity)
         logger.info (f"Generated Cypher for query: {query [:50]}...")
         return cypher
-    
+
     # Fallback: entity search
     entities = self._extract_entities (query)
     if entities:
@@ -695,19 +703,19 @@ class CypherQueryGenerator:
                 f" RETURN n.name, n.description, labels(n) LIMIT 10")
       logger.info (f"Generated fallback Cypher for entity: {entity}")
       return cypher
-    
+
     return None
-  
+
   def _extract_entities (self, query: str) -> list [str]:
     """Extract potential entity names from query."""
     # Simple extraction: capitalized words
     words = query.split ()
     entities = [w for w in words if w [0].isupper () and len (w) > 2]
-    
+
     # Filter common words
     stop_words = {"What", "How", "When", "Where", "Who", "Which", "The", "This", "That"}
     entities = [e for e in entities if e not in stop_words]
-    
+
     return entities
 
 
@@ -728,10 +736,10 @@ class GlobalSearch:
 
   Uses community summaries instead of individual chunks.
   """
-  
+
   def __init__ (self, community_summaries: list [dict [str, Any]] | None = None):
     self.community_summaries = community_summaries or []
-  
+
   def search (
       self, query: str, top_k: int = 5, ) -> list [dict [str, Any]]:
     """
@@ -741,15 +749,15 @@ class GlobalSearch:
     """
     if not self.community_summaries:
       return []
-    
+
     # Score communities by keyword overlap
     query_words = set (query.lower ().split ())
     scored = []
-    
+
     for community in self.community_summaries:
       summary = community.get ("summary", "")
       summary_words = set (summary.lower ().split ())
-      
+
       # Calculate overlap
       overlap = len (query_words & summary_words)
       if overlap > 0:
@@ -759,21 +767,21 @@ class GlobalSearch:
             "key_entities": community.get ("key_entities", []), "score": score,
             "members": community.get ("members", []),
         })
-    
+
     # Sort by score
     scored.sort (key = lambda x: x ["score"], reverse = True)
     return scored [:top_k]
-  
+
   def format_context (self, results: list [dict [str, Any]]) -> str:
     """Format global search results as context for LLM."""
     if not results:
       return ""
-    
+
     context_parts = []
     for i, result in enumerate (results, 1):
       entities = ", ".join (result.get ("key_entities", []) [:5])
       context_parts.append (f"[Community {i}] {result ['summary']}\nKey entities: {entities}")
-    
+
     return "\n\n".join (context_parts)
 
 
@@ -809,7 +817,7 @@ def apply_time_decay (chunks: list [dict [str, Any]], decay_days: int = 180) -> 
   """
   if not chunks:
     return chunks
-  
+
   now = datetime.now (timezone.utc).timestamp ()  # noqa: UP017
   result = []
   for chunk in chunks:
@@ -820,7 +828,7 @@ def apply_time_decay (chunks: list [dict [str, Any]], decay_days: int = 180) -> 
     if ts is None:
       result.append (chunk)
       continue
-    
+
     age_seconds = now - ts
     age_days = max (0, age_seconds / 86400)
     boost = exp (-age_days / decay_days)
@@ -828,7 +836,7 @@ def apply_time_decay (chunks: list [dict [str, Any]], decay_days: int = 180) -> 
     boosted ["score"] = chunk.get ("score", 0.0) * (1.0 + boost)
     boosted ["time_boost"] = boost
     result.append (boosted)
-  
+
   return result
 
 
@@ -857,7 +865,7 @@ def compute_dynamic_top_k (query: str, default: int = 50) -> int:
       Optimal top_k value (between 5 and 50).
   """
   from proxy.app.llm.slm import dynamic_top_k_from_complexity, score_query_complexity
-  
+
   try:
     complexity = score_query_complexity (query)
     return dynamic_top_k_from_complexity (complexity, max_default = default)

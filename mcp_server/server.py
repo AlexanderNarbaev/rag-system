@@ -44,7 +44,7 @@ async def rag_chat (message: str, context: str = "") -> str:
   messages = [{"role": "user", "content": message}]
   if context:
     messages.insert (0, {"role": "system", "content": f"Context: {context}"})
-  
+
   async with httpx.AsyncClient () as client:
     response = await client.post (f"{RAG_PROXY_URL}/v1/chat/completions", json = {
         "model": "rag", "messages": messages, "stream": False,

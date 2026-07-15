@@ -106,11 +106,11 @@ class CanarySplitResponse (BaseModel):
 
 class _CanaryState:
   """Thread-safe in-memory canary deployment state manager."""
-  
+
   def __init__ (self) -> None:
     self._lock = threading.RLock ()
     self._models: dict [str, dict [str, Any]] = {}
-  
+
   def set_split (self, model_name: str, traffic_split: float) -> dict [str, Any]:
     with self._lock:
       if model_name not in self._models:
@@ -126,7 +126,7 @@ class _CanaryState:
       else:
         entry ["phase"] = "idle"
       return dict (entry)
-  
+
   def get_status (self) -> dict [str, Any]:
     with self._lock:
       result: dict [str, dict [str, float | str | None]] = {}
@@ -140,11 +140,11 @@ _canary_state = _CanaryState ()
 
 class _TrainingJobStore:
   """Thread-safe in-memory training job store."""
-  
+
   def __init__ (self) -> None:
     self._lock = threading.RLock ()
     self._jobs: dict [str, dict [str, Any]] = {}
-  
+
   def create (self, trainer_type: str, config: dict [str, Any]) -> str:
     job_id = f"train-{uuid.uuid4 ().hex [:12]}"
     with self._lock:
@@ -153,11 +153,11 @@ class _TrainingJobStore:
           "started_at": datetime.now (UTC).isoformat (), "completed_at": None, "error_message": None,
       }
     return job_id
-  
+
   def get (self, job_id: str) -> dict [str, Any] | None:
     with self._lock:
       return self._jobs.get (job_id)
-  
+
   def update (self, job_id: str, **kwargs: Any) -> None:
     with self._lock:
       if job_id in self._jobs:
@@ -170,14 +170,14 @@ _training_jobs = _TrainingJobStore ()
 def _get_model_registry () -> Any:
   """Get model registry instance. Tests mock at proxy.app.main._get_model_registry."""
   from proxy.app.model_evolution.model_registry import ModelRegistry
-  
+
   return ModelRegistry ()
 
 
 def _get_model_registry_from_main () -> Any:
   """Get the _get_model_registry callable from main module for test mock compatibility."""
   import proxy.app.main as _main
-  
+
   return _main._get_model_registry ()  # type: ignore[attr-defined]
 
 
@@ -197,12 +197,12 @@ async def admin_warmup (
   The require_role(Role.ADMIN) dependency enforces admin-level access.
   """
   from proxy.app.shared.config import WARMUP_ENABLED
-  
+
   if not WARMUP_ENABLED:
     return JSONResponse (status_code = 200, content = {"status": "disabled", "message": "Warm-up is disabled"})
   try:
     from proxy.app.shared.warmup import warmup_all
-    
+
     result = await warmup_all ()
     return JSONResponse (status_code = 200, content = {"status": "ok", "results": result})
   except Exception as e:
@@ -222,21 +222,21 @@ async def admin_models_train (
   from proxy.app.model_evolution.env_profile import EnvProfile, get_preset
   from proxy.app.model_evolution.trainer import TrainerType as ME_TrainerType
   from proxy.app.model_evolution.trainer import TrainingConfig
-  
+
   profile = EnvProfile.DEV
   try:  # noqa: SIM105
     profile = EnvProfile (request.profile)
   except ValueError:
     pass
-  
+
   job_id = _training_jobs.create (trainer_type = request.trainer_type.value, config = {
       "base_model": request.base_model, "profile": profile.value, "data_dir": request.data_dir,
       "epochs": request.epochs, "batch_size": request.batch_size, "learning_rate": request.learning_rate,
       "use_lora": request.use_lora,
   }, )
-  
+
   _training_jobs.update (job_id, status = "running")
-  
+
   # Run training in background task
   async def _run_training () -> None:
     try:
@@ -249,18 +249,18 @@ async def admin_models_train (
           max_seq_length = preset.get ("max_seq_length", 256), )
       if trainer_type == ME_TrainerType.SLM:
         from proxy.app.model_evolution.slm_trainer import SLMTrainer
-        
+
         trainer = SLMTrainer ()
         result = trainer.train (config)
       elif trainer_type == ME_TrainerType.RERANKER:
         from proxy.app.model_evolution.trainer import TrainingJob as ME_TrainingJob
-        
+
         result = ME_TrainingJob (job_id = job_id, trainer_type = ME_TrainerType.RERANKER, config = config,
             status = "completed", metrics = {"mrr": 0.85, "recall_at_10": 0.78}, artifact_uri = "./models/reranker_v1",
             completed_at = datetime.now (UTC).isoformat (), )
       else:
         from proxy.app.model_evolution.trainer import TrainingJob as ME_TrainingJob
-        
+
         result = ME_TrainingJob (job_id = job_id, trainer_type = ME_TrainerType.LLM, config = config,
             status = "completed", metrics = {"eval_loss": 0.52, "rouge_l_f1": 0.38}, artifact_uri = "./models/llm_v1",
             completed_at = datetime.now (UTC).isoformat (), )
@@ -281,9 +281,9 @@ async def admin_models_train (
       logger.exception ("Training job %s failed: %s", job_id, e)
       _training_jobs.update (job_id, status = "failed", error_message = str (e),
           completed_at = datetime.now (UTC).isoformat (), )
-  
+
   asyncio.create_task (_run_training ())
-  
+
   return TrainResponse (job_id = job_id, trainer_type = request.trainer_type.value, status = "running",
       message = f"Training job {job_id} started", )
 
@@ -364,7 +364,7 @@ async def admin_models_evaluate (
   Default thresholds: accuracy >= 0.90, weighted_f1 >= 0.85, mrr >= 0.70.
   """
   from proxy.app.model_evolution.eval_gate import EvalGate, EvalGateConfig, MetricThreshold
-  
+
   thresholds = [
       MetricThreshold ("accuracy", 0.90, "gte"), MetricThreshold ("weighted_f1", 0.85, "gte"),
       MetricThreshold ("mrr", 0.70, "gte"), MetricThreshold ("recall_at_10", 0.65, "gte"),
@@ -372,7 +372,7 @@ async def admin_models_evaluate (
   ]
   config = EvalGateConfig (model_name = request.model_name, thresholds = thresholds,
       require_baseline_comparison = False, )
-  
+
   # Try to get baseline metrics from current production version
   baseline_metrics = None
   try:
@@ -382,17 +382,17 @@ async def admin_models_evaluate (
       baseline_metrics = production.metrics
   except Exception:
     pass
-  
+
   result = EvalGate.evaluate (metrics = request.metrics, config = config, baseline_metrics = baseline_metrics,
       version = request.version, )
-  
+
   # Update metrics in registry if the model exists there
   try:
     registry = _get_model_registry_from_main ()
     registry.update_metrics (request.model_name, request.version, request.metrics)
   except KeyError:
     pass
-  
+
   return EvaluateResponse (model_name = request.model_name, version = request.version,
       status = result.status.value.upper (), failures = result.failures, warnings = result.warnings,
       metrics = result.metrics, )

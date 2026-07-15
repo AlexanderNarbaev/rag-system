@@ -16,7 +16,8 @@ from typing import Any
 from proxy.app.shared.config import TOOLS_ENABLED
 
 from ._legacy import (
-  ToolDefinition, ToolRegistry,
+  ToolDefinition,
+  ToolRegistry,
 )
 from ._legacy import (
   ToolResult as ToolResult,  # noqa: F401  # re-export
@@ -105,31 +106,31 @@ class EnhancedToolRegistry:
   Also supports lookup by new-style ToolDefinition and format conversion
   (to_openai, to_anthropic).
   """
-  
+
   def __init__ (self) -> None:
     self._tools: dict [str, NewToolDefinition] = {}
-  
+
   def register (self, tool: NewToolDefinition) -> None:
     self._tools [tool.name] = tool
-  
+
   def unregister (self, name: str) -> bool:
     if name in self._tools:
       del self._tools [name]
       return True
     return False
-  
+
   def get_tool (self, name: str) -> NewToolDefinition | None:
     return self._tools.get (name)
-  
+
   def list_tools (self) -> list [str]:
     return list (self._tools.keys ())
-  
+
   def get_all (self) -> list [NewToolDefinition]:
     return list (self._tools.values ())
-  
+
   def get_all_openai (self) -> list [dict [str, Any]]:
     return [t.to_openai_format () for t in self._tools.values ()]
-  
+
   def get_all_anthropic (self) -> list [dict [str, Any]]:
     return [t.to_anthropic_format () for t in self._tools.values ()]
 
@@ -143,15 +144,19 @@ def _register_builtin_tools (
   - new-style ToolDefinition (with ToolParam lists) into the enhanced registry
   """
   from .builtin import (
-    GET_DOCUMENT_METADATA_TOOL, SEARCH_BY_VERSION_TOOL, SEARCH_DOCUMENTS_TOOL, get_document_metadata, search_by_version,
+    GET_DOCUMENT_METADATA_TOOL,
+    SEARCH_BY_VERSION_TOOL,
+    SEARCH_DOCUMENTS_TOOL,
+    get_document_metadata,
+    search_by_version,
     search_documents,
   )
-  
+
   if enhanced_registry is not None:
     enhanced_registry.register (SEARCH_DOCUMENTS_TOOL)
     enhanced_registry.register (SEARCH_BY_VERSION_TOOL)
     enhanced_registry.register (GET_DOCUMENT_METADATA_TOOL)
-  
+
   if legacy_registry is not None:
     legacy_registry.register (ToolDefinition (name = "search_documents",
         description = "Search indexed documents using hybrid (dense+sparse) search", parameters_schema = {
@@ -186,22 +191,22 @@ def _ensure_registries () -> tuple [ToolRegistry, EnhancedToolRegistry]:
   Stored on the tools package module for process-wide sharing.
   """
   import sys
-  
+
   pkg = sys.modules [__package__]
-  
+
   legacy = getattr (pkg, "_global_registry", None)
   enhanced = getattr (pkg, "_enhanced_registry", None)
-  
+
   if legacy is None or enhanced is None:
     legacy = ToolRegistry ()
     enhanced = EnhancedToolRegistry ()
-    
+
     if TOOLS_ENABLED:
       _register_builtin_tools (legacy_registry = legacy, enhanced_registry = enhanced)
-    
+
     pkg._global_registry = legacy  # type: ignore[attr-defined]
     pkg._enhanced_registry = enhanced  # type: ignore[attr-defined]
-  
+
   return legacy, enhanced
 
 

@@ -20,7 +20,7 @@ def extract_version_from_query (query: str) -> str | None:
   """
   if not query:
     return None
-  
+
   # Поиск семантических версий
   patterns = [
       r"(?:v|version)[\s]*(\d+(?:\.\d+)+(?:\.\d+)?)",  # v1.2.3, version 1.2.3
@@ -31,12 +31,12 @@ def extract_version_from_query (query: str) -> str | None:
     match = re.search (pattern, query, re.IGNORECASE)
     if match:
       return match.group (1)
-  
+
   # Поиск даты как версии (YYYY-MM-DD)
   date_match = re.search (r"(\d{4}-\d{2}-\d{2})", query)
   if date_match:
     return date_match.group (1)
-  
+
   return None
 
 
@@ -50,13 +50,13 @@ def resolve_versions (
   """
   if not chunks_with_scores:
     return []
-  
+
   # Группировка по source_id
   groups = defaultdict (list)
   for chunk, score in chunks_with_scores:
     source_id = chunk.get ("source_id", "unknown")
     groups [source_id].append ((chunk, score))
-  
+
   resolved = []
   for source_id, group in groups.items ():
     # Если запрошена конкретная версия
@@ -67,7 +67,7 @@ def resolve_versions (
         continue
       # Если нет чанков с запрошенной версией, пробуем найти ближайшую (по семантике версий)
       logger.warning (f"Requested version {requested_version} not found for {source_id}, using latest")
-    
+
     # Найти максимальную версию (простейшее строковое сравнение, для дат и семантических версий)
     def version_key (chunk: dict [str, Any]) -> tuple [int, ...]:
       v = chunk.get ("version", "0")
@@ -77,10 +77,10 @@ def resolve_versions (
         return tuple (int (p) for p in parts if p.isdigit ())
       except Exception:
         return (0,)
-    
+
     best_chunk = max (group, key = lambda x: version_key (x [0]))
     resolved.append (best_chunk)
-  
+
   logger.debug (
       f"Version resolution: {len (chunks_with_scores)} -> {len (resolved)} chunks (requested: {requested_version})")
   return resolved

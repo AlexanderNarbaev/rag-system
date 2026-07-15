@@ -52,15 +52,15 @@ def _make_stream_message (msg_id: str, event: dict) -> list:
 class TestConsumerInit:
   def test_consumer_creates_group (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client, stream_key = "etl:events",
         consumer_group = "etl-workers", )
     assert consumer.stream_key == "etl:events"
     assert consumer.consumer_group == "etl-workers"
-  
+
   def test_consumer_graceful_init_without_redis (self):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = None)
     assert consumer.redis is None
 
@@ -69,29 +69,29 @@ class TestEventProcessing:
   def test_process_confluence_created_event (self, mock_redis_client, sample_confluence_event):
     """Confluence stub returns False (planned, not implemented)."""
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     result = consumer.process_event (sample_confluence_event)
     assert result is False
-  
+
   def test_process_gitlab_push_event (self, mock_redis_client, sample_gitlab_event):
     """GitLab stub returns False (planned, not implemented)."""
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     result = consumer.process_event (sample_gitlab_event)
     assert result is False
-  
+
   def test_process_event_invalid_returns_false (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     result = consumer.process_event ({"invalid": "event"})
     assert result is False
-  
+
   def test_process_event_missing_source_logs_warning (self, mock_redis_client, caplog):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     consumer.process_event ({"event_type": "unknown", "doc_id": "1", "payload": "{}"})
     assert any ("Unknown source" in rec.message for rec in caplog.records)
@@ -101,28 +101,28 @@ class TestStreamProcessing:
   def test_consume_pending_messages_no_ack_for_stubs (self, mock_redis_client, sample_confluence_event):
     """Stubs return False, so messages are NOT acknowledged."""
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     msg_id = "1719000000000-0"
     mock_redis_client.xreadgroup.return_value = _make_stream_message (msg_id, sample_confluence_event)
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     processed = consumer.consume_batch (block_ms = 100)
     assert processed == 0
     mock_redis_client.xreadgroup.assert_called_once ()
     mock_redis_client.xack.assert_not_called ()
-  
+
   def test_consume_empty_stream (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     mock_redis_client.xreadgroup.return_value = []
     consumer = StreamConsumer (redis_client = mock_redis_client)
     processed = consumer.consume_batch (block_ms = 100)
     assert processed == 0
-  
+
   def test_consume_multiple_messages_no_ack_for_stubs (self, mock_redis_client):
     """Multiple stub events: none are acknowledged."""
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     event1 = {
         "source": "confluence", "event_type": "page_created", "doc_id": "1",
         "timestamp": datetime.now (UTC).isoformat (), "payload": "{}",
@@ -138,35 +138,35 @@ class TestStreamProcessing:
         ],
         ]
     ]
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     processed = consumer.consume_batch (block_ms = 100)
     assert processed == 0
     mock_redis_client.xack.assert_not_called ()
-  
+
   def test_acknowledge_on_success (self, mock_redis_client):
     """ACK is called when process_event returns True (e.g. future real processing)."""
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     event = {
         "source": "confluence", "event_type": "page_created", "doc_id": "1",
         "timestamp": datetime.now (UTC).isoformat (), "payload": "{}",
     }
     msg_id = b"1719000000000-0"
     mock_redis_client.xreadgroup.return_value = [["etl:events", [(msg_id, event)]]]
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     # Patch process_event to simulate successful processing
     consumer.process_event = lambda evt: True  # type: ignore[method-assign]
     consumer.consume_batch (block_ms = 100)
     mock_redis_client.xack.assert_called_with ("etl:events", "etl-workers", msg_id.decode ())
-  
+
   def test_no_acknowledge_on_failure (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     bad_event = {"invalid": True}
     mock_redis_client.xreadgroup.return_value = [["etl:events", [(b"1719000000000-0", bad_event)]]]
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     consumer.consume_batch (block_ms = 100)
     mock_redis_client.xack.assert_not_called ()
@@ -175,25 +175,25 @@ class TestStreamProcessing:
 class TestCrashRecovery:
   def test_claim_pending_on_startup (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     mock_redis_client.xpending.return_value = {"pending": 2}
     consumer = StreamConsumer (redis_client = mock_redis_client)
     claimed = consumer.claim_pending ()
     assert claimed >= 0
     mock_redis_client.xautoclaim.assert_called_once ()
-  
+
   def test_no_pending_messages (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     mock_redis_client.xpending.return_value = {"pending": 0}
     consumer = StreamConsumer (redis_client = mock_redis_client)
     claimed = consumer.claim_pending ()
     assert claimed == 0
     mock_redis_client.xautoclaim.assert_not_called ()
-  
+
   def test_consumer_stop_signal (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = mock_redis_client)
     assert consumer.running is True
     consumer.stop ()
@@ -203,14 +203,14 @@ class TestCrashRecovery:
 class TestConsumerGracefulDegradation:
   def test_consume_batch_no_redis (self):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     consumer = StreamConsumer (redis_client = None)
     processed = consumer.consume_batch ()
     assert processed == 0
-  
+
   def test_redis_error_returns_zero (self, mock_redis_client):
     from etl.scheduler.stream_consumer import StreamConsumer
-    
+
     mock_redis_client.xreadgroup.side_effect = Exception ("connection lost")
     consumer = StreamConsumer (redis_client = mock_redis_client)
     processed = consumer.consume_batch (block_ms = 100)

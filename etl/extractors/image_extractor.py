@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 try:
   from bs4 import BeautifulSoup
-  
+
   BS4_AVAILABLE = True
 except ImportError:
   BS4_AVAILABLE = False
@@ -34,9 +34,9 @@ def extract_images_from_html (html: str) -> list [ImageInfo]:
   """
   if not html:
     return []
-  
+
   results = []
-  
+
   if BS4_AVAILABLE:
     try:
       soup = BeautifulSoup (html, "html.parser")  # noqa: F821
@@ -49,10 +49,10 @@ def extract_images_from_html (html: str) -> list [ImageInfo]:
       return results
     except Exception:
       pass
-  
+
   pattern = re.compile (r'<img[^>]*?\s+(?:src\s*=\s*"([^"]*)"|src\s*=\s*\'([^\']*)\')', re.IGNORECASE, )
   alt_pattern = re.compile (r'<img[^>]*?\s+alt\s*=\s*"([^"]*)"', re.IGNORECASE, )
-  
+
   for match in pattern.finditer (html):
     src = match.group (1) or match.group (2) or ""
     if not src or src.startswith ("data:"):
@@ -67,7 +67,7 @@ def extract_images_from_html (html: str) -> list [ImageInfo]:
       if am:
         alt = am.group (1)
     results.append (ImageInfo (src = src, alt = alt))
-  
+
   return results
 
 
@@ -83,7 +83,7 @@ def caption_image (image_path: str, alt_text: str = "") -> str:
   """
   if alt_text and len (alt_text.strip ()) > 1:
     return f"[Image: {alt_text.strip ()}]"
-  
+
   if image_path:
     filename = image_path.rsplit ("/", 1) [-1] if "/" in image_path else image_path
     if filename:
@@ -91,7 +91,7 @@ def caption_image (image_path: str, alt_text: str = "") -> str:
       readable = re.sub (r"[_-]+", " ", name_part).strip ()
       if readable:
         return f"[Image: {readable}]"
-  
+
   return "[Image: untitled]"
 
 
@@ -107,10 +107,10 @@ def embed_image (image_path: str) -> list [float]:
   """
   if not IMAGE_EXTRACTION_ENABLED:
     return []
-  
+
   if not image_path or not os.path.exists (image_path):
     logger.debug ("Image not found for embedding: %s", image_path)
     return []
-  
+
   logger.info ("Placeholder embed_image called for %s — integrate CLIP model here", image_path)
   return []

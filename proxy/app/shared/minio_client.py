@@ -15,13 +15,17 @@ try:
   import boto3
   from botocore.config import Config as BotoConfig
   from botocore.exceptions import ClientError, EndpointConnectionError
-  
+
   HAS_BOTO3 = True
 except ImportError:
   HAS_BOTO3 = False
 
 from proxy.app.shared.config import (
-  MINIO_ACCESS_KEY, MINIO_BUCKET, MINIO_ENDPOINT, MINIO_SECRET_KEY, MINIO_SECURE,
+  MINIO_ACCESS_KEY,
+  MINIO_BUCKET,
+  MINIO_ENDPOINT,
+  MINIO_SECRET_KEY,
+  MINIO_SECURE,
 )
 from proxy.app.shared.exceptions import StorageError
 
@@ -35,7 +39,7 @@ class MinioClient:
   listing, and deleting files in a MinIO bucket. Also supports presigned
   URL generation for secure temporary access.
   """
-  
+
   def __init__ (
       self, endpoint: str | None = None, access_key: str | None = None, secret_key: str | None = None,
       bucket: str | None = None, secure: bool | None = None, ) -> None:
@@ -47,7 +51,7 @@ class MinioClient:
     self._bucket = bucket or MINIO_BUCKET
     self._secure = secure if secure is not None else MINIO_SECURE
     self._client = None
-  
+
   def _get_client (self) -> boto3.client:
     """Lazy-initialize and return the boto3 S3 client."""
     if self._client is None:
@@ -58,7 +62,7 @@ class MinioClient:
           region_name = "us-east-1",  # MinIO default
       )
     return self._client
-  
+
   def _ensure_bucket (self) -> None:
     """Create the bucket if it does not exist."""
     client = self._get_client ()
@@ -75,7 +79,7 @@ class MinioClient:
               component = "minio", ) from create_exc
       else:
         raise StorageError (f"Failed to access bucket '{self._bucket}': {exc}", component = "minio", ) from exc
-  
+
   def upload_file (
       self, file_obj: BinaryIO, object_name: str, content_type: str = "application/octet-stream",
       metadata: dict [str, str] | None = None, ) -> str:
@@ -104,7 +108,7 @@ class MinioClient:
       return object_name
     except (ClientError, EndpointConnectionError) as exc:
       raise StorageError (f"Failed to upload '{object_name}': {exc}", component = "minio", ) from exc
-  
+
   def download_file (self, object_name: str) -> bytes:
     """Download a file from MinIO.
 
@@ -128,7 +132,7 @@ class MinioClient:
       if error_code in ("NoSuchKey", "404"):
         raise StorageError (f"File not found: '{object_name}'", component = "minio", ) from exc
       raise StorageError (f"Failed to download '{object_name}': {exc}", component = "minio", ) from exc
-  
+
   def list_files (self, prefix: str = "") -> list [dict [str, Any]]:
     """List files in the bucket, optionally filtered by prefix.
 
@@ -154,7 +158,7 @@ class MinioClient:
       return results
     except ClientError as exc:
       raise StorageError (f"Failed to list files: {exc}", component = "minio", ) from exc
-  
+
   def delete_file (self, object_name: str) -> None:
     """Delete a file from MinIO.
 
@@ -170,7 +174,7 @@ class MinioClient:
       logger.info ("Deleted '%s' from bucket '%s'", object_name, self._bucket)
     except ClientError as exc:
       raise StorageError (f"Failed to delete '{object_name}': {exc}", component = "minio", ) from exc
-  
+
   def get_file_metadata (self, object_name: str) -> dict [str, Any]:
     """Get metadata for a file without downloading it.
 
@@ -197,7 +201,7 @@ class MinioClient:
       if error_code in ("NoSuchKey", "404", "403"):
         raise StorageError (f"File not found: '{object_name}'", component = "minio", ) from exc
       raise StorageError (f"Failed to get metadata for '{object_name}': {exc}", component = "minio", ) from exc
-  
+
   def generate_presigned_url (
       self, object_name: str, expiration: int = 3600, ) -> str:
     """Generate a presigned URL for downloading a file.
@@ -220,7 +224,7 @@ class MinioClient:
     except ClientError as exc:
       raise StorageError (f"Failed to generate presigned URL for '{object_name}': {exc}",
           component = "minio", ) from exc
-  
+
   def health_check (self) -> bool:
     """Check MinIO connectivity.
 

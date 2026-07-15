@@ -49,13 +49,13 @@ def sample_chunks ():
 @pytest.fixture
 def sample_search_results (sample_chunks):
   """Mocked Qdrant ScoredPoint search results."""
-  
+
   class ScoredPoint:
     def __init__ (self, id, score, payload):
       self.id = id
       self.score = score
       self.payload = payload
-  
+
   results = []
   for i, chunk in enumerate (sample_chunks):
     results.append (ScoredPoint (id = chunk ["hash"], score = 0.95 - i * 0.05, payload = chunk.copy ()))
@@ -141,7 +141,7 @@ def mock_non_stream_completion ():
     async def _mock_fn (*args, **kwargs):
       return ("На основе предоставленного контекста: RAG — это техника объединения LLM с внешней базой знаний для "
               "повышения точности ответов.")
-    
+
     mock.side_effect = _mock_fn
     yield mock
 
@@ -165,6 +165,6 @@ def mock_stream_completion ():
       ]
       for chunk in chunks:
         yield chunk
-    
+
     mock.side_effect = _mock_stream
     yield mock

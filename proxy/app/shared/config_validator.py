@@ -10,7 +10,6 @@ proxy starts accepting requests.
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any
 
 logger = logging.getLogger (__name__)
 
@@ -18,7 +17,7 @@ logger = logging.getLogger (__name__)
 @dataclass
 class ValidationResult:
   """Result of a configuration validation check."""
-  
+
   component: str
   status: str  # ok, warning, error
   message: str
@@ -32,7 +31,7 @@ def validate_config () -> list [ValidationResult]:
   cannot start; warnings indicate degraded functionality.
   """
   results: list [ValidationResult] = []
-  
+
   # --- Required settings ---
   llm_endpoint = os.environ.get ("LLM_ENDPOINT", "")
   if not llm_endpoint:
@@ -50,7 +49,7 @@ def validate_config () -> list [ValidationResult]:
         component = "LLM_ENDPOINT", status = "ok",
         message = f"Configured: {llm_endpoint}",
     ))
-  
+
   # --- Qdrant settings ---
   qdrant_host = os.environ.get ("QDRANT_HOST", "localhost")
   qdrant_port = os.environ.get ("QDRANT_PORT", "6333")
@@ -58,14 +57,14 @@ def validate_config () -> list [ValidationResult]:
       component = "QDRANT", status = "ok",
       message = f"Configured: {qdrant_host}:{qdrant_port}",
   ))
-  
+
   # --- Collection name ---
   collection_name = os.environ.get ("COLLECTION_NAME", "knowledge_base")
   results.append (ValidationResult (
       component = "COLLECTION_NAME", status = "ok",
       message = f"Default collection: {collection_name}",
   ))
-  
+
   # --- Redis (optional) ---
   use_redis = os.environ.get ("USE_REDIS", "false").lower () in ("true", "1", "yes")
   redis_url = os.environ.get ("REDIS_URL", "")
@@ -82,7 +81,7 @@ def validate_config () -> list [ValidationResult]:
     results.append (ValidationResult (
         component = "REDIS", status = "ok", message = "Disabled (using in-memory cache)",
     ))
-  
+
   # --- Neo4j (optional) ---
   graph_enabled = os.environ.get ("GRAPH_ENABLED", "false").lower () in ("true", "1", "yes")
   if graph_enabled:
@@ -100,7 +99,7 @@ def validate_config () -> list [ValidationResult]:
     results.append (ValidationResult (
         component = "NEO4J", status = "ok", message = "Graph expansion disabled",
     ))
-  
+
   # --- Auth (optional) ---
   auth_enabled = os.environ.get ("AUTH_ENABLED", "false").lower () in ("true", "1", "yes")
   if auth_enabled:
@@ -118,14 +117,14 @@ def validate_config () -> list [ValidationResult]:
     results.append (ValidationResult (
         component = "AUTH", status = "ok", message = "Authentication disabled",
     ))
-  
+
   # --- LangGraph (optional) ---
   use_langgraph = os.environ.get ("USE_LANGGRAPH", "false").lower () in ("true", "1", "yes")
   results.append (ValidationResult (
       component = "LANGGRAPH", status = "ok",
       message = "Enabled" if use_langgraph else "Disabled",
   ))
-  
+
   return results
 
 
@@ -138,16 +137,16 @@ def check_startup_health () -> tuple [bool, list [ValidationResult]]:
   results = validate_config ()
   errors = [r for r in results if r.status == "error"]
   warnings = [r for r in results if r.status == "warning"]
-  
+
   if errors:
     logger.error ("Configuration errors found:")
     for r in errors:
       logger.error ("  [%s] %s", r.component, r.message)
-  
+
   if warnings:
     logger.warning ("Configuration warnings:")
     for r in warnings:
       logger.warning ("  [%s] %s", r.component, r.message)
-  
+
   can_start = len (errors) == 0
   return can_start, results

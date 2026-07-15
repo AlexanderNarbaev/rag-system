@@ -54,13 +54,13 @@ def ndcg_at_k (retrieved: list [str], relevant: set [str], k: int) -> float:
   """
   if not relevant:
     return 1.0
-  
+
   binary_relevance = [1.0 if doc in relevant else 0.0 for doc in retrieved [:k]]
   ideal_relevance = sorted ([1.0] * min (len (relevant), k) + [0.0] * max (0, k - len (relevant)), reverse = True)
-  
+
   dcg = dcg_at_k (binary_relevance, k)
   idcg = dcg_at_k (ideal_relevance, k)
-  
+
   return dcg / idcg if idcg > 0 else 0.0
 
 
@@ -86,7 +86,7 @@ def mrr (retrieved_lists: list [list [str]], relevant_sets: list [set [str]]) ->
   """Compute MRR (Mean Reciprocal Rank) over all queries."""
   if not retrieved_lists:
     return 0.0
-  
+
   rr_sum = 0.0
   for retrieved, relevant in zip (retrieved_lists, relevant_sets, strict = False):
     if not relevant:
@@ -95,7 +95,7 @@ def mrr (retrieved_lists: list [list [str]], relevant_sets: list [set [str]]) ->
       if doc in relevant:
         rr_sum += 1.0 / rank
         break
-  
+
   return rr_sum / len (retrieved_lists) if retrieved_lists else 0.0
 
 
@@ -107,11 +107,11 @@ def extract_eval_pairs_from_hitl (hitl_dir: str) -> list [dict [str, Any]]:
   """
   pairs = []
   log_path = Path (hitl_dir)
-  
+
   if not log_path.exists ():
     logger.error (f"HITL directory not found: {hitl_dir}")
     return pairs
-  
+
   for jsonl_file in log_path.glob ("*.jsonl"):
     with open (jsonl_file, encoding = "utf-8") as f:
       for line in f:
@@ -122,11 +122,11 @@ def extract_eval_pairs_from_hitl (hitl_dir: str) -> list [dict [str, Any]]:
           record = json.loads (line)
         except json.JSONDecodeError:
           continue
-        
+
         query = record.get ("user_query") or record.get ("query", "")
         if not query:
           continue
-        
+
         # Extract relevant doc IDs from chunk metadata or explicit feedback
         relevant_docs = []
         metadata = record.get ("metadata") or {}
@@ -134,10 +134,10 @@ def extract_eval_pairs_from_hitl (hitl_dir: str) -> list [dict [str, Any]]:
           relevant_docs = metadata ["relevant_doc_ids"]
         elif "chunks" in metadata:
           relevant_docs = [c.get ("source_id", "") for c in metadata ["chunks"] if c.get ("source_id")]
-        
+
         if relevant_docs:
           pairs.append ({"query": query, "relevant_docs": relevant_docs})
-  
+
   logger.info (f"Extracted {len (pairs)} eval pairs from HITL logs")
   return pairs
 
@@ -146,11 +146,11 @@ def load_labeled_dataset (dataset_path: str) -> list [dict [str, Any]]:
   """Load a labeled evaluation dataset from a JSONL file."""
   pairs = []
   path = Path (dataset_path)
-  
+
   if not path.exists ():
     logger.error (f"Dataset not found: {dataset_path}")
     return pairs
-  
+
   with open (path, encoding = "utf-8") as f:
     for line in f:
       line = line.strip ()
@@ -162,7 +162,7 @@ def load_labeled_dataset (dataset_path: str) -> list [dict [str, Any]]:
           pairs.append (record)
       except json.JSONDecodeError:
         continue
-  
+
   logger.info (f"Loaded {len (pairs)} labeled eval pairs from {dataset_path}")
   return pairs
 
@@ -176,17 +176,17 @@ def run_retrieval_for_queries (
   """
   retrieved_lists = []
   relevant_sets = []
-  
+
   try:
     from proxy.app.retrieval import hybrid_search
   except ImportError as e:
     logger.error (f"Cannot import retrieval module: {e}. Use --hitl-dir instead.")
     return retrieved_lists, relevant_sets
-  
+
   for i, pair in enumerate (eval_pairs):
     query = pair ["query"]
     relevant = set (pair.get ("relevant_docs", []))
-    
+
     try:
       results = hybrid_search (query = query, top_k = top_k)
       retrieved_ids = []
@@ -196,17 +196,17 @@ def run_retrieval_for_queries (
           retrieved_ids.append (source_id)
         elif hit.id:
           retrieved_ids.append (str (hit.id))
-      
+
       retrieved_lists.append (retrieved_ids)
       relevant_sets.append (relevant)
     except Exception as e:
       logger.warning (f"Retrieval failed for query '{query [:80]}': {e}")
       retrieved_lists.append ([])
       relevant_sets.append (relevant)
-    
+
     if (i + 1) % 50 == 0:
       logger.info (f"  Processed {i + 1}/{len (eval_pairs)} queries")
-  
+
   return retrieved_lists, relevant_sets
 
 
@@ -214,21 +214,21 @@ def compute_all_metrics (
     retrieved_lists: list [list [str]], relevant_sets: list [set [str]], ) -> dict [str, float]:
   """Compute all evaluation metrics."""
   metrics: dict [str, float] = {}
-  
+
   metrics ["mrr"] = mrr (retrieved_lists, relevant_sets)
-  
+
   for k in (5, 10, 20):
     recalls = [recall_at_k (r, rel, k) for r, rel in zip (retrieved_lists, relevant_sets, strict = False)]
     metrics [f"recall@{k}"] = sum (recalls) / len (recalls) if recalls else 0.0
-  
+
   for k in (5, 10):
     ndcgs = [ndcg_at_k (r, rel, k) for r, rel in zip (retrieved_lists, relevant_sets, strict = False)]
     metrics [f"ndcg@{k}"] = sum (ndcgs) / len (ndcgs) if ndcgs else 0.0
-  
+
   for k in (5,):
     precisions = [precision_at_k (r, rel, k) for r, rel in zip (retrieved_lists, relevant_sets, strict = False)]
     metrics [f"precision@{k}"] = sum (precisions) / len (precisions) if precisions else 0.0
-  
+
   metrics ["num_queries"] = float (len (retrieved_lists))
   return metrics
 
@@ -241,11 +241,11 @@ def generate_eval_dataset_template (output_path: str, num_examples: int = 10):
         "query": f"<Insert query {i + 1} here>", "relevant_docs": ["<doc_id_1>", "<doc_id_2>"],
         "notes": "<Optional: why these docs are relevant>",
     })
-  
+
   with open (output_path, "w", encoding = "utf-8") as f:
     for entry in template_entries:
       f.write (json.dumps (entry, ensure_ascii = False) + "\n")
-  
+
   logger.info (f"Template dataset written to {output_path} ({num_examples} entries)")
 
 
@@ -263,45 +263,45 @@ def main ():
   parser.add_argument ("--gen-template", type = str, help = "Generate a template JSONL file for expert annotation", )
   parser.add_argument ("--threshold-mrr", type = float, default = 0.75,
       help = "Minimum acceptable MRR for CI regression test (default: 0.75)", )
-  
+
   args = parser.parse_args ()
-  
+
   if args.gen_template:
     generate_eval_dataset_template (args.gen_template)
     return
-  
+
   if not args.dataset and not args.run_retrieval:
     parser.error ("Either --dataset or --run-retrieval with --hitl-dir is required")
-  
+
   eval_pairs = []
   if args.dataset:
     eval_pairs = load_labeled_dataset (args.dataset)
-  
+
   if not eval_pairs and args.run_retrieval:
     eval_pairs = extract_eval_pairs_from_hitl (args.hitl_dir)
-  
+
   if not eval_pairs:
     logger.error ("No evaluation pairs found. Provide --dataset or use --gen-template to create one.")
     logger.info ("Tip: Use --gen-template ./data/eval_dataset.jsonl to create a template for annotation.")
     sys.exit (1)
-  
+
   start_time = time.time ()
-  
+
   if args.run_retrieval:
     retrieved_lists, relevant_sets = run_retrieval_for_queries (eval_pairs, top_k = args.top_k)
   else:
     # Use document IDs directly from the labeled dataset
     retrieved_lists = [pair.get ("retrieved_docs", []) for pair in eval_pairs]
     relevant_sets = [set (pair.get ("relevant_docs", [])) for pair in eval_pairs]
-    
+
     if not any (retrieved_lists):
       logger.warning ("No retrieved_docs in dataset. Use --run-retrieval to execute retrieval, "
                       "or add 'retrieved_docs' field to dataset entries.")
       sys.exit (1)
-  
+
   metrics = compute_all_metrics (retrieved_lists, relevant_sets)
   elapsed = time.time () - start_time
-  
+
   # Print report
   print ("\n" + "=" * 60)
   print ("  Retrieval Quality Evaluation Report")
@@ -318,14 +318,14 @@ def main ():
     else:
       print (f"  {k:<20s} {v:.4f}")
   print ("=" * 60)
-  
+
   # Check CI threshold
   if metrics.get ("mrr", 0.0) < args.threshold_mrr:
     print (f"\n  CI CHECK: MRR {metrics ['mrr']:.4f} < {args.threshold_mrr} threshold — FAIL")
     sys.exit (1)
   else:
     print (f"\n  CI CHECK: MRR {metrics ['mrr']:.4f} >= {args.threshold_mrr} threshold — PASS")
-  
+
   if args.output:
     with open (args.output, "w", encoding = "utf-8") as f:
       json.dump (metrics, f, indent = 2, ensure_ascii = False)

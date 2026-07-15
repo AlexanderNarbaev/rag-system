@@ -33,14 +33,14 @@ async def _send_completion_request (
   }
   if LLM_API_KEY:
     headers ["Authorization"] = f"Bearer {LLM_API_KEY}"
-  
+
   payload = {
       "model": LLM_MODEL_NAME, "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
       "stream": stream,
   }
-  
+
   timeout = ClientTimeout (total = REQUEST_TIMEOUT)
-  
+
   for attempt in range (retry + 1):
     try:
       session = aiohttp.ClientSession ()
@@ -51,7 +51,7 @@ async def _send_completion_request (
         await session.close ()
         logger.error (f"LLM API error {response.status}: {error_text}")
         raise LLMError (f"LLM returned {response.status}: {error_text}")
-      
+
       if stream:
         return session, response
       else:
@@ -74,7 +74,7 @@ async def stream_completion (
     messages: list [dict [str, str]], temperature: float = 0.2, max_tokens: int = 4096, ) -> AsyncIterator [dict [str, Any]]:
   session, response = await _send_completion_request (messages, temperature, max_tokens, stream = True,
       retry = MAX_RETRIES)
-  
+
   try:
     async for line in response.content:
       line = line.decode ("utf-8").strip ()
@@ -123,7 +123,7 @@ def non_stream_completion_sync (
 
 # Пример использования (для самопроверки, требует запущенного LLM сервера)
 if __name__ == "__main__":
-  
+
   async def test () -> None:
     messages = [{"role": "user", "content": "Привет, как дела?"}]
     # Не-потоковый тест
@@ -132,6 +132,6 @@ if __name__ == "__main__":
     # Потоковый тест
     async for chunk in stream_completion (messages):
       print ("Chunk:", chunk)
-  
-  
+
+
   asyncio.run (test ())

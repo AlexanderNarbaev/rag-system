@@ -30,12 +30,12 @@ logger = logging.getLogger ("rag-proxy.middleware")
 
 class RequestIdMiddleware (BaseHTTPMiddleware):
   """Injects X-Request-ID header into every request/response."""
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     request_id = request.headers.get ("X-Request-ID") or str (uuid.uuid4 ())
     request.state.request_id = request_id
     RequestIdFilter.set_request_id (request_id)
-    
+
     response: Response = await call_next (request)
     response.headers ["X-Request-ID"] = request_id
     return response
@@ -43,7 +43,7 @@ class RequestIdMiddleware (BaseHTTPMiddleware):
 
 class RequestLoggingMiddleware (BaseHTTPMiddleware):
   """Logs each request with method, path, status, and duration."""
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     start = time.monotonic ()
     response: Response = await call_next (request)
@@ -57,13 +57,13 @@ class CorrelationIdMiddleware (BaseHTTPMiddleware):
   Propagates X-Correlation-ID header.
   If absent from request, generates and injects a new one.
   """
-  
+
   HEADER_NAME = "X-Correlation-ID"
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     correlation_id = request.headers.get (self.HEADER_NAME) or str (uuid.uuid4 ())
     request.state.correlation_id = correlation_id
-    
+
     response: Response = await call_next (request)
     response.headers [self.HEADER_NAME] = correlation_id
     return response
@@ -71,7 +71,7 @@ class CorrelationIdMiddleware (BaseHTTPMiddleware):
 
 class SecurityHeadersMiddleware (BaseHTTPMiddleware):
   """Injects security-related HTTP headers into every response."""
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     response: Response = await call_next (request)
     headers = SecurityHeaders.get_headers ()
@@ -83,17 +83,17 @@ class SecurityHeadersMiddleware (BaseHTTPMiddleware):
 
 class AuditMiddleware (BaseHTTPMiddleware):
   """Logs every request through AuditLogger for security auditing."""
-  
+
   def __init__ (self, app: Any, audit_logger: Any = None) -> None:
     super ().__init__ (app)
     self.audit_logger = audit_logger
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     client_ip = request.client.host if request.client else "unknown"
     start = time.monotonic ()
-    
+
     response: Response = await call_next (request)
-    
+
     _duration_ms = (time.monotonic () - start) * 1000
     if self.audit_logger and response.status_code >= 400:
       try:  # noqa: SIM105
@@ -102,13 +102,13 @@ class AuditMiddleware (BaseHTTPMiddleware):
             client_ip = client_ip, endpoint = request.url.path, )
       except Exception:
         pass
-    
+
     return response
 
 
 class InputSanitizationMiddleware (BaseHTTPMiddleware):
   """Sanitizes query parameters in requests to prevent injection attacks."""
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     if request.url.query:
       sanitized_params = {}
@@ -119,7 +119,7 @@ class InputSanitizationMiddleware (BaseHTTPMiddleware):
           sv = InputValidator.validate_non_empty (v, max_len = 4096)
           sanitized_vals.append (sv if sv is not None else v)
         sanitized_params [sanitized_key] = sanitized_vals
-    
+
     response: Response = await call_next (request)
     return response
 

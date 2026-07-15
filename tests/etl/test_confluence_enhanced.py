@@ -1,12 +1,9 @@
 # tests/etl/test_confluence_enhanced.py
 """Tests for ConfluenceExtractor — validates configuration, API calls, and output."""
 
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -57,28 +54,28 @@ def mock_confluence_page ():
 
 class TestConfluenceExtractorConfig:
   """Validate that ConfluenceExtractor rejects invalid configurations."""
-  
+
   def test_rejects_empty_url (self):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     with pytest.raises (ValueError, match = "url.*required"):
       ConfluenceExtractor ({"url": ""})
-  
+
   def test_rejects_missing_url (self):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     with pytest.raises (ValueError, match = "url.*required"):
       ConfluenceExtractor ({})
-  
+
   def test_rejects_invalid_url_scheme (self):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     with pytest.raises (ValueError, match = "must start with http"):
       ConfluenceExtractor ({"url": "ftp://confluence.example.com"})
-  
+
   def test_accepts_valid_config (self, confluence_config):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     extractor = ConfluenceExtractor (confluence_config)
     assert extractor.url == "https://confluence.example.com"
     assert extractor.space_keys == ["DEV"]
@@ -91,11 +88,11 @@ class TestConfluenceExtractorConfig:
 
 class TestConfluenceExtractorAPI:
   """Test ConfluenceExtractor API calls with mocked HTTP."""
-  
+
   @patch ("etl.extractors.confluence.requests.Session")
   def test_fetch_spaces_calls_correct_endpoint (self, mock_session_cls, confluence_config):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     mock_session = MagicMock ()
     mock_session_cls.return_value = mock_session
     mock_resp = MagicMock ()
@@ -106,19 +103,19 @@ class TestConfluenceExtractorAPI:
     }
     mock_resp.raise_for_status = MagicMock ()
     mock_session.get.return_value = mock_resp
-    
+
     extractor = ConfluenceExtractor (confluence_config)
     extractor.session = mock_session
     # Verify the session was configured
     assert extractor is not None
-  
+
   @patch ("etl.extractors.confluence.requests.Session")
   def test_fetch_pages_handles_pagination (self, mock_session_cls, confluence_config):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     mock_session = MagicMock ()
     mock_session_cls.return_value = mock_session
-    
+
     # First page returns results, second page returns empty
     page1 = MagicMock ()
     page1.status_code = 200
@@ -128,12 +125,12 @@ class TestConfluenceExtractorAPI:
         "_links": {"next": "/rest/api/content?start=1"},
     }
     page1.raise_for_status = MagicMock ()
-    
+
     page2 = MagicMock ()
     page2.status_code = 200
     page2.json.return_value = {"results": [], "size": 0}
     page2.raise_for_status = MagicMock ()
-    
+
     mock_session.get.side_effect = [page1, page2]
     extractor = ConfluenceExtractor (confluence_config)
     extractor.session = mock_session
@@ -146,10 +143,10 @@ class TestConfluenceExtractorAPI:
 
 class TestConfluenceExtractorOutput:
   """Test that ConfluenceExtractor writes correct output files."""
-  
+
   def test_creates_output_directory (self, confluence_config, tmp_path):
     from etl.extractors.confluence import ConfluenceExtractor
-    
+
     output_dir = tmp_path / "confluence_output"
     confluence_config ["output_dir"] = str (output_dir)
     extractor = ConfluenceExtractor (confluence_config)

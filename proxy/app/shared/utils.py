@@ -20,7 +20,7 @@ from typing import Any
 # Попытка импорта tiktoken для точной токенизации
 try:
   import tiktoken
-  
+
   TIKTOKEN_AVAILABLE = True
 except ImportError:
   TIKTOKEN_AVAILABLE = False

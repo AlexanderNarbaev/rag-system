@@ -26,7 +26,7 @@ except ImportError:
 # Для NLP (опционально)
 try:
   import spacy
-  
+
   NLP_AVAILABLE = True
 except ImportError:
   NLP_AVAILABLE = False
@@ -38,7 +38,7 @@ logger = logging.getLogger (__name__)
 @dataclass
 class Chunk:
   """Структура чанка с метаданными."""
-  
+
   text: str
   hash: str
   title: str = ""
@@ -63,7 +63,7 @@ class SemanticChunker:
   Базовый семантический чанкер. Разбивает документ на структурные блоки:
   заголовки (h1-h3), абзацы, списки, таблицы. Поддерживает HTML и Markdown.
   """
-  
+
   def __init__ (self, max_tokens: int = 1500, overlap_tokens: int = 200, min_chunk_tokens: int = 100):
     """
     :param max_tokens: максимальное количество токенов в чанке (для эмбеддера)
@@ -76,11 +76,11 @@ class SemanticChunker:
     self.max_tokens = max_tokens
     self.overlap_tokens = overlap_tokens
     self.min_chunk_tokens = min_chunk_tokens
-  
+
   def _estimate_tokens (self, text: str) -> int:
     """Грубая оценка токенов (4 символа ~ 1 токен для рус/англ). Для точности использовать tiktoken."""
     return len (text) // 4
-  
+
   def _split_by_headings (self, html: str) -> list [dict]:
     """
     Разбивает HTML на секции по заголовкам h1, h2, h3.
@@ -104,12 +104,12 @@ class SemanticChunker:
     if current_content:
       sections.append ({"heading": current_heading, "content": "\n".join (current_content)})
     return sections
-  
+
   def _split_by_paragraphs (self, text: str) -> list [str]:
     """Разбивает текст на абзацы (две новые строки)."""
     paragraphs = re.split (r"\n\s*\n", text)
     return [p.strip () for p in paragraphs if p.strip ()]
-  
+
   def _merge_short_chunks (self, chunks: list [Chunk]) -> list [Chunk]:
     """Объединяет короткие чанки с соседними."""
     if not chunks:
@@ -133,7 +133,7 @@ class SemanticChunker:
         buffer = chunk
     merged.append (buffer)
     return merged
-  
+
   def _prepend_context (self, chunk_text: str, metadata: dict) -> str:
     """
     Prepend document-level context to chunk text for better embedding.
@@ -142,22 +142,22 @@ class SemanticChunker:
     Pattern from Anthropic's contextual chunking approach.
     """
     context_parts = []
-    
+
     if metadata.get ("doc_title"):
       context_parts.append (f"Document: {metadata ['doc_title']}")
-    
+
     if metadata.get ("section_title"):
       context_parts.append (f"Section: {metadata ['section_title']}")
-    
+
     if metadata.get ("source_type"):
       context_parts.append (f"Source: {metadata ['source_type']}")
-    
+
     if context_parts:
       context_prefix = " | ".join (context_parts) + "\n\n"
       return context_prefix + chunk_text
-    
+
     return chunk_text
-  
+
   def chunk_html (self, html: str, source_metadata: dict [str, Any]) -> list [Chunk]:
     """
     Нарезка HTML-документа на семантические чанки.
@@ -199,21 +199,21 @@ class SemanticChunker:
     # Объединяем короткие чанки
     chunks = self._merge_short_chunks (chunks)
     return chunks
-  
+
   def chunk_markdown (self, markdown_text: str, source_metadata: dict [str, Any]) -> list [Chunk]:
     """Конвертирует Markdown в HTML и использует chunk_html."""
     if markdown is None:
       raise ImportError ("markdown library is required. Install: pip install markdown")
     html = markdown.markdown (markdown_text, extensions = ["extra", "tables"])
     return self.chunk_html (html, source_metadata)
-  
+
   def _create_chunk (self, text: str, position: int, source_metadata: dict, heading: str) -> Chunk:
     chunk = Chunk (text = text, hash = hashlib.sha256 (text.encode ()).hexdigest (), title = heading,
         source_type = source_metadata.get ("source_type", ""), source_id = source_metadata.get ("source_id", ""),
         version = source_metadata.get ("version", ""), doc_title = source_metadata.get ("doc_title", ""),
         position = position, tokens_approx = self._estimate_tokens (text), )
     return chunk
-  
+
   def _apply_overlap (self, chunks: list [Chunk]) -> list [Chunk]:
     """Добавляет перекрытие между чанками (последние overlap_tokens из предыдущего в начало следующего)."""
     if self.overlap_tokens <= 0 or len (chunks) <= 1:
@@ -238,7 +238,7 @@ class MetadataEnricher:
   """
   Обогащение чанков метаданными с использованием NLP (spaCy) и опционально SLM.
   """
-  
+
   def __init__ (self, use_slm: bool = False, slm_endpoint: str | None = None):
     self.use_slm = use_slm
     self.slm_endpoint = slm_endpoint
@@ -253,7 +253,7 @@ class MetadataEnricher:
         except Exception:
           logger.warning ("spaCy model not found. Install: python -m spacy download ru_core_news_sm")
           self.nlp = None
-  
+
   def extract_keywords_tfidf (self, text: str, top_n: int = 5) -> list [str]:
     """Извлекает ключевые слова (простейший TF-IDF на уровне предложений). Заглушка для простоты."""
     # Упрощённо: берём наиболее частые слова длиннее 3 символов, исключая стоп-слова
@@ -265,7 +265,7 @@ class MetadataEnricher:
         freq [w] = freq.get (w, 0) + 1
     sorted_words = sorted (freq.items (), key = lambda x: x [1], reverse = True)
     return [w for w, _ in sorted_words [:top_n]]
-  
+
   def extract_entities_spacy (self, text: str) -> list [str]:
     """Извлекает именованные сущности (люди, организации, продукты)."""
     if not self.nlp:
@@ -273,14 +273,14 @@ class MetadataEnricher:
     doc = self.nlp (text [:500000])  # ограничиваем длину
     entities = list ({ent.text for ent in doc.ents if ent.label_ in ("PERSON", "ORG", "PRODUCT", "GPE")})
     return entities [:10]
-  
+
   def generate_summary (self, text: str) -> str:
     """Генерирует суммаризацию через эвристики (первые 2 предложения). Для SLM оставляем заглушку."""
     sentences = re.split (r"(?<=[.!?])\s+", text)
     if len (sentences) <= 2:
       return text
     return " ".join (sentences [:2]) + "..."
-  
+
   def generate_hypothetical_questions (self, text: str) -> list [str]:
     """Генерирует гипотетические вопросы, которые может задать пользователь (заглушка)."""
     # Простейший шаблон: извлечение ключевых фраз с вопросительными словами
@@ -291,14 +291,14 @@ class MetadataEnricher:
       if len (q) < 100:
         questions.append (q)
     return questions [:3]
-  
+
   def enrich_with_slm (self, chunk_text: str) -> dict [str, Any]:
     """Вызывает локальный SLM (через REST API) для генерации суммаризации, ключевых слов, вопросов."""
     if not self.use_slm or not self.slm_endpoint:
       return {}
     try:
       import requests
-      
+
       prompt = f"""Analyze the following technical text and output JSON with fields:
 - summary: short summary (one sentence)
 - keywords: list of 5 key terms
@@ -313,7 +313,7 @@ Output JSON:"""
         result = resp.json ()
         # Предполагаем, что SLM возвращает текст, который можно распарсить
         import json as json_parse
-        
+
         try:
           data = json_parse.loads (result.get ("text", "{}"))
           return {
@@ -331,11 +331,11 @@ class MDKeyChunker:
   """
   Полноценный семантический чанкер с каскадированием метаданных и биновой упаковкой.
   """
-  
+
   def __init__ (self, base_chunker: SemanticChunker, enricher: MetadataEnricher):
     self.base = base_chunker
     self.enricher = enricher
-  
+
   def process_document (self, content: str, content_type: str, source_metadata: dict [str, Any]) -> list [Chunk]:
     """
     Основной метод: нарезка, обогащение, каскадирование метаданных.
@@ -349,7 +349,7 @@ class MDKeyChunker:
       chunks = self.base.chunk_markdown (enriched_content, source_metadata)
     else:
       chunks = self.base.chunk_html (enriched_content, source_metadata)
-    
+
     # Обогащение метаданными (NLP + SLM)
     for _idx, chunk in enumerate (chunks):
       # Базовые метаданные от источника
@@ -357,7 +357,7 @@ class MDKeyChunker:
       chunk.source_id = source_metadata.get ("source_id", "")
       chunk.version = source_metadata.get ("version", "")
       chunk.doc_title = source_metadata.get ("doc_title", "")
-      
+
       # Извлечение сущностей
       if self.enricher:
         chunk.entities = self.enricher.extract_entities_spacy (chunk.text)
@@ -373,12 +373,12 @@ class MDKeyChunker:
             chunk.keywords = slm_data ["keywords"]
           if slm_data.get ("hypothetical_questions"):
             chunk.hypothetical_questions = slm_data ["hypothetical_questions"]
-    
+
     # Save original text before context prefix is added in Rolling Key Propagation
     for chunk in chunks:
       chunk.original_text = chunk.text
       chunk.enriched = True
-    
+
     # Rolling Key Propagation: передаём метаданные предыдущего чанка следующему, если semantic_key не задан
     prev_metadata = {}
     for chunk in chunks:
@@ -392,11 +392,11 @@ class MDKeyChunker:
         meta_prefix += f" > {chunk.parent_metadata ['title']}"
       chunk.text = f"[{meta_prefix}]\n{chunk.text}"
       chunk.hash = hashlib.sha256 (chunk.text.encode ()).hexdigest ()
-    
+
     # Биновая упаковка: группируем чанки с одинаковым semantic_key (если есть)
     packed_chunks = self._pack_by_semantic_key (chunks)
     return packed_chunks
-  
+
   def _pack_by_semantic_key (self, chunks: list [Chunk]) -> list [Chunk]:
     """Объединяет чанки с одинаковым semantic_key в один, сохраняя порядок."""
     groups = {}
@@ -441,7 +441,7 @@ class AdaptiveChunker:
 
   Based on research: optimal chunk size 500-1500 chars with 10-20% overlap.
   """
-  
+
   def __init__ (
       self, min_chunk_size: int = 200, max_chunk_size: int = 2000, target_chunk_size: int = 800,
       overlap_ratio: float = 0.15, ):
@@ -449,7 +449,7 @@ class AdaptiveChunker:
     self.max_chunk_size = max_chunk_size
     self.target_chunk_size = target_chunk_size
     self.overlap_ratio = overlap_ratio
-  
+
   def _detect_structure (self, text: str) -> list [dict]:
     """
     Detect document structure: headers, code blocks, tables, paragraphs.
@@ -458,11 +458,11 @@ class AdaptiveChunker:
     elements = []
     lines = text.split ("\n")
     current_pos = 0
-    
+
     i = 0
     while i < len (lines):
       line = lines [i]
-      
+
       # Header detection
       if re.match (r"^#{1,6}\s+", line):
         level_match = re.match (r"^(#{1,6})", line)
@@ -470,7 +470,7 @@ class AdaptiveChunker:
             "type": "header", "level": len (level_match.group (1)) if level_match else 1, "text": line,
             "start": current_pos, "end": current_pos + len (line) + 1,
         })
-      
+
       # Code block detection
       elif line.strip ().startswith ("```"):
         # Find closing ```
@@ -485,7 +485,7 @@ class AdaptiveChunker:
         elements.append ({
             "type": "code", "text": code_text, "start": current_pos, "end": current_pos + len (code_text) + 1,
         })
-      
+
       # Table detection
       elif "|" in line and i + 1 < len (lines) and "---" in lines [i + 1]:
         table_lines = [line]
@@ -498,26 +498,26 @@ class AdaptiveChunker:
             "type": "table", "text": table_text, "start": current_pos, "end": current_pos + len (table_text) + 1,
         })
         i -= 1  # Will be incremented at end of loop
-      
+
       # Regular paragraph
       elif line.strip ():
         elements.append ({
             "type": "paragraph", "text": line, "start": current_pos, "end": current_pos + len (line) + 1,
         })
-      
+
       current_pos += len (line) + 1
       i += 1
-    
+
     return elements
-  
+
   def _merge_small_elements (self, elements: list [dict]) -> list [dict]:
     """Merge small adjacent elements to reach target chunk size."""
     if not elements:
       return []
-    
+
     merged = []
     current_chunk = elements [0].copy ()
-    
+
     for elem in elements [1:]:
       # Don't merge headers with previous content
       if elem ["type"] == "header":
@@ -525,14 +525,14 @@ class AdaptiveChunker:
           merged.append (current_chunk)
         current_chunk = elem.copy ()
         continue
-      
+
       # Don't merge code blocks
       if elem ["type"] == "code" or current_chunk ["type"] == "code":
         if len (current_chunk ["text"]) >= self.min_chunk_size:
           merged.append (current_chunk)
         current_chunk = elem.copy ()
         continue
-      
+
       # Merge if combined size is under target
       combined_size = len (current_chunk ["text"]) + len (elem ["text"])
       if combined_size <= self.target_chunk_size:
@@ -542,12 +542,12 @@ class AdaptiveChunker:
         if len (current_chunk ["text"]) >= self.min_chunk_size:
           merged.append (current_chunk)
         current_chunk = elem.copy ()
-    
+
     if current_chunk:
       merged.append (current_chunk)
-    
+
     return merged
-  
+
   def _split_large_chunks (self, elements: list [dict]) -> list [dict]:
     """Split chunks that exceed max_chunk_size at sentence boundaries."""
     result = []
@@ -555,11 +555,11 @@ class AdaptiveChunker:
       if len (elem ["text"]) <= self.max_chunk_size:
         result.append (elem)
         continue
-      
+
       # Split at sentence boundaries
       sentences = re.split (r"(?<=[.!?])\s+", elem ["text"])
       current_chunk = ""
-      
+
       for sentence in sentences:
         if len (current_chunk) + len (sentence) > self.target_chunk_size:
           if current_chunk:
@@ -570,20 +570,20 @@ class AdaptiveChunker:
           current_chunk = sentence
         else:
           current_chunk += " " + sentence if current_chunk else sentence
-      
+
       if current_chunk:
         result.append ({
             "type": elem ["type"], "text": current_chunk.strip (), "start": elem ["start"],
             "end": elem ["start"] + len (current_chunk),
         })
-    
+
     return result
-  
+
   def _apply_overlap (self, chunks: list [dict]) -> list [dict]:
     """Apply overlap between consecutive chunks for context continuity."""
     if self.overlap_ratio <= 0 or len (chunks) <= 1:
       return chunks
-    
+
     overlapped = []
     for i, chunk in enumerate (chunks):
       if i > 0:
@@ -591,9 +591,9 @@ class AdaptiveChunker:
         overlap_text = chunks [i - 1] ["text"] [-overlap_chars:]
         chunk ["text"] = f"[previous context: ...{overlap_text}]\n\n{chunk ['text']}"
       overlapped.append (chunk)
-    
+
     return overlapped
-  
+
   def chunk (self, text: str) -> list [dict]:
     """
     Adaptive chunking: detect structure, merge small, split large.
@@ -605,18 +605,18 @@ class AdaptiveChunker:
     """
     # Step 1: Detect structure
     elements = self._detect_structure (text)
-    
+
     # Step 2: Merge small elements
     merged = self._merge_small_elements (elements)
-    
+
     # Step 3: Split large chunks
     final = self._split_large_chunks (merged)
-    
+
     # Step 4: Apply overlap
     final = self._apply_overlap (final)
-    
+
     return final
-  
+
   def chunk_markdown (self, markdown_text: str, source_metadata: dict [str, Any] | None = None) -> list [Chunk]:
     """
     Chunk markdown text and return Chunk objects compatible with the pipeline.
@@ -627,10 +627,10 @@ class AdaptiveChunker:
     """
     if source_metadata is None:
       source_metadata = {}
-    
+
     raw_chunks = self.chunk (markdown_text)
     chunks: list [Chunk] = []
-    
+
     for i, raw in enumerate (raw_chunks):
       text = raw ["text"]
       chunk = Chunk (text = text, hash = hashlib.sha256 (text.encode ()).hexdigest (),
@@ -640,7 +640,7 @@ class AdaptiveChunker:
           # Rough token estimate
       )
       chunks.append (chunk)
-    
+
     return chunks
 
 

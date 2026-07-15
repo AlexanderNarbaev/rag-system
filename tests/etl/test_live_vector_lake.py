@@ -3,7 +3,8 @@ from unittest.mock import MagicMock
 
 from etl.chunker.hash_versioning import ChunkVersionStore
 from etl.indexer.live_vector_lake import (
-  LiveVectorLake, incremental_index_pipeline,
+  LiveVectorLake,
+  incremental_index_pipeline,
 )
 
 
@@ -15,7 +16,7 @@ class TestLiveVectorLakeInit:
     LiveVectorLake (qdrant_indexer = mock_qdrant, version_store = version_store,
         cold_storage_dir = tmp_path / "cold_storage", use_delta = False, )
     assert (tmp_path / "cold_storage").is_dir ()
-  
+
   def test_init_with_delta_disabled (self, tmp_path):
     mock_qdrant = MagicMock ()
     version_store = ChunkVersionStore (hot_dir = tmp_path / "hot", cold_dir = tmp_path / "cold",
@@ -36,7 +37,7 @@ class TestLiveVectorLakeSyncDocument:
     lake = LiveVectorLake (qdrant_indexer = mock_qdrant, version_store = version_store,
         cold_storage_dir = tmp_path / "cold_storage", use_delta = False, )
     return lake, mock_qdrant, version_store
-  
+
   def test_sync_new_document (self, tmp_path):
     lake, mock_qdrant, _ = self._make_lake (tmp_path)
     chunks = [
@@ -47,7 +48,7 @@ class TestLiveVectorLakeSyncDocument:
     assert added == 2
     assert deleted == 0
     mock_qdrant.index_chunks.assert_called ()
-  
+
   def test_sync_unchanged_document (self, tmp_path):
     lake, mock_qdrant, _ = self._make_lake (tmp_path)
     chunks = [{"hash": "c1", "text": "content"}]
@@ -58,7 +59,7 @@ class TestLiveVectorLakeSyncDocument:
     assert deleted == 0
     mock_qdrant.index_chunks.assert_not_called ()
     mock_qdrant.delete_chunks.assert_not_called ()
-  
+
   def test_sync_with_deleted_chunks (self, tmp_path):
     lake, mock_qdrant, _ = self._make_lake (tmp_path)
     v1 = [
@@ -72,7 +73,7 @@ class TestLiveVectorLakeSyncDocument:
     added, deleted = lake.sync_document ("doc_1", v2)
     assert added == 0
     assert deleted == 1
-  
+
   def test_sync_force_mode (self, tmp_path):
     lake, mock_qdrant, _ = self._make_lake (tmp_path)
     chunks = [{"hash": "c1", "text": "content"}]
@@ -94,7 +95,7 @@ class TestLiveVectorLakeBulkSync:
     lake = LiveVectorLake (qdrant_indexer = mock_qdrant, version_store = version_store,
         cold_storage_dir = tmp_path / "cold_storage", use_delta = False, )
     return lake
-  
+
   def test_bulk_sync_multiple_documents (self, tmp_path):
     lake = self._make_lake (tmp_path)
     documents = {
@@ -104,7 +105,7 @@ class TestLiveVectorLakeBulkSync:
     assert len (results) == 2
     assert "doc_a" in results
     assert "doc_b" in results
-  
+
   def test_bulk_sync_empty (self, tmp_path):
     lake = self._make_lake (tmp_path)
     results = lake.bulk_sync ({})
@@ -170,7 +171,7 @@ class TestIncrementalIndexPipeline:
     chunks = [{"hash": "c1", "text": "new text"}]
     result = incremental_index_pipeline (lake, "doc_1", chunks)
     assert result is True
-  
+
   def test_pipeline_returns_false_when_no_changes (self, tmp_path):
     mock_qdrant = MagicMock ()
     mock_qdrant.index_chunks.return_value = 1
@@ -185,7 +186,7 @@ class TestIncrementalIndexPipeline:
     # Second sync with same chunks
     result = incremental_index_pipeline (lake, "doc_1", chunks)
     assert result is False
-  
+
   def test_pipeline_force_reindex (self, tmp_path):
     mock_qdrant = MagicMock ()
     mock_qdrant.index_chunks.return_value = 1

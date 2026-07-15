@@ -19,7 +19,7 @@ from typing import Any
 
 try:
   import pandas as pd
-  
+
   PANDAS_AVAILABLE = True
 except ImportError:
   PANDAS_AVAILABLE = False
@@ -52,7 +52,7 @@ class ChunkVersionStore:
   - LiveVectorLake: hot (текущие чанки) и cold storage (история)
   - WAL (checkpoint) для быстрого восстановления
   """
-  
+
   def __init__ (self, hot_dir: Path, cold_dir: Path, wal_path: Path):
     """
     :param hot_dir: директория с текущими чанками (например, для быстрой индексации в Qdrant)
@@ -66,25 +66,25 @@ class ChunkVersionStore:
     self.cold_dir.mkdir (parents = True, exist_ok = True)
     self.wal_path.parent.mkdir (parents = True, exist_ok = True)
     self._wal = self._load_wal ()
-  
+
   def _load_wal (self) -> dict:
     """Загружает WAL: mapping doc_id -> last_hash, last_modified, version_history."""
     if self.wal_path.exists ():
       with open (self.wal_path) as f:
         return json.load (f)
     return {"documents": {}}
-  
+
   def _save_wal (self):
     with open (self.wal_path, "w") as f:
       json.dump (self._wal, f, indent = 2)
-  
+
   def get_last_hash (self, doc_id: str) -> str | None:
     """Возвращает последний известный хеш документа (или None)."""
     doc_entry = self._wal ["documents"].get (doc_id)
     if doc_entry:
       return doc_entry.get ("last_hash")
     return None
-  
+
   def _append_to_cold_storage (self, doc_id: str, chunk: dict, old_hash: str = None):
     """Сохраняет версию чанка в холодное хранилище (историю)."""
     # Создаём запись с временной меткой
@@ -105,7 +105,7 @@ class ChunkVersionStore:
       cold_file = self.cold_dir / f"{doc_id}_history.jsonl"
       with open (cold_file, "a", encoding = "utf-8") as f:
         f.write (json.dumps (version_record, ensure_ascii = False) + "\n")
-  
+
   def update_document_chunks (
       self, doc_id: str, new_chunks: list [dict], force: bool = False, ) -> tuple [list [dict], list [dict]]:
     """
@@ -120,12 +120,12 @@ class ChunkVersionStore:
       self._save_chunks_to_hot (doc_id, new_chunks)
       self._update_wal (doc_id, new_chunks)
       return new_chunks, []
-    
+
     # Получаем предыдущие чанки из hot-директории
     old_chunks = self._load_hot_chunks (doc_id)
     old_map = {ch ["hash"]: ch for ch in old_chunks}
     new_map = {ch ["hash"]: ch for ch in new_chunks}
-    
+
     # Чанки, которые есть только в новом (добавленные или изменённые)
     added = []
     for h, ch in new_map.items ():
@@ -137,10 +137,10 @@ class ChunkVersionStore:
           added.append (ch)  # текст изменился -> переиндексируем
           # Сохраняем в историю
           self._append_to_cold_storage (doc_id, ch, old_hash = h)
-    
+
     # Чанки, которые были в старом, но отсутствуют в новом (удалены)
     deleted = [h for h in old_map if h not in new_map]
-    
+
     if added or deleted:
       # Сохраняем обновлённый набор в hot
       self._save_chunks_to_hot (doc_id, new_chunks)
@@ -150,17 +150,17 @@ class ChunkVersionStore:
         self._append_to_cold_storage (doc_id, ch)
       for dh in deleted:
         self._log_deletion (doc_id, dh)
-    
+
     # Обновляем WAL
     self._update_wal (doc_id, new_chunks)
     return added, deleted
-  
+
   def _save_chunks_to_hot (self, doc_id: str, chunks: list [dict]):
     """Сохраняет текущую версию чанков в hot-директорию (один JSON-файл на документ)."""
     doc_hot_path = self.hot_dir / f"{doc_id}.json"
     with open (doc_hot_path, "w", encoding = "utf-8") as f:
       json.dump (chunks, f, ensure_ascii = False, indent = 2)
-  
+
   def _load_hot_chunks (self, doc_id: str) -> list [dict]:
     """Загружает текущие чанки документа из hot-директории."""
     doc_hot_path = self.hot_dir / f"{doc_id}.json"
@@ -168,7 +168,7 @@ class ChunkVersionStore:
       return []
     with open (doc_hot_path, encoding = "utf-8") as f:
       return json.load (f)
-  
+
   def _update_wal (self, doc_id: str, chunks: list [dict]):
     """Обновляет запись в WAL для документа."""
     # Находим максимальную версию (если есть поле version) и последний хеш
@@ -177,7 +177,7 @@ class ChunkVersionStore:
         "last_hash": last_hash, "last_modified": datetime.now (UTC).isoformat (), "num_chunks": len (chunks),
     }
     self._save_wal ()
-  
+
   def _log_deletion (self, doc_id: str, chunk_hash: str):
     """Логирует удаление чанка в холодное хранилище."""
     deletion_record = {
@@ -194,7 +194,7 @@ class ChunkVersionStore:
       cold_file = self.cold_dir / f"{doc_id}_history.jsonl"
       with open (cold_file, "a", encoding = "utf-8") as f:
         f.write (json.dumps (deletion_record, ensure_ascii = False) + "\n")
-  
+
   def get_all_current_chunks (self) -> list [dict]:
     """Возвращает все актуальные чанки из hot-директории (для полной индексации)."""
     all_chunks = []
@@ -203,7 +203,7 @@ class ChunkVersionStore:
         chunks = json.load (f)
         all_chunks.extend (chunks)
     return all_chunks
-  
+
   def get_chunk_history (self, doc_id: str, limit: int = 100) -> list [dict]:
     """Возвращает историю изменений чанков для документа (из cold storage)."""
     history = []
@@ -222,7 +222,7 @@ class ChunkVersionStore:
             if len (history) >= limit:
               break
     return history
-  
+
   def cleanup_old_versions (self, doc_id: str, keep_versions: int = 10):
     """Очищает старые версии в cold storage, оставляя только последние keep_versions."""
     if PANDAS_AVAILABLE:
@@ -240,7 +240,7 @@ class ChunkVersionStore:
         if len (lines) > keep_versions:
           with open (cold_file, "w", encoding = "utf-8") as f:
             f.writelines (lines [-keep_versions:])
-  
+
   def reset (self, doc_id: str = None):
     """
     Полный сброс WAL и hot-данных для документа или всех.
@@ -278,7 +278,7 @@ if __name__ == "__main__":
   # Пример использования
   store = ChunkVersionStore (hot_dir = Path ("./test_hot"), cold_dir = Path ("./test_cold"),
       wal_path = Path ("./test_wal/wal.json"))
-  
+
   # Фиктивные чанки
   doc_id = "confluence_123"
   chunks_v1 = [
@@ -288,7 +288,7 @@ if __name__ == "__main__":
   # Добавляем в первый раз
   added, _ = store.update_document_chunks (doc_id, chunks_v1)
   print (f"Added: {len (added)}")
-  
+
   # Новая версия документа (изменился текст)
   chunks_v2 = [
       {"hash": "ccc", "text": "Version 2 content (updated)", "source_id": doc_id, "version": "2.0"},
@@ -296,11 +296,11 @@ if __name__ == "__main__":
   ]
   added2, deleted = store.update_document_chunks (doc_id, chunks_v2)
   print (f"Added in v2: {len (added2)}, Deleted: {len (deleted)}")
-  
+
   # Просмотр истории
   history = store.get_chunk_history (doc_id)
   print (f"History records: {len (history)}")
-  
+
   # Получение всех актуальных чанков для индексации
   all_current = store.get_all_current_chunks ()
   print (f"Total current chunks: {len (all_current)}")

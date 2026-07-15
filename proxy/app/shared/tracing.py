@@ -35,7 +35,10 @@ except ImportError:
   OTLPSpanExporter = None
 
 from proxy.app.shared.config import (
-  OTEL_BATCH_TIMEOUT, OTEL_ENABLED, OTEL_EXPORTER_ENDPOINT, OTEL_SERVICE_NAME,
+  OTEL_BATCH_TIMEOUT,
+  OTEL_ENABLED,
+  OTEL_EXPORTER_ENDPOINT,
+  OTEL_SERVICE_NAME,
 )
 
 logger = logging.getLogger (__name__)
@@ -59,24 +62,24 @@ def setup_tracing (service_name: str = "rag-proxy") -> None:
   Idempotent — subsequent calls are no-ops.
   """
   global _tracing_initialized, _tracer_provider, tracer
-  
+
   if not OTEL_ENABLED:
     logger.debug ("OpenTelemetry tracing is disabled (OTEL_ENABLED=false)")
     return
-  
+
   if _tracing_initialized:
     logger.debug ("OpenTelemetry tracing already initialized")
     return
-  
+
   resource = Resource.create ({SERVICE_NAME: service_name})
   provider = TracerProvider (resource = resource)
-  
+
   try:
     if OTLPSpanExporter is None:
       logger.warning ("OTLPSpanExporter not available (opentelemetry-exporter-otlp-proto-http not installed). "
                       "Tracing will be disabled.")
       return
-    
+
     exporter = OTLPSpanExporter (endpoint = OTEL_EXPORTER_ENDPOINT, )
     provider.add_span_processor (
         BatchSpanProcessor (exporter, schedule_delay_millis = OTEL_BATCH_TIMEOUT * 1000, max_export_batch_size = 512, ))

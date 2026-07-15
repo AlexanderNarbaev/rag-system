@@ -33,7 +33,7 @@ def decompose_into_claims (answer: str) -> list [str]:
   """Decompose answer text into atomic claims using sentence splitting."""
   if not answer or not answer.strip ():
     return []
-  
+
   parts = re.split (r"(?<=[.!?])\s+|\n|(?<=;)\s+", answer.strip ())
   claims = []
   for part in parts:
@@ -63,16 +63,16 @@ def _check_claim_supported (claim: str, context: str) -> bool:
   """Check if a claim is supported by context using cosine + keyword overlap."""
   if not context or not context.strip ():
     return False
-  
+
   claim_tokens = _tokenize (claim)
   if not claim_tokens:
     return False
-  
+
   cosine_score = _compute_cosine_proxy (claim, context)
-  
+
   context_tokens = _tokenize (context)
   keyword_overlap = len (claim_tokens & context_tokens) / len (claim_tokens)
-  
+
   combined = 0.5 * cosine_score + 0.5 * keyword_overlap
   return combined >= 0.25
 
@@ -88,32 +88,32 @@ def compute_nli_grounding (answer: str, context: str) -> GroundingReport:
   """
   if not answer or not answer.strip ():
     return GroundingReport (score = 0.0, supported_claims = 0, total_claims = 0, unsupported = [])
-  
+
   claims = decompose_into_claims (answer)
   if not claims:
     return GroundingReport (score = 0.0, supported_claims = 0, total_claims = 0, unsupported = [])
-  
+
   if not context or not context.strip ():
     return GroundingReport (score = 0.0, supported_claims = 0, total_claims = len (claims), unsupported = list (claims))
-  
+
   try:
     from proxy.app.model_evolution.nli_evaluator import is_nli_model_available
-    
+
     if is_nli_model_available ():
       return _compute_nli_with_real_model (answer, claims, context)
   except Exception:
     logger.debug ("NLI model not available, using lightweight proxy")
-  
+
   return _compute_nli_lightweight (claims, context)
 
 
 def _compute_nli_with_real_model (answer: str, claims: list [str], context: str) -> GroundingReport:
   from proxy.app.model_evolution.nli_evaluator import evaluate_nli
-  
+
   result = evaluate_nli (answer, context, use_real_nli = True)
   supported = result.entailed_claims
   unsupported_claims = [c ["claim"] for c in result.per_claim_scores if c ["label"] != "entailment"]
-  
+
   return GroundingReport (score = result.overall_score, supported_claims = supported,
       total_claims = result.total_claims, unsupported = unsupported_claims, )
 
@@ -126,7 +126,7 @@ def _compute_nli_lightweight (claims: list [str], context: str) -> GroundingRepo
       supported += 1
     else:
       unsupported.append (claim)
-  
+
   score = supported / len (claims) if claims else 0.0
   return GroundingReport (score = round (score, 3), supported_claims = supported, total_claims = len (claims),
       unsupported = unsupported, )
@@ -142,13 +142,13 @@ def calibrate_threshold (test_cases: list [tuple [float, bool]]) -> float:
   """
   if not test_cases:
     from proxy.app.shared.config import CONFIDENCE_THRESHOLD
-    
+
     return CONFIDENCE_THRESHOLD
-  
+
   candidates = [c [0] for c in test_cases]
   best_f1 = 0.0
   best_threshold = 0.5
-  
+
   for candidate in candidates:
     tp = fn = fp = tn = 0
     for score, is_correct in test_cases:
@@ -161,17 +161,17 @@ def calibrate_threshold (test_cases: list [tuple [float, bool]]) -> float:
         fn += 1
       else:
         tn += 1
-    
+
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    
+
     if f1 > best_f1:
       best_f1 = f1
       best_threshold = candidate
     elif f1 == best_f1 and candidate < best_threshold:
       best_threshold = candidate
-  
+
   # Also try midpoints between sorted candidates
   sorted_candidates = sorted (set (candidates))
   for i in range (len (sorted_candidates) - 1):
@@ -187,15 +187,15 @@ def calibrate_threshold (test_cases: list [tuple [float, bool]]) -> float:
         fn += 1
       else:
         tn += 1
-    
+
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    
+
     if f1 > best_f1:
       best_f1 = f1
       best_threshold = mid
-  
+
   return round (best_threshold, 3)
 
 
@@ -207,15 +207,15 @@ def compute_confidence (
   uncertainties: list [str] = []
   score = 0.7
   nli_score = None
-  
+
   if not context or len (context.strip ()) < 20:
     uncertainties.append ("Retrieved context is empty or very short")
     score -= 0.4
-  
+
   if context and len (context) < len (answer) * 0.5:
     uncertainties.append ("Context is much shorter than answer — possible hallucination")
     score -= 0.2
-  
+
   uncertainty_phrases = [
       "I don't know", "I'm not sure", "I cannot", "no information", "не знаю", "не уверен", "нет информации", "не могу",
       "unclear", "uncertain", "possibly", "maybe", "возможно", "вероятно", "неясно",
@@ -225,11 +225,11 @@ def compute_confidence (
   if found_phrases:
     uncertainties.append (f"Answer contains uncertainty phrases: {', '.join (found_phrases)}")
     score -= 0.2
-  
+
   if len (answer.strip ()) < 20:
     uncertainties.append ("Answer is very short — insufficient information")
     score -= 0.15
-  
+
   # F1: NLI grounding integration
   # HALLUCINATION_CHECK_ENABLED is an alias — either flag gates NLI grounding
   try:
@@ -237,7 +237,7 @@ def compute_confidence (
   except ImportError:
     NLI_GROUNDING_ENABLED = True  # noqa: N806
     HALLUCINATION_CHECK_ENABLED = False  # noqa: N806
-  
+
   if (NLI_GROUNDING_ENABLED or HALLUCINATION_CHECK_ENABLED) and answer.strip () and context.strip ():
     nli_report = compute_nli_grounding (answer, context)
     nli_score = nli_report.score
@@ -246,13 +246,13 @@ def compute_confidence (
       uncertainties.append (f"NLI: {nli_report.supported_claims}/{nli_report.total_claims} claims grounded. "
                             f"Unsupported: {unsupported_preview}")
     score = 0.6 * score + 0.4 * nli_score
-  
+
   score = max (0.0, min (1.0, score))
   needs_review = score < 0.5
   recommendation = ""
   if needs_review:
     recommendation = "Consider rewording query, expanding retrieved context, or flagging for human review."
-  
+
   return ConfidenceReport (score = round (score, 2), needs_review = needs_review, uncertainties = uncertainties,
       recommendation = recommendation, )
 
@@ -275,15 +275,15 @@ def _score_chunk_relevance (query: str, chunk_text: str) -> float:
   """Score a single chunk's relevance to the query using keyword overlap."""
   if not query or not chunk_text:
     return 0.0
-  
+
   query_tokens = _tokenize (query)
   chunk_tokens = _tokenize (chunk_text)
   if not query_tokens:
     return 0.0
-  
+
   intersection = query_tokens & chunk_tokens
   overlap_ratio = len (intersection) / len (query_tokens)
-  
+
   cosine = _compute_cosine_proxy (query, chunk_text)
   combined = 0.4 * overlap_ratio + 0.6 * cosine
   return min (1.0, combined)
@@ -308,33 +308,33 @@ def evaluate_retrieval_quality (query: str, chunks: list [dict [str, Any]]) -> R
     return RetrievalQualityReport (classification = "Incorrect", correct_count = 0, incorrect_count = 0,
         ambiguous_count = 0, total_count = 0, correct_rate = 0.0,
         recommendations = ["No chunks retrieved. Consider expanding retrieval scope or checking index."], )
-  
+
   correct = 0
   incorrect = 0
   ambiguous = 0
   recommendations: list [str] = []
-  
+
   for chunk in chunks:
     text = chunk.get ("text", "")
     score = _score_chunk_relevance (query, text)
-    
+
     if score > 0.7:
       correct += 1
     elif score < 0.3:
       incorrect += 1
     else:
       ambiguous += 1
-  
+
   total = len (chunks)
   correct_rate = correct / total if total > 0 else 0.0
-  
+
   if correct_rate >= 0.5:
     classification = "Correct"
   elif correct_rate == 0.0 and incorrect == total:
     classification = "Incorrect"
   else:
     classification = "Ambiguous"
-  
+
   if incorrect > 0:
     recommendations.append (f"{incorrect}/{total} chunks are irrelevant to the query.")
   if ambiguous > 0:
@@ -343,7 +343,7 @@ def evaluate_retrieval_quality (query: str, chunks: list [dict [str, Any]]) -> R
     recommendations.append ("No highly relevant chunks found. Consider re-running retrieval with HyDE enabled.")
   if correct_rate >= 0.5:
     recommendations.append ("Retrieval quality is acceptable.")
-  
+
   return RetrievalQualityReport (classification = classification, correct_count = correct, incorrect_count = incorrect,
       ambiguous_count = ambiguous, total_count = total, correct_rate = round (correct_rate, 3),
       recommendations = recommendations, )
@@ -375,15 +375,15 @@ def verify_answer_claims (answer: str, context: str) -> VerificationReport:
   """
   if not answer or not answer.strip ():
     return VerificationReport (verification_rate = 0.0)
-  
+
   claims = decompose_into_claims (answer)
   if not claims:
     return VerificationReport (verification_rate = 0.0)
-  
+
   if not context or not context.strip ():
     return VerificationReport (verification_rate = 0.0, unsupported_claims = list (claims),
         total_claims = len (claims), )
-  
+
   supported = []
   unsupported = []
   for claim in claims:
@@ -391,7 +391,7 @@ def verify_answer_claims (answer: str, context: str) -> VerificationReport:
       supported.append (claim)
     else:
       unsupported.append (claim)
-  
+
   rate = len (supported) / len (claims) if claims else 0.0
   return VerificationReport (verification_rate = round (rate, 3), supported_claims = supported,
       unsupported_claims = unsupported, total_claims = len (claims), )
@@ -414,17 +414,17 @@ async def self_critique_answer (
   """
   if not answer or not context:
     return True, 5.0, "No verification needed"
-  
+
   # Extract claims from answer
   claims = [s.strip () for s in answer.split (".") if s.strip () and len (s.strip ()) > 10]
-  
+
   if not claims:
     return True, 5.0, "No claims to verify"
-  
+
   # Check each claim against context
   supported_claims = 0
   total_claims = len (claims)
-  
+
   context_lower = context.lower ()
   for claim in claims:
     claim_words = set (claim.lower ().split ())
@@ -435,24 +435,24 @@ async def self_critique_answer (
         "by", "from", "as", "into", "through", "during",
     }
     claim_keywords = claim_words - stop_words
-    
+
     # Check if keywords appear in context
     matched = sum (1 for kw in claim_keywords if kw in context_lower)
     if len (claim_keywords) > 0 and matched / len (claim_keywords) >= 0.3:
       supported_claims += 1
-  
+
   # Calculate support ratio
   support_ratio = supported_claims / total_claims if total_claims > 0 else 1.0
-  
+
   # Convert to 1-5 scale
   score = 1.0 + (support_ratio * 4.0)  # 1.0 to 5.0
-  
+
   is_valid = score >= threshold
   reason = f"Support ratio: {support_ratio:.2f} ({supported_claims}/{total_claims} claims supported)"
-  
+
   if not is_valid:
     reason = f"Answer not well supported by context. {reason}"
-  
+
   return is_valid, score, reason
 
 
@@ -476,11 +476,11 @@ def should_generate_answer (chunks: list [dict [str, Any]], min_strong_sources: 
   """
   if not chunks:
     return False, "No relevant documents found in knowledge base"
-  
+
   # Check score distribution
   scores = [c.get ("score", 0) for c in chunks]
   strong_count = sum (1 for s in scores if s >= 0.32)
-  
+
   if strong_count < min_strong_sources:
     if strong_count > 0:
       return False, (f"Only {strong_count} relevant source(s) found "
@@ -488,5 +488,5 @@ def should_generate_answer (chunks: list [dict [str, Any]], min_strong_sources: 
                      f"Insufficient data for reliable answer.")
     else:
       return False, "No sufficiently relevant sources found. Cannot provide reliable answer."
-  
+
   return True, "Sufficient relevant sources found"

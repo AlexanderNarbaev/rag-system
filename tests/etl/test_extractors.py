@@ -27,7 +27,7 @@ class TestConfluenceExtractorInit:
     assert extractor.download_attachments is True
     assert (tmp_path / "output").is_dir ()
     assert (tmp_path / "wal").is_dir ()
-  
+
   def test_init_with_all_options (self, tmp_path):
     config = {
         "url": "https://cf.test", "username": "u", "token": "t", "space_keys": ["DEV", "OPS"],
@@ -48,7 +48,7 @@ class TestConfluenceCalculatePageHash:
     config ["output_dir"] = str (tmp_path / "output")
     config ["wal_file"] = str (tmp_path / "wal" / "wal.json")
     return ConfluenceExtractor (config)
-  
+
   def test_same_page_same_hash (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     page = {
@@ -57,7 +57,7 @@ class TestConfluenceCalculatePageHash:
     h1 = ex._calculate_page_hash (page)
     h2 = ex._calculate_page_hash (page)
     assert h1 == h2
-  
+
   def test_different_body_different_hash (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     page1 = {
@@ -67,7 +67,7 @@ class TestConfluenceCalculatePageHash:
         "body": {"storage": {"value": "world"}}, "version": {"number": 1, "when": "2025-01-01"},
     }
     assert ex._calculate_page_hash (page1) != ex._calculate_page_hash (page2)
-  
+
   def test_hash_changes_with_version (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     page1 = {
@@ -85,22 +85,22 @@ class TestConfluenceShouldProcessPage:
     config ["output_dir"] = str (tmp_path / "output")
     config ["wal_file"] = str (tmp_path / "wal" / "wal.json")
     return ConfluenceExtractor (config)
-  
+
   def test_should_process_when_incremental_off (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.incremental = False
     assert ex._should_process_page ("p1", "anyhash") is True
-  
+
   def test_new_page_should_process (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     # WAL has no entry for this page
     assert ex._should_process_page ("new_page", "hash1") is True
-  
+
   def test_unchanged_page_should_not_process (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.wal_data ["pages_hash"] ["p1"] = "oldhash"
     assert ex._should_process_page ("p1", "oldhash") is False
-  
+
   def test_changed_page_should_process (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.wal_data ["pages_hash"] ["p1"] = "oldhash"
@@ -113,7 +113,7 @@ class TestConfluenceExtractLinks:
     config ["output_dir"] = str (tmp_path / "output")
     config ["wal_file"] = str (tmp_path / "wal" / "wal.json")
     return ConfluenceExtractor (config)
-  
+
   def test_extract_internal_and_external_links (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     html = """
@@ -124,7 +124,7 @@ class TestConfluenceExtractLinks:
     links = ex._extract_links_from_html (html)
     assert len (links ["internal_links"]) == 2
     assert len (links ["external_links"]) == 1
-  
+
   def test_extract_links_empty_html (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     links = ex._extract_links_from_html ("<p>No links here</p>")
@@ -138,7 +138,7 @@ class TestConfluenceGetPageVersions:
     config ["output_dir"] = str (tmp_path / "output")
     config ["wal_file"] = str (tmp_path / "wal" / "wal.json")
     return ConfluenceExtractor (config)
-  
+
   @patch.object (ConfluenceExtractor, "_request")
   def test_get_page_versions (self, mock_request, tmp_path):
     ex = self._make_extractor (tmp_path)
@@ -149,7 +149,7 @@ class TestConfluenceGetPageVersions:
     }
     versions = ex._get_page_versions ("12345")
     assert len (versions) == 2
-  
+
   @patch.object (ConfluenceExtractor, "_request")
   def test_get_page_versions_with_max_limit (self, mock_request, tmp_path):
     ex = self._make_extractor (tmp_path)
@@ -167,13 +167,13 @@ class TestConfluenceRun:
     config ["output_dir"] = str (tmp_path / "output")
     config ["wal_file"] = str (tmp_path / "wal" / "wal.json")
     return ConfluenceExtractor (config)
-  
+
   @patch.object (ConfluenceExtractor, "_get_all_pages")
   def test_run_with_no_pages (self, mock_get_pages, tmp_path):
     ex = self._make_extractor (tmp_path)
     mock_get_pages.return_value = []
     ex.run ()  # Should not raise
-  
+
   @patch.object (ConfluenceExtractor, "_get_all_pages")
   @patch.object (ConfluenceExtractor, "extract_page")
   @patch.object (ConfluenceExtractor, "_save_page_data")
@@ -189,7 +189,7 @@ class TestConfluenceRun:
     ex.run ()
     mock_extract.assert_called ()
     mock_save.assert_called ()
-  
+
   @patch.object (ConfluenceExtractor, "_get_all_pages")
   def test_run_skips_unchanged_pages (self, mock_get_pages, tmp_path):
     ex = self._make_extractor (tmp_path)
@@ -225,7 +225,7 @@ class TestJiraExtractorInit:
     assert extractor.base_jql == "ORDER BY updated DESC"
     assert extractor.incremental is True
     assert (tmp_path / "output").is_dir ()
-  
+
   def test_init_with_custom_jql (self, tmp_path):
     config = {
         "url": "https://jira.test", "username": "u", "token": "t", "jql": "project = DEV",
@@ -241,13 +241,13 @@ class TestJiraBuildJql:
     config ["output_dir"] = str (tmp_path / "out")
     config ["wal_file"] = str (tmp_path / "wal" / "w.json")
     return JiraExtractor (config)
-  
+
   def test_build_jql_no_incremental (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.incremental = False
     jql = ex._build_jql ()
     assert jql == ex.base_jql
-  
+
   def test_build_jql_incremental_with_last_run (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.base_jql = "project = DEV AND status != Closed"
@@ -255,14 +255,14 @@ class TestJiraBuildJql:
     jql = ex._build_jql ()
     assert "updated >=" in jql
     assert "2025-06-01" in jql
-  
+
   def test_build_jql_incremental_with_since_date (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.base_jql = "project = DEV"
     ex.since_date = "2025-03-01T00:00:00"
     jql = ex._build_jql ()
     assert "2025-03-01" in jql
-  
+
   def test_build_jql_with_existing_updated (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.base_jql = "project = DEV AND updated > 2025-01-01"
@@ -277,20 +277,20 @@ class TestJiraExtractLinks:
     config ["output_dir"] = str (tmp_path / "out")
     config ["wal_file"] = str (tmp_path / "wal" / "w.json")
     return JiraExtractor (config)
-  
+
   def test_extract_urls_and_issue_keys (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     text = "See https://docs.example.com and PROJ-123 for details."
     links = ex._extract_links_from_text (text)
     assert "https://docs.example.com" in links ["external_urls"]
     assert "PROJ-123" in links ["mentioned_issues"]
-  
+
   def test_extract_links_empty (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     links = ex._extract_links_from_text (None)
     assert links ["external_urls"] == []
     assert links ["mentioned_issues"] == []
-  
+
   def test_extract_links_no_matches (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     text = "Just plain text without links or issues."
@@ -305,7 +305,7 @@ class TestJiraProcessIssue:
     config ["output_dir"] = str (tmp_path / "out")
     config ["wal_file"] = str (tmp_path / "wal" / "w.json")
     return JiraExtractor (config)
-  
+
   @patch.object (JiraExtractor, "_get_sprints_for_issue")
   def test_process_issue_minimal (self, mock_sprints, tmp_path):
     ex = self._make_extractor (tmp_path)
@@ -324,7 +324,7 @@ class TestJiraProcessIssue:
     assert result ["priority"] == "High"
     assert result ["issuetype"] == "Bug"
     assert result ["labels"] == ["backend"]
-  
+
   @patch.object (JiraExtractor, "_get_sprints_for_issue")
   def test_process_issue_with_links (self, mock_sprints, tmp_path):
     ex = self._make_extractor (tmp_path)
@@ -352,7 +352,7 @@ class TestJiraRun:
     config ["output_dir"] = str (tmp_path / "out")
     config ["wal_file"] = str (tmp_path / "wal" / "w.json")
     return JiraExtractor (config)
-  
+
   @patch.object (JiraExtractor, "_paginated_issues")
   @patch.object (JiraExtractor, "_process_issue")
   def test_run_processes_issues (self, mock_process, mock_paginated, tmp_path):
@@ -361,7 +361,7 @@ class TestJiraRun:
     mock_paginated.return_value = iter ([issue])
     mock_process.return_value = {"key": "PROJ-1"}
     ex.run ()
-  
+
   @patch.object (JiraExtractor, "_paginated_issues")
   def test_run_respects_max_issues (self, mock_paginated, tmp_path):
     ex = self._make_extractor (tmp_path)
@@ -399,7 +399,7 @@ class TestGitLabExtractorInit:
     assert extractor.fetch_files is True
     assert extractor.fetch_merge_requests is True
     assert (tmp_path / "out").is_dir ()
-  
+
   def test_init_disabled_features (self, tmp_path):
     config = {
         "url": "https://gitlab.test", "token": "tok", "output_dir": str (tmp_path / "out"),
@@ -418,25 +418,25 @@ class TestGitLabMatchesFilter:
     config ["output_dir"] = str (tmp_path / "out")
     config ["wal_file"] = str (tmp_path / "wal" / "w.json")
     return GitLabExtractor (config)
-  
+
   def test_matches_with_extension_pattern (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.file_paths_filter = ["*.py", "*.md"]
     assert ex._matches_filter ("src/main.py") is True
     assert ex._matches_filter ("README.md") is True
     assert ex._matches_filter ("Dockerfile") is False
-  
+
   def test_matches_with_exact_pattern (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.file_paths_filter = ["Dockerfile", "Makefile"]
     assert ex._matches_filter ("Dockerfile") is True
     assert ex._matches_filter ("path/to/Dockerfile") is True  # 'Dockerfile' in path
     assert ex._matches_filter ("random.txt") is False
-  
+
   def test_matches_no_filter_returns_true (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     assert ex._matches_filter ("anything.py") is True
-  
+
   def test_matches_with_substring_match (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.file_paths_filter = ["config"]
@@ -449,21 +449,21 @@ class TestGitLabShouldProcessCommit:
     config ["output_dir"] = str (tmp_path / "out")
     config ["wal_file"] = str (tmp_path / "wal" / "w.json")
     return GitLabExtractor (config)
-  
+
   def test_should_process_when_incremental_off (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.incremental = False
     assert ex._should_process_commit (1, "sha1", "2025-01-01") is True
-  
+
   def test_new_project_should_process (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     assert ex._should_process_commit (99, "sha1", "2025-01-01") is True
-  
+
   def test_same_commit_should_not_process (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.wal_data ["projects"] ["1"] = {"last_commit_sha": "sha1"}
     assert ex._should_process_commit (1, "sha1", "2025-01-01") is False
-  
+
   def test_different_commit_should_process (self, tmp_path):
     ex = self._make_extractor (tmp_path)
     ex.wal_data ["projects"] ["1"] = {"last_commit_sha": "sha1"}
@@ -478,13 +478,13 @@ class TestGitLabRun:
     config ["fetch_files"] = False
     config ["fetch_merge_requests"] = False
     return GitLabExtractor (config)
-  
+
   @patch.object (GitLabExtractor, "get_projects")
   def test_run_with_no_projects (self, mock_projects, tmp_path):
     ex = self._make_extractor (tmp_path)
     mock_projects.return_value = []
     ex.run ()  # Should not raise
-  
+
   @patch.object (GitLabExtractor, "get_projects")
   @patch.object (GitLabExtractor, "get_commits")
   @patch.object (GitLabExtractor, "get_branches")

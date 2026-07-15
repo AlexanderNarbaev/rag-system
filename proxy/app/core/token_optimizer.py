@@ -36,7 +36,7 @@ def count_bpe_tokens (text: str) -> int:
 
 class TokenOptimizer:
   """Optimizes token usage in RAG context assembly."""
-  
+
   def estimate_token_cost (self, text: str) -> int:
     """
     Accurate token counting with BPE awareness.
@@ -48,7 +48,7 @@ class TokenOptimizer:
     word_tokens = len (_tokenize_words (text))
     word_estimate = max (1, int (word_tokens * 1.3))
     return max (1, int (char_estimate * 0.4 + word_estimate * 0.6))
-  
+
   def compress_context (self, chunks: list [dict [str, Any]], max_tokens: int, strategy: str = "relevance") -> str:
     """
     Compress context using the specified strategy.
@@ -61,7 +61,7 @@ class TokenOptimizer:
     """
     if not chunks:
       return ""
-    
+
     if strategy == "relevance":
       return self._compress_relevance (chunks, max_tokens)
     elif strategy == "proposition":
@@ -73,14 +73,14 @@ class TokenOptimizer:
     else:
       logger.warning (f"Unknown compression strategy '{strategy}', falling back to relevance")
       return self._compress_relevance (chunks, max_tokens)
-  
+
   def _compress_relevance (self, chunks: list [dict [str, Any]], max_tokens: int) -> str:
     """Keep top chunks, truncate each to fit token budget."""
     token_budget = max_tokens
     parts = []
     used = 0
     per_chunk = max (50, token_budget // max (1, len (chunks)))
-    
+
     for chunk in chunks:
       text = chunk.get ("text", "").strip ()
       if not text:
@@ -92,9 +92,9 @@ class TokenOptimizer:
         break
       parts.append (text [: per_chunk * 4])
       used += per_chunk
-    
+
     return "\n\n".join (parts)
-  
+
   def _compress_proposition (self, chunks: list [dict [str, Any]], max_tokens: int) -> str:
     """Convert each chunk to atomic fact-like sentences, then assemble."""
     propositions = []
@@ -114,13 +114,13 @@ class TokenOptimizer:
         break
       result = candidate
     return result.strip ()
-  
+
   def _compress_summary (self, chunks: list [dict [str, Any]], max_tokens: int) -> str:
     """Keep first N sentences of each chunk, stop at budget."""
     parts = []
     used = 0
     budget = max_tokens
-    
+
     for chunk in chunks:
       text = chunk.get ("text", "").strip ()
       if not text:
@@ -135,9 +135,9 @@ class TokenOptimizer:
         break
       parts.append (summary)
       used += cost
-    
+
     return "\n\n".join (parts)
-  
+
   def _compress_hierarchical (self, chunks: list [dict [str, Any]], max_tokens: int) -> str:
     """
     Tiered detail:
@@ -148,12 +148,12 @@ class TokenOptimizer:
     parts = []
     used = 0
     budget = max_tokens
-    
+
     for i, chunk in enumerate (chunks):
       text = chunk.get ("text", "").strip ()
       if not text:
         continue
-      
+
       if i < 3:
         segment = text
       elif i < 8:
@@ -162,7 +162,7 @@ class TokenOptimizer:
       else:
         sentences = re.split (r"(?<=[.!?])\s+", text)
         segment = sentences [0] if sentences else text [:200]
-      
+
       cost = self.estimate_token_cost (segment)
       if used + cost > budget:
         remaining = budget - used
@@ -171,9 +171,9 @@ class TokenOptimizer:
         break
       parts.append (segment)
       used += cost
-    
+
     return "\n\n".join (parts)
-  
+
   def extractive_compress (self, chunks: list [str], query: str, max_sentences: int = 3) -> str:
     """Extract most query-relevant sentences from chunks.
 
@@ -182,11 +182,11 @@ class TokenOptimizer:
     """
     if not chunks or not query:
       return "\n\n".join (chunks) if chunks else ""
-    
+
     query_keywords = set (re.findall (r"\w+", query.lower ()))
     if not query_keywords:
       return "\n\n".join (chunks)
-    
+
     result_parts = []
     for chunk_text in chunks:
       if not chunk_text.strip ():
@@ -195,7 +195,7 @@ class TokenOptimizer:
       if len (sentences) <= max_sentences:
         result_parts.append (chunk_text.strip ())
         continue
-      
+
       scored = []
       for s in sentences:
         s_tokens = set (re.findall (r"\w+", s.lower ()))
@@ -205,13 +205,13 @@ class TokenOptimizer:
         overlap = len (query_keywords & s_tokens)
         score = overlap / len (query_keywords)
         scored.append ((s, score))
-      
+
       scored.sort (key = lambda x: x [1], reverse = True)
       top_sentences = [s for s, _ in scored [:max_sentences]]
       result_parts.append (" ".join (top_sentences))
-    
+
     return "\n\n".join (result_parts)
-  
+
   def smart_token_budget (self, available_tokens: int, num_chunks: int) -> dict [str, int]:
     """
     Allocate token budget across system_prompt, context_per_chunk, history, and response.
@@ -227,23 +227,23 @@ class TokenOptimizer:
           "system_prompt": max (50, available_tokens // 5), "context_total": max (100, available_tokens * 3 // 5),
           "history": 0, "response": max (50, available_tokens // 5),
       }
-    
+
     system_prompt = min (2000, available_tokens // 10)
     response = min (4096, available_tokens // 5)
     history = min (8000, available_tokens // 6)
     context_total = available_tokens - system_prompt - response - history
-    
+
     if context_total < 0:
       context_total = max (100, available_tokens * 2 // 3)
       history = 0
-    
+
     context_per_chunk = max (100, context_total // max (1, num_chunks)) if num_chunks > 0 else context_total
-    
+
     return {
         "system_prompt": system_prompt, "context_total": context_total, "context_per_chunk": context_per_chunk,
         "history": history, "response": response,
     }
-  
+
   def surround_chunks (self, chunks: list [dict [str, Any]], nearby_count: int = 2) -> list [dict [str, Any]]:
     """
     Expand chunks with surrounding context from the same document.
@@ -253,30 +253,30 @@ class TokenOptimizer:
     """
     if not chunks or nearby_count <= 0:
       return list (chunks) if chunks else []
-    
+
     source_groups: dict [str, list [dict [str, Any]]] = {}
     for chunk in chunks:
       source_id = chunk.get ("source_id", "unknown")
       source_groups.setdefault (source_id, []).append (chunk)
-    
+
     expanded = []
     seen_hashes = set ()
-    
+
     for _source_id, group in source_groups.items ():
       group.sort (key = lambda x: x.get ("chunk_index", 0))
       indices = {id (c): i for i, c in enumerate (group)}
-      
+
       for chunk in group:
         chunk_hash = chunk.get ("text", "") [:80]
         if chunk_hash in seen_hashes:
           continue
         seen_hashes.add (chunk_hash)
         expanded.append (chunk)
-        
+
         ci = indices.get (id (chunk), 0)
         start = max (0, ci - nearby_count)
         end = min (len (group), ci + nearby_count + 1)
-        
+
         for j in range (start, end):
           if j == ci:
             continue
@@ -285,9 +285,9 @@ class TokenOptimizer:
           if n_hash not in seen_hashes:
             seen_hashes.add (n_hash)
             expanded.append (neighbor)
-    
+
     return expanded
-  
+
   def enrich_chunk_headers (self, chunk: dict [str, Any], doc_context: dict [str, Any]) -> dict [str, Any]:
     """
     Add document-level context as chunk header.
@@ -297,12 +297,12 @@ class TokenOptimizer:
     """
     result = dict (chunk)
     text = result.get ("text", "")
-    
+
     title = doc_context.get ("title", "")
     section = doc_context.get ("section", "")
     doc_type = doc_context.get ("doc_type", "")
     version = doc_context.get ("version", "")
-    
+
     header_parts = []
     if doc_type:
       header_parts.append (f"[Type: {doc_type}]")
@@ -312,15 +312,15 @@ class TokenOptimizer:
       header_parts.append (f"[Section: {section}]")
     if version:
       header_parts.append (f"[Version: {version}]")
-    
+
     if header_parts:
       header = " ".join (header_parts)
       result ["text"] = f"{header}\n{text}"
-    
+
     return result
-  
+
   # ── F5: LLMLingua-style Perplexity Compression ──
-  
+
   def compress_with_perplexity (self, text: str, budget: int, strategy: str = "keyword") -> str:
     """Compress text to fit within token budget using SLM perplexity or keyword scoring.
 
@@ -333,14 +333,14 @@ class TokenOptimizer:
     """
     if not text or not text.strip ():
       return ""
-    
+
     if strategy == "none":
       return text
-    
+
     current_tokens = self.estimate_token_cost (text)
     if current_tokens <= budget:
       return text
-    
+
     if strategy == "perplexity":
       try:
         return self._compress_by_perplexity (text, budget)
@@ -349,7 +349,7 @@ class TokenOptimizer:
         return self._compress_by_keyword (text, budget)
     else:
       return self._compress_by_keyword (text, budget)
-  
+
   def _compress_by_perplexity (self, text: str, budget: int) -> str:
     """Perplexity-based compression using token-level surprise scores.
 
@@ -361,17 +361,17 @@ class TokenOptimizer:
     words = re.findall (r"\w+", text.lower ())
     if not words:
       return text
-    
+
     word_freq: dict [str, int] = {}
     for w in words:
       word_freq [w] = word_freq.get (w, 0) + 1
     total = len (words)
-    
+
     # Higher frequency → lower surprise (more predictable)
     vocab = {w: 1.0 - (cnt / total) for w, cnt in word_freq.items ()}
-    
+
     surprises = _compute_token_surprise (text, vocab)
-    
+
     sentences = re.split (r"(?<=[.!?])\s+", text)
     scored = []
     for s in sentences:
@@ -384,9 +384,9 @@ class TokenOptimizer:
         continue
       avg_surprise = sum (surprises.get (w, 0.5) for w in s_words) / len (s_words)
       scored.append ((s_stripped, avg_surprise))
-    
+
     scored.sort (key = lambda x: x [1], reverse = True)
-    
+
     result = ""
     for sentence, _ in scored:
       candidate = result + sentence + " "
@@ -398,9 +398,9 @@ class TokenOptimizer:
           result += truncated
         break
       result += sentence + " "
-    
+
     return result.strip ()
-  
+
   def _compress_by_keyword (self, text: str, budget: int) -> str:
     """Sentence-level compression by keyword density relative to the full text.
 
@@ -410,15 +410,15 @@ class TokenOptimizer:
     words = re.findall (r"\w+", text.lower ())
     if not words:
       return text
-    
+
     word_freq: dict [str, int] = {}
     for w in words:
       word_freq [w] = word_freq.get (w, 0) + 1
     total = len (words)
-    
+
     # IDF-like: rare words are more important
     word_importance = {w: 1.0 - (cnt / total) for w, cnt in word_freq.items ()}
-    
+
     sentences = re.split (r"(?<=[.!?])\s+", text)
     scored = []
     for s in sentences:
@@ -431,9 +431,9 @@ class TokenOptimizer:
         continue
       avg_importance = sum (word_importance.get (w, 0.5) for w in s_words) / len (s_words)
       scored.append ((s_stripped, avg_importance))
-    
+
     scored.sort (key = lambda x: x [1], reverse = True)
-    
+
     result = ""
     for sentence, _ in scored:
       candidate = result + sentence + " "
@@ -444,7 +444,7 @@ class TokenOptimizer:
           result += truncated
         break
       result += sentence + " "
-    
+
     return result.strip ()
 
 
@@ -459,7 +459,7 @@ def _compute_token_surprise (text: str, vocab: dict [str, float]) -> dict [str, 
   """
   if not text or not vocab:
     return {}
-  
+
   words = re.findall (r"\w+", text.lower ())
   surprises = {}
   for w in words:

@@ -31,14 +31,14 @@ router = APIRouter (tags = ["chat"])
 
 class ChatMessage (BaseModel):
   """Single message in a chat conversation."""
-  
+
   role: str
   content: str
 
 
 class ChatCompletionRequest (BaseModel):
   """OpenAI-compatible chat completion request with RAG extensions."""
-  
+
   model: str
   messages: list [ChatMessage]
   temperature: float | None = 0.2
@@ -55,7 +55,7 @@ class ChatCompletionRequest (BaseModel):
 
 class ChatCompletionResponseChoice (BaseModel):
   """Single choice in a chat completion response."""
-  
+
   index: int
   message: ChatMessage
   finish_reason: str | None = "stop"
@@ -63,7 +63,7 @@ class ChatCompletionResponseChoice (BaseModel):
 
 class ChatCompletionResponse (BaseModel):
   """OpenAI-compatible chat completion response with RAG extensions."""
-  
+
   id: str
   object: str = "chat.completion"
   created: int
@@ -78,7 +78,7 @@ class ChatCompletionResponse (BaseModel):
 
 class ModelInfo (BaseModel):
   """Model metadata for the /v1/models endpoint."""
-  
+
   id: str
   object: str = "model"
   created: int
@@ -87,7 +87,7 @@ class ModelInfo (BaseModel):
 
 class ModelsResponse (BaseModel):
   """Response wrapper for the /v1/models endpoint."""
-  
+
   object: str = "list"
   data: list [ModelInfo]
 
@@ -104,21 +104,21 @@ class StreamOptimizer:
   to reduce client-side latency. Buffers streamed content up to the
   configured chunk size before emitting, balancing latency and overhead.
   """
-  
+
   def __init__ (self, chunk_size: int | None = None, buffer_size: int | None = None):
     from proxy.app.shared.config import SSE_CHUNK_SIZE, STREAM_BUFFER_SIZE
-    
+
     self.sse_chunk_size = chunk_size or SSE_CHUNK_SIZE
     self.stream_buffer_size = buffer_size or STREAM_BUFFER_SIZE
     self.initial_chunk_sent = False
-  
+
   def initial_chunk (self) -> str:
     """Return the initial empty SSE chunk to reduce TTFT."""
     if self.initial_chunk_sent:
       return ""
     self.initial_chunk_sent = True
     return 'data: {"role":"initial_chunk"}\n\n'
-  
+
   def format_chunk (self, chunk: dict [str, Any]) -> str:
     """Format a single chunk as an SSE event."""
     return f"data: {json.dumps (chunk)}\n\n"
@@ -141,17 +141,17 @@ async def chat_completions (
   """Main chat endpoint (OpenAI compatible)."""
   # Deferred imports from main.py to preserve test mock compatibility
   import proxy.app.main as _main
-  
+
   request_id = generate_request_id ()
   start_time = time.time ()
-  
+
   raw_request.state.user_context = user
-  
+
   # Input validation
   validated_model = InputValidator.validate_non_empty (request.model, max_len = 256)
   if not validated_model:
     raise HTTPException (status_code = 400, detail = "Invalid model name")
-  
+
   # Extract last user query
   user_query = None
   other_messages = []
@@ -163,13 +163,13 @@ async def chat_completions (
       sanitized_msg = msg.model_dump ()
       sanitized_msg ["content"] = sanitized_content
       other_messages.append (sanitized_msg)
-  
+
   if not user_query:
     raise HTTPException (status_code = 400, detail = "No user message found")
-  
+
   # Extract version from query
   version = request.rag_version or _main.extract_version_from_query (user_query)  # type: ignore[attr-defined]
-  
+
   # Log incoming request
   client_ip = raw_request.client.host if raw_request.client else "unknown"
   if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
@@ -177,9 +177,9 @@ async def chat_completions (
     safe_query = InputValidator.sanitize_for_log (user_query [:100])
     logger.info (f"Request {request_id}: user={client_ip}, roles={role_info}, "
                  f"query={safe_query}, version={version}, stream={request.stream}")
-  
+
   _main.request_tracker.start (request_id, metadata = {"model": request.model, "client_ip": client_ip})
-  
+
   # Federation: skip LLM generation, return chunks only
   if request.rag_skip_generation:
     rag_context, _, _, sources, _ = await _main.process_rag_query (user_query = user_query, version = version,
@@ -198,7 +198,7 @@ async def chat_completions (
           chunks = len (sources), duration_ms = duration_ms, tokens = 0, client_ip = client_ip,
           result_status = "success", metadata = {"version": version, "model": request.model, "skip_generation": True}, )
     return skip_response
-  
+
   # LangGraph orchestrator path
   if _main.USE_LANGGRAPH and _main.orchestrator:  # type: ignore[attr-defined]
     try:
@@ -221,7 +221,7 @@ async def chat_completions (
       context = final_response.get ("context", "")
       orchestrator_sources: list [dict [str, Any]] = []
       from proxy.app.core.context import compute_chunk_hash
-      
+
       for chunk, score in final_response.get ("reranked_chunks", []):
         orchestrator_sources.append ({
             "chunk_id": compute_chunk_hash (chunk), "source": chunk.get ("source_type", "unknown"),
@@ -231,7 +231,7 @@ async def chat_completions (
         })
       from proxy.app.core.confidence import compute_confidence
       from proxy.app.core.hitl import generate_feedback_id
-      
+
       feedback_id = generate_feedback_id ()
       confidence = compute_confidence (query = user_query, context = context, answer = response_text)
       completion = ChatCompletionResponse (id = request_id, created = int (time.time ()), model = request.model,
@@ -252,14 +252,14 @@ async def chat_completions (
             feedback_id = feedback_id, client_ip = client_ip, )
       if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
         from proxy.app.core.hitl import log_interaction
-        
+
         await log_interaction (request_id = request_id, user_query = user_query, context = "[agentic]",
             response = response_text, metadata = {"version": version, "model": request.model, "client_ip": client_ip}, )
       return completion
-  
+
   # Standard RAG pipeline
   if request.stream:
-    
+
     async def event_generator () -> AsyncIterator [str]:
       accumulated_answer = []
       optimizer = StreamOptimizer ()
@@ -289,7 +289,7 @@ async def chat_completions (
         full_answer = "".join (accumulated_answer)
         from proxy.app.core.confidence import compute_confidence
         from proxy.app.core.hitl import generate_feedback_id
-        
+
         feedback_id = generate_feedback_id ()
         confidence = compute_confidence (query = user_query, context = rag_context, answer = full_answer)
         yield f"data: {json.dumps ({'rag_feedback_id': feedback_id, 'rag_confidence': confidence.score})}\n\n"
@@ -306,7 +306,7 @@ async def chat_completions (
           _main.audit_logger.log_error (error_type = "StreamingError", error_msg = str (e), stack_trace = None,
               client_ip = client_ip, endpoint = "/v1/chat/completions", )
         yield f"data: {json.dumps ({'error': str (e)})}\n\n"
-    
+
     return StreamingResponse (event_generator (), media_type = "text/event-stream")
   else:
     # Non-streaming
@@ -330,7 +330,7 @@ async def chat_completions (
     ragas_scores = _rag_result [4]
     from proxy.app.core.confidence import compute_confidence
     from proxy.app.core.hitl import generate_feedback_id
-    
+
     feedback_id = generate_feedback_id ()
     confidence = compute_confidence (query = user_query, context = rag_ctx, answer = response_text)
     completion = ChatCompletionResponse (id = request_id, created = int (time.time ()), model = request.model,
@@ -352,7 +352,7 @@ async def chat_completions (
           client_ip = client_ip, )
     if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
       from proxy.app.core.hitl import log_interaction
-      
+
       await log_interaction (request_id = request_id, user_query = user_query,
           context = "[rag_context_omitted_for_logging]", response = response_text,
           metadata = {"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache}, )

@@ -35,7 +35,7 @@ class FLAREController:
       controller = FLAREController(search_fn, rerank_fn)
       response = controller.generate_with_flare(query, initial_context)
   """
-  
+
   def __init__ (
       self, search_fn: Callable [..., Any] | None = None, rerank_fn: Callable [..., Any] | None = None,
       confidence_threshold: float = 0.5, max_retrievals: int = 3, ):
@@ -44,26 +44,26 @@ class FLAREController:
     self.confidence_threshold = confidence_threshold
     self.max_retrievals = max_retrievals
     self.retrieval_count = 0
-  
+
   def should_retrieve (self, token_confidence: float) -> bool:
     """Check if we should trigger re-retrieval based on token confidence."""
     if self.retrieval_count >= self.max_retrievals:
       return False
     return token_confidence < self.confidence_threshold
-  
+
   def extract_query_from_context (self, context: str) -> str:
     """Extract a query from the upcoming generation context."""
     # Take last N characters as query
     if len (context) > FLARE_CONTEXT_WINDOW:
       return context [-FLARE_CONTEXT_WINDOW:]
     return context
-  
+
   def retrieve_additional_context (
       self, query: str, existing_context: list [str], ) -> list [str]:
     """Retrieve additional context for the query."""
     if not self.search_fn:
       return []
-    
+
     try:
       results = self.search_fn (query = query, top_k = 3)
       new_contexts = []
@@ -76,7 +76,7 @@ class FLAREController:
     except Exception as e:
       logger.warning (f"FLARE re-retrieval failed: {e}")
       return []
-  
+
   def generate_with_flare (
       self, query: str, initial_context: list [str], generate_fn: Callable [..., Any] | None = None,
       max_tokens: int = 1000, ) -> dict [str, Any]:
@@ -94,36 +94,36 @@ class FLAREController:
       return {
           "response": response, "retrievals": 0, "contexts": initial_context,
       }
-    
+
     all_contexts = list (initial_context)
     self.retrieval_count = 0
-    
+
     # Generate with monitoring
     response = ""
     remaining_query = query
-    
+
     for _ in range (self.max_retrievals + 1):
       # Generate chunk
       chunk = generate_fn (remaining_query, all_contexts)
       response += chunk
-      
+
       # Check confidence (simplified — in production, use token-level confidence)
       # For now, use a heuristic: if response is too short, confidence is low
       confidence = min (1.0, len (chunk) / 100)
-      
+
       if not self.should_retrieve (confidence):
         break
-      
+
       # Extract query from response for re-retrieval
       retrieval_query = self.extract_query_from_context (response)
       new_contexts = self.retrieve_additional_context (retrieval_query, all_contexts)
-      
+
       if not new_contexts:
         break
-      
+
       all_contexts.extend (new_contexts)
       remaining_query = retrieval_query
-    
+
     return {
         "response": response, "retrievals": self.retrieval_count, "contexts": all_contexts,
     }

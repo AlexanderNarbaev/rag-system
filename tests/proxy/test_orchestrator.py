@@ -10,7 +10,7 @@ sys.path.insert (0, str (Path (__file__).parent.parent.parent / "proxy"))
 def test_check_confidence_high_score_no_escalation ():
   with patch ("proxy.app.shared.config.CONFIDENCE_THRESHOLD", 0.5):
     from proxy.app.core.orchestrator import check_confidence
-    
+
     state = {
         "query": "What is Python?",
         "context": "Python is a programming language created in 1991 by Guido van Rossum. It is widely used.",
@@ -30,7 +30,7 @@ def test_check_confidence_low_score_escalation ():
       "proxy.app.shared.config.ADMIN_ALERT_ENABLED", False), patch (
       "proxy.app.shared.config.HALLUCINATION_CHECK_ENABLED", True), ):
     from proxy.app.core.orchestrator import check_confidence
-    
+
     state = {
         "query": "What is XYZ?", "context": "", "answer": "I don't know about XYZ.", "rewrite_count": 0,
     }
@@ -46,7 +46,7 @@ def test_check_confidence_max_loops_no_escalation ():
       "proxy.app.shared.config.ADMIN_ALERT_ENABLED", False), patch (
       "proxy.app.shared.config.HALLUCINATION_CHECK_ENABLED", True), ):
     from proxy.app.core.orchestrator import check_confidence
-    
+
     state = {
         "query": "What is XYZ?", "context": "", "answer": "I don't know.", "rewrite_count": 2,
     }
@@ -57,7 +57,7 @@ def test_check_confidence_max_loops_no_escalation ():
 
 def test_check_confidence_empty_answer ():
   from proxy.app.core.orchestrator import check_confidence
-  
+
   state = {
       "query": "test", "context": "context", "answer": "", "rewrite_count": 0,
   }

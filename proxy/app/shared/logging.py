@@ -30,7 +30,7 @@ def mask_sensitive_data (message: str) -> str:
 
 class JsonFormatter (logging.Formatter):
   """JSON structured log formatter for machine-parseable logs."""
-  
+
   def format (self, record: logging.LogRecord) -> str:
     log_entry = {
         "timestamp": datetime.now (UTC).isoformat (), "level": record.levelname, "logger": record.name,
@@ -46,16 +46,16 @@ class JsonFormatter (logging.Formatter):
 
 class RequestIdFilter (logging.Filter):
   """Injects request_id from context into log records."""
-  
+
   _request_id: str | None = None
-  
+
   def filter (self, record: logging.LogRecord) -> bool:
     if RequestIdFilter._request_id:
       record.request_id = RequestIdFilter._request_id
     else:
       record.request_id = "-"
     return True
-  
+
   @classmethod
   def set_request_id (cls, request_id: str | None) -> None:
     """Set the current request ID for log correlation."""
@@ -64,12 +64,12 @@ class RequestIdFilter (logging.Filter):
 
 class ColoredConsoleFormatter (logging.Formatter):
   """Human-readable console formatter with optional colors."""
-  
+
   COLORS = {
       "DEBUG": "\033[36m", "INFO": "\033[32m", "WARNING": "\033[33m", "ERROR": "\033[31m", "CRITICAL": "\033[1;31m",
   }
   RESET = "\033[0m"
-  
+
   def format (self, record: logging.LogRecord) -> str:
     color = self.COLORS.get (record.levelname, "")
     message = mask_sensitive_data (record.getMessage ())
@@ -107,25 +107,25 @@ def setup_logging (level: int | None = None) -> logging.Handler:
   log_format = get_log_format ()
   root_logger = logging.getLogger ()
   root_logger.setLevel (level)
-  
+
   for handler in root_logger.handlers [:]:
     root_logger.removeHandler (handler)
-  
+
   handler = logging.StreamHandler ()
   handler.addFilter (RequestIdFilter ())
-  
+
   if log_format == "json":
     handler.setFormatter (JsonFormatter ())
   else:
     handler.setFormatter (ColoredConsoleFormatter ("%(asctime)s", "%Y-%m-%d %H:%M:%S"))
-  
+
   root_logger.addHandler (handler)
-  
+
   logging.getLogger ("uvicorn").handlers = []
   logging.getLogger ("uvicorn").addHandler (handler)
   logging.getLogger ("uvicorn.access").handlers = []
   logging.getLogger ("uvicorn.access").addHandler (handler)
-  
+
   return handler
 
 

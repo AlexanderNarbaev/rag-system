@@ -24,14 +24,14 @@ from typing import Any
 
 try:
   import torch
-  
+
   TORCH_AVAILABLE = True
 except ImportError:
   TORCH_AVAILABLE = False
 
 try:
   from sentence_transformers import CrossEncoder
-  
+
   CROSS_ENCODER_AVAILABLE = True
 except ImportError:
   CROSS_ENCODER_AVAILABLE = False
@@ -57,13 +57,13 @@ def initialize_reranker () -> None:
   and local CrossEncoder with graceful fallback.
   """
   global reranker, cache_manager
-  
+
   from proxy.app.llm.remote_services import create_reranker
-  
+
   reranker = create_reranker ()
   reranker_name = getattr (reranker, "__class__", type (reranker)).__name__
   logger.info ("Reranker initialized: %s", reranker_name)
-  
+
   # Инициализация кэша (если используется Redis)
   if USE_REDIS and REDIS_URL:  # noqa: SIM108
     cache_manager = CacheManager (redis_url = REDIS_URL)
@@ -90,18 +90,18 @@ def _call_reranker_safe (pairs: list [tuple [str, str]]) -> list [float]:
   """
   if reranker is None:
     return [0.5] * len (pairs)
-  
+
   _circuit_breaker_available = False
   _circuit_breaker_error: type [Exception] = Exception
-  
+
   try:
     from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError, get_breaker
-    
+
     _circuit_breaker_available = True
     _circuit_breaker_error = CircuitBreakerOpenError
   except ImportError:
     pass
-  
+
   if _circuit_breaker_available:
     try:
       result: list [float] = get_breaker ("reranker").call_sync (lambda: reranker.predict (pairs))
@@ -109,7 +109,7 @@ def _call_reranker_safe (pairs: list [tuple [str, str]]) -> list [float]:
     except _circuit_breaker_error:
       logger.warning ("Reranker circuit breaker OPEN — returning neutral scores")
       return [0.5] * len (pairs)
-  
+
   # Fallback: direct call without circuit breaker
   result = reranker.predict (pairs)
   return result
@@ -133,16 +133,16 @@ def rerank_chunks (query: str, chunks: list [str], top_k: int = 20, use_cache: b
   """
   if not reranker:
     initialize_reranker ()
-  
+
   if not chunks:
     return []
-  
+
   # Обрезаем тексты до максимальной длины модели
   truncated_chunks = [_truncate_text (chunk) for chunk in chunks]
-  
+
   # Подготовка пар (запрос, чанк)
   pairs = [(query, chunk) for chunk in truncated_chunks]
-  
+
   # Получение скоров с кэшированием
   scores: list [float] = []
   if use_cache and cache_manager:
@@ -166,11 +166,11 @@ def rerank_chunks (query: str, chunks: list [str], top_k: int = 20, use_cache: b
         cache_manager.set_sync (cache_key, str (scores [i]), ttl = 3600)
   else:
     scores = _call_reranker_safe (pairs)
-  
+
   # Сортировка индексов по убыванию скора
   indexed_scores = list (enumerate (scores))
   indexed_scores.sort (key = lambda x: x [1], reverse = True)
-  
+
   # Возвращаем индексы top_k
   return [idx for idx, _ in indexed_scores [:top_k]]
 
@@ -197,10 +197,10 @@ def cosine_similarity_single (a: list [float], b: list [float]) -> float:
   dot_product: float = sum (x * y for x, y in zip (a, b, strict = False))
   norm_a: float = sum (x * x for x in a) ** 0.5
   norm_b: float = sum (x * x for x in b) ** 0.5
-  
+
   if norm_a == 0 or norm_b == 0:
     return 0.0
-  
+
   return dot_product / (norm_a * norm_b)
 
 
@@ -214,7 +214,7 @@ def colbert_score (query_tokens: list [list [float]], doc_tokens: list [list [fl
   """
   if not query_tokens or not doc_tokens:
     return 0.0
-  
+
   total_score = 0.0
   for q_token in query_tokens:
     max_sim = 0.0
@@ -223,7 +223,7 @@ def colbert_score (query_tokens: list [list [float]], doc_tokens: list [list [fl
       sim = cosine_similarity_single (q_token, d_token)
       max_sim = max (max_sim, sim)
     total_score += max_sim
-  
+
   return total_score / len (query_tokens)
 
 
@@ -240,7 +240,7 @@ list [dict [str, Any]]:
   """
   if not documents:
     return []
-  
+
   # Stage 1: ColBERT scores (if token embeddings available)
   colbert_scores = []
   for doc in documents:
@@ -249,10 +249,10 @@ list [dict [str, Any]]:
       colbert_scores.append (score)
     else:
       colbert_scores.append (0.0)
-  
+
   # Stage 2: Cross-encoder scores
   cross_scores = rerank_chunks (query, [d ["text"] for d in documents])
-  
+
   # Combine scores
   combined = []
   for i, doc in enumerate (documents):
@@ -261,7 +261,7 @@ list [dict [str, Any]]:
     doc ["colbert_score"] = colbert_scores [i]
     doc ["cross_encoder_score"] = cross_scores [i]
     combined.append (doc)
-  
+
   # Sort by combined score
   combined.sort (key = lambda x: x ["score"], reverse = True)
   return combined
@@ -283,7 +283,7 @@ class TwoStageReranker:
       )
       results = reranker.rerank(query, documents, final_top_k=5)
   """
-  
+
   def __init__ (
       self, fast_model: str | None = None, cross_encoder_model: str | None = None, fast_top_k: int = 20,
       final_top_k: int = 5, ):
@@ -293,19 +293,19 @@ class TwoStageReranker:
     self.final_top_k = final_top_k
     self._fast_encoder: Any = None
     self._cross_encoder: Any = None
-  
+
   def _get_fast_encoder (self) -> Any:
     """Lazy-load fast embedding model."""
     if self._fast_encoder is None and self.fast_model:
       try:
         from sentence_transformers import SentenceTransformer
-        
+
         self._fast_encoder = SentenceTransformer (self.fast_model)
         logger.info (f"Loaded fast encoder: {self.fast_model}")
       except Exception as e:
         logger.warning (f"Failed to load fast encoder: {e}")
     return self._fast_encoder
-  
+
   def fast_score (self, query: str, documents: list [str]) -> list [float]:
     """
     Stage 1: Fast embedding-based scoring.
@@ -315,25 +315,25 @@ class TwoStageReranker:
     if encoder is None:
       # Fallback: return uniform scores
       return [0.5] * len (documents)
-    
+
     try:
       query_emb = encoder.encode (query, normalize_embeddings = True)
       doc_embs = encoder.encode (documents, normalize_embeddings = True)
-      
+
       # Cosine similarity
       import numpy as np
-      
+
       scores: list [float] = np.dot (doc_embs, query_emb).tolist ()
       return scores
     except Exception as e:
       logger.warning (f"Fast scoring failed: {e}")
       return [0.5] * len (documents)
-  
+
   def cross_encoder_score (self, query: str, documents: list [str]) -> list [float]:
     """Stage 2: Cross-encoder scoring (slow but accurate)."""
     indices = rerank_chunks (query, documents, top_k = len (documents))
     return [float (i) for i in indices]
-  
+
   def rerank (
       self, query: str, documents: list [dict [str, Any]], text_key: str = "text", ) -> list [dict [str, Any]]:
     """
@@ -343,20 +343,20 @@ class TwoStageReranker:
     """
     if not documents:
       return []
-    
+
     # Stage 1: Fast scoring
     texts = [doc.get (text_key, "") for doc in documents]
     fast_scores = self.fast_score (query, texts)
-    
+
     # Sort by fast score and take top K
     scored_docs = list (zip (documents, fast_scores, strict = False))
     scored_docs.sort (key = lambda x: x [1], reverse = True)
     top_fast = scored_docs [: self.fast_top_k]
-    
+
     # Stage 2: Cross-encoder scoring
     fast_top_texts = [doc.get (text_key, "") for doc, _ in top_fast]
     cross_scores = self.cross_encoder_score (query, fast_top_texts)
-    
+
     # Combine scores (weighted)
     results = []
     for i, (doc, fast_score) in enumerate (top_fast):
@@ -367,7 +367,7 @@ class TwoStageReranker:
       doc ["cross_score"] = cross_score
       doc ["score"] = combined_score
       results.append (doc)
-    
+
     # Sort by combined score
     results.sort (key = lambda x: x ["score"], reverse = True)
     return results [: self.final_top_k]
@@ -389,12 +389,12 @@ def collect_training_pairs () -> list [tuple [str, str, float]]:
   """
   if not RERANKER_FT_ENABLED:
     return []
-  
+
   feedback_dir = Path (FEEDBACK_LOG_DIR)
   if not feedback_dir.is_dir ():
     logger.warning ("Feedback directory not found: %s", FEEDBACK_LOG_DIR)
     return []
-  
+
   pairs = []
   for fpath in sorted (feedback_dir.glob ("*.json")):
     try:
@@ -402,14 +402,14 @@ def collect_training_pairs () -> list [tuple [str, str, float]]:
     except (json.JSONDecodeError, OSError):
       logger.warning ("Failed to read feedback file: %s", fpath)
       continue
-    
+
     query = data.get ("query", "")
     chunks = data.get ("chunks", [])
     positive_ids = set (data.get ("positive_chunk_ids", []))
     negative_ids = set (data.get ("negative_chunk_ids", []))
-    
+
     chunk_map = {c.get ("id", ""): c.get ("text", "") for c in chunks}
-    
+
     for cid, text in chunk_map.items ():
       if not text:
         continue
@@ -417,7 +417,7 @@ def collect_training_pairs () -> list [tuple [str, str, float]]:
         pairs.append ((query, text, 1.0))
       elif cid in negative_ids:
         pairs.append ((query, text, 0.0))
-  
+
   logger.info ("Collected %d training pairs from HITL feedback", len (pairs))
   return pairs
 
@@ -438,17 +438,17 @@ def fine_tune_reranker (pairs: list [tuple [str, str, float]], epochs: int = 3) 
   if not RERANKER_FT_ENABLED:
     logger.info ("Reranker fine-tuning is disabled")
     return None
-  
+
   if not pairs:
     logger.warning ("No training pairs provided for fine-tuning")
     return None
-  
+
   gpu_available = TORCH_AVAILABLE and torch.cuda.is_available ()
   use_lora = gpu_available
-  
+
   if use_lora and gpu_available:
     return _fine_tune_with_lora (pairs, epochs)
-  
+
   return _fine_tune_full (pairs, epochs)
 
 
@@ -461,22 +461,22 @@ def _fine_tune_with_lora (pairs: list [tuple [str, str, float]], epochs: int = 3
   except ImportError as e:
     logger.error ("Model evolution module not available: %s", e)
     return None
-  
+
   output_dir = Path (FT_MODEL_DIR)
   output_dir.mkdir (parents = True, exist_ok = True)
-  
+
   pairs_file = output_dir / "reranker_train.json"
   pairs_file.write_text (json.dumps (pairs, ensure_ascii = False))
-  
+
   eval_count = max (1, int (len (pairs) * 0.2))
   eval_pairs = pairs [:eval_count]
   (output_dir / "reranker_eval.json").write_text (json.dumps (eval_pairs, ensure_ascii = False))
-  
+
   config = TrainingConfig.from_profile (TrainerType.RERANKER,
       EnvProfile.PROD if torch.cuda.is_available () else EnvProfile.DEV,
       base_model = RERANKER_MODEL or "cross-encoder/ms-marco-MiniLM-L-6-v2", output_dir = str (output_dir),
       epochs = epochs, use_lora = True, lora_r = RERANKER_LORA_R, lora_alpha = RERANKER_LORA_ALPHA, )
-  
+
   try:
     trainer = RerankerTrainer ()
     job = trainer.train (config)
@@ -497,26 +497,26 @@ def _fine_tune_full (pairs: list [tuple [str, str, float]], epochs: int = 3) -> 
   if not CROSS_ENCODER_AVAILABLE:
     logger.error ("sentence-transformers not available for fine-tuning")
     return None
-  
+
   global reranker
   if reranker is None:
     logger.warning ("Reranker not initialized, loading model for fine-tuning")
     reranker = CrossEncoder (RERANKER_MODEL, max_length = RERANKER_MAX_LENGTH)
-  
+
   try:
     train_inputs = [(q, c) for q, c, _ in pairs]
     train_scores = [s for _, _, s in pairs]
-    
+
     logger.info ("Fine-tuning reranker on %d pairs for %d epochs (full FT, CPU)", len (pairs), epochs)
     reranker.fit (train_inputs = train_inputs, train_labels = train_scores, epochs = epochs,
         show_progress_bar = False, )
-    
+
     output_dir = Path (FT_MODEL_DIR)
     output_dir.mkdir (parents = True, exist_ok = True)
     reranker.save (str (output_dir))
     logger.info ("Fine-tuned reranker saved to %s", output_dir)
     return str (output_dir)
-  
+
   except Exception as e:
     logger.error ("Reranker fine-tuning failed: %s", e)
     return None
@@ -529,12 +529,12 @@ RERANKER_LORA_ALPHA = 8
 if __name__ == "__main__":
   # Тестовый запуск (требуется настроенная конфигурация)
   import sys
-  
+
   sys.path.insert (0, ".")
   from proxy.app.shared.config import set_test_config  # type: ignore[attr-defined]
-  
+
   set_test_config ()
-  
+
   initialize_reranker ()
   query = "Как настроить CI/CD pipeline?"
   chunks = [

@@ -59,11 +59,11 @@ circuit_breaker_failures_total = _register_metric (Counter, "circuit_breaker_fai
 
 class State (StrEnum):
   """Circuit breaker states."""
-  
+
   CLOSED = "closed"
   OPEN = "open"
   HALF_OPEN = "half_open"
-  
+
   @property
   def metric_value (self) -> int:
     """Map state to numeric value for Prometheus gauge."""
@@ -72,7 +72,7 @@ class State (StrEnum):
 
 class CircuitBreakerOpenError (Exception):
   """Raised when a call is rejected because the circuit is open."""
-  
+
   def __init__ (self, name: str):
     self.name = name
     super ().__init__ (f"Circuit breaker '{name}' is OPEN — calls are rejected")
@@ -86,11 +86,11 @@ class CircuitBreaker:
       OPEN (1): Failing — calls are rejected immediately.
       HALF_OPEN (2): Testing recovery — limited calls allowed.
   """
-  
+
   CLOSED = State.CLOSED
   OPEN = State.OPEN
   HALF_OPEN = State.HALF_OPEN
-  
+
   def __init__ (
       self, name: str, failure_threshold: int = 5, cooldown_seconds: float = 30.0, half_open_max: int = 2, ):
     """Initialize a circuit breaker.
@@ -105,18 +105,18 @@ class CircuitBreaker:
     self.failure_threshold = failure_threshold
     self.cooldown_seconds = cooldown_seconds
     self.half_open_max = half_open_max
-    
+
     self._state = State.CLOSED
     self._failure_count = 0
     self._last_failure_time: float = 0.0
     self._half_open_calls = 0
     self._opened_at: float = 0.0
-    
+
     # Publish initial gauge value
     circuit_breaker_state.labels (name = self.name).set (self._state.metric_value)
     logger.info ("Circuit breaker '%s' initialized: threshold=%d, cooldown=%.1fs, half_open_max=%d", self.name,
         self.failure_threshold, self.cooldown_seconds, self.half_open_max, )
-  
+
   @property
   def state (self) -> State:
     """Current circuit breaker state (evaluated at access time).
@@ -125,12 +125,12 @@ class CircuitBreaker:
     """
     self._maybe_transition ()
     return self._state
-  
+
   @property
   def failure_count (self) -> int:
     """Current consecutive failure count."""
     return self._failure_count
-  
+
   def _maybe_transition (self) -> None:
     """Check and perform state transitions based on time and failure counts.
 
@@ -145,7 +145,7 @@ class CircuitBreaker:
         circuit_breaker_state.labels (name = self.name).set (self._state.metric_value)
         logger.info ("Circuit breaker '%s': %s → %s (cooldown %.1fs elapsed)", self.name, old_state, self._state,
             elapsed, )
-  
+
   def _transition (self, new_state: State) -> None:
     """Manually transition to a new state with logging and metrics update."""
     old_state = self._state
@@ -153,19 +153,19 @@ class CircuitBreaker:
     circuit_breaker_state.labels (name = self.name).set (self._state.metric_value)
     logger.info ("Circuit breaker '%s': %s → %s (failures=%d)", self.name, old_state, self._state,
         self._failure_count, )
-  
+
   def success (self) -> None:
     """Record a successful call — resets the failure count and closes the circuit."""
     self._failure_count = 0
     if self._state != State.CLOSED:
       self._transition (State.CLOSED)
-  
+
   def failure (self) -> None:
     """Record a failed call — increments failure count, may open the circuit."""
     self._failure_count += 1
     self._last_failure_time = time.monotonic ()
     circuit_breaker_failures_total.labels (name = self.name).inc ()
-    
+
     if self._state == State.HALF_OPEN:
       # Any failure in half-open immediately re-opens the circuit
       self._opened_at = time.monotonic ()
@@ -173,19 +173,19 @@ class CircuitBreaker:
     elif self._state == State.CLOSED and self._failure_count >= self.failure_threshold:
       self._opened_at = time.monotonic ()
       self._transition (State.OPEN)
-  
+
   def _check_and_enter (self) -> None:
     """Validate state and allow entry if circuit permits. Raises on rejection."""
     current_state = self.state  # triggers _maybe_transition
-    
+
     if current_state == State.OPEN:
       raise CircuitBreakerOpenError (self.name)
-    
+
     if current_state == State.HALF_OPEN:
       if self._half_open_calls >= self.half_open_max:
         raise CircuitBreakerOpenError (self.name)
       self._half_open_calls += 1
-  
+
   def call_sync (self, fn: Callable [..., Any], *args: Any, **kwargs: Any) -> Any:
     """Execute fn(*args, **kwargs) with circuit breaker protection (synchronous).
 
@@ -213,7 +213,7 @@ class CircuitBreaker:
         raise
       self.failure ()
       raise
-  
+
   async def call (self, fn: Callable [..., Any], *args: Any, **kwargs: Any) -> Any:
     """Execute fn(*args, **kwargs) with circuit breaker protection (async).
 

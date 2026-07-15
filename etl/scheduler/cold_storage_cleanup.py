@@ -22,10 +22,10 @@ def _list_parquet_versions (cold_dir: Path) -> dict [str, list [tuple [Path, int
   """
   if not cold_dir.is_dir ():
     return {}
-  
+
   pattern = re.compile (r"^(.+?)_v(\d+(?:_\d+)*)\.parquet$")
   groups: dict [str, list [tuple [Path, int]]] = {}
-  
+
   for f in cold_dir.glob ("*.parquet"):
     m = pattern.match (f.name)
     if not m:
@@ -34,10 +34,10 @@ def _list_parquet_versions (cold_dir: Path) -> dict [str, list [tuple [Path, int
     version_str = m.group (2)
     major_version = int (version_str.split ("_") [0])
     groups.setdefault (doc_name, []).append ((f, major_version))
-  
+
   for doc_name in groups:
     groups [doc_name].sort (key = lambda x: x [1], reverse = True)
-  
+
   return groups
 
 
@@ -70,22 +70,22 @@ def cleanup_cold_storage (cold_dir: str, max_versions: int | None = None) -> int
   if not COLD_STORAGE_ENABLED:
     logger.info ("Cold storage cleanup is disabled")
     return 0
-  
+
   if max_versions is None:
     max_versions = COLD_STORAGE_MAX_VERSIONS
-  
+
   cold_path = Path (cold_dir)
   if not cold_path.is_dir ():
     logger.warning ("Cold storage directory not found: %s", cold_dir)
     return 0
-  
+
   version_map = _list_parquet_versions (cold_path)
   total = sum (len (v) for v in version_map.values ())
-  
+
   if total == 0:
     logger.info ("No Parquet files found in %s", cold_dir)
     return 0
-  
+
   deleted = _prune_old_versions (version_map, max_versions)
   logger.info ("Cold storage cleanup: pruned %d files from %d total across %d documents", deleted, total,
       len (version_map), )

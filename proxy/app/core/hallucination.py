@@ -39,7 +39,7 @@ def _compute_cosine_proxy (text_a: str, text_b: str) -> float:
 def extract_factual_claims (answer: str) -> list [str]:
   if not answer or not answer.strip ():
     return []
-  
+
   parts = re.split (r"(?<=[.!?])\s+|\n|(?<=;)\s+", answer.strip ())
   claims = []
   for part in parts:
@@ -55,15 +55,15 @@ def check_claim_against_context (claim: str, context: str) -> bool:
     return False
   if not claim or not claim.strip ():
     return False
-  
+
   claim_tokens = _tokenize (claim)
   if not claim_tokens:
     return False
-  
+
   context_tokens = _tokenize (context)
   cosine_score = _compute_cosine_proxy (claim, context)
   keyword_overlap = len (claim_tokens & context_tokens) / len (claim_tokens)
-  
+
   combined = 0.5 * cosine_score + 0.5 * keyword_overlap
   return combined >= 0.30
 
@@ -81,15 +81,15 @@ def _find_evidence (claim: str, context: str) -> str:
 def detect_hallucinations (answer: str, context: str) -> HallucinationReport:
   if not answer or not answer.strip ():
     return HallucinationReport (hallucination_rate = 0.0)
-  
+
   claims = extract_factual_claims (answer)
   if not claims:
     return HallucinationReport (hallucination_rate = 0.0)
-  
+
   if not context or not context.strip ():
     return HallucinationReport (hallucination_rate = 1.0, hallucinated_claims = list (claims),
         total_claims = len (claims), )
-  
+
   hallucinated = []
   evidence_links = {}
   supported = 0
@@ -99,7 +99,7 @@ def detect_hallucinations (answer: str, context: str) -> HallucinationReport:
       evidence_links [claim] = _find_evidence (claim, context) or "context"
     else:
       hallucinated.append (claim)
-  
+
   rate = len (hallucinated) / len (claims) if claims else 0.0
   return HallucinationReport (hallucination_rate = round (rate, 3), hallucinated_claims = hallucinated,
       supported_claims = supported, total_claims = len (claims), evidence_links = evidence_links, )
@@ -110,16 +110,16 @@ def compute_hallucination_rate (answers: list [str], contexts: list [str]) -> fl
     return 0.0
   if not answers:
     return 0.0
-  
+
   total_hallucinated = 0
   total_claims = 0
   limit = min (len (answers), len (contexts))
-  
+
   for i in range (limit):
     report = detect_hallucinations (answers [i], contexts [i])
     total_hallucinated += len (report.hallucinated_claims)
     total_claims += report.total_claims
-  
+
   if total_claims == 0:
     return 0.0
   return round (total_hallucinated / total_claims, 3)
@@ -130,18 +130,18 @@ def run_hallucination_benchmark (eval_dataset: list [dict [str, Any]]) -> dict [
     return {
         "hallucination_rate": 0.0, "total_claims": 0, "hallucinated_claims": 0, "samples_count": 0,
     }
-  
+
   answers = [item.get ("answer", "") for item in eval_dataset]
   contexts = [item.get ("context", "") for item in eval_dataset]
   rate = compute_hallucination_rate (answers, contexts)
-  
+
   total_hallucinated = 0
   total_claims_count = 0
   for i in range (len (eval_dataset)):
     report = detect_hallucinations (answers [i], contexts [i])
     total_hallucinated += len (report.hallucinated_claims)
     total_claims_count += report.total_claims
-  
+
   return {
       "hallucination_rate": rate, "total_claims": total_claims_count, "hallucinated_claims": total_hallucinated,
       "samples_count": len (eval_dataset),

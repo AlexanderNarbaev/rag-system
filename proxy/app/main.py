@@ -35,11 +35,15 @@ from pydantic import BaseModel
 from starlette.middleware.gzip import GZipMiddleware
 
 from proxy.app.auth import (
-  AUTH_ENABLED, AuthMiddleware, UserContext,
+  AUTH_ENABLED,
+  AuthMiddleware,
+  UserContext,
 )
 from proxy.app.core.confidence import should_generate_answer
 from proxy.app.core.context import (  # noqa: F401 — re-export for test patching
-  build_context, deduplicate_chunks, extract_version_from_query,
+  build_context,
+  deduplicate_chunks,
+  extract_version_from_query,
 )
 from proxy.app.core.rerank import rerank_chunks
 from proxy.app.core.retrieval import hybrid_search
@@ -47,19 +51,37 @@ from proxy.app.core.retrieval_evaluator import RetrievalEvaluator
 from proxy.app.core.token_optimizer import TokenOptimizer
 from proxy.app.llm.provider import non_stream_completion, stream_completion  # noqa: F401 — re-export for test patching
 from proxy.app.shared.access_control import (
-  build_access_filter, filter_chunks,
+  build_access_filter,
+  filter_chunks,
 )
 from proxy.app.shared.audit import AuditLogger, RequestTracker
 from proxy.app.shared.cache import CacheManager
 
 # Internal module imports
 from proxy.app.shared.config import (
-  COLLECTION_NAME, COMPRESSION_ENABLED, COMPRESSION_LEVEL, COMPRESSION_MIN_SIZE, CORS_ORIGINS,
-  GRACEFUL_SHUTDOWN_ENABLED, LLM_MODEL_NAME,
-  LOG_DIR, LOG_REQUESTS,  # noqa: F401 — re-export for test patching
-  MAX_CHUNKS_AFTER_RERANK, MAX_CHUNKS_RETRIEVAL, OTEL_ENABLED, RATE_LIMIT_BURST, RATE_LIMIT_ENABLED,
-  RATE_LIMIT_PER_MINUTE, REDIS_URL, SHUTDOWN_TIMEOUT, TOOLS_DECLARATIVE_DIR, TOOLS_ENABLED, TOOLS_OPENAPI_SPECS,
-  USE_LANGGRAPH, USE_REDIS, WARMUP_ENABLED, WARMUP_ON_STARTUP,
+  COLLECTION_NAME,
+  COMPRESSION_ENABLED,
+  COMPRESSION_LEVEL,
+  COMPRESSION_MIN_SIZE,
+  CORS_ORIGINS,
+  GRACEFUL_SHUTDOWN_ENABLED,
+  LLM_MODEL_NAME,
+  LOG_DIR,  # noqa: F401 — re-export for test patching
+  MAX_CHUNKS_AFTER_RERANK,
+  MAX_CHUNKS_RETRIEVAL,
+  OTEL_ENABLED,
+  RATE_LIMIT_BURST,
+  RATE_LIMIT_ENABLED,
+  RATE_LIMIT_PER_MINUTE,
+  REDIS_URL,
+  SHUTDOWN_TIMEOUT,
+  TOOLS_DECLARATIVE_DIR,
+  TOOLS_ENABLED,
+  TOOLS_OPENAPI_SPECS,
+  USE_LANGGRAPH,
+  USE_REDIS,
+  WARMUP_ENABLED,
+  WARMUP_ON_STARTUP,
 )
 from proxy.app.shared.logging import setup_logging
 from proxy.app.shared.metrics import init_metrics
@@ -105,11 +127,11 @@ def _ensure_qdrant_collection () -> None:
   separate ``scripts/init_collections.py`` hasn't been run yet.
   """
   from proxy.app.core.retrieval import qdrant_client
-  
+
   if qdrant_client is None:
     logger.warning ("Qdrant client not available — skipping collection check")
     return
-  
+
   try:
     existing = {c.name for c in qdrant_client.get_collections ().collections}
     if COLLECTION_NAME in existing:
@@ -117,7 +139,7 @@ def _ensure_qdrant_collection () -> None:
       return
     # Create collection with named dense vector (matches ETL indexer schema)
     from qdrant_client.http import models as qmodels
-    
+
     qdrant_client.create_collection (
         collection_name = COLLECTION_NAME,
         vectors_config = {
@@ -150,17 +172,17 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   setup_logging ()
   logger.info ("Starting RAG Proxy...")
   init_metrics ()
-  
+
   # OpenTelemetry tracing (graceful degradation)
   if OTEL_ENABLED:
     try:
       from proxy.app.shared.tracing import setup_tracing
-      
+
       setup_tracing ()
       logger.info ("OpenTelemetry tracing initialized")
     except Exception as e:
       logger.warning ("OpenTelemetry tracing setup failed (non-blocking): %s", e)
-  
+
   audit_logger = AuditLogger (log_dir = LOG_DIR)
   # Initialize cache
   if USE_REDIS and REDIS_URL:
@@ -173,7 +195,7 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   # Auto-initialize Qdrant collections on startup
   try:
     from proxy.app.core.retrieval import initialize_retrieval
-    
+
     initialize_retrieval ()
     # Ensure the default collection exists
     _ensure_qdrant_collection ()
@@ -184,7 +206,7 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   try:
     from proxy.app.core.kb_manager import KnowledgeBaseManager
     from proxy.app.core.retrieval import qdrant_client as _qc
-    
+
     kb_manager = KnowledgeBaseManager (db_path = "data/knowledge_bases.db", qdrant_client = _qc)
     logger.info ("Knowledge Base Manager initialized")
   except Exception as e:
@@ -192,7 +214,7 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   # Initialize LangGraph orchestrator (if enabled)
   if USE_LANGGRAPH:
     from proxy.app.core.orchestrator import get_orchestrator
-    
+
     orchestrator = get_orchestrator ()
     if orchestrator is not None:
       logger.info ("LangGraph orchestrator initialized")
@@ -201,12 +223,12 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   # Tool discovery from all providers
   if TOOLS_ENABLED:
     registry = get_enhanced_registry ()
-    
+
     # Declarative provider
     if os.path.isdir (TOOLS_DECLARATIVE_DIR):
       try:
         from proxy.app.tools.declarative import DeclarativeProvider
-        
+
         declarative_provider: Any = DeclarativeProvider ()
         discovered = await declarative_provider.discover ()
         for tool in discovered:
@@ -214,12 +236,12 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
         logger.info ("Startup: loaded %d tools from declarative provider", len (discovered))
       except Exception as e:
         logger.warning ("Startup: declarative tool discovery failed: %s", e)
-    
+
     # OpenAPI provider
     if TOOLS_OPENAPI_SPECS:
       try:
         from proxy.app.tools.openapi import OpenAPIProvider
-        
+
         openapi_provider: Any = OpenAPIProvider ()
         discovered = await openapi_provider.discover ()
         for tool in discovered:
@@ -231,12 +253,12 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
   if WARMUP_ENABLED and WARMUP_ON_STARTUP:
     try:
       from proxy.app.shared.warmup import warmup_all
-      
+
       warmup_result = await warmup_all ()
       logger.info (f"Model warm-up completed: {warmup_result}")
     except Exception as e:
       logger.warning (f"Model warm-up failed (non-blocking): {e}")
-  
+
   if GRACEFUL_SHUTDOWN_ENABLED:
     loop = asyncio.get_running_loop ()
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -246,7 +268,7 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
       except (NotImplementedError, RuntimeError, ValueError):
         logger.info (f"Signal handler for {sig.name} skipped (not supported in this environment)")
     logger.info ("Graceful shutdown handlers registered")
-  
+
   logger.info ("RAG Proxy ready")
   yield
   # Cleanup
@@ -312,9 +334,9 @@ async def process_rag_query (
   """
   if user_context is None:
     user_context = UserContext.anonymous ()
-  
+
   _access_filter = build_access_filter (user_context)
-  
+
   # 1. Cache check
   cache_key = f"rag:{user_context.user_id}:{user_query}:{version or 'latest'}"
   if not force_refresh and cache_manager:
@@ -322,18 +344,18 @@ async def process_rag_query (
     if cached:
       logger.info (f"Cache hit for query: {user_query [:50]}...")
       return cached, "", True, [], {}
-  
+
   # 2. Adaptive query routing (opt-in via config)
   from proxy.app.shared.config import ADAPTIVE_ROUTING_ENABLED
-  
+
   if ADAPTIVE_ROUTING_ENABLED:
     from proxy.app.core.query_router import get_query_router
-    
+
     router = get_query_router ()
     complexity = router.classify (user_query)
     routing_params = router.get_retrieval_params (complexity)
     logger.debug (f"Query classified as '{complexity}': {user_query [:50]}...")
-    
+
     if not routing_params ["retrieve"]:
       # Simple query — no retrieval needed
       logger.info (f"Skipping retrieval for 'direct' query: {user_query [:50]}...")
@@ -345,7 +367,7 @@ async def process_rag_query (
       messages.append ({"role": "user", "content": user_query})
       response_text = await non_stream_completion (messages, temperature = temperature, max_tokens = max_tokens)
       return response_text, "", False, [], {}
-  
+
   # 3. Hybrid search
   try:
     search_results = hybrid_search (query = user_query, version = version,
@@ -362,14 +384,14 @@ async def process_rag_query (
     chunks_texts = [hit.payload ["text"] for hit in search_results]
     chunks_metadata = [hit.payload for hit in search_results]
     scores = [hit.score for hit in search_results]
-    
+
     # 2.5. Row-level access control filtering
     chunk_dicts = [{**meta, "_score": scores [i]} for i, meta in enumerate (chunks_metadata)]
     filtered_chunks = filter_chunks (chunk_dicts, user_context)
     if len (filtered_chunks) < len (chunk_dicts):
       logger.info (f"Access control filtered {len (chunk_dicts) - len (filtered_chunks)} "
                    f"chunks (user={user_context.username}, roles={user_context.roles})")
-    
+
     if not filtered_chunks:
       context = ""
       chunks_metadata = []
@@ -385,17 +407,17 @@ async def process_rag_query (
       chunks_metadata = filtered_metadata
       scores = filtered_scores
       chunks_texts = filtered_texts
-      
+
       # 3. Reranking
       reranked_indices = rerank_chunks (user_query, chunks_texts, top_k = MAX_CHUNKS_AFTER_RERANK)
       reranked_chunks = [(chunks_metadata [i], scores [i]) for i in reranked_indices]
-      
+
       # 4. Deduplication and versioning
       unique_chunks = deduplicate_chunks (reranked_chunks)
-      
+
       # 5. Build source citations
       from proxy.app.core.context import compute_chunk_hash
-      
+
       if unique_chunks:
         for chunk, score in unique_chunks:
           sources.append ({
@@ -404,7 +426,7 @@ async def process_rag_query (
               "version": chunk.get ("version", "unknown"), "relevance": round (score, 4),
               "text_preview": chunk.get ("text", "") [:200],
           })
-      
+
       # 6. Retrieval quality evaluation (CRAG-style)
       chunks_for_eval = []
       for c, s in unique_chunks:
@@ -414,7 +436,7 @@ async def process_rag_query (
       confidence, action, quality_processed = retrieval_evaluator.evaluate_and_act (query = user_query,
           retrieved_chunks = chunks_for_eval)
       logger.info (f"Retrieval quality: confidence={confidence:.3f}, action={action}")
-      
+
       # CRAG-style corrective retrieval
       if action == "REWRITE":
         logger.info ("CRAG: Triggering query rewrite due to low retrieval quality")
@@ -429,7 +451,7 @@ async def process_rag_query (
             logger.info (f"CRAG: Added {len (additional_results)} results from rewritten query")
         except Exception as e:
           logger.warning (f"CRAG rewrite failed: {e}")
-      
+
       elif action == "EXPAND":
         logger.info ("CRAG: Triggering context expansion")
         # Try broader search
@@ -441,7 +463,7 @@ async def process_rag_query (
             logger.info (f"CRAG: Added {len (expanded_results)} expanded results")
         except Exception as e:
           logger.warning (f"CRAG expansion failed: {e}")
-      
+
       if action == "FALLBACK":
         context = ""
         chunks_metadata = []
@@ -453,26 +475,26 @@ async def process_rag_query (
         available_tokens = 130_000  # approximate context window budget for LLM
         budget = token_optimizer.smart_token_budget (available_tokens = available_tokens,
             num_chunks = len (unique_chunks))
-        
+
         # 8. Context compression with budget
         raw_context = build_context (unique_chunks, max_tokens = budget ["context_total"], include_metadata = True)
-        
+
         if budget ["context_total"] < len (raw_context) // 4:
           context = token_optimizer.compress_context ([c for c, _ in unique_chunks],
               max_tokens = budget ["context_total"], strategy = "hierarchical")
         else:
           context = raw_context
-        
+
         logger.info (f"Token budget: system={budget ['system_prompt']}, "
                      f"context={budget ['context_total']}, response={budget ['response']}")
-  
+
   # 9. Negative evidence check — refuse to hallucinate if retrieval is insufficient
   should_gen, reason = should_generate_answer (chunks_for_eval)
   if not should_gen:
     logger.info (f"Negative evidence: refusing to generate — {reason}")
     refusal = f"I don't have enough relevant information to answer this question reliably. {reason}"
     return refusal, "", False, sources, {}
-  
+
   # 10. Build system prompt
   system_prompt = ("Ты – технический ассистент. Используй предоставленный контекст для ответа. "
                    "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
@@ -484,7 +506,7 @@ async def process_rag_query (
         messages_for_llm.append (msg)
   # Add the user query as the final message
   messages_for_llm.append ({"role": "user", "content": user_query})
-  
+
   # 11. LLM call
   if stream:
     return context, messages_for_llm, False, sources, {}
@@ -499,26 +521,26 @@ async def process_rag_query (
       )
     if cache_manager and not force_refresh:
       await cache_manager.set (cache_key, response_text, ttl = DEFAULT_CACHE_TTL_SECONDS)
-    
+
     # 11.5 Self-critique verification
     from proxy.app.core.confidence import self_critique_answer
-    
+
     is_valid, critique_score, critique_reason = await self_critique_answer (query = user_query, context = context,
         answer = response_text, )
     if not is_valid:
       logger.warning (
         f"Self-critique failed: {critique_reason} (score={critique_score:.1f})")  # Low confidence answers get
       # flagged in metadata
-    
+
     # 12. Compute RAGAS evaluation scores
     ragas_scores: dict [str, float] = {}
     if chunks_for_eval:
       from proxy.app.core.ragas_eval import evaluate_rag_response
-      
+
       context_texts = [c.get ("text", "") for c in chunks_for_eval]
       ragas_scores = evaluate_rag_response (question = user_query, answer = response_text, contexts = context_texts, )
       logger.info (f"RAGAS scores: {ragas_scores}")
-    
+
     return response_text, context, False, sources, ragas_scores
 
 
@@ -567,7 +589,7 @@ if COMPRESSION_ENABLED:
 if OTEL_ENABLED:
   try:
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    
+
     FastAPIInstrumentor.instrument_app (app)
     logger.info ("FastAPI OpenTelemetry instrumentation enabled")
   except ImportError:
@@ -583,7 +605,7 @@ if OTEL_ENABLED:
 
 class ModelInfo (BaseModel):
   """Model metadata returned by the /v1/models endpoint."""
-  
+
   id: str
   object: str = "model"
   created: int
@@ -592,7 +614,7 @@ class ModelInfo (BaseModel):
 
 class ModelsResponse (BaseModel):
   """Response wrapper for the /v1/models endpoint."""
-  
+
   object: str = "list"
   data: list [ModelInfo]
 
@@ -612,7 +634,14 @@ async def list_models () -> ModelsResponse:
 # ---------------------------------------------------------------------------
 
 from proxy.app.api import (  # noqa: E402
-  admin_router, auth_router, chat_router, feedback_router, files_router, health_router, metrics_router, tools_router,
+  admin_router,
+  auth_router,
+  chat_router,
+  feedback_router,
+  files_router,
+  health_router,
+  metrics_router,
+  tools_router,
   widget_router,
 )
 from proxy.app.api.admin_kb import router as admin_kb_router  # noqa: E402
@@ -637,10 +666,16 @@ app.include_router (admin_kb_router)
 # Re-export admin helpers so tests that patch
 # ``proxy.app.main._get_model_registry`` still work.
 from proxy.app.api.admin import (  # noqa: E402, F401
-  _canary_state, _get_model_registry, _training_jobs,
+  _canary_state,
+  _get_model_registry,
+  _training_jobs,
 )
 from proxy.app.api.chat import (  # noqa: E402, F401
-  ChatCompletionRequest, ChatCompletionResponse, ChatCompletionResponseChoice, ChatMessage, StreamOptimizer,
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  ChatCompletionResponseChoice,
+  ChatMessage,
+  StreamOptimizer,
   generate_request_id,
 )
 

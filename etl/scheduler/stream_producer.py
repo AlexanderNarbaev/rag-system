@@ -13,10 +13,10 @@ logger = logging.getLogger ("StreamProducer")
 
 class StreamProducer:
   """Produces events to Redis Streams."""
-  
+
   def __init__ (self, redis_client = None):
     self.redis = redis_client
-  
+
   def produce_event (self, stream: str, event: dict) -> str | None:
     """
     Produce a single event to a Redis Stream.

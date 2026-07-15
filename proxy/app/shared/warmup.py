@@ -14,7 +14,9 @@ import logging
 from typing import Any
 
 from proxy.app.shared.config import (
-  LLM_ENDPOINT, LLM_MODEL_NAME, WARMUP_ENABLED,
+  LLM_ENDPOINT,
+  LLM_MODEL_NAME,
+  WARMUP_ENABLED,
 )
 
 logger = logging.getLogger (__name__)
@@ -34,7 +36,7 @@ async def warmup_embedder () -> bool:
   """
   try:
     from proxy.app.core.retrieval import hybrid_search
-    
+
     _ = hybrid_search (query = WARMUP_QUERY, top_k = 1)
     logger.info ("Embedder warm-up completed")
     return True
@@ -50,7 +52,7 @@ async def warmup_reranker () -> bool:
   """
   try:
     from proxy.app.core.rerank import rerank_chunks
-    
+
     _ = rerank_chunks (WARMUP_QUERY, [WARMUP_DOC], top_k = 1)
     logger.info ("Reranker warm-up completed")
     return True
@@ -69,7 +71,7 @@ async def warmup_llm () -> bool:
     return False
   try:
     from proxy.app.llm.provider import non_stream_completion
-    
+
     await non_stream_completion ([{"role": "user", "content": WARMUP_TEXT}], temperature = 0.0, max_tokens = 1, )
     logger.info ("LLM warm-up completed")
     return True
@@ -86,13 +88,13 @@ async def warmup_all () -> dict [str, Any]:
   """
   if not WARMUP_ENABLED:
     return {"status": "disabled", "embedder": False, "reranker": False, "llm": False}
-  
+
   results = await asyncio.gather (warmup_embedder (), warmup_reranker (), warmup_llm (), return_exceptions = True, )
-  
+
   embedder_ok = results [0] if not isinstance (results [0], BaseException) else False
   reranker_ok = results [1] if not isinstance (results [1], BaseException) else False
   llm_ok = results [2] if not isinstance (results [2], BaseException) else False
-  
+
   all_ok = embedder_ok and reranker_ok and llm_ok
   return {
       "status": "ok" if all_ok else "partial", "embedder": embedder_ok, "reranker": reranker_ok, "llm": llm_ok,

@@ -3,7 +3,11 @@ import json
 from unittest.mock import MagicMock
 
 from etl.chunker.semantic_chunker import (
-  Chunk, MDKeyChunker, MetadataEnricher, SemanticChunker, save_chunks_to_json,
+  Chunk,
+  MDKeyChunker,
+  MetadataEnricher,
+  SemanticChunker,
+  save_chunks_to_json,
 )
 
 
@@ -16,7 +20,7 @@ class TestChunkDataclass:
     assert c.entities == []
     assert c.position == 0
     assert c.tokens_approx == 0
-  
+
   def test_full_construction (self):
     c = Chunk (text = "full text", hash = "xyz", title = "My Title", summary = "summary", keywords = ["a", "b"],
         entities = ["PERSON:John"], source_type = "wiki", source_id = "123", version = "2.0", doc_title = "Doc",
@@ -49,7 +53,7 @@ class TestSemanticChunkerSplitByHeadings:
     assert len (sections) >= 2
     assert sections [0] ["heading"] == "Intro"
     assert sections [1] ["heading"] == "Details"
-  
+
   def test_split_html_no_headings (self):
     chunker = SemanticChunker ()
     html = "<p>Just a paragraph.</p><p>Another.</p>"
@@ -67,14 +71,14 @@ class TestSemanticChunkerSplitByParagraphs:
     assert paragraphs [0] == "Para one."
     assert paragraphs [1] == "Para two."
     assert paragraphs [2] == "Para three."
-  
+
   def test_split_single_paragraph (self):
     chunker = SemanticChunker ()
     text = "Just one paragraph."
     paragraphs = chunker._split_by_paragraphs (text)
     assert len (paragraphs) == 1
     assert paragraphs [0] == "Just one paragraph."
-  
+
   def test_split_empty_text (self):
     chunker = SemanticChunker ()
     assert chunker._split_by_paragraphs ("") == []
@@ -90,7 +94,7 @@ class TestSemanticChunkerMergeShortChunks:
     ]
     merged = chunker._merge_short_chunks (chunks)
     assert len (merged) < 3
-  
+
   def test_no_merge_when_all_large (self):
     chunker = SemanticChunker (max_tokens = 1000, min_chunk_tokens = 10)
     chunks = [
@@ -99,7 +103,7 @@ class TestSemanticChunkerMergeShortChunks:
     ]
     merged = chunker._merge_short_chunks (chunks)
     assert len (merged) == 2
-  
+
   def test_merge_empty_list (self):
     chunker = SemanticChunker ()
     assert chunker._merge_short_chunks ([]) == []
@@ -127,7 +131,7 @@ class TestSemanticChunkerApplyOverlap:
     result = chunker._apply_overlap ([c1, c2])
     assert len (result) == 2
     assert "previous context" not in result [0].text
-  
+
   def test_overlap_adds_context (self):
     chunker = SemanticChunker (overlap_tokens = 5)
     c1 = Chunk (text = "aaaa bbbb cccc dddd eeee", hash = "a")
@@ -135,7 +139,7 @@ class TestSemanticChunkerApplyOverlap:
     result = chunker._apply_overlap ([c1, c2])
     assert len (result) == 2
     assert "[previous context" in result [1].text
-  
+
   def test_single_chunk_no_overlap (self):
     chunker = SemanticChunker (overlap_tokens = 20)
     c1 = Chunk (text = "only one", hash = "a")
@@ -154,7 +158,7 @@ class TestSemanticChunkerChunkHtml:
     for c in chunks:
       assert c.source_type == "wiki"
       assert c.doc_title == "Test Doc"
-  
+
   def test_chunk_html_large_content_splits (self):
     chunker = SemanticChunker (max_tokens = 5)
     huge_text = "word " * 100
@@ -182,7 +186,7 @@ class TestMetadataEnricherExtractKeywords:
     keywords = enricher.extract_keywords_tfidf (text, top_n = 3)
     assert isinstance (keywords, list)
     assert len (keywords) <= 3
-  
+
   def test_extract_keywords_empty_text (self):
     enricher = MetadataEnricher ()
     assert enricher.extract_keywords_tfidf ("") == []
@@ -194,7 +198,7 @@ class TestMetadataEnricherExtractEntities:
     enricher = MetadataEnricher (use_slm = False)
     enricher.nlp = None
     assert enricher.extract_entities_spacy ("some text") == []
-  
+
   def test_extract_entities_with_mock_spacy (self):
     enricher = MetadataEnricher (use_slm = False)
     mock_nlp = MagicMock ()
@@ -218,7 +222,7 @@ class TestMetadataEnricherSummary:
     enricher = MetadataEnricher ()
     result = enricher.generate_summary ("Short text.")
     assert result == "Short text."
-  
+
   def test_generate_summary_long_text (self):
     enricher = MetadataEnricher ()
     text = "First sentence. Second sentence. Third sentence. Fourth."
@@ -234,7 +238,7 @@ class TestMetadataEnricherHypotheticalQuestions:
     questions = enricher.generate_hypothetical_questions (text)
     assert isinstance (questions, list)
     assert len (questions) <= 3
-  
+
   def test_generate_questions_no_matches (self):
     enricher = MetadataEnricher ()
     text = "This is plain text without Russian question words."
@@ -254,7 +258,7 @@ class TestMDKeyChunkerProcessDocument:
     assert len (chunks) >= 1
     for c in chunks:
       assert c.source_type == "wiki"
-  
+
   def test_process_markdown_document (self):
     chunker = SemanticChunker (max_tokens = 800)
     enricher = MetadataEnricher (use_slm = False)
@@ -277,7 +281,7 @@ class TestMDKeyChunkerPackBySemanticKey:
     ]
     packed = md_key._pack_by_semantic_key (chunks)
     assert len (packed) == 2
-  
+
   def test_pack_with_same_semantic_key (self):
     chunker = SemanticChunker ()
     enricher = MetadataEnricher ()

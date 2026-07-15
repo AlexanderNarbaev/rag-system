@@ -19,7 +19,7 @@ logger = logging.getLogger (__name__)
 
 class GateStatus (Enum):
   """Outcome of an evaluation gate run."""
-  
+
   PASS = "pass"
   FAIL = "fail"
   WARN = "warn"
@@ -28,17 +28,17 @@ class GateStatus (Enum):
 @dataclass
 class MetricThreshold:
   """A single metric threshold with comparison operator and severity."""
-  
+
   metric_name: str
   threshold: float
   comparison: str  # "gt", "gte", "lt", "lte"
   severity: str = "fail"  # "fail" or "warn"
   tolerance: float = 0.0  # Relative tolerance for "warn" status
-  
+
   _COMPARATORS = {
       "gt": lambda a, b: a > b, "gte": lambda a, b: a >= b, "lt": lambda a, b: a < b, "lte": lambda a, b: a <= b,
   }
-  
+
   def evaluate (self, value: float) -> bool:
     """Return True if the value passes this threshold."""
     comparator = self._COMPARATORS.get (self.comparison)
@@ -51,7 +51,7 @@ class MetricThreshold:
 @dataclass
 class GateResult:
   """Result of an evaluation gate run."""
-  
+
   status: GateStatus = GateStatus.PASS
   model_name: str = ""
   version: str = ""
@@ -68,7 +68,7 @@ class GateResult:
 @dataclass
 class EvalGateConfig:
   """Configuration for an evaluation gate."""
-  
+
   model_name: str
   thresholds: list [MetricThreshold] = field (default_factory = list)
   require_baseline_comparison: bool = True
@@ -82,7 +82,7 @@ class EvalGate:
   Reads metrics, compares against configurable thresholds, detects
   baseline regression, and produces a pass/fail/warn decision.
   """
-  
+
   @staticmethod
   def evaluate (
       metrics: dict [str, float], config: EvalGateConfig, baseline_metrics: dict [str, float] | None = None,
@@ -100,12 +100,12 @@ class EvalGate:
     """
     failures: list [str] = []
     warnings: list [str] = []
-    
+
     for threshold in config.thresholds:
       value = metrics.get (threshold.metric_name)
       if value is None:
         continue
-      
+
       passed = threshold.evaluate (value)
       if not passed:
         message = f"{threshold.metric_name} {value} is not {threshold.comparison} {threshold.threshold}"
@@ -113,13 +113,13 @@ class EvalGate:
           failures.append (message)
         else:
           warnings.append (message)
-    
+
     delta_metrics: dict [str, float] = {}
     if baseline_metrics:
       for key in metrics:
         if key in baseline_metrics:
           delta_metrics [key] = metrics [key] - baseline_metrics [key]
-      
+
       if config.baseline_regression_tolerance > 0:
         for threshold in config.thresholds:
           if threshold.severity != "fail":
@@ -132,18 +132,18 @@ class EvalGate:
                              f"(tolerance: {config.baseline_regression_tolerance})")
     elif config.require_baseline_comparison:
       warnings.append ("No baseline metrics provided for comparison")
-    
+
     if failures:
       status = GateStatus.FAIL
     elif warnings:
       status = GateStatus.WARN
     else:
       status = GateStatus.PASS
-    
+
     return GateResult (status = status, model_name = config.model_name, version = version or "unknown",
         metrics = metrics, thresholds = config.thresholds, failures = failures, warnings = warnings,
         baseline_metrics = baseline_metrics or {}, delta_metrics = delta_metrics, )
-  
+
   @staticmethod
   def from_mlflow_run (
       metrics: dict [str, float], config: EvalGateConfig, tracker: Any = None, run_id: str | None = None,
@@ -163,7 +163,7 @@ class EvalGate:
     result = EvalGate.evaluate (metrics, config, baseline_metrics = baseline_metrics, version = run_id, )
     result.mlflow_run_id = run_id
     return result
-  
+
   @staticmethod
   def format_report (result: GateResult) -> str:
     """Format a GateResult as a human-readable report string.
@@ -178,10 +178,10 @@ class EvalGate:
         "=" * 60, "Eval Gate Report", "=" * 60, f"Model:    {result.model_name}", f"Version:  {result.version}",
         f"Status:   {result.status.value.upper ()}",
     ]
-    
+
     if result.mlflow_run_id:
       lines.append (f"Run ID:   {result.mlflow_run_id}")
-    
+
     lines.append ("")
     lines.append ("-" * 60)
     lines.append ("Metrics")
@@ -193,7 +193,7 @@ class EvalGate:
         sign = "+" if d >= 0 else ""
         delta_str = f"  (Δ{sign}{d:.4f})"
       lines.append (f"  {name}: {value:.4f}{delta_str}")
-    
+
     if result.thresholds:
       lines.append ("")
       lines.append ("-" * 60)
@@ -204,7 +204,7 @@ class EvalGate:
         passed: bool | None = t.evaluate (metric_value) if metric_value is not None else None
         status_mark = "PASS" if passed else ("FAIL" if passed is False else "N/A")
         lines.append (f"  {t.metric_name} {t.comparison} {t.threshold} [{status_mark}] ({t.severity})")
-    
+
     if result.failures:
       lines.append ("")
       lines.append ("-" * 60)
@@ -212,7 +212,7 @@ class EvalGate:
       lines.append ("-" * 60)
       for f in result.failures:
         lines.append (f"  * {f}")
-    
+
     if result.warnings:
       lines.append ("")
       lines.append ("-" * 60)
@@ -220,7 +220,7 @@ class EvalGate:
       lines.append ("-" * 60)
       for w in result.warnings:
         lines.append (f"  ! {w}")
-    
+
     if result.delta_metrics:
       lines.append ("")
       lines.append ("-" * 60)
@@ -229,11 +229,11 @@ class EvalGate:
       for name, delta in sorted (result.delta_metrics.items ()):
         sign = "+" if delta >= 0 else ""
         lines.append (f"  {name}: {sign}{delta:.4f}")
-    
+
     lines.append ("")
     lines.append ("=" * 60)
     return "\n".join (lines)
-  
+
   @staticmethod
   def is_passing (result: GateResult) -> bool:
     """Return True if the gate result allows promotion (PASS or WARN).
@@ -241,7 +241,7 @@ class EvalGate:
     Only FAIL blocks promotion.
     """
     return result.status != GateStatus.FAIL
-  
+
   @staticmethod
   def evaluate_with_nli (
       metrics: dict [str, float], config: EvalGateConfig, answer_context_pairs: list [tuple [str, str]] | None = None,
@@ -261,9 +261,9 @@ class EvalGate:
         GateResult with pass/fail/warn status including NLI metrics.
     """
     from proxy.app.model_evolution.nli_evaluator import evaluate_nli_batch
-    
+
     if answer_context_pairs:
       nli_metrics = evaluate_nli_batch (answer_context_pairs, use_real_nli = use_real_nli)
       metrics = {**metrics, **nli_metrics}
-    
+
     return EvalGate.evaluate (metrics, config, baseline_metrics = baseline_metrics, version = version, )

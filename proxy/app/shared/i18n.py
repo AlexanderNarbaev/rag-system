@@ -88,10 +88,10 @@ def detect_language (text: str | None) -> str:
   """
   if not text:
     return DEFAULT_LANGUAGE
-  
+
   if not isinstance (text, str):
     return DEFAULT_LANGUAGE
-  
+
   cjk = _count_cjk (text)
   cyrillic = _count_cyrillic (text)
   de_special = _count_german_special (text)
@@ -99,28 +99,28 @@ def detect_language (text: str | None) -> str:
   de_words = _count_german_words (text)
   fr_words = _count_french_words (text)
   alpha = _count_alpha (text)
-  
+
   if cjk > 0 and cjk >= alpha * 0.1:
     return "zh"
-  
+
   if cyrillic > 0 and cyrillic >= alpha * 0.1:
     return "ru"
-  
+
   de_score = de_special + de_words * 3
   fr_score = fr_special + fr_words * 3
-  
+
   if de_score >= 2 and de_score > fr_score:
     return "de"
-  
+
   if fr_score >= 2 and fr_score > de_score:
     return "fr"
-  
+
   if de_special > 0 and de_special >= alpha * 0.03:
     return "de"
-  
+
   if fr_special > 0 and fr_special >= alpha * 0.03:
     return "fr"
-  
+
   return DEFAULT_LANGUAGE
 
 

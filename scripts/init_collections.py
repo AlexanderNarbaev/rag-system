@@ -15,7 +15,13 @@ from pathlib import Path
 sys.path.insert (0, str (Path (__file__).parent.parent))
 
 from proxy.app.config import (
-  COLLECTION_NAME, GRAPH_ENABLED, NEO4J_PASSWORD, NEO4J_URI, NEO4J_USER, QDRANT_HOST, QDRANT_PORT,
+  COLLECTION_NAME,
+  GRAPH_ENABLED,
+  NEO4J_PASSWORD,
+  NEO4J_URI,
+  NEO4J_USER,
+  QDRANT_HOST,
+  QDRANT_PORT,
 )
 
 from etl.graph_builder.neo4j_loader import NEO4J_AVAILABLE, Neo4jLoader
@@ -78,12 +84,12 @@ def main ():
   parser.add_argument ("--skip-qdrant", action = "store_true", help = "Skip Qdrant initialization")
   parser.add_argument ("--skip-neo4j", action = "store_true", help = "Skip Neo4j initialization")
   args = parser.parse_args ()
-  
+
   if not args.skip_qdrant:
     init_qdrant (recreate = args.qdrant_recreate)
   if not args.skip_neo4j:
     init_neo4j ()
-  
+
   logger.info ("Initialization complete")
 
 

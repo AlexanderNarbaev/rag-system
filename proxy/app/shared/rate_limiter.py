@@ -24,20 +24,20 @@ class TokenBucket:
   Implements the token bucket algorithm where tokens are refilled
   at a constant rate up to a maximum burst capacity.
   """
-  
+
   def __init__ (self, rate: float, burst: int):
     self.rate = rate
     self.burst = burst
     self.tokens = float (burst)
     self.last_refill = time.monotonic ()
-  
+
   def _refill (self) -> None:
     """Refill tokens based on elapsed time since last refill."""
     now = time.monotonic ()
     elapsed = now - self.last_refill
     self.tokens = min (float (self.burst), self.tokens + elapsed * self.rate)
     self.last_refill = now
-  
+
   def consume (self, tokens: int = 1) -> tuple [bool, float]:
     """Try to consume tokens. Returns (allowed, retry_after_seconds)."""
     self._refill ()
@@ -54,24 +54,24 @@ class RateLimiter:
   Maintains per-key token buckets with configurable rate and burst.
   Supports async operations and automatic cleanup of expired buckets.
   """
-  
+
   def __init__ (self, rate_per_minute: int = 60, burst: int = 10):
     self.rate_per_minute = rate_per_minute
     self.burst = burst
     self._buckets: dict [str, TokenBucket] = {}
     self._lock = asyncio.Lock ()
-  
+
   @property
   def rate_per_second (self) -> float:
     """Convert rate_per_minute to tokens per second."""
     return self.rate_per_minute / 60.0
-  
+
   async def _get_bucket (self, key: str) -> TokenBucket:
     async with self._lock:
       if key not in self._buckets:
         self._buckets [key] = TokenBucket (self.rate_per_second, self.burst)
       return self._buckets [key]
-  
+
   async def is_allowed (self, key: str) -> tuple [bool, float]:
     """Check if a request is allowed for the given key.
 
@@ -80,7 +80,7 @@ class RateLimiter:
     """
     bucket = await self._get_bucket (key)
     return bucket.consume ()
-  
+
   async def cleanup_expired (self, max_age: float = 300.0) -> None:
     """Remove buckets not used for max_age seconds."""
     now = time.monotonic ()
@@ -119,11 +119,11 @@ class RateLimitMiddleware (BaseHTTPMiddleware):
   Uses token bucket algorithm with per-IP or per-API-key tracking.
   Returns 429 with Retry-After header when limit is exceeded.
   """
-  
+
   def __init__ (self, app: Any, limiter: RateLimiter):
     super ().__init__ (app)
     self._limiter = limiter
-  
+
   def _extract_key (self, request: Request) -> str:
     """Extract rate limit key from request (IP or API key).
 
@@ -143,7 +143,7 @@ class RateLimitMiddleware (BaseHTTPMiddleware):
       if idx >= 0:
         client_host = ips [idx]
     return f"ip:{client_host}"
-  
+
   async def dispatch (self, request: Request, call_next: Callable [..., Any]) -> Response:
     """Enforce rate limits on incoming requests.
 

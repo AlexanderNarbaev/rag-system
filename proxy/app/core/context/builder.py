@@ -14,7 +14,7 @@ logger = logging.getLogger (__name__)
 @dataclass
 class KnowledgeStrip:
   """A single knowledge strip from CRAG decomposition."""
-  
+
   text: str
   score: float
   source_type: str = "unknown"
@@ -66,7 +66,7 @@ def group_by_semantic_key (chunks_with_scores: list [tuple [dict [str, Any], flo
   for chunk, score in chunks_with_scores:
     key = chunk.get ("semantic_key", chunk.get ("hash", ""))
     groups [key].append ((chunk, score))
-  
+
   merged = []
   for _key, group in groups.items ():
     if len (group) == 1:
@@ -104,20 +104,20 @@ def reorder_chunks (
   """
   if len (chunks_with_scores) <= 2:
     return list (chunks_with_scores)
-  
+
   sorted_chunks = sorted (chunks_with_scores, key = lambda x: x [1], reverse = True)
   positions_high = []
   positions_low = []
-  
+
   for i, item in enumerate (sorted_chunks):
     if i % 2 == 0:
       positions_high.append (item)
     else:
       positions_low.append (item)
-  
+
   # Reverse the "low" group so the second-best goes last, fourth-best second-to-last, etc.
   positions_low.reverse ()
-  
+
   return positions_high + positions_low
 
 
@@ -129,15 +129,15 @@ def extract_relevant_segments (text: str, query: str) -> str:
   """
   if not text or not query:
     return text
-  
+
   query_tokens = set (re.findall (r"\w+", query.lower ()))
   if not query_tokens:
     return text
-  
+
   sentences = re.split (r"(?<=[.!?])\s+", text)
   if len (sentences) <= 3:
     return text
-  
+
   scored = []
   for s in sentences:
     s_tokens = set (re.findall (r"\w+", s.lower ()))
@@ -147,10 +147,10 @@ def extract_relevant_segments (text: str, query: str) -> str:
     overlap = len (query_tokens & s_tokens)
     score = overlap / len (query_tokens)
     scored.append ((s, score))
-  
+
   threshold = max (0.05, sum (sc for _, sc in scored) / len (scored) * 0.5)
   relevant = [s for s, sc in scored if sc >= threshold]
-  
+
   if relevant:
     return " ".join (relevant)
   return " ".join (s for s, _ in scored [:3])
@@ -170,7 +170,7 @@ def build_context (
   """
   if not chunks_with_scores:
     return ""
-  
+
   # F4: LongContextReorder — place best at start/end, medium in middle
   try:
     from proxy.app.shared.config import REORDER_ENABLED
@@ -178,19 +178,19 @@ def build_context (
     REORDER_ENABLED = True  # noqa: N806
   if REORDER_ENABLED:
     chunks_with_scores = reorder_chunks (chunks_with_scores)
-  
+
   # Сортировка по скору (убывание)
   if sort_by_score:
     chunks_with_scores.sort (key = lambda x: x [1], reverse = True)
-  
+
   context_parts = []
   total_tokens = 0
-  
+
   for chunk, score in chunks_with_scores:
     text = chunk.get ("text", "").strip ()
     if not text:
       continue
-    
+
     # Добавляем метаданные, если нужно
     if include_metadata:
       source_type = chunk.get ("source_type", "unknown")
@@ -201,10 +201,10 @@ def build_context (
       header = f"[{source_type}] {doc_title} / {title} (v{version}) [rel={score:.3f}]\n"
     else:
       header = ""
-    
+
     part = header + text + "\n\n"
     part_tokens = estimate_tokens (part)
-    
+
     if total_tokens + part_tokens > max_tokens:
       # Если превышаем лимит, пытаемся сократить последний чанк или остановиться
       remaining = max_tokens - total_tokens
@@ -214,23 +214,23 @@ def build_context (
         part = header + truncated_text + "...\n\n"
         context_parts.append (part)
       break
-    
+
     context_parts.append (part)
     total_tokens += part_tokens
-  
+
   final_context = "".join (context_parts)
   logger.info (f"Context built: {len (final_context)} chars, ~{total_tokens} tokens")
-  
+
   # Token optimizer integration: apply compression if token budget exceeded
   try:
     from proxy.app.shared.config import TOKEN_OPTIMIZER_ENABLED
   except ImportError:
     TOKEN_OPTIMIZER_ENABLED = False  # noqa: N806
-  
+
   if TOKEN_OPTIMIZER_ENABLED and total_tokens > max_tokens and chunks_with_scores:
     try:
       from proxy.app.core.token_optimizer import TokenOptimizer
-      
+
       optimizer = TokenOptimizer ()
       compressed = optimizer.compress_context ([c for c, _ in chunks_with_scores], max_tokens = max_tokens,
           strategy = "hierarchical")
@@ -239,7 +239,7 @@ def build_context (
         logger.info (f"Context compressed via TokenOptimizer: {len (final_context)} chars")
     except Exception:
       logger.warning ("Token optimizer compression failed, using truncated context", exc_info = True)
-  
+
   return final_context
 
 
@@ -252,19 +252,19 @@ def prepare_context (
   """
   if not chunks_with_scores:
     return ""
-  
+
   result = chunks_with_scores
-  
+
   if deduplicate:
     result = deduplicate_chunks (result)
-  
+
   if resolve_versions_flag:
     from proxy.app.core.context.versioning import resolve_versions
-    
+
     result = resolve_versions (result, requested_version = requested_version)
-  
+
   if group_semantic:
     result = group_by_semantic_key (result)
-  
+
   context = build_context (result, max_tokens = max_tokens, lang = lang)
   return context

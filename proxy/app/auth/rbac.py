@@ -45,11 +45,11 @@ def get_user_role (user: UserContext) -> Role:
   Anonymous or role-less users get READ_ONLY.
   """
   role_set = {role.lower () for role in user.roles}
-  
+
   for role in (Role.ADMIN, Role.EXPERT, Role.USER, Role.READ_ONLY):
     if role.value in role_set:
       return role
-  
+
   return Role.READ_ONLY
 
 
@@ -61,11 +61,11 @@ def has_permission (user: UserContext, action: str) -> bool:
   """
   if not RBAC_ENABLED:
     return True
-  
+
   required_role = _PERMISSION_MAP.get (action)
   if required_role is None:
     return False
-  
+
   user_role = get_user_role (user)
   return ROLE_RANK.get (user_role, 0) >= ROLE_RANK.get (required_role, 0)
 
@@ -80,15 +80,15 @@ def require_role (required_role: Role) -> Any:
 
   If the user's role is insufficient, raises 403 Forbidden.
   """
-  
+
   async def _check_role (user: UserContext = Depends (get_auth_context)) -> UserContext:  # noqa: B008
     if not RBAC_ENABLED:
       return user
-    
+
     user_role = get_user_role (user)
     if ROLE_RANK.get (user_role, 0) < ROLE_RANK.get (required_role, 0):
       raise HTTPException (status_code = 403,
           detail = f"Role '{user_role.value}' is not sufficient. Required: '{required_role.value}'", )
     return user
-  
+
   return _check_role

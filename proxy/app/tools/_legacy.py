@@ -20,7 +20,7 @@ logger = logging.getLogger (__name__)
 @dataclass
 class ToolDefinition:
   """Definition of a callable tool with its schema and handler."""
-  
+
   name: str
   description: str
   parameters_schema: dict [str, Any]
@@ -32,7 +32,7 @@ class ToolDefinition:
 @dataclass
 class ToolResult:
   """Result of a tool execution."""
-  
+
   name: str
   content: str
   tool_call_id: str = ""
@@ -41,15 +41,15 @@ class ToolResult:
 
 class ToolRegistry:
   """Registry for tool definitions with register/unregister/lookup."""
-  
+
   def __init__ (self) -> None:
     self._tools: dict [str, ToolDefinition] = {}
-  
+
   def register (self, tool: ToolDefinition) -> None:
     """Register a tool, overwriting if already registered."""
     self._tools [tool.name] = tool
     logger.info (f"Tool registered: {tool.name} (category={tool.category})")
-  
+
   def unregister (self, name: str) -> bool:
     """Unregister a tool by name. Returns True if removed."""
     if name in self._tools:
@@ -57,15 +57,15 @@ class ToolRegistry:
       logger.info (f"Tool unregistered: {name}")
       return True
     return False
-  
+
   def get_tool (self, name: str) -> ToolDefinition | None:
     """Look up a tool by name."""
     return self._tools.get (name)
-  
+
   def list_tools (self) -> list [str]:
     """Return list of registered tool names."""
     return list (self._tools.keys ())
-  
+
   def get_all (self) -> list [ToolDefinition]:
     """Return all registered tool definitions."""
     return list (self._tools.values ())
@@ -90,7 +90,7 @@ def execute_tool (name: str, params: dict [str, Any], registry: ToolRegistry) ->
     error_msg = f"Tool '{name}' not found in registry"
     logger.warning (error_msg)
     return ToolResult (name = name, content = "", error = error_msg)
-  
+
   try:
     result = tool.handler (**params)
     content = str (result) if not isinstance (result, str) else result
@@ -105,17 +105,17 @@ def handle_function_call (call: dict [str, Any], registry: ToolRegistry) -> Tool
   """Parse a function call from LLM response and execute it."""
   call_id = call.get ("id", "")
   function_info = call.get ("function", {})
-  
+
   tool_name = function_info.get ("name", "")
   if not tool_name:
     return ToolResult (name = "", content = "", tool_call_id = call_id, error = "Missing function name in tool call")
-  
+
   arguments_raw = function_info.get ("arguments", "{}")
   try:
     arguments = json.loads (arguments_raw) if isinstance (arguments_raw, str) else arguments_raw
   except json.JSONDecodeError as e:
     return ToolResult (name = tool_name, content = "", tool_call_id = call_id, error = f"Invalid JSON arguments: {e}")
-  
+
   result = execute_tool (tool_name, arguments, registry)
   result.tool_call_id = call_id
   return result
@@ -127,7 +127,7 @@ def handle_function_call (call: dict [str, Any], registry: ToolRegistry) -> Tool
 def _search_documents (query: str, top_k: int = 5, version: str | None = None) -> str:
   """Search indexed documents using hybrid search."""
   from proxy.app.core.retrieval import hybrid_search
-  
+
   try:
     results = hybrid_search (query = query, version = version, top_k = top_k)
     if not results:
@@ -146,7 +146,7 @@ def _search_documents (query: str, top_k: int = 5, version: str | None = None) -
 def _search_by_version (version: str, query: str | None = None, top_k: int = 10) -> str:
   """Search documents by a specific version string."""
   from proxy.app.core.retrieval import hybrid_search
-  
+
   try:
     results = hybrid_search (query = query or version, version = version, top_k = top_k)
     if not results:
@@ -165,9 +165,9 @@ def _get_document_metadata (doc_id: str) -> str:
   """Get metadata for a specific document by its ID."""
   try:
     from qdrant_client import QdrantClient
-    
+
     from proxy.app.shared.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
-    
+
     client = QdrantClient (host = QDRANT_HOST, port = QDRANT_PORT, check_compatibility = False)
     points = client.retrieve (collection_name = COLLECTION_NAME, ids = [doc_id])
     if not points:
@@ -189,9 +189,9 @@ def _get_document_metadata (doc_id: str) -> str:
 def get_tool_registry () -> ToolRegistry:
   """Get or create the global tool registry with built-in tools."""
   import sys
-  
+
   from . import TOOLS_ENABLED  # type: ignore[attr-defined]
-  
+
   _tools_pkg = sys.modules [__package__]
   if _tools_pkg._global_registry is None:
     _tools_pkg._global_registry = ToolRegistry ()  # type: ignore[attr-defined]

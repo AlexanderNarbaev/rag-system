@@ -24,7 +24,13 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import (
-  Button, Footer, Header, Input, Label, Log, Static,
+  Button,
+  Footer,
+  Header,
+  Input,
+  Label,
+  Log,
+  Static,
 )
 
 # ---------------------------------------------------------------------------
@@ -119,7 +125,7 @@ def write_env_file (env_vars: dict [str, str]) -> None:
   else:
     for key, value in env_vars.items ():
       lines.append (f"{key}={value}\n")
-  
+
   with open (ENV_FILE, "w") as f:
     f.writelines (lines)
 
@@ -129,11 +135,11 @@ def get_recent_logs (n: int = 100) -> list [str]:
   log_dir = Path (os.getenv ("LOG_DIR", PROJECT_ROOT / "proxy" / "logs"))
   if not log_dir.exists ():
     return ["Log directory not found"]
-  
+
   log_files = sorted (log_dir.glob ("*.log"), key = lambda p: p.stat ().st_mtime, reverse = True)
   if not log_files:
     return ["No log files found"]
-  
+
   try:
     with open (log_files [0]) as f:
       lines = f.readlines ()
@@ -149,9 +155,9 @@ def get_recent_logs (n: int = 100) -> list [str]:
 
 class StatusIndicator (Static):
   """A status indicator widget with colored dot."""
-  
+
   status = reactive ("unknown")
-  
+
   def render (self) -> Text:
     status_colors = {
         "healthy": "green", "online": "green", "degraded": "yellow", "offline": "red", "timeout": "yellow",
@@ -164,7 +170,7 @@ class StatusIndicator (Static):
 
 class ServiceStatusPanel (Static):
   """Panel showing status of all services."""
-  
+
   def compose (self) -> ComposeResult:
     yield Label ("Service Status", classes = "panel-title")
     with Vertical (id = "service-status-list"):
@@ -172,7 +178,7 @@ class ServiceStatusPanel (Static):
         with Horizontal (classes = "service-row"):
           yield Label (f"{name}:", classes = "service-name")
           yield StatusIndicator (id = f"status-{name.lower ()}", classes = "service-indicator")
-  
+
   def update_status (self, name: str, status: str) -> None:
     """Update status indicator for a service."""
     try:
@@ -184,7 +190,7 @@ class ServiceStatusPanel (Static):
 
 class QuickActionsPanel (Static):
   """Panel with quick action buttons."""
-  
+
   def compose (self) -> ComposeResult:
     yield Label ("Quick Actions", classes = "panel-title")
     with Vertical ():
@@ -197,16 +203,16 @@ class QuickActionsPanel (Static):
 
 class ConfigEditor (ModalScreen):
   """Modal screen for editing configuration."""
-  
+
   BINDINGS = [
       Binding ("escape", "cancel", "Cancel"), Binding ("ctrl+s", "save", "Save"),
   ]
-  
+
   def __init__ (self, env_vars: dict [str, str], **kwargs: Any) -> None:
     super ().__init__ (**kwargs)
     self.env_vars = env_vars
     self.edited_vars = env_vars.copy ()
-  
+
   def compose (self) -> ComposeResult:
     yield Header ()
     with Container (id = "config-editor"):
@@ -220,13 +226,13 @@ class ConfigEditor (ModalScreen):
       with Horizontal (id = "config-actions"):
         yield Button ("Save", id = "btn-save", variant = "success")
         yield Button ("Cancel", id = "btn-cancel", variant = "error")
-  
+
   def on_button_pressed (self, event: Button.Pressed) -> None:
     if event.button.id == "btn-save":
       self.action_save ()
     elif event.button.id == "btn-cancel":
       self.action_cancel ()
-  
+
   def action_save (self) -> None:
     """Save configuration changes."""
     for key in self.env_vars:
@@ -237,7 +243,7 @@ class ConfigEditor (ModalScreen):
         pass
     write_env_file (self.edited_vars)
     self.dismiss (True)
-  
+
   def action_cancel (self) -> None:
     """Cancel editing."""
     self.dismiss (False)
@@ -245,15 +251,15 @@ class ConfigEditor (ModalScreen):
 
 class LogViewer (ModalScreen):
   """Modal screen for viewing logs."""
-  
+
   BINDINGS = [
       Binding ("escape", "close", "Close"),
   ]
-  
+
   def __init__ (self, logs: list [str], **kwargs: Any) -> None:
     super ().__init__ (**kwargs)
     self.logs = logs
-  
+
   def compose (self) -> ComposeResult:
     yield Header ()
     with Container (id = "log-viewer"):
@@ -262,17 +268,17 @@ class LogViewer (ModalScreen):
       log_widget = Log (id = "log-content")
       yield log_widget
       yield Button ("Close", id = "btn-close-logs", variant = "default")
-  
+
   def on_mount (self) -> None:
     """Load logs on mount."""
     log_widget = self.query_one ("#log-content", Log)
     for line in self.logs:
       log_widget.write_line (line.rstrip ())
-  
+
   def on_button_pressed (self, event: Button.Pressed) -> None:
     if event.button.id == "btn-close-logs":
       self.action_close ()
-  
+
   def action_close (self) -> None:
     """Close log viewer."""
     self.dismiss ()
@@ -285,16 +291,16 @@ class LogViewer (ModalScreen):
 
 class RAGDashboard (App):
   """RAG System Terminal Dashboard."""
-  
+
   TITLE = "RAG System TUI"
   SUB_TITLE = "Terminal Management Interface"
-  
+
   BINDINGS = [
       Binding ("q", "quit", "Quit"), Binding ("r", "refresh", "Refresh"), Binding ("l", "view_logs", "Logs"),
       Binding ("c", "edit_config", "Config"), Binding ("d", "clear_cache", "Clear Cache"),
       Binding ("t", "run_tests", "Run Tests"),
   ]
-  
+
   CSS = """
     Screen {
         layout: grid;
@@ -400,56 +406,56 @@ class RAGDashboard (App):
         align: center middle;
     }
     """
-  
+
   def compose (self) -> ComposeResult:
     yield Header ()
     yield Footer ()
-    
+
     # Status panel (left)
     with Container (id = "status-panel"):
       yield ServiceStatusPanel ()
-    
+
     # Actions panel (right)
     with Container (id = "actions-panel"):
       yield QuickActionsPanel ()
-    
+
     # Info panel (left bottom)
     with Container (id = "info-panel"):
       yield Label ("System Information", classes = "panel-title")
       yield Static (id = "system-info", expand = True)
-    
+
     # Metrics panel (right bottom)
     with Container (id = "metrics-panel"):
       yield Label ("Key Metrics", classes = "panel-title")
       yield Static (id = "key-metrics", expand = True)
-  
+
   def on_mount (self) -> None:
     """Initialize dashboard on mount."""
     self.refresh_status ()
     self.load_system_info ()
-  
+
   @work (exclusive = True, thread = True)
   def refresh_status (self) -> None:
     """Refresh service status in background."""
     status_panel = self.query_one (ServiceStatusPanel)
-    
+
     for name, svc in SERVICES.items ():
       result = check_service_health (name, svc ["url"], svc ["method"])
       status = result ["status"]
       self.call_from_thread (status_panel.update_status, name, status)
-    
+
     # Update system info
     self.call_from_thread (self.update_system_info)
-  
+
   def update_system_info (self) -> None:
     """Update system information display."""
     info_lines = []
-    
+
     # Proxy health
     health = get_proxy_health ()
     proxy_status = health.get ("status", "unknown")
     info_lines.append (f"Proxy Status: {proxy_status}")
-    
+
     # Environment
     env_vars = read_env_file ()
     info_lines.append (f"LLM Endpoint: {env_vars.get ('LLM_ENDPOINT', 'N/A')}")
@@ -457,10 +463,10 @@ class RAGDashboard (App):
     info_lines.append (f"Redis: {env_vars.get ('USE_REDIS', 'false')}")
     info_lines.append (f"LangGraph: {env_vars.get ('USE_LANGGRAPH', 'false')}")
     info_lines.append (f"Graph: {env_vars.get ('GRAPH_ENABLED', 'false')}")
-    
+
     info_widget = self.query_one ("#system-info", Static)
     info_widget.update ("\n".join (info_lines))
-    
+
     # Key metrics
     metrics_lines = []
     try:
@@ -471,24 +477,24 @@ class RAGDashboard (App):
             metrics_lines.append (line)
     except Exception:
       metrics_lines.append ("Metrics unavailable")
-    
+
     metrics_widget = self.query_one ("#key-metrics", Static)
     metrics_widget.update ("\n".join (metrics_lines [:10]) if metrics_lines else "No metrics available")
-  
+
   def load_system_info (self) -> None:
     """Load initial system information."""
     self.update_system_info ()
-  
+
   def action_refresh (self) -> None:
     """Refresh all status indicators."""
     self.refresh_status ()
     self.notify ("Status refreshed")
-  
+
   def action_view_logs (self) -> None:
     """Open log viewer."""
     logs = get_recent_logs (200)
     self.push_screen (LogViewer (logs))
-  
+
   def action_edit_config (self) -> None:
     """Open configuration editor."""
     env_vars = read_env_file ()
@@ -496,7 +502,7 @@ class RAGDashboard (App):
       self.push_screen (ConfigEditor (env_vars))
     else:
       self.notify ("No configuration file found", severity = "warning")
-  
+
   def action_clear_cache (self) -> None:
     """Clear Redis cache."""
     try:
@@ -508,7 +514,7 @@ class RAGDashboard (App):
         self.notify ("Cache clear endpoint unavailable", severity = "warning")
     except Exception as e:
       self.notify (f"Failed to clear cache: {e}", severity = "error")
-  
+
   def action_run_tests (self) -> None:
     """Run test suite."""
     self.notify ("Running tests...", severity = "information")
@@ -523,7 +529,7 @@ class RAGDashboard (App):
       self.notify ("Tests timed out", severity = "warning")
     except Exception as e:
       self.notify (f"Error running tests: {e}", severity = "error")
-  
+
   def on_button_pressed (self, event: Button.Pressed) -> None:
     """Handle button presses."""
     if event.button.id == "btn-refresh":

@@ -6,14 +6,23 @@ Re-exports all public symbols for backward compatibility with
 """
 
 from proxy.app.core.context.builder import (
-  KnowledgeStrip, build_context, compute_chunk_hash, deduplicate_chunks, estimate_tokens, extract_relevant_segments,
-  group_by_semantic_key, prepare_context, reorder_chunks,
+  KnowledgeStrip,
+  build_context,
+  compute_chunk_hash,
+  deduplicate_chunks,
+  estimate_tokens,
+  extract_relevant_segments,
+  group_by_semantic_key,
+  prepare_context,
+  reorder_chunks,
 )
 from proxy.app.core.context.compression import (
-  assemble_multimodal_context, decompose_to_strips,
+  assemble_multimodal_context,
+  decompose_to_strips,
 )
 from proxy.app.core.context.versioning import (
-  extract_version_from_query, resolve_versions,
+  extract_version_from_query,
+  resolve_versions,
 )
 
 __all__ = [

@@ -32,7 +32,7 @@ class ToolMetrics:
       metrics.record_error("search_docs", error_type="ToolTimeoutError")
       metrics.record_retry("search_docs", retry_count=2)
   """
-  
+
   @staticmethod
   def record_call (
       tool_name: str, status: str = "success", duration_seconds: float | None = None, ) -> None:
@@ -40,12 +40,12 @@ class ToolMetrics:
     tool_calls_total.labels (tool_name = tool_name, status = status).inc ()
     if duration_seconds is not None:
       tool_duration_seconds.labels (tool_name = tool_name).observe (duration_seconds)
-  
+
   @staticmethod
   def record_error (tool_name: str, error_type: str) -> None:
     """Record a tool error by error type."""
     tool_errors_total.labels (tool_name = tool_name, error_type = error_type).inc ()
-  
+
   @staticmethod
   def record_retry (tool_name: str, retry_count: int) -> None:
     """Record a retry count for a tool call."""

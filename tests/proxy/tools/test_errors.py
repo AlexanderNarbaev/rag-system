@@ -2,18 +2,25 @@
 """Tests for tool error taxonomy — Task 2 TDD."""
 
 from proxy.app.tools.errors import (
-  ToolDependencyError, ToolError, ToolExecutionError, ToolNotFoundError, ToolPermissionError, ToolRateLimitError,
-  ToolTimeoutError, ToolValidationError, classify_error,
+  ToolDependencyError,
+  ToolError,
+  ToolExecutionError,
+  ToolNotFoundError,
+  ToolPermissionError,
+  ToolRateLimitError,
+  ToolTimeoutError,
+  ToolValidationError,
+  classify_error,
 )
 
 
 class TestToolErrorBase:
   def test_tool_error_inherits_from_ragerror (self):
     from proxy.app.shared.exceptions import RAGError
-    
+
     err = ToolError (tool_name = "test_tool", tool_call_id = "call_1", retryable = False, message = "test error", )
     assert isinstance (err, RAGError)
-  
+
   def test_tool_error_attributes (self):
     err = ToolError (tool_name = "test_tool", tool_call_id = "call_1", retryable = False, message = "test error", )
     assert err.tool_name == "test_tool"
@@ -60,7 +67,7 @@ class TestToolValidationError:
         validation_errors = ["field 'x' is required", "field 'y' must be int"], )
     assert err.retryable is False
     assert err.validation_errors == ["field 'x' is required", "field 'y' must be int"]
-  
+
   def test_default_validation_errors_is_empty (self):
     err = ToolValidationError (tool_name = "validate_tool", tool_call_id = "call_5", )
     assert err.validation_errors == []
@@ -86,28 +93,28 @@ class TestClassifyError:
     assert isinstance (err, ToolTimeoutError)
     assert err.tool_name == "test"
     assert err.tool_call_id == "call_8"
-  
+
   def test_value_error_maps_to_validation (self):
     err = classify_error (tool_name = "test", error = ValueError ("bad value"), tool_call_id = "call_9", )
     assert isinstance (err, ToolValidationError)
     assert err.retryable is False
-  
+
   def test_type_error_maps_to_validation (self):
     err = classify_error (tool_name = "test", error = TypeError ("bad type"), tool_call_id = "call_10", )
     assert isinstance (err, ToolValidationError)
-  
+
   def test_key_error_maps_to_validation (self):
     err = classify_error (tool_name = "test", error = KeyError ("missing_key"), tool_call_id = "call_11", )
     assert isinstance (err, ToolValidationError)
-  
+
   def test_attribute_error_maps_to_validation (self):
     err = classify_error (tool_name = "test", error = AttributeError ("no attr"), tool_call_id = "call_12", )
     assert isinstance (err, ToolValidationError)
-  
+
   def test_permission_error_maps_to_permission (self):
     err = classify_error (tool_name = "test", error = PermissionError ("denied"), tool_call_id = "call_13", )
     assert isinstance (err, ToolPermissionError)
-  
+
   def test_generic_exception_maps_to_execution (self):
     err = classify_error (tool_name = "test", error = RuntimeError ("generic error"), tool_call_id = "call_14", )
     assert isinstance (err, ToolExecutionError)

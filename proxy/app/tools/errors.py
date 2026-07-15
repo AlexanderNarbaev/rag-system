@@ -12,7 +12,7 @@ from proxy.app.shared.exceptions import RAGError
 
 class ToolError (RAGError):
   """Base error for all tool-related failures."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", retryable: bool = False, message: str = "", ):
     super ().__init__ (message or f"Error in tool '{tool_name}'", component = "tools")
@@ -23,7 +23,7 @@ class ToolError (RAGError):
 
 class ToolNotFoundError (ToolError):
   """Requested tool is not registered."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", message: str = "", ):
     super ().__init__ (tool_name = tool_name, tool_call_id = tool_call_id, retryable = False,
@@ -32,7 +32,7 @@ class ToolNotFoundError (ToolError):
 
 class ToolExecutionError (ToolError):
   """Tool execution raised an unhandled exception."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", original_error: Exception | None = None, message: str = "", ):
     super ().__init__ (tool_name = tool_name, tool_call_id = tool_call_id, retryable = True,
@@ -42,7 +42,7 @@ class ToolExecutionError (ToolError):
 
 class ToolTimeoutError (ToolError):
   """Tool execution timed out."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", timeout_seconds: float = 30.0, message: str = "", ):
     super ().__init__ (tool_name = tool_name, tool_call_id = tool_call_id, retryable = True,
@@ -52,7 +52,7 @@ class ToolTimeoutError (ToolError):
 
 class ToolPermissionError (ToolError):
   """Caller lacks required visibility/role for the tool."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", required_visibility: str = "", user_role: str = "",
       message: str = "", ):
@@ -67,7 +67,7 @@ class ToolPermissionError (ToolError):
 
 class ToolValidationError (ToolError):
   """Tool parameters failed validation."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", validation_errors: list [str] | None = None, message: str = "", ):
     super ().__init__ (tool_name = tool_name, tool_call_id = tool_call_id, retryable = False,
@@ -77,7 +77,7 @@ class ToolValidationError (ToolError):
 
 class ToolRateLimitError (ToolError):
   """Tool rate limit exceeded."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", retry_after_seconds: float = 60.0, message: str = "", ):
     super ().__init__ (tool_name = tool_name, tool_call_id = tool_call_id, retryable = True,
@@ -87,7 +87,7 @@ class ToolRateLimitError (ToolError):
 
 class ToolDependencyError (ToolError):
   """A tool dependency is not satisfied."""
-  
+
   def __init__ (
       self, tool_name: str, tool_call_id: str = "", dependency_name: str = "", message: str = "", ):
     super ().__init__ (tool_name = tool_name, tool_call_id = tool_call_id, retryable = False,

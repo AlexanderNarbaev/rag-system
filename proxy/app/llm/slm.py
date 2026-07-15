@@ -34,8 +34,16 @@ from typing import Any
 import requests
 
 from proxy.app.shared.config import (
-  SLM_API_KEY, SLM_ENDPOINT, SLM_LOCAL_BINARY, SLM_LOCAL_CONTEXT_SIZE, SLM_LOCAL_ENABLED, SLM_LOCAL_MODEL_PATH,
-  SLM_LOCAL_PORT, SLM_LOCAL_STARTUP_TIMEOUT, SLM_LOCAL_THREADS, SLM_MODEL_NAME,
+  SLM_API_KEY,
+  SLM_ENDPOINT,
+  SLM_LOCAL_BINARY,
+  SLM_LOCAL_CONTEXT_SIZE,
+  SLM_LOCAL_ENABLED,
+  SLM_LOCAL_MODEL_PATH,
+  SLM_LOCAL_PORT,
+  SLM_LOCAL_STARTUP_TIMEOUT,
+  SLM_LOCAL_THREADS,
+  SLM_MODEL_NAME,
 )
 
 logger = logging.getLogger (__name__)
@@ -43,7 +51,7 @@ logger = logging.getLogger (__name__)
 
 class IntentType (Enum):
   """Типы интентов пользователя."""
-  
+
   GREETING = "greeting"  # Приветствие/общие фразы
   SIMPLE_FACT = "simple_fact"  # Простой факт (да/нет, определение)
   FACTUAL = "factual"  # Простой факт (требует контекст)
@@ -78,7 +86,7 @@ class LocalSLMClient:
       threads: Number of CPU threads.
       port: Port for the llama-server HTTP API.
   """
-  
+
   def __init__ (
       self, binary: str, model_path: str, context_size: int = 4096, threads: int = 4, port: int = 8081,
       startup_timeout: int = 60, ):
@@ -90,12 +98,12 @@ class LocalSLMClient:
     self._startup_timeout = startup_timeout
     self._process: subprocess.Popen [Any] | None = None
     self._lock = threading.Lock ()
-  
+
   @property
   def endpoint (self) -> str:
     """Return the local server's base URL."""
     return f"http://127.0.0.1:{self._port}/v1"
-  
+
   def _is_server_ready (self) -> bool:
     """Check whether the local llama-server is accepting requests."""
     try:
@@ -103,7 +111,7 @@ class LocalSLMClient:
       return resp.status_code == 200
     except requests.RequestException:
       return False
-  
+
   def _ensure_server_running (self) -> None:
     """Start llama-server if it is not already running.
 
@@ -112,18 +120,18 @@ class LocalSLMClient:
     """
     if self._is_server_ready ():
       return
-    
+
     with self._lock:
       # Double-check inside the lock in case another thread
       # already started the server while we were waiting.
       if self._is_server_ready ():
         return
-      
+
       # If a dead process exists, clean it up first.
       if self._process is not None and self._process.poll () is not None:
         logger.info ("Local SLM process died (rc=%s), restarting", self._process.returncode, )
         self._process = None
-      
+
       if self._process is not None:
         # Already starting in another thread's critical section.
         # Wait for it to become ready.
@@ -133,10 +141,10 @@ class LocalSLMClient:
             return
           time.sleep (0.5)
         raise RuntimeError (f"Local SLM server did not become ready within {self._startup_timeout}s")
-      
+
       logger.info ("Starting local SLM server: %s --port %s -m %s -c %s -t %s", self._binary, self._port,
           self._model_path, self._context_size, self._threads, )
-      
+
       self._process = subprocess.Popen ([
           self._binary, "--port", str (self._port), "-m", self._model_path, "-c", str (self._context_size), "-t",
           str (self._threads),
@@ -144,7 +152,7 @@ class LocalSLMClient:
           # sent to the proxy don't kill the server before we
           # have a chance to shut it down gracefully.
           start_new_session = True, )
-      
+
       # Wait for the server to become ready.
       deadline = time.monotonic () + self._startup_timeout
       while time.monotonic () < deadline:
@@ -154,11 +162,11 @@ class LocalSLMClient:
           logger.info ("Local SLM server ready on port %s", self._port)
           return
         time.sleep (0.5)
-      
+
       # Timed out — kill the process and raise.
       self._shutdown ()
       raise RuntimeError (f"Local SLM server did not become ready within {self._startup_timeout}s")
-  
+
   def generate (
       self, prompt: str, max_tokens: int = 256, temperature: float = 0.1, ) -> str:
     """Run inference through the local llama-server.
@@ -171,14 +179,14 @@ class LocalSLMClient:
     except RuntimeError as e:
       logger.error ("Local SLM server unavailable: %s", e)
       return ""
-    
+
     url = f"{self.endpoint}/chat/completions"
     headers = {"Content-Type": "application/json"}
-    
+
     payload: dict [str, Any] = {
         "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": temperature,
     }
-    
+
     try:
       resp = requests.post (url, json = payload, headers = headers, timeout = 30)
       resp.raise_for_status ()
@@ -190,7 +198,7 @@ class LocalSLMClient:
       if self._process is not None and self._process.poll () is not None:
         self._process = None
       return ""
-  
+
   def _shutdown (self) -> None:
     """Terminate the local llama-server process."""
     if self._process is None:
@@ -206,12 +214,12 @@ class LocalSLMClient:
       logger.warning ("Error shutting down local SLM server: %s", e)
     finally:
       self._process = None
-  
+
   def shutdown (self) -> None:
     """Public shutdown method, safe to call multiple times."""
     with self._lock:
       self._shutdown ()
-  
+
   def __del__ (self) -> None:
     """Ensure the subprocess is cleaned up on garbage collection."""
     self.shutdown ()
@@ -230,18 +238,18 @@ def _get_local_slm_client () -> LocalSLMClient | None:
   local SLM mode is not configured (no model path provided).
   """
   global _local_slm_client
-  
+
   if _local_slm_client is not None:
     return _local_slm_client
-  
+
   if not SLM_LOCAL_MODEL_PATH:
     logger.warning ("SLM_LOCAL_ENABLED=true but SLM_LOCAL_MODEL_PATH is empty")
     return None
-  
+
   with _local_slm_client_lock:
     if _local_slm_client is not None:
       return _local_slm_client
-    
+
     _local_slm_client = LocalSLMClient (binary = SLM_LOCAL_BINARY, model_path = SLM_LOCAL_MODEL_PATH,
         context_size = SLM_LOCAL_CONTEXT_SIZE, threads = SLM_LOCAL_THREADS, port = SLM_LOCAL_PORT,
         startup_timeout = SLM_LOCAL_STARTUP_TIMEOUT, )
@@ -284,22 +292,22 @@ def _call_slm_sync (prompt: str, max_tokens: int = 256, temperature: float = 0.1
     except Exception as e:
       logger.error ("Local SLM generation failed: %s", e)
       return ""
-  
+
   # ── Mode 2: Remote OpenAI-compatible API ──
   if not SLM_ENDPOINT:
     logger.warning ("SLM endpoint not configured, falling back to heuristics")
     return ""
-  
+
   url = f"{SLM_ENDPOINT}/chat/completions"
   headers = {"Content-Type": "application/json"}
   if SLM_API_KEY:
     headers ["Authorization"] = f"Bearer {SLM_API_KEY}"
-  
+
   payload: dict [str, Any] = {
       "model": SLM_MODEL_NAME, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens,
       "temperature": temperature,
   }
-  
+
   try:
     resp = requests.post (url, json = payload, headers = headers, timeout = 10)
     resp.raise_for_status ()
@@ -366,7 +374,7 @@ def decompose_query (query: str, max_subqueries: int = 3) -> list [str]:
   except json.JSONDecodeError:
     # Пытаемся извлечь строки вручную
     import re
-    
+
     lines = re.findall (r'"([^"]+)"', result)
     if lines:
       return lines [:max_subqueries]
@@ -419,7 +427,7 @@ def extract_entities_slm (query: str) -> list [str]:
       return entities
   except json.JSONDecodeError:
     import re
-    
+
     # Ищем слова с заглавной буквы или цифрами
     words = re.findall (r"\b[A-ZА-Я][A-Za-zА-Яа-я0-9_-]+\b", query)
     return words
@@ -441,7 +449,7 @@ def score_query_complexity (query: str) -> int:
   """
   score = 1
   word_count = len (query.split ())
-  
+
   # Heuristic: word count contributes to complexity
   if word_count <= 3:
     score = 1
@@ -453,7 +461,7 @@ def score_query_complexity (query: str) -> int:
     score = 7
   else:
     score = 9
-  
+
   # Comparison/relational words increase complexity
   comparison_words = [
       "сравн", "compar", "difference", "versus", "vs", "лучше", "better", "отличие", "difference", "плюсы", "минусы",
@@ -462,11 +470,11 @@ def score_query_complexity (query: str) -> int:
   query_lower = query.lower ()
   comp_count = sum (1 for w in comparison_words if w in query_lower)
   score += min (comp_count, 3)
-  
+
   # Multi-question indicator
   if query_lower.count ("?") > 1 or query_lower.count ("?") == 1 and word_count > 10:
     score += 1
-  
+
   # SLM-based refinement (if available)
   try:
     intent, _ = classify_intent (query)
@@ -480,7 +488,7 @@ def score_query_complexity (query: str) -> int:
       score = max (score, 3)
   except Exception:
     pass
-  
+
   return max (1, min (10, score))
 
 
@@ -541,33 +549,33 @@ def classify_intent_multilingual (query: str) -> tuple [IntentType, float]:
   """
   if not query:
     return IntentType.UNKNOWN, 0.0
-  
+
   try:
     from proxy.app.shared.i18n import detect_language
-    
+
     lang = detect_language (query)
   except Exception:
     logger.warning ("Language detection failed, falling back to classify_intent")
     return classify_intent (query)
-  
+
   if lang in ("en", "ru"):
     return classify_intent (query)
-  
+
   query_lower = query.lower ()
-  
+
   greetings = _NON_EN_GREETING_PATTERNS.get (lang, [])
   howto = _NON_EN_HOWTO_PATTERNS.get (lang, [])
   compare = _NON_EN_COMPARE_PATTERNS.get (lang, [])
-  
+
   if any (g in query_lower for g in greetings):
     return IntentType.GREETING, 0.85
-  
+
   if any (c in query_lower for c in compare):
     return IntentType.COMPARISON, 0.70
-  
+
   if any (h in query_lower for h in howto):
     return IntentType.PROCEDURAL, 0.70
-  
+
   return IntentType.FACTUAL, 0.50
 
 
@@ -577,14 +585,14 @@ if __name__ == "__main__":
   test_query = "Как настроить CI/CD пайплайн в GitLab и чем он отличается от GitHub Actions?"
   intent, confidence = classify_intent (test_query)
   print (f"Intent: {intent.value}, confidence: {confidence}")
-  
+
   subqueries = decompose_query (test_query, max_subqueries = 3)
   print (f"Subqueries: {subqueries}")
-  
+
   rewritten = rewrite_query_slm (test_query)
   print (f"Rewritten: {rewritten}")
-  
+
   entities = extract_entities_slm (test_query)
   print (f"Entities: {entities}")
-  
+
   print (f"Use graph: {should_use_graph (intent, test_query)}")

@@ -40,7 +40,13 @@ from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
 
 from proxy.app.shared.config import (
-  ACCESS_TOKEN_MINUTES, AUTH_ENABLED, JWT_ALGORITHM, JWT_PUBLIC_KEY, JWT_SECRET, KEYCLOAK_REALM, KEYCLOAK_URL,
+  ACCESS_TOKEN_MINUTES,
+  AUTH_ENABLED,
+  JWT_ALGORITHM,
+  JWT_PUBLIC_KEY,
+  JWT_SECRET,
+  KEYCLOAK_REALM,
+  KEYCLOAK_URL,
   TOKEN_EXPIRE_HOURS,
 )
 
@@ -59,26 +65,26 @@ security = HTTPBearer (auto_error = False)
 @dataclass
 class UserContext:
   """Holds the authenticated user's identity, roles, groups, access level, and namespace."""
-  
+
   user_id: str
   username: str
   roles: list [str] = field (default_factory = list)
   groups: list [str] = field (default_factory = list)
   access_level: str = "internal"
   namespace: str = ""
-  
+
   @property
   def is_admin (self) -> bool:
     return "admin" in self.roles
-  
+
   @property
   def is_expert (self) -> bool:
     return "expert" in self.roles
-  
+
   @property
   def is_authenticated (self) -> bool:
     return self.user_id != "anonymous"
-  
+
   @property
   def effective_namespace (self) -> str:
     """Return the namespace for data isolation.
@@ -91,7 +97,7 @@ class UserContext:
     if self.groups:
       return self.groups [0]
     return ""
-  
+
   @classmethod
   def anonymous (cls) -> UserContext:
     """Return an anonymous user context with public access."""
@@ -139,14 +145,14 @@ def verify_token (token: str) -> UserContext:
   """Verify and decode a JWT token.  Returns UserContext or raises HTTPException."""
   key = _get_verify_key ()
   algorithms = [JWT_ALGORITHM] if JWT_ALGORITHM else ["HS256"]
-  
+
   try:
     payload = jwt.decode (token, key = key or "", algorithms = algorithms, options = {"verify_exp": True}, )
   except jwt.ExpiredSignatureError:
     raise HTTPException (status_code = 401, detail = "Token has expired") from None
   except jwt.InvalidTokenError as exc:
     raise HTTPException (status_code = 401, detail = f"Invalid token: {exc}") from None
-  
+
   return UserContext (user_id = payload.get ("sub", ""), username = payload.get ("preferred_username", ""),
       roles = payload.get ("roles", payload.get ("realm_access", {}).get ("roles", [])),
       groups = payload.get ("groups", []), access_level = payload.get ("access_level", "internal"),
@@ -160,12 +166,12 @@ def get_user_from_token (token: str) -> UserContext | None:
   """
   key = _get_verify_key ()
   algorithms = [JWT_ALGORITHM] if JWT_ALGORITHM else ["HS256"]
-  
+
   try:
     payload = jwt.decode (token, key = key or "", algorithms = algorithms, options = {"verify_exp": True}, )
   except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
     return None
-  
+
   return UserContext (user_id = payload.get ("sub", ""), username = payload.get ("preferred_username", ""),
       roles = payload.get ("roles", payload.get ("realm_access", {}).get ("roles", [])),
       groups = payload.get ("groups", []), access_level = payload.get ("access_level", "internal"),
@@ -190,21 +196,21 @@ async def get_auth_context (
   """
   if not AUTH_ENABLED:
     return UserContext.anonymous ()
-  
+
   # Also check for X-Auth-Token header (alternative to Bearer)
   token: str | None = None
   if credentials:
     token = credentials.credentials
   elif "x-auth-token" in request.headers:
     token = request.headers ["x-auth-token"]
-  
+
   if not token:
     raise HTTPException (status_code = 401, detail = "Authentication required")
-  
+
   # Check for API key (sk-* prefix)
   if token.startswith ("sk-"):
     return _validate_api_key (token)
-  
+
   return verify_token (token)
 
 
@@ -214,11 +220,11 @@ def _validate_api_key (key: str) -> UserContext:
   Raises HTTPException(401) if the key is invalid or revoked.
   """
   from proxy.app.auth.api_keys import api_key_manager
-  
+
   api_key = api_key_manager.validate_key (key)
   if api_key is None:
     raise HTTPException (status_code = 401, detail = "Invalid or revoked API key")
-  
+
   return UserContext (user_id = api_key.user_id, username = api_key.user_id, roles = api_key.roles, groups = [],
       access_level = "internal", namespace = "", )
 
@@ -236,12 +242,12 @@ async def get_optional_auth_context (
     token = credentials.credentials
   elif "x-auth-token" in request.headers:
     token = request.headers ["x-auth-token"]
-  
+
   if token:
     # Check for API key (sk-* prefix)
     if token.startswith ("sk-"):
       from proxy.app.auth.api_keys import api_key_manager
-      
+
       api_key = api_key_manager.validate_key (token)
       if api_key is not None:
         return UserContext (user_id = api_key.user_id, username = api_key.user_id, roles = api_key.roles, groups = [],
@@ -250,7 +256,7 @@ async def get_optional_auth_context (
       result = get_user_from_token (token)
       if result is not None:
         return result
-  
+
   return UserContext.anonymous ()
 
 
@@ -292,15 +298,15 @@ class AuthMiddleware (BaseHTTPMiddleware):
   the UserContext into request.state.user_context.
   Skips /v1/auth/login and /v1/health even when auth is enabled.
   """
-  
+
   async def dispatch (self, request: StarletteRequest, call_next: Callable [[StarletteRequest], Any]) -> Response:
     if not AUTH_ENABLED:
       request.state.user_context = UserContext.anonymous ()
       response: Response = await call_next (request)
       return response
-    
+
     path = request.url.path
-    
+
     # Public endpoints — no auth required
     _PUBLIC_PATHS = {  # noqa: N806
         "/v1/auth/login", "/v1/auth/register", "/v1/auth/refresh", "/v1/health", "/v1/health/live", "/v1/health/ready",
@@ -308,35 +314,35 @@ class AuthMiddleware (BaseHTTPMiddleware):
     }
     _PUBLIC_PREFIXES = (  # allow sub-paths like /v1/health/live, /v1/widget, etc.  # noqa: N806
     )
-    
+
     if path in _PUBLIC_PATHS or path.rstrip ("/") in _PUBLIC_PATHS:
       request.state.user_context = UserContext.anonymous ()
       response = await call_next (request)
       return response
-    
+
     # Require auth for /v1/* endpoints
     if path.startswith ("/v1/"):
       token: str | None = None
-      
+
       auth_header = request.headers.get ("authorization", "")
       if auth_header.startswith ("Bearer "):
         token = auth_header [7:]
       elif "x-auth-token" in request.headers:
         token = request.headers ["x-auth-token"]
-      
+
       if not token:
         return JSONResponse (status_code = 401, content = {"detail": "Authentication required"}, )
-      
+
       try:
         # Check for API key (sk-* prefix)
         user_ctx = _validate_api_key (token) if token.startswith ("sk-") else verify_token (token)
       except HTTPException as exc:
         return JSONResponse (status_code = exc.status_code, content = {"detail": exc.detail}, )
-      
+
       request.state.user_context = user_ctx
       response = await call_next (request)
       return response
-    
+
     # Non-v1 routes pass through
     request.state.user_context = UserContext.anonymous ()
     response = await call_next (request)
@@ -360,18 +366,18 @@ def _fetch_jwks_oidc () -> dict [str, Any] | None:
   Results are cached for _JWKS_CACHE_TTL seconds.
   """
   global _jwks_cache, _jwks_cache_ts
-  
+
   if not KEYCLOAK_URL:
     return None
-  
+
   now = time.time ()
   if _jwks_cache is not None and (now - _jwks_cache_ts) < _JWKS_CACHE_TTL:
     return _jwks_cache
-  
+
   try:
     import json
     import urllib.request
-    
+
     jwks_url = f"{KEYCLOAK_URL.rstrip ('/')}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/certs"
     with urllib.request.urlopen (jwks_url, timeout = 5) as resp:
       jwks_data: dict [str, Any] = json.loads (resp.read ())
@@ -392,18 +398,18 @@ def _get_keycloak_verify_key (kid: str | None = None) -> Any:
   jwks = _fetch_jwks_oidc ()
   if not jwks or not jwks.get ("keys"):
     return JWT_PUBLIC_KEY or None
-  
+
   keys = jwks ["keys"]
   if kid:
     for k in keys:
       if k.get ("kid") == kid:
         return _pem_from_jwk (k)
-  
+
   # No kid match — try to construct from first RSA key
   for k in keys:
     if k.get ("kty") == "RSA":
       return _pem_from_jwk (k)
-  
+
   return None
 
 
@@ -411,7 +417,7 @@ def _pem_from_jwk (jwk: dict [str, Any]) -> Any:
   """Convert a JWK RSA public key to PEM format."""
   try:
     from jwt.algorithms import RSAAlgorithm
-    
+
     return RSAAlgorithm.from_jwk (jwk)
   except (ImportError, Exception) as e:
     logger.warning (f"Failed to convert JWK to PEM: {e}")
@@ -444,11 +450,11 @@ async def create_token_pair (user: dict [str, Any]) -> dict [str, Any]:
       dict with access_token, refresh_token, token_type, expires_in.
   """
   import secrets as _secrets
-  
+
   now = int (time.time ())
   access_expires = now + ACCESS_TOKEN_MINUTES * 60
   jti = _secrets.token_hex (16)
-  
+
   # Access token
   payload: dict [str, Any] = {
       "sub": user ["id"], "preferred_username": user ["username"], "roles": user.get ("roles", ["user"]),
@@ -458,18 +464,18 @@ async def create_token_pair (user: dict [str, Any]) -> dict [str, Any]:
   key = JWT_SECRET
   if not key:
     raise ValueError ("JWT_SECRET is not configured — cannot create tokens")
-  
+
   access_token = jwt.encode (payload, key, algorithm = JWT_ALGORITHM)
-  
+
   # Refresh token — opaque random string, stored in DB
   refresh_token = _secrets.token_urlsafe (48)
-  
+
   # Store refresh token in database
   from proxy.app.auth.user_db import get_user_db
-  
+
   db = get_user_db ()
   await db.store_refresh_token (user ["id"], refresh_token)
-  
+
   return {
       "access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer",
       "expires_in": ACCESS_TOKEN_MINUTES * 60,
@@ -483,7 +489,7 @@ async def verify_refresh_token (refresh_token: str) -> dict [str, Any] | None:
   Returns None if invalid/expired/revoked.
   """
   from proxy.app.auth.user_db import get_user_db
-  
+
   db = get_user_db ()
   return await db.consume_refresh_token (refresh_token)
 
@@ -492,18 +498,18 @@ async def blacklist_access_token (token: str) -> None:
   """Add an access token's JTI to the blacklist (for logout)."""
   key = _get_verify_key ()
   algorithms = [JWT_ALGORITHM] if JWT_ALGORITHM else ["HS256"]
-  
+
   try:
     # Decode without expiry check to get JTI even for expired tokens
     payload = jwt.decode (token, key = key or "", algorithms = algorithms, options = {"verify_exp": False}, )
     jti = payload.get ("jti", "")
     exp = payload.get ("exp", 0)
     from datetime import datetime
-    
+
     expires_at = datetime.fromtimestamp (exp, tz = UTC).isoformat ()
-    
+
     from proxy.app.auth.user_db import get_user_db
-    
+
     db = get_user_db ()
     if jti:
       await db.add_to_blacklist (jti, expires_at)

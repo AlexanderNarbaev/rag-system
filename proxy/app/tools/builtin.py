@@ -57,9 +57,9 @@ def get_document_metadata (doc_id: str) -> str:
   """Get metadata for a specific document by its ID."""
   try:
     from qdrant_client import QdrantClient
-    
+
     from proxy.app.shared.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
-    
+
     client = QdrantClient (host = QDRANT_HOST, port = QDRANT_PORT, check_compatibility = False)
     points = client.retrieve (collection_name = COLLECTION_NAME, ids = [doc_id])
     if not points:

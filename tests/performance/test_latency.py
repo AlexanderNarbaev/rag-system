@@ -28,7 +28,6 @@ for mod in _modules_to_mock:
 
 from proxy.app.main import app
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -39,7 +38,7 @@ def _disable_auth (monkeypatch):
   """Disable authentication for all tests in this module."""
   import proxy.app.auth.jwt as _jwt
   import proxy.app.shared.config as _cfg
-  
+
   monkeypatch.setenv ("AUTH_ENABLED", "false")
   monkeypatch.setattr (_cfg, "AUTH_ENABLED", False)
   monkeypatch.setattr (_jwt, "AUTH_ENABLED", False)
@@ -111,7 +110,7 @@ def _compute_percentiles (values: list [float]) -> dict [str, float]:
 
 class TestChatCompletionLatency:
   """Latency benchmarks for non-streaming chat completion."""
-  
+
   def test_chat_completion_latency_under_5s (self, client, mock_rag_pipeline):
     """Single chat completion should complete in < 5s with mocked services.
 
@@ -119,22 +118,22 @@ class TestChatCompletionLatency:
     response serialization. External service latency is zero (mocked).
     """
     max_latency_ms = 5000  # 5 seconds
-    
+
     start = time.perf_counter ()
     response = client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [{"role": "user", "content": "What is RAG?"}], "stream": False,
     }, )
     latency_ms = (time.perf_counter () - start) * 1000
-    
+
     assert response.status_code == 200
     assert latency_ms < max_latency_ms, (
         f"Chat completion latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms threshold")
-  
+
   def test_chat_completion_repeated_latency_stable (self, client, mock_rag_pipeline):
     """10 sequential chat completions should all be under 5s."""
     max_latency_ms = 5000
     latencies = []
-    
+
     for i in range (10):
       start = time.perf_counter ()
       response = client.post ("/v1/chat/completions", json = {
@@ -143,7 +142,7 @@ class TestChatCompletionLatency:
       latency_ms = (time.perf_counter () - start) * 1000
       assert response.status_code == 200
       latencies.append (latency_ms)
-    
+
     p95 = _compute_percentiles (latencies) ["p95"]
     assert p95 < max_latency_ms, f"p95 latency {p95:.1f}ms exceeded {max_latency_ms}ms threshold"
 
@@ -155,7 +154,7 @@ class TestChatCompletionLatency:
 
 class TestStreamingFirstChunkLatency:
   """Latency benchmarks for streaming time-to-first-token (TTFT)."""
-  
+
   def test_streaming_first_chunk_under_1s (self, client, mock_rag_pipeline):
     """Time-to-first-chunk should be < 1s with mocked services.
 
@@ -163,33 +162,33 @@ class TestStreamingFirstChunkLatency:
     followed by content chunks.
     """
     max_ttft_ms = 1000  # 1 second
-    
+
     async def mock_stream_gen (*args, **kwargs):
       yield {"id": "1", "choices": [{"delta": {"content": "First "}}]}
       yield {"id": "2", "choices": [{"delta": {"content": "chunk."}}]}
-    
+
     mock_rag_pipeline ["stream_completion"].side_effect = mock_stream_gen
-    
+
     start = time.perf_counter ()
     response = client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [{"role": "user", "content": "test"}], "stream": True,
     }, )
     first_chunk_ms = (time.perf_counter () - start) * 1000
-    
+
     assert response.status_code == 200
     # The full response arrives at once with TestClient, but the framework
     # overhead should still be minimal
     assert first_chunk_ms < max_ttft_ms, (
         f"Streaming first-chunk latency {first_chunk_ms:.1f}ms exceeded {max_ttft_ms}ms")
-  
+
   def test_streaming_initial_chunk_is_immediate (self, client, mock_rag_pipeline):
     """StreamOptimizer's initial empty chunk should be the first data line."""
-    
+
     async def mock_stream_gen (*args, **kwargs):
       yield {"id": "1", "choices": [{"delta": {"content": "Hello"}}]}
-    
+
     mock_rag_pipeline ["stream_completion"].side_effect = mock_stream_gen
-    
+
     response = client.post ("/v1/chat/completions", json = {
         "model": "rag-proxy", "messages": [{"role": "user", "content": "test"}], "stream": True,
     }, )
@@ -208,58 +207,58 @@ class TestStreamingFirstChunkLatency:
 
 class TestHealthCheckLatency:
   """Latency benchmarks for health check endpoints."""
-  
+
   def test_health_live_under_100ms (self, client):
     """GET /v1/health/live should respond in < 100ms.
 
     Liveness probe is a trivial endpoint — no external calls.
     """
     max_latency_ms = 100
-    
+
     start = time.perf_counter ()
     response = client.get ("/v1/health/live")
     latency_ms = (time.perf_counter () - start) * 1000
-    
+
     assert response.status_code == 200
     assert latency_ms < max_latency_ms, f"Health live latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
-  
+
   def test_health_live_repeated_under_100ms (self, client, mock_healthy_services):
     """10 sequential liveness probes should all be under 100ms."""
     max_latency_ms = 100
     latencies = []
-    
+
     for _ in range (10):
       start = time.perf_counter ()
       response = client.get ("/v1/health/live")
       latency_ms = (time.perf_counter () - start) * 1000
       assert response.status_code == 200
       latencies.append (latency_ms)
-    
+
     p95 = _compute_percentiles (latencies) ["p95"]
     assert p95 < max_latency_ms, f"Health live p95 latency {p95:.1f}ms exceeded {max_latency_ms}ms"
-  
+
   def test_health_ready_under_100ms (self, client, mock_healthy_services):
     """GET /v1/health/ready should respond in < 100ms with mocked services.
 
     With mocked Qdrant and LLM, the readiness probe overhead is minimal.
     """
     max_latency_ms = 100
-    
+
     start = time.perf_counter ()
     response = client.get ("/v1/health/ready")
     latency_ms = (time.perf_counter () - start) * 1000
-    
+
     assert response.status_code == 200
     assert latency_ms < max_latency_ms, f"Health ready latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
-  
+
   def test_health_full_under_500ms (self, client, mock_healthy_services):
     """GET /v1/health should respond in < 500ms with mocked services."""
     max_latency_ms = 500
-    
+
     start = time.perf_counter ()
     response = client.get ("/v1/health")
     latency_ms = (time.perf_counter () - start) * 1000
-    
+
     assert response.status_code == 200
     assert latency_ms < max_latency_ms, f"Health full latency {latency_ms:.1f}ms exceeded {max_latency_ms}ms"
 
@@ -271,7 +270,7 @@ class TestHealthCheckLatency:
 
 class TestConcurrentRequestHandling:
   """Concurrency benchmarks for parallel request handling."""
-  
+
   def test_10_parallel_chat_requests (self, client, mock_rag_pipeline):
     """10 parallel chat requests should all succeed.
 
@@ -281,7 +280,7 @@ class TestConcurrentRequestHandling:
     num_workers = 10
     max_total_ms = 10000  # 10 seconds for all 10 requests
     max_per_request_ms = 5000  # 5 seconds per individual request
-    
+
     def send_request (query_id: int) -> tuple [float, int]:
       start = time.perf_counter ()
       response = client.post ("/v1/chat/completions", json = {
@@ -290,11 +289,11 @@ class TestConcurrentRequestHandling:
       }, )
       latency_ms = (time.perf_counter () - start) * 1000
       return latency_ms, response.status_code
-    
+
     start_total = time.perf_counter ()
     latencies = []
     errors = 0
-    
+
     with ThreadPoolExecutor (max_workers = num_workers) as executor:
       futures = [executor.submit (send_request, i) for i in range (num_workers)]
       for future in as_completed (futures):
@@ -303,27 +302,27 @@ class TestConcurrentRequestHandling:
           latencies.append (latency_ms)
         else:
           errors += 1
-    
+
     total_ms = (time.perf_counter () - start_total) * 1000
-    
+
     assert errors == 0, f"Some requests failed: {errors}/{num_workers}"
     assert len (latencies) == num_workers, f"Only {len (latencies)}/{num_workers} succeeded"
     assert total_ms < max_total_ms, (
         f"Total time {total_ms:.1f}ms exceeded {max_total_ms}ms for {num_workers} parallel requests")
-    
+
     # Each individual request should be under the per-request threshold
     for i, lat in enumerate (latencies):
       assert lat < max_per_request_ms, f"Request {i} latency {lat:.1f}ms exceeded {max_per_request_ms}ms"
-  
+
   def test_10_parallel_streaming_requests (self, client, mock_rag_pipeline):
     """10 parallel streaming requests should all complete."""
     num_workers = 10
-    
+
     async def mock_stream_gen (*args, **kwargs):
       yield {"id": "1", "choices": [{"delta": {"content": "Response"}}]}
-    
+
     mock_rag_pipeline ["stream_completion"].side_effect = mock_stream_gen
-    
+
     def send_streaming_request (query_id: int) -> tuple [float, int]:
       start = time.perf_counter ()
       response = client.post ("/v1/chat/completions", json = {
@@ -331,10 +330,10 @@ class TestConcurrentRequestHandling:
       }, )
       latency_ms = (time.perf_counter () - start) * 1000
       return latency_ms, response.status_code
-    
+
     latencies = []
     errors = 0
-    
+
     with ThreadPoolExecutor (max_workers = num_workers) as executor:
       futures = [executor.submit (send_streaming_request, i) for i in range (num_workers)]
       for future in as_completed (futures):
@@ -343,14 +342,14 @@ class TestConcurrentRequestHandling:
           latencies.append (latency_ms)
         else:
           errors += 1
-    
+
     assert errors == 0, f"Some streaming requests failed: {errors}/{num_workers}"
     assert len (latencies) == num_workers
-  
+
   def test_concurrent_health_and_chat (self, client, mock_rag_pipeline, mock_healthy_services):
     """Mix of health checks and chat requests should all succeed."""
     num_workers = 10
-    
+
     def send_request (idx: int) -> tuple [float, int, str]:
       start = time.perf_counter ()
       if idx % 3 == 0:
@@ -369,10 +368,10 @@ class TestConcurrentRequestHandling:
         endpoint = "chat"
       latency_ms = (time.perf_counter () - start) * 1000
       return latency_ms, response.status_code, endpoint
-    
+
     latencies = []
     errors = 0
-    
+
     with ThreadPoolExecutor (max_workers = num_workers) as executor:
       futures = [executor.submit (send_request, i) for i in range (num_workers)]
       for future in as_completed (futures):
@@ -381,14 +380,14 @@ class TestConcurrentRequestHandling:
           latencies.append (latency_ms)
         else:
           errors += 1
-    
+
     assert errors == 0, f"Some mixed requests failed: {errors}/{num_workers}"
     assert len (latencies) == num_workers
-  
+
   def test_concurrent_request_latency_percentiles (self, client, mock_rag_pipeline):
     """Compute latency percentiles for 10 concurrent chat requests."""
     num_workers = 10
-    
+
     def send_request (query_id: int) -> tuple [float, int]:
       start = time.perf_counter ()
       response = client.post ("/v1/chat/completions", json = {
@@ -397,18 +396,18 @@ class TestConcurrentRequestHandling:
       }, )
       latency_ms = (time.perf_counter () - start) * 1000
       return latency_ms, response.status_code
-    
+
     latencies = []
-    
+
     with ThreadPoolExecutor (max_workers = num_workers) as executor:
       futures = [executor.submit (send_request, i) for i in range (num_workers)]
       for future in as_completed (futures):
         latency_ms, status = future.result ()
         if status == 200:
           latencies.append (latency_ms)
-    
+
     assert len (latencies) == num_workers
-    
+
     percentiles = _compute_percentiles (latencies)
     # With mocked services, all percentiles should be well under 5s
     assert percentiles ["p50"] < 5000, f"p50 {percentiles ['p50']:.1f}ms too high"

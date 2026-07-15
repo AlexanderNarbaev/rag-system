@@ -31,7 +31,7 @@ class ExtractedDocument:
   version: str = ""
   extracted_at: str = ""
   links: list [dict] = field (default_factory = list)
-  
+
   def __post_init__ (self):
     if not self.extracted_at:
       self.extracted_at = datetime.now (UTC).isoformat ()
@@ -39,26 +39,26 @@ class ExtractedDocument:
 
 class BaseExtractor (ABC):
   """All extractors must implement this interface."""
-  
+
   def __init__ (self, config: ExtractorConfig):
     self.config = config
-  
+
   @abstractmethod
   async def extract (self) -> AsyncIterator [ExtractedDocument]:
     """Yield extracted documents."""
-  
+
   @abstractmethod
   async def validate_connection (self) -> bool:
     """Test connectivity to the source."""
-  
+
   @abstractmethod
   def should_process (self, doc: ExtractedDocument, last_hash: str) -> bool:
     """Check if document needs processing (incremental)."""
-  
+
   def compute_hash (self, content: str) -> str:
     """SHA-256 hash for change detection."""
     return hashlib.sha256 (content.encode ("utf-8")).hexdigest ()
-  
+
   def _truncate_text (self, text: str, max_length: int = 10000) -> str:
     """Truncate text to a maximum length for logging/metadata."""
     if len (text) <= max_length:

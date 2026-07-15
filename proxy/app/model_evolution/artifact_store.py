@@ -9,7 +9,7 @@ from pathlib import Path
 @dataclass
 class ArtifactRef:
   """Reference to a stored model artifact (bucket, key, version, size, URI)."""
-  
+
   bucket: str
   key: str
   version_id: str | None = None
@@ -19,29 +19,29 @@ class ArtifactRef:
 
 class ArtifactStore:
   """Storage backend for model artifacts — supports MinIO/S3 and local filesystem."""
-  
+
   def __init__ (
       self, endpoint: str | None = None, access_key: str | None = None, secret_key: str | None = None,
       bucket: str = "rag-artifacts", secure: bool = False, ):
     self.bucket = bucket
     self._client = None
     self._local_mode = True
-    
+
     if endpoint and access_key and secret_key:
       try:
         import boto3
-        
+
         self._client = boto3.client ("s3", endpoint_url = f"{'https' if secure else 'http'}://{endpoint}",
             aws_access_key_id = access_key, aws_secret_access_key = secret_key, )
         self.ensure_bucket ()
         self._local_mode = False
       except ImportError:
         pass
-    
+
     if self._local_mode:
       self._local_path = Path ("data/artifacts") / bucket
       self._local_path.mkdir (parents = True, exist_ok = True)
-  
+
   def ensure_bucket (self) -> None:
     """Ensure the S3 bucket exists, creating it if necessary."""
     if self._client:
@@ -49,7 +49,7 @@ class ArtifactStore:
         self._client.head_bucket (Bucket = self.bucket)
       except Exception:
         self._client.create_bucket (Bucket = self.bucket)
-  
+
   def upload_model (self, model_name: str, version: str, local_path: str) -> ArtifactRef:
     """Upload a model directory or file to storage.
 
@@ -78,10 +78,10 @@ class ArtifactStore:
         shutil.copytree (local_path, dest, dirs_exist_ok = True)
       else:
         shutil.copy2 (local_path, dest / os.path.basename (local_path))
-    
+
     return ArtifactRef (bucket = self.bucket, key = key, uri = str (
       self._local_path / model_name / version) if self._local_mode else f"s3://{self.bucket}/{key}", )  # noqa: E501
-  
+
   def download_model (self, model_name: str, version: str, local_dir: str) -> str:
     """Download a model version to a local directory.
 
@@ -96,7 +96,7 @@ class ArtifactStore:
     dest = Path (local_dir) / model_name / version
     dest.mkdir (parents = True, exist_ok = True)
     key = f"models/{model_name}/{version}/"
-    
+
     if self._client:
       paginator = self._client.get_paginator ("list_objects_v2")
       for page in paginator.paginate (Bucket = self.bucket, Prefix = key):
@@ -110,9 +110,9 @@ class ArtifactStore:
       src = self._local_path / model_name / version
       if src.exists ():
         shutil.copytree (src, dest, dirs_exist_ok = True)
-    
+
     return str (dest)
-  
+
   def list_versions (self, model_name: str) -> list [str]:
     """List all versions of a model in storage."""
     prefix = f"models/{model_name}/"
@@ -131,7 +131,7 @@ class ArtifactStore:
           if d.is_dir ():
             versions.add (d.name)
     return sorted (versions)
-  
+
   def delete_version (self, model_name: str, version: str) -> None:
     """Delete a specific model version from storage."""
     key = f"models/{model_name}/{version}/"

@@ -22,7 +22,7 @@ def compute_mrr (retrieved_lists: list [list [str]], relevant_sets: list [set [s
   """Compute MRR (Mean Reciprocal Rank) over all queries."""
   if not retrieved_lists:
     return 0.0
-  
+
   rr_sum = 0.0
   query_count = 0
   for retrieved, relevant in zip (retrieved_lists, relevant_sets, strict = False):
@@ -33,7 +33,7 @@ def compute_mrr (retrieved_lists: list [list [str]], relevant_sets: list [set [s
       if doc in relevant:
         rr_sum += 1.0 / rank
         break
-  
+
   return rr_sum / query_count if query_count > 0 else 0.0
 
 
@@ -50,13 +50,13 @@ def compute_ndcg_at_k (retrieved: list [str], relevant: set [str], k: int) -> fl
   """Compute nDCG@k with binary relevance."""
   if not relevant:
     return 1.0
-  
+
   binary_relevance = [1.0 if doc in relevant else 0.0 for doc in retrieved [:k]]
   ideal_relevance = sorted ([1.0] * min (len (relevant), k) + [0.0] * max (0, k - len (relevant)), reverse = True)
-  
+
   dcg = sum (rel / math.log2 (i + 2) for i, rel in enumerate (binary_relevance [:k]))
   idcg = sum (rel / math.log2 (i + 2) for i, rel in enumerate (ideal_relevance [:k]))
-  
+
   return dcg / idcg if idcg > 0 else 0.0
 
 
@@ -81,21 +81,21 @@ def compute_all_metrics (
       Dictionary with MRR, Recall@k, nDCG@k, Precision@k, and num_queries.
   """
   metrics: dict [str, float] = {}
-  
+
   metrics ["mrr"] = compute_mrr (retrieved_lists, relevant_sets)
-  
+
   for k in (5, 10, 20):
     recalls = [compute_recall_at_k (r, rel, k) for r, rel in zip (retrieved_lists, relevant_sets, strict = False)]
     metrics [f"recall@{k}"] = sum (recalls) / len (recalls) if recalls else 0.0
-  
+
   for k in (5, 10):
     ndcgs = [compute_ndcg_at_k (r, rel, k) for r, rel in zip (retrieved_lists, relevant_sets, strict = False)]
     metrics [f"ndcg@{k}"] = sum (ndcgs) / len (ndcgs) if ndcgs else 0.0
-  
+
   for k in (5,):
     precisions = [compute_precision_at_k (r, rel, k) for r, rel in zip (retrieved_lists, relevant_sets, strict = False)]
     metrics [f"precision@{k}"] = sum (precisions) / len (precisions) if precisions else 0.0
-  
+
   metrics ["num_queries"] = float (len (retrieved_lists))
   return metrics
 
@@ -109,12 +109,12 @@ def load_eval_dataset (dataset_path: str) -> list [dict [str, Any]]:
   """
   import json
   from pathlib import Path
-  
+
   path = Path (dataset_path)
   if not path.exists ():
     logger.error (f"Dataset not found: {dataset_path}")
     return []
-  
+
   pairs = []
   if path.suffix == ".jsonl":
     with open (path, encoding = "utf-8") as f:
@@ -137,7 +137,7 @@ def load_eval_dataset (dataset_path: str) -> list [dict [str, Any]]:
             pairs.append (record)
       elif isinstance (data, dict) and "query" in data:
         pairs.append (data)
-  
+
   logger.info (f"Loaded {len (pairs)} eval pairs from {dataset_path}")
   return pairs
 
@@ -196,51 +196,51 @@ def evaluate_cross_lingual_retrieval (
       cross_lingual metrics, comparison delta, and num_queries.
   """
   source_lang, target_lang = lang_pair
-  
+
   if queries is None:
     q_source = _CROSS_LINGUAL_SAMPLE_QUERIES.get (source_lang, _CROSS_LINGUAL_SAMPLE_QUERIES ["en"])
     q_target = _CROSS_LINGUAL_SAMPLE_QUERIES.get (target_lang, _CROSS_LINGUAL_SAMPLE_QUERIES ["en"])
   else:
     q_source = queries.get (source_lang, queries.get ("en", []))
     q_target = queries.get (target_lang, queries.get ("en", []))
-  
+
   relevant = _RELEVANT_DOC_IDS.get (source_lang, _RELEVANT_DOC_IDS ["en"])
-  
+
   if not q_source:
     return {
         "source_lang": source_lang, "target_lang": target_lang, "monolingual": {}, "cross_lingual": {},
         "comparison": {}, "num_queries": 0,
     }
-  
+
   n = min (len (q_source), len (relevant))
   q_source = q_source [:n]
   relevant = relevant [:n]
-  
+
   try:
     from proxy.app.core.retrieval import hybrid_search
-    
+
     def _id_from_hit (hit: Any) -> str:
       try:
         return str (hit.payload.get ("semantic_key", hit.payload.get ("hash", str (hit.id))))
       except Exception:
         return str (hit.id)
-    
+
     # Monolingual: query in source lang
     retrieved_mono = []
     for q in q_source:
       hits = hybrid_search (q, top_k = 10)
       retrieved_mono.append ([_id_from_hit (h) for h in hits])
-    
+
     mono_metrics = compute_all_metrics (retrieved_mono, relevant)
-    
+
     # Cross-lingual: query in target lang
     retrieved_cross = []
     for q in q_target:
       hits = hybrid_search (q, top_k = 10)
       retrieved_cross.append ([_id_from_hit (h) for h in hits])
-    
+
     cross_metrics = compute_all_metrics (retrieved_cross, relevant)
-  
+
   except Exception as e:
     logger.warning (f"Cross-lingual benchmark failed (retrieval unavailable): {e}")
     return {
@@ -249,12 +249,12 @@ def evaluate_cross_lingual_retrieval (
         "cross_lingual": {"mrr": 0.0, "recall@5": 0.0, "recall@10": 0.0}, "comparison": {"mrr_delta": 0.0},
         "num_queries": len (q_source),
     }
-  
+
   comparison = {}
   for key in mono_metrics:
     if key != "num_queries" and key in cross_metrics:
       comparison [f"{key}_delta"] = round (cross_metrics [key] - mono_metrics [key], 4)
-  
+
   return {
       "source_lang": source_lang, "target_lang": target_lang,
       "monolingual": {k: v for k, v in mono_metrics.items () if k != "num_queries"},

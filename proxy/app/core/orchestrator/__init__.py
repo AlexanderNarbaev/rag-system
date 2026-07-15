@@ -6,12 +6,30 @@ Re-exports all public symbols for backward compatibility with
 """
 
 from proxy.app.core.orchestrator.graph import (  # type: ignore[attr-defined]
-  END, LANGGRAPH_AVAILABLE, MemorySaver, RAGOrchestrator, RAGState, StateGraph, _self_critique_route,
-  _self_reflection_route, build_rag_graph, get_orchestrator,
+  END,
+  LANGGRAPH_AVAILABLE,
+  MemorySaver,
+  RAGOrchestrator,
+  RAGState,
+  StateGraph,
+  _self_critique_route,
+  _self_reflection_route,
+  build_rag_graph,
+  get_orchestrator,
 )
 from proxy.app.core.orchestrator.nodes import (
-  _dynamic_top_k, build_context_node, call_tools, check_confidence, check_sufficiency, generate, graph_expand, rerank,
-  retrieve, rewrite_query, self_critique, self_reflection,
+  _dynamic_top_k,
+  build_context_node,
+  call_tools,
+  check_confidence,
+  check_sufficiency,
+  generate,
+  graph_expand,
+  rerank,
+  retrieve,
+  rewrite_query,
+  self_critique,
+  self_reflection,
 )
 from proxy.app.core.rerank import rerank_chunks  # noqa: F401 — re-export for test patching
 from proxy.app.core.retrieval import hybrid_search  # noqa: F401 — re-export for test patching

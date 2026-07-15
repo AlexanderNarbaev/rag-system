@@ -22,11 +22,11 @@ logger = logging.getLogger (__name__)
 
 class QueryEnhancer:
   """Enhances queries for better retrieval."""
-  
+
   QUERY_PREFIXES = [
       "Passage: ", "Answer: ", "The document states that ",
   ]
-  
+
   METADATA_PATTERNS = {
       "version": [
           r"version\s*[:=]?\s*(\S+)", r"v(?:ersion)?\.?\s*([\d.]+)", r"release\s+(\S+)",
@@ -42,7 +42,7 @@ class QueryEnhancer:
           r"project\s*[:=]?\s*['\"]?(\w+)['\"]?", r"in\s+(?:the\s+)?['\"]?(\w+)\s+project['\"]?",
       ],
   }
-  
+
   def hyde_enhance (self, query: str) -> str:
     """Hypothetical Document Embedding: generate fake answer, use it for search."""
     hyde_prefixes = [
@@ -51,13 +51,13 @@ class QueryEnhancer:
     ]
     joined = " ".join (hyde_prefixes)
     return f"{joined} {query}"
-  
+
   def multi_query_expand (self, query: str, num_variants: int = 3) -> list [str]:
     """Generate multiple query variants for fusion retrieval."""
     variants = [query]
     keywords = [w for w in query.split () if len (w) > 3]
     lower = query.lower ()
-    
+
     if lower.startswith ("how") and len (keywords) > 1:
       variants.append (f"steps to {query [4:].strip ()}")
       variants.append (f"guide for {query [4:].strip ()}")
@@ -74,9 +74,9 @@ class QueryEnhancer:
     elif len (keywords) >= 2:
       variants.append (" ".join (keywords))
       variants.append (f"{keywords [0]} related to {keywords [1]}")
-    
+
     return list (dict.fromkeys (variants)) [: num_variants + 1]
-  
+
   def decompose_complex_query (self, query: str) -> list [str]:
     """Break complex query into sub-queries."""
     delimiters = [
@@ -92,7 +92,7 @@ class QueryEnhancer:
     if len (sub_queries) == 1:
       sub_queries = [query]
     return sub_queries
-  
+
   def extract_metadata_filters (self, query: str) -> dict [str, str]:
     """Extract metadata filters from natural language query."""
     filters: dict [str, str] = {}
@@ -103,7 +103,7 @@ class QueryEnhancer:
           filters [field] = match.group (1).strip ()
           break
     return filters
-  
+
   def enhance (self, query: str) -> dict [str, Any]:
     """Full enhancement: returns HyDE query, variants, sub-queries, and filters."""
     return {
@@ -126,11 +126,11 @@ def generate_query_variants (query: str, num_variants: int = 3) -> list [str]:
   5. Keyword extraction
   """
   variants = [query]  # Always include original
-  
+
   # Strategy 1: Add context prefix
   if not query.startswith (("what", "how", "why", "when", "where", "who")):
     variants.append (f"explain {query}")
-  
+
   # Strategy 2: Extract key terms (remove stop words)
   stop_words = {
       "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did",
@@ -142,14 +142,14 @@ def generate_query_variants (query: str, num_variants: int = 3) -> list [str]:
   keywords = [w for w in words if w not in stop_words and len (w) > 2]
   if keywords:
     variants.append (" ".join (keywords))
-  
+
   # Strategy 3: Question form
   if not query.endswith ("?"):
     variants.append (f"{query}?")
-  
+
   # Strategy 4: Rephrase
   variants.append (f"what is {query}")
-  
+
   return variants [: num_variants + 1]  # +1 for original
 
 
@@ -165,7 +165,7 @@ def multi_query_search (
   """
   variants = generate_query_variants (query, num_variants)
   logger.info ("Multi-query: generated %d variants: %s", len (variants), variants)
-  
+
   all_results: list [list [dict [str, Any]]] = []
   for variant in variants:
     try:
@@ -173,16 +173,16 @@ def multi_query_search (
       all_results.append (results)
     except Exception as e:
       logger.warning ("Search failed for variant '%s': %s", variant, e)
-  
+
   if not all_results:
     return []
-  
+
   if len (all_results) == 1:
     return all_results [0]
-  
+
   # Chain pairwise RRF: fuse first two, then fuse result with next, etc.
   fused = reciprocal_rank_fusion (all_results [0], all_results [1])
   for result_set in all_results [2:]:
     fused = reciprocal_rank_fusion (fused, result_set)
-  
+
   return fused [:top_k]

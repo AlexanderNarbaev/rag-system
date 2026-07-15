@@ -33,16 +33,16 @@ def chunk_python (source: str) -> list [CodeChunk]:
   """Split Python source by top-level functions and classes using AST."""
   if not source.strip ():
     return []
-  
+
   try:
     tree = ast.parse (source)
   except SyntaxError:
     logger.warning ("Python AST parse failed, falling back to regex")
     return _chunk_python_regex (source)
-  
+
   lines = source.splitlines ()
   chunks = []
-  
+
   for node in ast.iter_child_nodes (tree):
     if isinstance (node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
       start = node.lineno - 1
@@ -54,7 +54,7 @@ def chunk_python (source: str) -> list [CodeChunk]:
       chunks.append (
           CodeChunk (name = node.name, code = code, language = "python", docstring = docstring, line_start = start + 1,
               line_end = end if isinstance (end, int) else start + 1, ))
-  
+
   return chunks
 
 
@@ -77,10 +77,10 @@ def chunk_javascript (source: str) -> list [CodeChunk]:
   """Split JavaScript source by functions and classes using regex."""
   if not source.strip ():
     return []
-  
+
   chunks = []
   seen_names = set ()
-  
+
   patterns = [
       (
           r"/\*\*(.*?)\*/\s*\n\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{(?:[^{}]|\{[^{}]*\})*\}",
@@ -91,7 +91,7 @@ def chunk_javascript (source: str) -> list [CodeChunk]:
       (r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{(?:[^{}]|\{[^{}]*\})*\}", False),
       (r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*[^;]+;", False),
   ]
-  
+
   for pattern, has_jsdoc in patterns:
     for match in re.finditer (pattern, source, re.MULTILINE | re.DOTALL):
       if has_jsdoc:
@@ -103,14 +103,14 @@ def chunk_javascript (source: str) -> list [CodeChunk]:
       else:
         name = match.group (1)
         docstring = ""
-      
+
       if name in seen_names:
         continue
       seen_names.add (name)
-      
+
       code = match.group (0)
       chunks.append (CodeChunk (name = name, code = code, language = "javascript", docstring = docstring, ))
-  
+
   return chunks
 
 
@@ -118,9 +118,9 @@ def chunk_java (source: str) -> list [CodeChunk]:
   """Split Java source by classes, interfaces, and methods using regex."""
   if not source.strip ():
     return []
-  
+
   chunks = []
-  
+
   class_pattern = (r"(?:/\*\*(.*?)\*/\s*\n\s*)?(?:public\s+)?(?:abstract\s+)?(?:class|interface|enum)\s+(\w+)\s*("
                    r"?:extends\s+\w+\s*)?(?:implements\s+[^{]+\s*)?\{(?:[^{}]|\{[^{}]*\})*\}")  # noqa: E501
   for match in re.finditer (class_pattern, source, re.MULTILINE | re.DOTALL):
@@ -137,7 +137,7 @@ def chunk_java (source: str) -> list [CodeChunk]:
       name = groups [1]
     code = match.group (0)
     chunks.append (CodeChunk (name = name, code = code, language = "java", docstring = docstring))
-  
+
   method_pattern = (r"(?:/\*\*(.*?)\*/\s*\n\s*)?(?:public|private|protected|static|\s)*\s+(\w+(?:<[^>]+>)?)\s+("
                     r"\w+)\s*\([^)]*\)\s*(?:\{|throws[^{]*\{)(?:[^{}]|\{[^{}]*\})*\}")  # noqa: E501
   for match in re.finditer (method_pattern, source, re.MULTILINE | re.DOTALL):
@@ -152,7 +152,7 @@ def chunk_java (source: str) -> list [CodeChunk]:
       docstring = ""
     code = match.group (0)
     chunks.append (CodeChunk (name = name, code = code, language = "java", docstring = docstring))
-  
+
   return chunks
 
 
@@ -165,7 +165,7 @@ def chunk_code (source: str, language: str) -> list [CodeChunk]:
   """
   if not CODE_CHUNKING_ENABLED:
     return []
-  
+
   lang = language.lower ()
   if lang == "python":
     return chunk_python (source)

@@ -22,7 +22,7 @@ def _get_embedder () -> Any:
   if _embedder is None:
     try:
       from proxy.app.llm.remote_services import create_embedder
-      
+
       _embedder = create_embedder ()
     except Exception:
       logger.warning ("Embedder not available, grounding disabled", exc_info = True)
@@ -47,11 +47,11 @@ def compute_grounding (answer: str, context: str) -> float:
   """
   if not answer or not context:
     return 0.0
-  
+
   embedder = _get_embedder ()
   if embedder is None:
     return 0.0
-  
+
   try:
     answer_emb = embedder.encode (answer, normalize_embeddings = True)
     context_emb = embedder.encode (context, normalize_embeddings = True)

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 def mock_kb_manager ():
   """Mock KnowledgeBaseManager for API tests."""
   from proxy.app.core.kb_manager import ETLTask, KnowledgeBase
-  
+
   manager = MagicMock ()
   # create_kb returns a KB
   manager.create_kb.return_value = KnowledgeBase (
@@ -52,12 +52,12 @@ def mock_kb_manager ():
 def client (mock_kb_manager):
   """Create a TestClient with mocked KB manager."""
   from fastapi import FastAPI
-  
+
   from proxy.app.api.admin_kb import router
-  
+
   app = FastAPI ()
   app.include_router (router)
-  
+
   # Patch kb_manager in main module
   with patch ("proxy.app.main.kb_manager", mock_kb_manager):
     with patch ("proxy.app.api.admin_kb._get_kb_manager", return_value = mock_kb_manager):
@@ -66,7 +66,7 @@ def client (mock_kb_manager):
 
 class TestCreateKnowledgeBase:
   """Test POST /v1/admin/kb/"""
-  
+
   def test_create_kb_success (self, client):
     response = client.post ("/v1/admin/kb/", json = {
         "name": "Production Docs",
@@ -76,7 +76,7 @@ class TestCreateKnowledgeBase:
     data = response.json ()
     assert data ["name"] == "Test KB"
     assert data ["id"] == "kb-123"
-  
+
   def test_create_kb_missing_name (self, client):
     response = client.post ("/v1/admin/kb/", json = {"description": "No name"})
     assert response.status_code == 422  # Validation error
@@ -84,14 +84,14 @@ class TestCreateKnowledgeBase:
 
 class TestListKnowledgeBases:
   """Test GET /v1/admin/kb/"""
-  
+
   def test_list_kbs (self, client):
     response = client.get ("/v1/admin/kb/")
     assert response.status_code == 200
     data = response.json ()
     assert data ["total"] == 2
     assert len (data ["knowledge_bases"]) == 2
-  
+
   def test_list_kbs_include_deleted (self, client):
     response = client.get ("/v1/admin/kb/?include_deleted=true")
     assert response.status_code == 200
@@ -99,13 +99,13 @@ class TestListKnowledgeBases:
 
 class TestGetKnowledgeBase:
   """Test GET /v1/admin/kb/{kb_id}"""
-  
+
   def test_get_kb_success (self, client):
     response = client.get ("/v1/admin/kb/kb-123")
     assert response.status_code == 200
     data = response.json ()
     assert data ["id"] == "kb-123"
-  
+
   def test_get_kb_not_found (self, client, mock_kb_manager):
     mock_kb_manager.get_kb.return_value = None
     response = client.get ("/v1/admin/kb/nonexistent")
@@ -114,7 +114,7 @@ class TestGetKnowledgeBase:
 
 class TestUpdateKnowledgeBase:
   """Test PUT /v1/admin/kb/{kb_id}"""
-  
+
   def test_update_kb_success (self, client):
     response = client.put ("/v1/admin/kb/kb-123", json = {"name": "Updated KB"})
     assert response.status_code == 200
@@ -124,14 +124,14 @@ class TestUpdateKnowledgeBase:
 
 class TestDeleteKnowledgeBase:
   """Test DELETE /v1/admin/kb/{kb_id}"""
-  
+
   def test_soft_delete (self, client):
     response = client.delete ("/v1/admin/kb/kb-123")
     assert response.status_code == 200
     data = response.json ()
     assert data ["status"] == "deleted"
     assert data ["hard"] is False
-  
+
   def test_hard_delete (self, client):
     response = client.delete ("/v1/admin/kb/kb-123?hard=true")
     assert response.status_code == 200
@@ -141,7 +141,7 @@ class TestDeleteKnowledgeBase:
 
 class TestETLTasks:
   """Test ETL task endpoints."""
-  
+
   def test_create_task (self, client):
     response = client.post ("/v1/admin/kb/kb-123/tasks", json = {
         "source_type": "confluence",
@@ -151,13 +151,13 @@ class TestETLTasks:
     data = response.json ()
     assert data ["source_type"] == "confluence"
     assert data ["id"] == "task-1"
-  
+
   def test_list_tasks (self, client):
     response = client.get ("/v1/admin/kb/kb-123/tasks")
     assert response.status_code == 200
     data = response.json ()
     assert data ["total"] == 1
-  
+
   def test_get_task (self, client):
     response = client.get ("/v1/admin/kb/kb-123/tasks/task-1")
     assert response.status_code == 200

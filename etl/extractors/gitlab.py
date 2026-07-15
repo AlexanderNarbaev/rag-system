@@ -64,7 +64,7 @@ class GitLabExtractor:
     token = config.get ("token") or config.get ("api_key") or ""
     if not token or not token.strip ():
       raise ValueError ("GitLabExtractor: 'token' or 'api_key' is required and must not be empty")
-    
+
     self.url = url.rstrip ("/")
     self.config = config  # Store full config for retry logic
     self.token = token
@@ -81,14 +81,14 @@ class GitLabExtractor:
     self.file_paths_exclude = config.get ("file_paths_exclude", [])
     self.max_projects = config.get ("max_projects", 0)
     self.branch = config.get ("branch", "main")  # Branch to fetch files from
-    
+
     # Timeout configuration
     self.connect_timeout = config.get ("connect_timeout", 10)
     self.read_timeout = config.get ("timeout", 30)
     self.timeout = (self.connect_timeout, self.read_timeout)
-    
+
     self.session = requests.Session ()
-    
+
     # SSL configuration
     verify_ssl = config.get ("verify_ssl", True)
     ca_bundle = config.get ("ca_bundle", "")
@@ -96,15 +96,15 @@ class GitLabExtractor:
       self.session.verify = ca_bundle
     else:
       self.session.verify = verify_ssl
-    
+
     # GitLab token auth
     self.session.headers ["PRIVATE-TOKEN"] = self.token
     self.session.headers.update ({"PRIVATE-TOKEN": self.token, "Accept": "application/json"})
-    
+
     self.output_dir.mkdir (parents = True, exist_ok = True)
     self.wal_path.parent.mkdir (parents = True, exist_ok = True)
     self.wal_data = self._load_wal ()
-  
+
   def _load_wal (self) -> dict:
     if self.wal_path.exists ():
       try:
@@ -114,17 +114,17 @@ class GitLabExtractor:
         logger.warning (f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
         return {"last_run": None, "projects": {}}
     return {"last_run": None, "projects": {}}
-  
+
   def _save_wal (self):
     with open (self.wal_path, "w") as f:
       json.dump (self.wal_data, f, indent = 2)
-  
+
   def _request (self, endpoint: str, params: dict = None, method: str = "GET") -> dict:
     """Выполняет запрос к GitLab API с retry логикой и экспоненциальной задержкой."""
     url = urljoin (self.url, endpoint)
     max_retries = self.config.get ("max_retries", 3)
     base_delay = self.config.get ("retry_delay", 1)
-    
+
     for attempt in range (max_retries + 1):
       try:
         logger.debug (f"Requesting: {method} {url} (attempt {attempt + 1})")
@@ -151,7 +151,7 @@ class GitLabExtractor:
           time.sleep (delay)
         else:
           raise
-  
+
   def _paginated_get (self, endpoint: str, params: dict = None, per_page: int = 100) -> Iterator [dict]:
     """Пагинированный сбор всех элементов (постранично)."""
     page = 1
@@ -164,7 +164,7 @@ class GitLabExtractor:
         break
       yield from data
       page += 1
-  
+
   def get_projects (self) -> list [dict]:
     """Список проектов (репозиториев)."""
     if self.project_ids:
@@ -178,7 +178,7 @@ class GitLabExtractor:
       projects = list (self._paginated_get ("/api/v4/projects", {"simple": True}))
       logger.info (f"Fetched {len (projects)} project(s) from GitLab API")
       return projects
-  
+
   def get_commits (self, project_id: int, since: str = None) -> list [dict]:
     """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
     params = {"with_stats": True}
@@ -200,11 +200,11 @@ class GitLabExtractor:
         logger.warning (f"Failed to fetch diff for commit {sha}: {e}")
         commit ["diff"] = []
     return commits
-  
+
   def get_branches (self, project_id: int) -> list [dict]:
     """Список веток репозитория."""
     return list (self._paginated_get (f"/api/v4/projects/{project_id}/repository/branches"))
-  
+
   def get_file_content (self, project_id: int, file_path: str, ref: str = "main") -> str | None:
     """Получает содержимое файла (текст). Возвращает None если не удалось."""
     encoded_path = file_path.replace ("/", "%2F")
@@ -216,7 +216,7 @@ class GitLabExtractor:
     except Exception as e:
       logger.warning (f"Failed to fetch file {file_path} in project {project_id}: {e}")
       return None
-  
+
   def get_merge_requests (self, project_id: int, state: str = "all") -> list [dict]:
     """MR с пагинацией. Добавляет обсуждения и комментарии."""
     params = {"state": state}
@@ -233,7 +233,7 @@ class GitLabExtractor:
       mr ["changes"] = changes.get ("changes", [])
       mrs.append (mr)
     return mrs
-  
+
   def get_mr_discussions (self, project_id: int, mr_iid: int) -> list [dict]:
     """Возвращает все дискуссии (нити комментариев) в MR."""
     discussions = list (self._paginated_get (f"/api/v4/projects/{project_id}/merge_requests/{mr_iid}/discussions"))
@@ -248,7 +248,7 @@ class GitLabExtractor:
         })
       result.append ({"id": disc ["id"], "notes": notes})
     return result
-  
+
   def _should_process_commit (self, project_id: int, commit_sha: str, commit_updated: str) -> bool:
     """Инкрементальная проверка: обрабатывать коммит, если он новый или изменился."""
     if not self.incremental:
@@ -264,7 +264,7 @@ class GitLabExtractor:
       return False
     # Иначе если коммит новее – обрабатываем
     return True
-  
+
   def _update_wal_commit (self, project_id: int, last_commit_sha: str, last_commit_date: str):
     if "projects" not in self.wal_data:
       self.wal_data ["projects"] = {}
@@ -274,7 +274,7 @@ class GitLabExtractor:
     self.wal_data ["projects"] [str (project_id)] ["last_commit_date"] = last_commit_date
     self.wal_data ["last_run"] = datetime.now (UTC).isoformat ()
     self._save_wal ()
-  
+
   def _save_project_data (
       self, project: dict, commits: list [dict], branches: list [dict], merge_requests: list [dict],
       files_data: list [dict], ):
@@ -282,26 +282,26 @@ class GitLabExtractor:
     project_id = str (project ["id"])
     proj_dir = self.output_dir / project_id
     proj_dir.mkdir (parents = True, exist_ok = True)
-    
+
     # Метаданные проекта
     with open (proj_dir / "project.json", "w", encoding = "utf-8") as f:
       json.dump (project, f, ensure_ascii = False, indent = 2)
-    
+
     # Коммиты
     if commits:
       with open (proj_dir / "commits.json", "w", encoding = "utf-8") as f:
         json.dump (commits, f, ensure_ascii = False, indent = 2)
-    
+
     # Ветки
     if branches:
       with open (proj_dir / "branches.json", "w", encoding = "utf-8") as f:
         json.dump (branches, f, ensure_ascii = False, indent = 2)
-    
+
     # Merge Requests
     if merge_requests:
       with open (proj_dir / "merge_requests.json", "w", encoding = "utf-8") as f:
         json.dump (merge_requests, f, ensure_ascii = False, indent = 2)
-    
+
     # Файлы (код)
     if files_data:
       files_dir = proj_dir / "files"
@@ -314,27 +314,27 @@ class GitLabExtractor:
       # также сохраняем список файлов как JSON
       with open (proj_dir / "files_manifest.json", "w", encoding = "utf-8") as f:
         json.dump (files_data, f, ensure_ascii = False, indent = 2)
-  
+
   def run (self):
     """Основной процесс выгрузки по всем проектам."""
     projects = self.get_projects ()
-    
+
     # Apply max_projects limit if configured
     if self.max_projects > 0 and len (projects) > self.max_projects:
       logger.info (f"Limiting projects from {len (projects)} to max_projects={self.max_projects}")
       projects = projects [: self.max_projects]
-    
+
     total = len (projects)
     logger.info (f"Found {total} project(s) to process")
     if not self.project_ids:
       logger.info ("project_ids not set — fetched ALL accessible projects from GitLab")
     else:
       logger.info (f"Processing configured project_ids: {self.project_ids}")
-    
+
     for idx, project in enumerate (projects, 1):
       project_id = project ["id"]
       logger.info (f"[{idx}/{total}] Processing project {project ['path_with_namespace']} (id={project_id})")
-      
+
       commits = []
       if self.fetch_commits:
         commits = self.get_commits (project_id, since = self.since_date)
@@ -342,17 +342,17 @@ class GitLabExtractor:
         if commits:
           last_commit = commits [0]  # самый новый (первый в списке)
           self._update_wal_commit (project_id, last_commit ["id"], last_commit ["created_at"])
-      
+
       branches = []
       if self.fetch_commits:  # ветки не требуют отдельного флага, но идём вместе
         branches = self.get_branches (project_id)
         logger.info (f"  Retrieved {len (branches)} branches")
-      
+
       merge_requests = []
       if self.fetch_merge_requests:
         merge_requests = self.get_merge_requests (project_id)
         logger.info (f"  Retrieved {len (merge_requests)} merge requests")
-      
+
       files_data = []
       if self.fetch_files:
         # Для каждого коммита (или последнего) получаем изменённые файлы, но лучше взять из последнего коммита на
@@ -373,12 +373,12 @@ class GitLabExtractor:
           logger.info (f"  Retrieved {len (files_data)} files from repository")
         except Exception as e:
           logger.error (f"  Failed to fetch repository tree for project {project_id}: {e}")
-      
+
       self._save_project_data (project, commits, branches, merge_requests, files_data)
       logger.info (f"Finished project {project_id}")
-    
+
     logger.info ("GitLab extraction finished.")
-  
+
   def _matches_filter (self, path: str) -> bool:
     """Проверяет, подходит ли путь файла под фильтр и не исключён ли он."""
     # Check exclusions first

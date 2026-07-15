@@ -15,14 +15,14 @@ from typing import Any
 
 try:
   import spacy
-  
+
   SPACY_AVAILABLE = True
 except ImportError:
   SPACY_AVAILABLE = False
 
 try:
   import requests
-  
+
   REQUESTS_AVAILABLE = True
 except ImportError:
   REQUESTS_AVAILABLE = False
@@ -34,7 +34,7 @@ logger = logging.getLogger (__name__)
 @dataclass
 class Entity:
   """Сущность для графа знаний."""
-  
+
   id: str
   name: str
   type: str  # PERSON, ORGANIZATION, TECHNOLOGY, PRODUCT, GPE, CONCEPT, etc.
@@ -45,7 +45,7 @@ class Entity:
 @dataclass
 class Relation:
   """Отношение между двумя сущностями."""
-  
+
   source: str  # id источника
   target: str  # id цели
   type: str  # RELATES_TO, DEPENDS_ON, USES, CONTAINS, etc.
@@ -56,7 +56,7 @@ class EntityRelationExtractor:
   """
   Извлекает сущности и отношения из текста, используя комбинацию NLP и SLM.
   """
-  
+
   def __init__ (
       self, use_spacy: bool = True, spacy_model: str = "ru_core_news_sm", use_slm: bool = False,
       slm_endpoint: str = None, cache_dir: Path | None = None, max_text_length: int = 4000, ):
@@ -80,16 +80,16 @@ class EntityRelationExtractor:
       except OSError:
         logger.warning (f"spaCy model {spacy_model} not found. Install with: python -m spacy download {spacy_model}")
         self.use_spacy = False
-    
+
     self.cache_dir = cache_dir
     if cache_dir:
       cache_dir.mkdir (parents = True, exist_ok = True)
     self.cache = {}  # in-memory cache
-  
+
   def _get_cache_key (self, text: str) -> str:
     """Генерирует ключ кэша на основе текста."""
     return hashlib.sha256 (text.encode ()).hexdigest ()
-  
+
   def _load_from_cache (self, key: str) -> tuple [list [Entity], list [Relation]] | None:
     if not self.cache_dir:
       return None
@@ -101,7 +101,7 @@ class EntityRelationExtractor:
         relations = [Relation (**r) for r in data.get ("relations", [])]
         return entities, relations
     return None
-  
+
   def _save_to_cache (self, key: str, entities: list [Entity], relations: list [Relation]):
     if not self.cache_dir:
       return
@@ -109,7 +109,7 @@ class EntityRelationExtractor:
     data = {"entities": [e.__dict__ for e in entities], "relations": [r.__dict__ for r in relations]}
     with open (cache_file, "w", encoding = "utf-8") as f:
       json.dump (data, f, ensure_ascii = False, indent = 2)
-  
+
   def extract_entities_spacy (self, text: str) -> list [Entity]:
     """Извлекает сущности с помощью spaCy."""
     if not self.nlp:
@@ -132,7 +132,7 @@ class EntityRelationExtractor:
         entities.append (Entity (id = hashlib.sha256 (f"{name}_{mapped_type}".encode ()).hexdigest (), name = name,
             type = mapped_type, source_id = "", ))
     return entities
-  
+
   def extract_relations_slm (self, text: str, entities: list [Entity]) -> list [Relation]:
     """
     Использует SLM для извлечения отношений между известными сущностями.
@@ -140,7 +140,7 @@ class EntityRelationExtractor:
     """
     if not self.use_slm:
       return []
-    
+
     # Подготовка промпта
     entity_names = [e.name for e in entities]
     entities_str = ", ".join (entity_names)
@@ -155,7 +155,7 @@ class EntityRelationExtractor:
               f"\n\nText: {text [:3000]}"
               f"\n\nEntities: {entities_str}"
               "\n\nRelations:")
-    
+
     try:
       # Вызов SLM (ожидаем OpenAI-совместимый endpoint)
       payload = {"prompt": prompt, "max_tokens": 1000, "temperature": 0.2, "stop": ["\n\n", "```"]}
@@ -166,7 +166,7 @@ class EntityRelationExtractor:
         payload ["messages"] = [{"role": "user", "content": prompt}]
         del payload ["prompt"]
         response = requests.post (self.slm_endpoint + "/chat/completions", json = payload, timeout = 30)
-      
+
       if response.status_code == 200:
         result = response.json ()
         if "choices" in result:
@@ -198,7 +198,7 @@ class EntityRelationExtractor:
     except Exception as e:
       logger.warning (f"SLM relation extraction failed: {e}")
     return []
-  
+
   def extract_from_chunk (
       self, text: str, source_id: str, chunk_metadata: dict = None, ) -> tuple [list [Entity], list [Relation]]:
     """
@@ -208,27 +208,27 @@ class EntityRelationExtractor:
     cached = self._load_from_cache (cache_key)
     if cached:
       return cached
-    
+
     entities = []
     # 1. Базовое извлечение через spaCy
     if self.use_spacy:
       entities = self.extract_entities_spacy (text)
-    
+
     # 2. Дополнительное извлечение кастомных сущностей через SLM (если включено)
     if self.use_slm and entities:  # noqa: SIM108
       relations = self.extract_relations_slm (text, entities)
     else:
       relations = []
-    
+
     # Присваиваем source_id всем сущностям
     for e in entities:
       e.source_id = source_id
       if chunk_metadata:
         e.properties.update (chunk_metadata)
-    
+
     self._save_to_cache (cache_key, entities, relations)
     return entities, relations
-  
+
   def extract_batch (self, chunks: list [dict], source_id_prefix: str = None) -> tuple [list [Entity], list [Relation]]:
     """
     Обрабатывает пакет чанков (список словарей с полем 'text' и опционально 'metadata').
@@ -243,7 +243,7 @@ class EntityRelationExtractor:
       entities, relations = self.extract_from_chunk (text, source_id, metadata)
       all_entities.extend (entities)
       all_relations.extend (relations)
-    
+
     # Дедупликация сущностей (объединяем по id)
     unique_entities = {}
     for e in all_entities:
@@ -294,7 +294,7 @@ if __name__ == "__main__":
   print ("Relations:")
   for r in relations:
     print (f"  {r.source} -> {r.target} : {r.type}")
-  
+
   # Генерация Cypher
   cypher = entities_to_cypher (entities, relations)
   print ("\nCypher queries:")

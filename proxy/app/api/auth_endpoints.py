@@ -124,20 +124,20 @@ async def auth_register (request: RegisterRequest, raw_request: Request) -> Regi
   Rate-limited to prevent abuse: 3 registrations per IP per minute.
   """
   from proxy.app.shared.config import AUTH_ENABLED
-  
+
   client_ip = raw_request.client.host if raw_request.client else "unknown"
   _check_login_rate_limit (f"register:{client_ip}")
-  
+
   if not AUTH_ENABLED:
     raise HTTPException (status_code = 400, detail = "Registration is not enabled. Set AUTH_ENABLED=true.")
-  
+
   db = get_user_db ()
   try:
     user = await db.create_user (username = request.username, password = request.password,
         email = request.email or "", )
   except ValueError as e:
     raise HTTPException (status_code = 409, detail = str (e)) from None
-  
+
   logger.info ("User registered: %s from %s", request.username, client_ip)
   return RegisterResponse (user_id = user ["user_id"], username = user ["username"], created_at = user ["created_at"], )
 
@@ -152,39 +152,39 @@ async def auth_login (request: LoginRequest, raw_request: Request) -> LoginRespo
   """
   client_ip = raw_request.client.host if raw_request.client else "unknown"
   rate_limit_key = f"login:{client_ip}:{request.username}"
-  
+
   _check_login_rate_limit (rate_limit_key)
-  
+
   db = get_user_db ()
-  
+
   # Check local database
   user = await db.verify_password (request.username, request.password)
-  
+
   # LDAP fallback (if enabled)
   if user is None:
     from proxy.app.shared.config import AD_ENABLED
-    
+
     if AD_ENABLED:
       try:
         from proxy.app.auth.ldap import authenticate_ldap
-        
+
         user = await authenticate_ldap (request.username, request.password)
         if user:
           logger.info ("LDAP authentication successful for %s", request.username)
       except Exception as e:
         logger.warning ("LDAP authentication failed for %s: %s", request.username, e)
-  
+
   if user is None:
     raise HTTPException (status_code = 401, detail = "Invalid credentials")
-  
+
   if not user.get ("is_active", 1):
     raise HTTPException (status_code = 403, detail = "Account is deactivated")
-  
+
   # Create token pair
   from proxy.app.auth.jwt import create_token_pair
-  
+
   token_pair = await create_token_pair (user)
-  
+
   return LoginResponse (access_token = token_pair ["access_token"], refresh_token = token_pair ["refresh_token"],
       token_type = "bearer", expires_in = token_pair ["expires_in"], user_id = user ["id"],
       username = user ["username"], roles = user.get ("roles", ["user"]), groups = user.get ("groups", []), )
@@ -200,13 +200,13 @@ async def auth_refresh (request: RefreshRequest) -> RefreshResponse:
   """
   from proxy.app.auth.jwt import create_token_pair, verify_refresh_token, verify_token
   from proxy.app.shared.config import AUTH_ENABLED
-  
+
   if not AUTH_ENABLED:
     raise HTTPException (status_code = 400, detail = "Authentication is not enabled")
-  
+
   # Try refresh token first (preferred path)
   user = await verify_refresh_token (request.token)
-  
+
   if user is None:
     # Fallback: try as access token (backward compat for old clients)
     try:
@@ -217,10 +217,10 @@ async def auth_refresh (request: RefreshRequest) -> RefreshResponse:
       }
     except Exception:
       raise HTTPException (status_code = 401, detail = "Invalid or expired refresh token") from None
-  
+
   # Issue new token pair
   token_pair = await create_token_pair (user)
-  
+
   return RefreshResponse (access_token = token_pair ["access_token"], refresh_token = token_pair ["refresh_token"],
       token_type = "bearer", expires_in = token_pair ["expires_in"], )
 
@@ -235,15 +235,15 @@ async def auth_logout (
   When refresh_token is provided, revokes only that specific token.
   """
   db = get_user_db ()
-  
+
   if request.refresh_token:
     await db.consume_refresh_token (request.refresh_token)
     logger.info ("Refresh token revoked for user %s", user.username)
-  
+
   if request.all_sessions and user.is_authenticated:
     count = await db.revoke_user_tokens (user.user_id)
     logger.info ("All sessions revoked for user %s (%d tokens)", user.username, count)
-  
+
   return LogoutResponse (status = "ok", message = "Logged out successfully")
 
 

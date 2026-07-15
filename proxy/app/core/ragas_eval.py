@@ -40,13 +40,13 @@ def compute_faithfulness (answer: str, context: str, llm_client: Any = None) -> 
   """
   if not answer or not context:
     return 0.0
-  
+
   # Extract claims from answer (simple sentence-based)
   claims = [s.strip () for s in answer.split (".") if s.strip () and len (s.strip ()) > 10]
-  
+
   if not claims:
     return 1.0  # No claims to verify
-  
+
   # Check each claim against context (using tokenized keywords, stop-words removed)
   context_tokens = _tokenize (context)
   supported_claims = 0
@@ -55,10 +55,10 @@ def compute_faithfulness (answer: str, context: str, llm_client: Any = None) -> 
     if not claim_tokens:
       continue
     overlap = len (claim_tokens & context_tokens) / len (claim_tokens)
-    
+
     if overlap >= 0.3:  # At least 30% keyword overlap
       supported_claims += 1
-  
+
   return supported_claims / len (claims)
 
 
@@ -69,16 +69,16 @@ def compute_answer_relevance (question: str, answer: str) -> float:
   """
   if not question or not answer:
     return 0.0
-  
+
   question_keywords = _tokenize (question)
-  
+
   if not question_keywords:
     return 0.5  # Can't determine relevance
-  
+
   # Check how many question keywords appear in answer
   answer_tokens = _tokenize (answer)
   matched_keywords = sum (1 for kw in question_keywords if kw in answer_tokens)
-  
+
   return matched_keywords / len (question_keywords)
 
 
@@ -89,12 +89,12 @@ def compute_context_relevance (question: str, contexts: list [str]) -> float:
   """
   if not question or not contexts:
     return 0.0
-  
+
   question_keywords = _tokenize (question)
-  
+
   if not question_keywords:
     return 0.5
-  
+
   # Check each context for relevance
   relevant_contexts = 0
   for ctx in contexts:
@@ -102,7 +102,7 @@ def compute_context_relevance (question: str, contexts: list [str]) -> float:
     matched = sum (1 for kw in question_keywords if kw in ctx_tokens)
     if matched / len (question_keywords) >= 0.3:
       relevant_contexts += 1
-  
+
   return relevant_contexts / len (contexts)
 
 
@@ -113,7 +113,7 @@ def evaluate_rag_response (
   Returns dict with metric names and scores.
   """
   context_text = " ".join (contexts)
-  
+
   return {
       "faithfulness": compute_faithfulness (answer, context_text),
       "answer_relevance": compute_answer_relevance (question, answer),

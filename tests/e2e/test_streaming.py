@@ -9,7 +9,7 @@ import requests
 @pytest.mark.e2e
 class TestStreamingRAG:
   """E2E tests for streaming /v1/chat/completions."""
-  
+
   def test_streaming_rag (self, service_url: str, auth_headers: dict):
     """SSE streaming -> collect chunks -> verify final metadata."""
     payload = {
@@ -20,11 +20,11 @@ class TestStreamingRAG:
         headers = {**auth_headers, "Accept": "text/event-stream"}, timeout = 60, stream = True, )
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers.get ("content-type", "")
-    
+
     chunks = []
     final_metadata = None
     done_received = False
-    
+
     for line in resp.iter_lines (decode_unicode = True):
       if not line:
         continue
@@ -41,13 +41,13 @@ class TestStreamingRAG:
             chunks.append (data)
         except json.JSONDecodeError:
           continue
-    
+
     assert len (chunks) > 0, "No content chunks received"
     assert done_received, "[DONE] not received"
     if final_metadata:
       assert "rag_feedback_id" in final_metadata
       assert "rag_confidence" in final_metadata
-  
+
   def test_streaming_empty_query (self, service_url: str, auth_headers: dict):
     """SSE streaming with minimal query -> still returns chunks."""
     payload = {
@@ -63,7 +63,7 @@ class TestStreamingRAG:
         if chunk_count > 20:
           break
     assert chunk_count > 0
-  
+
   def test_streaming_headers_and_status (self, service_url: str, auth_headers: dict):
     """Verify SSE response has correct content type and status."""
     payload = {
