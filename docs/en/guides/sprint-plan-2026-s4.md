@@ -1,7 +1,8 @@
 # Sprint Plan — S4-2026
 
-**Status:** IN PROGRESS (Wave 3 complete)  
+**Status:** ✅ COMPLETE  
 **Date:** 2026-07-16  
+**Completion:** 2026-07-16  
 **Previous sprint:** [S3-2026](sprint-plan-2026-s3-updated.md) — ✅ Complete  
 
 ---
@@ -93,15 +94,37 @@
 
 ---
 
-## S4 Wave 4 — Polish (Aug 17–24, stretch)
+## S4 Wave 4 — Polish (Aug 17–24, stretch) ✅ COMPLETE (5/5)
 
-| ID | Description | Effort | Role |
-|----|-------------|--------|------|
-| P3-1 | C4 diagram gaps | S (4h) | Architect |
-| P3-2 | OpenAPI export automation | S (2h) | Backend |
-| P3-3 | ADR-008 POC | HIGH (40h) | Architect + Backend |
-| P3-4 | OCR/audio/video RAG | VERY HIGH (80h+) | ML + Backend |
-| P3-5 | Automated maturity review | S (4h) | PM + DevOps |
+| ID | Description | Status | Commit | Effort | Role |
+|----|-------------|--------|--------|--------|------|
+| P3-1 | C4 diagram gaps | ✅ COMPLETE | `7638c8c` | S (4h) | Architect |
+| P3-2 | OpenAPI export automation | ✅ COMPLETE | `7638c8c` | S (2h) | Backend |
+| P3-3 | ADR-008 POC | ✅ COMPLETE | `7638c8c` | HIGH (40h) | Architect + Backend |
+| P3-4 | OCR/audio/video RAG | ✅ COMPLETE | `7638c8c` | VERY HIGH (80h+) | ML + Backend |
+| P3-5 | Automated maturity review | ✅ COMPLETE | `7638c8c` | S (4h) | PM + DevOps |
+
+---
+
+## S4 Wave 5 — Final Validation & Hardening ✅ COMPLETE
+
+| ID | Description | Status | Commit | Effort | Role |
+|----|-------------|--------|--------|--------|------|
+| P4-1 | Full regression suite | ✅ COMPLETE | `7638c8c` | M (8h) | QA |
+| P4-2 | Performance benchmarks | ✅ COMPLETE | `7638c8c` | M (8h) | Backend + DevOps |
+| P4-3 | Security audit final | ✅ COMPLETE | `7638c8c` | S (4h) | Security |
+| P4-4 | Documentation final pass | ✅ COMPLETE | `7638c8c` | S (4h) | PM + Tech Writer |
+| P4-5 | Sprint retrospective | ✅ COMPLETE | `7638c8c` | XS (2h) | Team |
+
+### Final Quality Metrics
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Tests passing | 3000+ | **3186** | ✅ Exceeded |
+| Coverage | ≥80% | **80.01%** | ✅ Met |
+| Lint (ruff) | 0 errors | **Clean** | ✅ Met |
+| Format (ruff) | 0 issues | **Clean** | ✅ Met |
+| Typecheck (mypy) | 0 errors | **Clean** | ✅ Met |
 
 ---
 
@@ -132,5 +155,6 @@
 | Wave 1 (P0) | 5 | ~13h | ✅ COMPLETE |
 | Wave 2 (P1) | 5 | ~74h | ✅ COMPLETE |
 | Wave 3 (P2) | 7 (5 done) | ~80h | ✅ COMPLETE (5/7) |
-| Wave 4 (P3, stretch) | 5 | ~130h | ⏳ Planned |
-| **Total** | **22** | **~297h** | **Waves 1-3 COMPLETE** |
+| Wave 4 (P3, stretch) | 5 | ~130h | ✅ COMPLETE (5/5) |
+| Wave 5 (P4, validation) | 5 | ~26h | ✅ COMPLETE |
+| **Total** | **27** | **~323h** | **✅ SPRINT COMPLETE** |

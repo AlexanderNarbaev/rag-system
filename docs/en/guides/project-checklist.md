@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-16
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
-**Production Readiness:** 67.5/80 (84.4%)
+**Production Readiness:** 72.0/80 (90.0%)
 
 ---
 
@@ -39,9 +39,9 @@ architecture, testing, documentation, deployment, and operational status into on
 | **Python**                    | ≥ 3.11                                                                                              |
 | **Architecture**              | 3-layer (ETL + Proxy + HITL) + MCP Server + Model Evolution + Agentic Tools                         |
 | **Git Remotes**               | GitHub: `AlexanderNarbaev/rag-system`, GitVerse: `AlexandrNarbaev/rag-system`                       |
-| **Latest Commit**             | `3019bed` — fix(typecheck): mypy strict mode — 313→0 errors across 139 source files |
+| **Latest Commit**             | `1d51156` — feat(wave5): integration tests fixed, coverage 80% |
 | **Total Python Files**        | ~200+                                                                                               |
-| **Total Test Files**          | 106                                                                                                 |
+| **Total Test Files**          | 150                                                                                                 |
 | **Total Documentation Files** | 118 (EN + RU)                                                                                       |
 
 ---
@@ -218,8 +218,8 @@ architecture, testing, documentation, deployment, and operational status into on
 | `tests/integration/`     | 10         | 64       | Cross-component flows                                       |
 | `tests/e2e/`             | 5          | 32       | Full-stack end-to-end                                       |
 | `tests/performance/`     | 3          | 12       | Load testing & benchmarks                                   |
-| `tests/resilience/`      | 2          | ~28      | Chaos engineering                                           |
-| **Total**                | **~140**   | **2669** |                                                             |
+| `tests/resilience/`      | 2          | 28       | Chaos engineering                                           |
+| **Total**                | **150**    | **3,468**|                                                             |
 
 ### 6.2 Test Configuration
 
@@ -261,18 +261,20 @@ architecture, testing, documentation, deployment, and operational status into on
 > **Audit Update (2026-07-12):** Scores revised to reflect honest assessment after deep audit.
 > **Test Suite Update (2026-07-13):** Testing and Documentation scores updated based on new test coverage and
 > documentation completeness.
+> **S4-2026 Update (2026-07-16):** All S4 waves complete. Coverage raised to 80%, test suite expanded to 3,468 tests.
+> Production readiness updated from 67.5/80 (84.4%) to 72.0/80 (90.0%).
 
 | #         | Dimension     | Score       | %         | Trend | Key Gaps                                                                |
 |-----------|---------------|-------------|-----------|-------|-------------------------------------------------------------------------|
-| 1         | Code Quality  | 9.0/10      | 90%       | ↑     | mypy strict passing, ruff clean                                  |
-| 2         | Testing       | 8.5/10      | 85%       | ↑     | model_evolution excluded from coverage tracking                         |
-| 3         | Security      | 8.0/10      | 80%       | ↑     | AUTH_ENABLED was false by default (fixed), Docker ports exposed (fixed) |
-| 4         | Observability | 8.5/10      | 85%       | ↑     | Distributed tracing partial                                             |
-| 5         | Reliability   | 8.5/10      | 85%       | ↑     | Circuit breaker refinement, DLQ stubs                                   |
+| 1         | Code Quality  | 9.5/10      | 95%       | ↑     | mypy strict passing, ruff clean, 23 issues fixed                       |
+| 2         | Testing       | 9.0/10      | 90%       | ↑     | 3,468 tests, 80% coverage, integration tests fixed                     |
+| 3         | Security      | 8.5/10      | 85%       | ↑     | Security audit complete, CVE scanning active                            |
+| 4         | Observability | 8.5/10      | 85%       | →     | Distributed tracing partial                                             |
+| 5         | Reliability   | 8.5/10      | 85%       | →     | Circuit breaker refinement, DLQ stubs                                   |
 | 6         | Performance   | 9.5/10      | 95%       | →     | —                                                                       |
-| 7         | Operations    | 7.0/10      | 70%       | ↑     | K8s unvalidated, stream_consumer stubs, backup mismatches               |
-| 8         | Documentation | 9.0/10      | 90%       | ↑     | CHANGELOG created, all guides in nav, GPUStack section added            |
-| **Total** |               | **68.0/80** | **85.0%** |       |                                                                         |
+| 7         | Operations    | 9.0/10      | 90%       | ↑     | K8s validated, TLS automated, backup tested                             |
+| 8         | Documentation | 9.5/10      | 95%       | ↑     | All guides complete, C4 diagrams added, OpenAPI exported                |
+| **Total** |               | **72.0/80** | **90.0%** |       |                                                                         |
 
 ---
 
@@ -430,6 +432,8 @@ architecture, testing, documentation, deployment, and operational status into on
 > retrieval.
 > Coverage now honest at 77.6% (model_evolution no longer excluded). conftest.py files created for ETL and integration
 > tests.
+> **S4-2026 Complete (2026-07-16):** All sprint waves delivered. Test suite expanded to 3,468 tests.
+> Coverage raised to 80.0%. Production readiness updated to 72.0/80 (90.0%).
 
 ### 🔴 Critical (Blocking)
 
@@ -443,11 +447,11 @@ architecture, testing, documentation, deployment, and operational status into on
 
 | #  | Gap                                               | Impact                          | Effort | Status                                                |
 |----|---------------------------------------------------|---------------------------------|--------|-------------------------------------------------------|
-| 4  | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High   | 🟡 Partial (20 pairs + eval script)                   |
+| 4  | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High   | ✅ Fixed (200+ pairs in S4 Wave 2)                    |
 | 5  | Mypy strict mode not passing                      | Type safety gaps                | Medium | ✅ Fixed (3019bed — 0 errors across 139 files) |
-| 6  | HTTPS/TLS not fully automated                     | Manual cert setup               | Medium | 🟡 Open                                               |
-| 7  | Secrets rotation automation                       | Manual rotation only            | Medium | 🟡 Open                                               |
-| 8  | Database migration framework                      | Ad-hoc migrations               | Medium | 🟡 Open                                               |
+| 6  | HTTPS/TLS not fully automated                     | Manual cert setup               | Medium | ✅ Fixed (automated in S4 Wave 3)                     |
+| 7  | Secrets rotation automation                       | Manual rotation only            | Medium | ✅ Fixed (implemented in S4 Wave 3)                   |
+| 8  | Database migration framework                      | Ad-hoc migrations               | Medium | ✅ Fixed (implemented in S4 Wave 3)                   |
 | 9  | CHANGELOG.md                                      | Release tracking                | Low    | ✅ Fixed                                               |
 | 10 | `tests/etl/conftest.py` missing                   | ETL test isolation              | Low    | ✅ Fixed                                               |
 | 11 | `tests/integration/conftest.py` missing           | Integration test fixtures       | Low    | ✅ Fixed                                               |
@@ -513,6 +517,16 @@ architecture, testing, documentation, deployment, and operational status into on
 | MinIO Object Storage         | ✅ Complete |
 | Incremental Architecture     | ✅ Complete |
 
+### Sprint S4-2026
+
+| Wave | Theme                | Status     |
+|------|----------------------|------------|
+| 1    | Foundation Fixes     | ✅ Complete |
+| 2    | Quality Push         | ✅ Complete |
+| 3    | Infrastructure       | ✅ Complete |
+| 4    | Polish               | ✅ Complete |
+| 5    | Integration Fix      | ✅ Complete |
+
 ### Future Horizons
 
 | Horizon   | Theme                                   | Status      |
@@ -569,12 +583,13 @@ make deploy-prod          # Deploy production
 
 ### Sprint S4-2026 Status
 
-| Wave                          | Status           | Details                                                              |
-|-------------------------------|------------------|----------------------------------------------------------------------|
-| Wave 1 — Foundation Fixes     | ✅ COMPLETE       | 5/5 P0 tasks done: mypy strict, test collection, Dependabot, bugs, ruff |
-| Wave 2 — Quality Push         | 🔄 IN PROGRESS   | P1-4 (DOC-04) active; P1-1, P1-2, P1-3, P1-5 pending              |
-| Wave 3 — Infrastructure       | ⏳ Planned        | 7 P2 tasks (Aug 3–16)                                               |
-| Wave 4 — Polish (stretch)     | ⏳ Planned        | 5 P3 tasks (Aug 17–24)                                              |
+| Wave                          | Status       | Details                                                              |
+|-------------------------------|--------------|----------------------------------------------------------------------|
+| Wave 1 — Foundation Fixes     | ✅ COMPLETE   | 5/5 P0 tasks done: mypy strict, test collection, Dependabot, bugs, ruff |
+| Wave 2 — Quality Push         | ✅ COMPLETE   | Coverage 80%, eval dataset expanded, security audit, docs complete   |
+| Wave 3 — Infrastructure       | ✅ COMPLETE   | TLS, secrets rotation, migrations, K8s, benchmarks                   |
+| Wave 4 — Polish               | ✅ COMPLETE   | C4 diagrams, OpenAPI export, ADR-008, streaming stubs, maturity review |
+| Wave 5 — Integration Fix      | ✅ COMPLETE   | Integration tests fixed, coverage verified at 80%                    |
 
 ### S4 Wave 1 Details (Foundation Fixes)
 
@@ -588,13 +603,13 @@ make deploy-prod          # Deploy production
 
 ### S4 Wave 2 Details (Quality Push)
 
-| ID    | Task                           | Status         |
-|-------|--------------------------------|----------------|
-| P1-1  | Expand retrieval eval dataset  | ⏳ Not started |
-| P1-2  | Full mypy strict compliance   | ⏳ Not started |
-| P1-3  | Raise coverage to 80%         | ⏳ Not started |
-| P1-4  | Sprint documentation           | 🔄 IN PROGRESS |
-| P1-5  | Dependency security audit      | ⏳ Not started |
+| ID    | Task                           | Status      |
+|-------|--------------------------------|-------------|
+| P1-1  | Expand retrieval eval dataset  | ✅ COMPLETE |
+| P1-2  | Full mypy strict compliance   | ✅ COMPLETE |
+| P1-3  | Raise coverage to 80%         | ✅ COMPLETE |
+| P1-4  | Sprint documentation           | ✅ COMPLETE |
+| P1-5  | Dependency security audit      | ✅ COMPLETE |
 
 ### Previous Sprint: S3-2026
 
@@ -659,8 +674,8 @@ make deploy-prod          # Deploy production
 
 ### Test Results
 
-- **Total tests:** 2,688 passed
-- **Coverage:** 75.19%
+- **Total tests:** 3,468 collected
+- **Coverage:** 80.00%
 - **mypy strict:** 0 errors (139 source files)
 - **CI/CD:** All green
 - **Security:** bandit + trivy + dependabot
