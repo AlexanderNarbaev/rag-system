@@ -102,7 +102,7 @@ def get_log_format() -> str:
 
 def get_log_level() -> int:
     """Return log level from LOG_LEVEL env var (default: INFO)."""
-    raw = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    raw = os.getenv("LOG_LEVEL", "INFO").strip().lower()
     return _LOG_LEVEL_MAP.get(raw, logging.INFO)
 
 
