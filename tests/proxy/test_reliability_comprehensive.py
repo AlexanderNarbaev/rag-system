@@ -12,11 +12,10 @@ Tests cover:
 from __future__ import annotations
 
 import asyncio
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+import contextlib
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -26,22 +25,25 @@ def _reset_reliability_state():
     """Reset reliability module state between tests."""
     try:
         from proxy.app.shared.health_aggregator import reset_health_aggregator
+
         reset_health_aggregator()
     except ImportError:
         pass
     try:
         from proxy.app.shared.timeout_manager import reset_service_timeouts
+
         reset_service_timeouts()
     except ImportError:
         pass
     try:
         from proxy.app.shared.connection_pool import reset_pool_registry
+
         reset_pool_registry()
     except ImportError:
         pass
     try:
-        from proxy.app.shared.circuit_breaker import _breakers, _frozen, reset_all_breakers
-        _frozen = False
+        from proxy.app.shared.circuit_breaker import _breakers, reset_all_breakers
+
         reset_all_breakers()
         _breakers.clear()
     except ImportError:
@@ -49,22 +51,25 @@ def _reset_reliability_state():
     yield
     try:
         from proxy.app.shared.health_aggregator import reset_health_aggregator
+
         reset_health_aggregator()
     except ImportError:
         pass
     try:
         from proxy.app.shared.timeout_manager import reset_service_timeouts
+
         reset_service_timeouts()
     except ImportError:
         pass
     try:
         from proxy.app.shared.connection_pool import reset_pool_registry
+
         reset_pool_registry()
     except ImportError:
         pass
     try:
-        from proxy.app.shared.circuit_breaker import _breakers, _frozen, reset_all_breakers
-        _frozen = False
+        from proxy.app.shared.circuit_breaker import _breakers, reset_all_breakers
+
         reset_all_breakers()
         _breakers.clear()
     except ImportError:
@@ -150,7 +155,6 @@ class TestHealthAggregator:
 
     def test_exception_in_check_is_critical(self):
         from proxy.app.shared.health_aggregator import (
-            AggregateStatus,
             HealthAggregator,
             HealthStatus,
         )
@@ -228,7 +232,6 @@ class TestHealthAggregator:
     def test_details_fn_passed_through(self):
         from proxy.app.shared.health_aggregator import (
             HealthAggregator,
-            HealthStatus,
         )
 
         agg = HealthAggregator()
@@ -254,7 +257,6 @@ class TestHealthAggregator:
     @pytest.mark.asyncio
     async def test_async_run_all(self):
         from proxy.app.shared.health_aggregator import (
-            AggregateStatus,
             HealthAggregator,
             HealthStatus,
         )
@@ -430,7 +432,7 @@ class TestTimeoutIntegrationWithCircuitBreaker:
             assert stats["total"] == 1
 
     def test_retry_with_timeout_per_attempt(self):
-        from proxy.app.shared.retry import RetryConfig, async_retry
+        from proxy.app.shared.retry import RetryConfig
 
         config = RetryConfig(max_attempts=3, base_delay=0.001)
         assert config.max_attempts == 3
@@ -514,9 +516,9 @@ class TestConnectionPool:
         pool = ConnectionPool("exhaust_test", PoolConfig(max_connections=1))
         pool.set_factory(factory)
 
-        async with pool.acquire() as conn1:
+        async with pool.acquire():
             with pytest.raises(PoolExhaustedError):
-                async with pool.acquire() as conn2:
+                async with pool.acquire():
                     pass
 
         pool.close_sync()
@@ -598,7 +600,7 @@ class TestConnectionPool:
         pool.set_factory(factory)
 
         async def use_pool():
-            async with pool.acquire() as conn:
+            async with pool.acquire():
                 await asyncio.sleep(0.01)
 
         await asyncio.gather(use_pool(), use_pool(), use_pool())
@@ -654,6 +656,7 @@ class TestConnectionPool:
         pool = ConnectionPool("closed_health", PoolConfig(max_connections=1))
         pool.close_sync()
         import asyncio as _a
+
         result = _a.run(pool.health_check())
         assert result is False
 
@@ -746,7 +749,7 @@ class TestGracefulDegradation:
 
     def test_circuit_breaker_open_triggers_degraded_health(self):
         from proxy.app.shared.circuit_breaker import CircuitBreaker, State
-        from proxy.app.shared.health_aggregator import HealthAggregator, HealthStatus
+        from proxy.app.shared.health_aggregator import HealthAggregator
 
         cb = CircuitBreaker("qdrant", failure_threshold=1)
         cb.failure()
@@ -763,6 +766,7 @@ class TestGracefulDegradation:
 
         dlq = DeadLetterQueue("graceful_dlq", db_path=":memory:")
         try:
+
             def always_fails():
                 raise ConnectionError("transient")
 
@@ -811,7 +815,6 @@ class TestGracefulDegradation:
 
     def test_llm_unavailable_triggers_retry_then_degraded(self):
         from proxy.app.shared.circuit_breaker import CircuitBreaker, State
-        from proxy.app.shared.retry import RetryConfig, RetryExhaustedError, sync_retry
 
         cb = CircuitBreaker("llm_backend", failure_threshold=2)
         cb.failure()
@@ -828,7 +831,7 @@ class TestGracefulDegradation:
         assert stats["pending"] == 1
 
     def test_component_failure_isolation(self):
-        from proxy.app.shared.circuit_breaker import CircuitBreaker, State, CircuitBreakerOpenError
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
         from proxy.app.shared.health_aggregator import HealthAggregator, HealthStatus
 
         qdrant_cb = CircuitBreaker("qdrant", failure_threshold=1)
@@ -858,7 +861,7 @@ class TestReliabilityPipeline:
     """End-to-end reliability pipeline: CB → retry → DLQ → health."""
 
     def test_full_cb_retry_dlq_health_flow(self):
-        from proxy.app.shared.circuit_breaker import State, CircuitBreakerOpenError, get_breaker
+        from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError, State, get_breaker
         from proxy.app.shared.dlq import DeadLetterQueue
         from proxy.app.shared.health_aggregator import HealthAggregator
         from proxy.app.shared.retry import RetryConfig, RetryExhaustedError, sync_retry
@@ -901,7 +904,6 @@ class TestReliabilityPipeline:
         from proxy.app.shared.health_aggregator import (
             AggregateStatus,
             HealthAggregator,
-            HealthStatus,
         )
 
         agg = HealthAggregator(critical_components=["qdrant", "llm_backend"])
@@ -933,7 +935,7 @@ class TestRetryCircuitBreakerIntegration:
         def transient_fail():
             raise ConnectionError("fail")
 
-        try:
+        with contextlib.suppress(RetryExhaustedError):
             sync_retry(
                 transient_fail,
                 config=RetryConfig(
@@ -942,8 +944,6 @@ class TestRetryCircuitBreakerIntegration:
                     circuit_breaker_name="retry_cb_test",
                 ),
             )
-        except RetryExhaustedError:
-            pass
 
         assert cb.failure_count >= 1
 
@@ -973,6 +973,7 @@ class TestRetryCircuitBreakerIntegration:
 
         dlq = DeadLetterQueue("non_retry_dlq", db_path=":memory:")
         try:
+
             def bad_input():
                 raise ValueError("invalid input")
 
@@ -1011,8 +1012,16 @@ class TestExceptionHierarchy:
             StorageError,
         )
 
-        for cls in [RetrievalError, RerankerError, LLMError, GraphError, CacheError,
-                     EmbeddingError, StorageError, DLQError]:
+        for cls in [
+            RetrievalError,
+            RerankerError,
+            LLMError,
+            GraphError,
+            CacheError,
+            EmbeddingError,
+            StorageError,
+            DLQError,
+        ]:
             err = cls("test")
             assert err.recoverable is True
 

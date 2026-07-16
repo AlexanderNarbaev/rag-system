@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal
 import threading
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -180,7 +179,7 @@ class TimeoutManager:
     async def __aenter__(self) -> TimeoutManager:
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> Any:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any) -> Any:
         if exc_type is not None and exc_val is not None and isinstance(exc_val, RequestTimeoutError):
             return False
         return None
@@ -226,15 +225,16 @@ class TimeoutManager:
                 timeout_val = tm._timeout
                 service_name = tm._service or "unknown"
                 try:
-                    result = await asyncio.wait_for(
+                    result: T = await asyncio.wait_for(
                         func(*args, **kwargs),  # type: ignore[arg-type]
                         timeout=timeout_val,
                     )
                     return result
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     raise RequestTimeoutError(timeout_val, f"{operation or func.__name__} ({service_name})") from None
 
             import inspect as _inspect
+
             if _inspect.iscoroutinefunction(func):
                 return async_wrapper  # type: ignore[return-value]
             return sync_wrapper
@@ -245,7 +245,7 @@ class TimeoutManager:
         async def _wrapped() -> T:
             try:
                 return await asyncio.wait_for(coro, timeout=self._timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise RequestTimeoutError(
                     self._timeout,
                     f"{self._operation} ({self._service or 'unknown'})",

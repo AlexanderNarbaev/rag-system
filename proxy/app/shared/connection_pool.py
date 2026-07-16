@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import logging
 import time
-import weakref
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +78,7 @@ class PoolExhaustedError(Exception):
         self.pool_name = pool_name
         self.max_connections = max_connections
         super().__init__(
-            f"Connection pool '{pool_name}' exhausted (max={max_connections}). "
-            "All connections are in use."
+            f"Connection pool '{pool_name}' exhausted (max={max_connections}). All connections are in use."
         )
 
 
@@ -90,9 +88,7 @@ class PoolTimeoutError(Exception):
     def __init__(self, pool_name: str, timeout: float):
         self.pool_name = pool_name
         self.timeout = timeout
-        super().__init__(
-            f"Timed out waiting for connection from pool '{pool_name}' ({timeout:.1f}s)"
-        )
+        super().__init__(f"Timed out waiting for connection from pool '{pool_name}' ({timeout:.1f}s)")
 
 
 class ConnectionPool:
@@ -137,6 +133,7 @@ class ConnectionPool:
     async def _ensure_lock(self) -> Any:
         if self._lock is None:
             import asyncio
+
             self._lock = asyncio.Lock()
         return self._lock
 
@@ -155,9 +152,13 @@ class ConnectionPool:
                     delay = self.config.retry_delay * (2**attempt)
                     logger.warning(
                         "Pool '%s': connection attempt %d failed: %s. Retrying in %.2fs...",
-                        self.name, attempt + 1, e, delay,
+                        self.name,
+                        attempt + 1,
+                        e,
+                        delay,
                     )
                     import asyncio
+
                     await asyncio.sleep(delay)
                 else:
                     logger.error("Pool '%s': all connection attempts exhausted: %s", self.name, e)
@@ -308,15 +309,14 @@ class ConnectionPool:
     def _is_valid(self, conn: Any) -> bool:
         if hasattr(conn, "closed") and conn.closed:
             return False
-        if hasattr(conn, "is_connected") and not conn.is_connected():
-            return False
-        return True
+        return not (hasattr(conn, "is_connected") and not conn.is_connected())
 
     async def _close_connection(self, conn: Any) -> None:
         try:
             if hasattr(conn, "close"):
                 close_fn = conn.close
                 import inspect as _insp
+
                 if _insp.iscoroutinefunction(close_fn):
                     await close_fn()
                 else:

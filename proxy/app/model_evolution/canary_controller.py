@@ -14,7 +14,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import REGISTRY, Counter, Gauge, Histogram
+
+
+def _reuse_metric(name: str, metric_cls: type) -> Any:
+    """Reuse existing metric if already registered (prevents duplication on re-import)."""
+    try:
+        for collector, names in REGISTRY._collector_to_names.items():
+            if name in names and isinstance(collector, metric_cls):
+                return collector
+    except (AttributeError, TypeError):
+        pass
+    return None
 
 
 class CanaryPhase(Enum):
@@ -58,38 +69,38 @@ class CanaryConfig:
     cooldown_seconds: int = 3600
 
 
-canary_traffic_total = Counter(
+canary_traffic_total: Any = _reuse_metric("rag_canary_traffic_total", Counter) or Counter(
     "rag_canary_traffic_total",
     "Total requests routed by canary controller",
     ["model", "target"],
 )
 
-canary_result_total = Counter(
+canary_result_total: Any = _reuse_metric("rag_canary_result_total", Counter) or Counter(
     "rag_canary_result_total",
     "Canary request outcomes (success/error)",
     ["model", "target", "outcome"],
 )
 
-canary_latency_seconds = Histogram(
+canary_latency_seconds: Any = _reuse_metric("rag_canary_latency_seconds", Histogram) or Histogram(
     "rag_canary_latency_seconds",
     "Canary request latency",
     ["model", "target"],
     buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
 )
 
-canary_phase_gauge = Gauge(
+canary_phase_gauge: Any = _reuse_metric("rag_canary_phase", Gauge) or Gauge(
     "rag_canary_phase",
     "Current canary phase (0=idle, 1=ramp_5, ..., 5=full, 6=rollback)",
     ["model"],
 )
 
-canary_split_ratio = Gauge(
+canary_split_ratio: Any = _reuse_metric("rag_canary_split_ratio", Gauge) or Gauge(
     "rag_canary_split_ratio",
     "Current traffic split ratio for canary",
     ["model"],
 )
 
-canary_rollback_total = Counter(
+canary_rollback_total: Any = _reuse_metric("rag_canary_rollback_total", Counter) or Counter(
     "rag_canary_rollback_total",
     "Total number of canary rollbacks triggered",
     ["model"],

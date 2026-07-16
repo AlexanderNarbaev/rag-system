@@ -92,6 +92,7 @@ def _make_checker(
                 error=str(e),
                 last_check=time.time(),
             )
+
     return checker
 
 
@@ -199,7 +200,7 @@ class HealthAggregator:
         for name, health in components.items():
             if health.status == HealthStatus.OK:
                 continue
-            if name in self.critical_components and health.status != HealthStatus.OK:
+            if name in self.critical_components:
                 status = AggregateStatus.CRITICAL
                 critical_failures.append(name)
             elif health.status in (HealthStatus.DEGRADED, HealthStatus.UNAVAILABLE, HealthStatus.CRITICAL):

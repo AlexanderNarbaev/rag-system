@@ -15,7 +15,6 @@ Covers:
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -105,9 +104,9 @@ class TestNewMetricsRegistration:
         assert RAG_TRAINING_JOBS_TOTAL is not None
 
     def test_canary_split_metric_registered(self):
-        from proxy.app.shared.metrics import RAG_CANARY_SPLIT_GAUGE
+        from proxy.app.model_evolution.canary_controller import canary_split_ratio
 
-        assert RAG_CANARY_SPLIT_GAUGE is not None
+        assert canary_split_ratio is not None
 
     def test_warmup_status_metric_registered(self):
         from proxy.app.shared.metrics import RAG_WARMUP_STATUS
@@ -545,34 +544,6 @@ class TestMetricsAllEndpoints:
 
     def test_all_metrics_present_in_output(self):
         from proxy.app.shared.metrics import (
-            RAG_ADMIN_OPERATIONS_TOTAL,
-            RAG_AUTH_LOGIN_TOTAL,
-            RAG_AUTH_LOGOUT_TOTAL,
-            RAG_AUTH_RATE_LIMIT_TOTAL,
-            RAG_AUTH_REFRESH_TOTAL,
-            RAG_AUTH_REGISTER_TOTAL,
-            RAG_CACHE_HITS,
-            RAG_CACHE_MISSES,
-            RAG_CANARY_SPLIT_GAUGE,
-            RAG_CONFIDENCE,
-            RAG_ENRICHMENT_TOTAL,
-            RAG_FEEDBACK_PROCESSING_SECONDS,
-            RAG_FEEDBACK_TOTAL,
-            RAG_FILE_DELETE_TOTAL,
-            RAG_FILE_DOWNLOAD_TOTAL,
-            RAG_FILE_LIST_TOTAL,
-            RAG_FILE_PRESIGNED_TOTAL,
-            RAG_FILE_UPLOAD_BYTES,
-            RAG_FILE_UPLOAD_TOTAL,
-            RAG_HALLUCINATION_DETECTED,
-            RAG_LATENCY,
-            RAG_LLM_TOKENS,
-            RAG_NEGATIVE_REJECTION,
-            RAG_QUEUE_DEPTH,
-            RAG_REQUEST_COUNT,
-            RAG_RETRIEVAL_SCORES,
-            RAG_TRAINING_JOBS_TOTAL,
-            RAG_WARMUP_STATUS,
             init_metrics,
             metrics_endpoint,
         )

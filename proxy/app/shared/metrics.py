@@ -270,12 +270,6 @@ RAG_TRAINING_JOBS_TOTAL: Any = _reuse_metric("rag_training_jobs_total", Counter)
     ["trainer_type", "status"],
 )
 
-RAG_CANARY_SPLIT_GAUGE: Any = _reuse_metric("rag_canary_split_ratio", Gauge) or Gauge(
-    "rag_canary_split_ratio",
-    "Current canary traffic split ratio",
-    ["model_name"],
-)
-
 RAG_WARMUP_STATUS: Any = _reuse_metric("rag_warmup_status", Gauge) or Gauge(
     "rag_warmup_status",
     "Warm-up status (1=completed, 0=not started, -1=failed)",
@@ -421,7 +415,9 @@ def record_training_job(trainer_type: str, status: str) -> None:
 
 def set_canary_split(model_name: str, ratio: float) -> None:
     """Set canary split gauge for a model."""
-    RAG_CANARY_SPLIT_GAUGE.labels(model_name=model_name).set(ratio)
+    from proxy.app.model_evolution.canary_controller import canary_split_ratio
+
+    canary_split_ratio.labels(model=model_name).set(ratio)
 
 
 def set_warmup_status(status_value: int) -> None:
