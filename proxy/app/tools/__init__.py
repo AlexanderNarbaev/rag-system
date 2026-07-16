@@ -40,6 +40,15 @@ from ._legacy import (
 from ._legacy import (
     handle_function_call as handle_function_call,  # re-export
 )
+from .audit import (
+    AuditDestination as AuditDestination,  # re-export
+)
+from .audit import (
+    ToolAuditLogger as ToolAuditLogger,  # re-export
+)
+from .audit import (
+    ToolAuditRecord as ToolAuditRecord,  # re-export
+)
 from .definition import (
     _UNSET as _UNSET,  # re-export
 )
@@ -90,6 +99,51 @@ from .errors import (
 )
 from .errors import (
     classify_error as classify_error,  # re-export
+)
+from .metrics import (
+    ToolMetrics as ToolMetrics,  # re-export
+)
+from .metrics import (
+    tool_calls_total as tool_calls_total,  # re-export
+)
+from .metrics import (
+    tool_duration_seconds as tool_duration_seconds,  # re-export
+)
+from .metrics import (
+    tool_errors_total as tool_errors_total,  # re-export
+)
+from .metrics import (
+    tool_retry_count as tool_retry_count,  # re-export
+)
+from .metrics import (
+    tools_registered_total as tools_registered_total,  # re-export
+)
+from .orchestrator import (
+    ChainPattern as ChainPattern,  # re-export
+)
+from .orchestrator import (
+    CompositionPattern as CompositionPattern,  # re-export
+)
+from .orchestrator import (
+    ConditionalPattern as ConditionalPattern,  # re-export
+)
+from .orchestrator import (
+    FanOutPattern as FanOutPattern,  # re-export
+)
+from .orchestrator import (
+    ParallelExecutor as ParallelExecutor,  # re-export
+)
+from .orchestrator import (
+    StreamingExecutor as StreamingExecutor,  # re-export
+)
+from .orchestrator import (
+    ToolComposer as ToolComposer,  # re-export
+)
+from .security import (
+    ToolInputSanitizer as ToolInputSanitizer,  # re-export
+)
+from .security import (
+    ToolVisibilityFilter as ToolVisibilityFilter,  # re-export
 )
 
 _global_registry = None

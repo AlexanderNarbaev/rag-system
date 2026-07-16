@@ -90,7 +90,7 @@ class TestRecordCircuitBreaker:
             "proxy.app.shared.circuit_breaker.get_breaker",
             side_effect=ImportError,
         ):
-            _record_circuit_breaker("test-cb", success=True)
+            _record_circuit_breaker("test-cb", success=True)  # should not raise
 
 
 class TestSyncRetryCircuitBreaker:

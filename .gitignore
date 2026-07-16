@@ -24,6 +24,9 @@ data/
 .vscode/
 *.swp
 
+# OpenCode IDE
+.opencode/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -53,7 +56,6 @@ site/
 htmlcov/
 coverage.xml
 coverage.json
-rag-system/
 
 # TLS certificates & keys (generated locally via deploy/nginx/generate-certs.sh)
 deploy/nginx/ssl/

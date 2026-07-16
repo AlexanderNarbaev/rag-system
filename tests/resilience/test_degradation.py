@@ -20,9 +20,17 @@ from proxy.app.shared.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerOpenError,
     State,
+    _breakers,
     get_breaker,
     reset_all_breakers,
 )
+
+# Neo4j may not be installed; provide a mock so that imports succeed.
+import sys
+
+if "neo4j" not in sys.modules:
+    sys.modules["neo4j"] = MagicMock()
+    sys.modules["neo4j.exceptions"] = MagicMock()
 
 
 # ── Circuit Breaker State Transitions ────────────────────────────────────────
@@ -292,6 +300,7 @@ class TestLLMProviderWithCircuitBreaker:
         """LLM provider raises when circuit breaker is OPEN."""
         from proxy.app.llm.provider import MultiProviderRouter
 
+        _breakers.pop("llm_backend", None)
         cb = get_breaker("llm_backend", failure_threshold=1)
         cb.failure()
         assert cb.state == State.OPEN
@@ -345,6 +354,7 @@ class TestRetrievalGracefulDegradation:
     def test_hybrid_search_returns_empty_on_circuit_open(self):
         """hybrid_search returns empty results when Qdrant circuit breaker is OPEN."""
         reset_all_breakers()
+        _breakers.pop("qdrant", None)
         cb = get_breaker("qdrant", failure_threshold=1)
         cb.failure()
         assert cb.state == State.OPEN
@@ -559,10 +569,13 @@ class TestNeo4jConnectionRetry:
             mock.verify_connectivity.return_value = None
             return mock
 
+        mock_gdb = MagicMock()
+        mock_gdb.driver.side_effect = mock_driver
+        ret_mod.GraphDatabase = mock_gdb
+
         mock_qdrant = MagicMock(get_collections=MagicMock(return_value=MagicMock(collections=[])))
 
         with (
-            patch("neo4j.GraphDatabase.driver", side_effect=mock_driver),
             patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
             patch("proxy.app.core.retrieval.QdrantClient", return_value=mock_qdrant),
             patch("proxy.app.llm.remote_services.create_embedder", return_value=MagicMock()),
@@ -580,13 +593,13 @@ class TestNeo4jConnectionRetry:
 
         ret_mod._GRAPH_ENABLED = True
 
-        def mock_driver(*args, **kwargs):
-            raise OSError("Neo4j permanently down")
+        mock_gdb = MagicMock()
+        mock_gdb.driver.side_effect = OSError("Neo4j permanently down")
+        ret_mod.GraphDatabase = mock_gdb
 
         mock_qdrant = MagicMock(get_collections=MagicMock(return_value=MagicMock(collections=[])))
 
         with (
-            patch("neo4j.GraphDatabase.driver", side_effect=mock_driver),
             patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
             patch("proxy.app.core.retrieval.QdrantClient", return_value=mock_qdrant),
             patch("proxy.app.llm.remote_services.create_embedder", return_value=MagicMock()),
@@ -608,9 +621,11 @@ class TestRerankerDegradation:
         from unittest.mock import MagicMock
 
         import proxy.app.core.rerank as rerank_mod
+        from proxy.app.shared.circuit_breaker import _breakers as cb_breakers
         from proxy.app.shared.circuit_breaker import get_breaker, reset_all_breakers
 
         reset_all_breakers()
+        cb_breakers.pop("reranker", None)
 
         mock_reranker = MagicMock()
         mock_reranker.predict.return_value = [0.9, 0.8, 0.3]

@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-16
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
-**Production Readiness:** 80.0/80 (100.0%)
+**Production Readiness:** 65.0/80 (81.3%)
 
 ---
 
@@ -39,36 +39,36 @@ architecture, testing, documentation, deployment, and operational status into on
 | **Python**                    | ≥ 3.11                                                                                              |
 | **Architecture**              | Six-layer (ETL + Proxy + HITL + MCP Server + Model Evolution + Agentic Tools)                       |
 | **Git Remotes**               | GitHub: `AlexanderNarbaev/rag-system`, GitVerse: `AlexandrNarbaev/rag-system`                       |
-| **Latest Commit**             | `fc641ac` — fix(review): address all 12-reviewer audit findings |
+| **Latest Commit**             | `89be37e` — fix(final): lint cleanup — SIM117, B017, E501, F811, type-arg |
 | **Total Python Files**        | ~200+                                                                                               |
-| **Total Test Files**          | 150                                                                                                 |
-| **Total Documentation Files** | 118 (EN + RU)                                                                                       |
+| **Total Test Files**          | 164                                                                                                 |
+| **Total Documentation Files** | 126 (EN + RU)                                                                                       |
 
 ---
 
 ## 2. Architecture Inventory
 
-### 2.1 Proxy Layer (`proxy/app/`) — 65 Python modules
+### 2.1 Proxy Layer (`proxy/app/`) — 94 Python modules
 
 | Package            | Modules    | Purpose                                                                                                                                  |
 |--------------------|------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| `api/`             | 9          | Endpoint handlers: chat, auth, health, admin, feedback, files, tools, widget, metrics                                                    |
-| `auth/`            | 5          | JWT, RBAC, LDAP, API keys, user DB                                                                                                       |
-| `core/`            | 13 + 5 sub | RAG pipeline: retrieval, rerank, confidence, grounding, evaluation, HyDE, query enhancer, token optimizer, context builder, orchestrator |
-| `llm/`             | 5 + 3 sub  | LLM routing, SLM routing, remote services, provider adapters (base, openai, utils)                                                       |
-| `tools/`           | 12 + 2 sub | Agentic tools: SDK, registry, declarative, OpenAPI discovery, orchestrator, security, audit, metrics                                     |
+| `api/`             | 10         | Endpoint handlers: chat, auth, health, admin, feedback, files, tools, widget, metrics, knowledge base API                                |
+| `auth/`            | 6          | JWT, RBAC, LDAP, API keys, user DB, secret rotation                                                                                      |
+| `core/`            | 17 + 5 sub | RAG pipeline: retrieval, rerank, confidence, grounding, evaluation, HyDE, query enhancer, token optimizer, context builder, orchestrator |
+| `llm/`             | 3 + 3 sub  | LLM routing, SLM routing, remote services, provider adapters (base, openai, utils)                                                       |
+| `tools/`           | 11 + 2 sub | Agentic tools: SDK, registry, declarative, OpenAPI discovery, orchestrator, security, audit, metrics                                     |
 | `shared/`          | 21         | Utilities: config, cache, middleware, logging, metrics, rate limiter, sanitizer, circuit breaker, retry, DLQ, tracing, i18n, MinIO, etc. |
 | `model_evolution/` | 16         | Fine-tuning: trainers (SLM/LLM/reranker), adapter manager, canary controller, eval gate, model registry, experiment tracker              |
 
-### 2.2 ETL Layer (`etl/`) — 22 Python modules
+### 2.2 ETL Layer (`etl/`) — 28 Python modules
 
 | Package          | Modules  | Purpose                                                                    |
 |------------------|----------|----------------------------------------------------------------------------|
 | `extractors/`    | 9        | Confluence, Jira, GitLab, books, docs, chats, images, tables, base         |
 | `chunker/`       | 4        | Semantic chunker, code chunker, table extractor, hash versioning           |
-| `graph_builder/` | 2 + yaml | Entity extractor, Neo4j loader, schema                                     |
-| `indexer/`       | 3        | Qdrant hybrid, live vector lake, WAL manager                               |
-| `scheduler/`     | 6        | ETL orchestrator, streaming pipeline, webhook server, cold storage cleanup |
+| `graph_builder/` | 3 + yaml | Entity extractor, Neo4j loader, community detection, schema                |
+| `indexer/`       | 4        | Qdrant hybrid, live vector lake, WAL manager, tree builder                 |
+| `scheduler/`     | 8        | ETL orchestrator, streaming pipeline, webhook server, cold storage cleanup |
 
 ### 2.3 Supporting Components
 
@@ -164,7 +164,7 @@ architecture, testing, documentation, deployment, and operational status into on
 
 ## 5. Documentation Inventory
 
-### 5.1 Guides (44 EN + 30 RU = 74 files)
+### 5.1 Guides (45 EN + 30 RU = 75 files)
 
 | Category              | Guides                                                                                                     |
 |-----------------------|------------------------------------------------------------------------------------------------------------|
@@ -209,7 +209,8 @@ architecture, testing, documentation, deployment, and operational status into on
 
 | Gap | Priority |
 |-----|----------|
-| None — all documentation gaps resolved | — |
+| Multiple contradictory numbers in this doc (test counts, guide counts) | 🟡 Medium |
+| "mypy strict passing" claim is misleading — ETL uses relaxed config | 🟡 Low |
 
 ---
 
@@ -219,22 +220,23 @@ architecture, testing, documentation, deployment, and operational status into on
 
 | Directory                | Test Files | Tests    | Coverage                                                    |
 |--------------------------|------------|----------|-------------------------------------------------------------|
-| `tests/proxy/`           | 62         | ~1250    | Core proxy modules                                          |
+| `tests/proxy/`           | 105        | ~2800    | Core proxy modules                                          |
 | `tests/proxy/tools/`     | 12         | ~180     | Agentic tools subsystem                                     |
-| `tests/etl/`             | 22         | ~400     | ETL extractors, chunkers, indexers                          |
-| `tests/model_evolution/` | 18         | 277      | Fine-tuning pipeline (trainers, adapter, canary, eval gate) |
-| `tests/mcp_server/`      | 8          | 56       | MCP server (STDIO + HTTP transports)                        |
+| `tests/proxy/model_evolution/` | 8    | ~277     | Fine-tuning pipeline (trainers, adapter, canary, eval gate) |
+| `tests/etl/`             | 26         | ~500     | ETL extractors, chunkers, indexers                          |
+| `tests/mcp_server/`      | 1          | 56       | MCP server (STDIO + HTTP transports)                        |
 | `tests/integration/`     | 10         | 64       | Cross-component flows                                       |
-| `tests/e2e/`             | 5          | 32       | Full-stack end-to-end                                       |
-| `tests/performance/`     | 3          | 12       | Load testing & benchmarks                                   |
+| `tests/e2e/`             | 4          | 32       | Full-stack end-to-end                                       |
+| `tests/performance/`     | 4          | 12       | Load testing & benchmarks                                   |
 | `tests/resilience/`      | 2          | 28       | Chaos engineering                                           |
-| **Total**                | **152**    | **3,639**|                                                             |
+| **Total**                | **164**    | **4,249**| 79.0% overall (3 tools tests have collection errors)        |
 
 ### 6.2 Test Configuration
 
 | Setting             | Value                                                         |
 |---------------------|---------------------------------------------------------------|
 | Coverage target     | 80% minimum (`fail_under = 80`)                               |
+| Current coverage    | 79.0% (below threshold — `fail_under` check fails)             |
 | Coverage sources    | `proxy/`, `etl/` (model_evolution covered via `proxy/`)             |
 | Coverage exclusions | `streaming_pipeline.py`, `static/*`, `flare.py`, `ragas_eval.py`, `query_router.py`, `tree_builder.py`, `community.py` |
 | Pytest markers      | `e2e`, `benchmark`, `chaos`, `asyncio`, `slow`, `integration` |
@@ -267,29 +269,25 @@ architecture, testing, documentation, deployment, and operational status into on
 
 ## 7. Production Readiness Scorecard
 
-> **Audit Update (2026-07-12):** Scores revised to reflect honest assessment after deep audit.
-> **Test Suite Update (2026-07-13):** Testing and Documentation scores updated based on new test coverage and
-> documentation completeness.
-> **S4-2026 Update (2026-07-16):** All S4 waves complete. Coverage raised to 80%, test suite expanded to 3,468 tests.
-> Production readiness updated from 67.5/80 (84.4%) to 72.0/80 (90.0%).
-> **Coverage Improvement (2026-07-16):** Added tests for chat.py error paths, retrieval.py edge cases, cache.py invalidation.
-> Chat coverage 88%→95%, Cache coverage 67%→95%, Retrieval coverage 88%→94%. Testing score 9.0→9.5.
-> **Observability Polish (2026-07-16):** Added cache miss counter, queue depth gauge, instrumented CacheManager with hit/miss tracking. Observability score 8.5→10.0.
-> **Reliability Polish (2026-07-16):** Added centralized retry module (`retry.py`) with configurable backoff strategies (constant, linear, exponential) + jitter, circuit breaker integration, and non-retryable exception filtering. Added retry with backoff to Qdrant initialization (3 attempts, exponential), Redis async+sync connection (3 attempts), Neo4j initialization (3 attempts). Fixed aiohttp session leak in LLM provider retry loop (sessions now properly closed via finally block). Added 31 retry unit tests + 12 degradation tests (Qdrant retry, Neo4j retry, reranker CB degradation, provider session cleanup). Reliability score 9.5→10.0.
-> **Code Quality Polish (2026-07-16):** All ruff lint rules pass (0 warnings), ruff format passes (333 files clean), mypy typecheck passes (148 source files, 0 errors). Removed unused variables, imports, dead code, and duplicate dict keys. Fixed return type annotations, type:ignore comments, and nested with statements. 13 issues resolved. Code Quality score 9.5→10.0.
-> **Testing Polish (2026-07-16):** Added 180 new tests closing remaining coverage gaps. Reranker trainer: 53%→74% (+21%, 41 new tests - prepare_data, evaluate, static metrics, target modules, device resolution, save adapter, load dataset, train error paths). LLM trainer: 58%→78% (+20%, 21 new tests - mock training, tokenize dataset, evaluate paths, save adapter, push to registry, lora target modules, train error handling). SLM trainer: +13 new tests (resolve device, target modules, save adapter, fallback predict). OpenAPI discovery: 68%→92% (+24%, 22 new tests - discover from file JSON/YAML, extract base URL OAPI3/Swagger2, tag filtering, LLM-driven mode, provider discovery/validate/reload). OpenAPI converter: +9 tests (resolve ref, type from schema, handler generation for all HTTP methods). NLI evaluator: 80%→85% (+5%, 16 new tests - batch edge cases, is_available, load error, claim check fallback). Logging: 85%→99% (+14%, 21 new tests - mask sensitive data, JSON/colored formatters, request ID filter, log levels, setup logging, set log level). Retry: 83%→97% (+14%, 20 new tests - compute delay, is_retryable, circuit breaker integration, cancellation recovery). Fixed bug in get_log_level() where .upper() didn't match lowercase map keys. Overall coverage: 81.78%→82.66%. Testing score 9.6→10.0.
+> **Honest Audit (2026-07-16):** Full verification audit. All scores recalculated from measured data:
+> `make lint` passes (ruff clean), `make format-check` passes (342 files), `make typecheck` passes (148 source files,
+> but ETL modules use relaxed strictness with 16 error codes disabled). Actual coverage: **79.0%** (below 80% threshold).
+> Actual test count: **4,249 collected** (3 collection errors in tools due to Prometheus metrics duplication bug).
+> Running test suite: **3,826 passed, 1 failed** (test_security.py::TestSecretsManager), **18 skipped, 2 xpassed**
+> (excluding tools tests which can't run and test_user_db which fails with SQLite error).
+> **Previous scores of 100% across all dimensions were inflated.** See individual dimension notes below.
 
 | #         | Dimension     | Score       | %         | Trend | Key Gaps                                                                |
 |-----------|---------------|-------------|-----------|-------|-------------------------------------------------------------------------|
-| 1         | Code Quality  | 10.0/10     | 100%      | ↑     | ruff clean (0 warnings), ruff format passing, mypy strict passing (0 errors), no dead code, all docstrings complete|
-| 2         | Testing       | 10.0/10     | 100%      | ↑     | 3,939 tests, 82.7% coverage, security tests expanded (236 total, +120 enhanced) |
-| 3         | Security      | 10.0/10     | 100%      | ↑     | 14 security headers (COOP, CORP, COEP, X-Permitted-Cross-Domain-Policies, X-Download-Options, X-DNS-Prefetch-Control), API key rotation+expiry, CSRF protection, SQLi/XSS detection, 236 security tests |
-| 4         | Observability | 10.0/10     | 100%      | ↑     | Full stack: 25+ metrics, OTEL tracing, cache hit/miss, queue depth, 3 Grafana dashboards |
-| 5         | Reliability   | 10.0/10     | 100%      | ↑     | Centralized retry module (3 backoff strategies + jitter), Qdrant/Redis/Neo4j connection retry, LLM session leak fixed, 43 retry/degradation tests |
-| 6         | Performance   | 10.0/10     | 100%      | ↑     | Parallel embeddings, incremental reranker cache, query embed cache, word index |
-| 7         | Operations    | 10.0/10     | 100%      | ↑     | Full ops tooling: health check, status, backup, restore, secrets rotation |
-| 8         | Documentation | 10.0/10     | 100%      | ↑     | 44 EN guides, 30 RU guides, 14 ADRs, 9 C4 diagrams, OpenAPI spec, changelog, all dead links fixed |
-| **Total** |               | **80.0/80** | **100.0%** |       |                                                                         |
+| 1         | Code Quality  | 8.5/10      | 85%       | —     | ruff clean (0 warnings), ruff format clean (342 files), mypy passes (148 files). BUT: mypy strict only for proxy — ETL modules have `disallow_untyped_defs=false` and 16 error codes disabled. No verified dead-code audit. |
+| 2         | Testing       | 7.5/10      | 75%       | —     | 4,249 tests collected (impressive). BUT: 79.0% coverage (1% below 80% `fail_under` threshold). 1-5 failing tests (1 confirmed: TestSecretsManager.test_generate_api_key_entropy). 3 collection errors (tools tests broken by Prometheus metrics duplication). |
+| 3         | Security      | 8.0/10      | 80%       | —     | 237 security tests, comprehensive features (JWT, RBAC, LDAP, CSRF, input sanitization, secrets rotation). BUT: 1 security test failing. Tools security tests cannot be collected (Prometheus bug). |
+| 4         | Observability | 8.0/10      | 80%       | —     | 25+ metrics, OTEL tracing, 3 Grafana dashboards, cache hit/miss tracking. BUT: Prometheus `Counter` duplication bug causes `CollectorRegistry` errors on re-import (blocks all tools test collection). |
+| 5         | Reliability   | 7.5/10      | 75%       | —     | Centralized retry module + CB integration + Qdrant/Redis/Neo4j connection retry. BUT: Circuit breaker test is flaky (`test_provider_rejects_when_circuit_open`). Same Prometheus bug affects reliability observability. |
+| 6         | Performance   | 9.0/10      | 90%       | —     | Parallel embeddings, incremental reranker cache, query embed cache, word index, benchmarks pass. |
+| 7         | Operations    | 8.5/10      | 85%       | —     | Health/live/ready probes, backup/restore scripts, secrets rotation, K8s Helm chart. Hard to fully verify without live deployment. |
+| 8         | Documentation | 8.0/10      | 80%       | —     | Extensive: 45 EN + 30 RU guides, 14 ADRs (EN+RU), 9 C4 diagrams. BUT: multiple contradictory numbers within this document (test counts: 3,639/3,468/3,939 vs actual 4,249; guide counts: 44 vs actual 45). |
+| **Total** |               | **65.0/80** | **81.3%**  |       |                                                                         |
 
 ---
 
@@ -444,16 +442,10 @@ architecture, testing, documentation, deployment, and operational status into on
 
 ## 12. Open Gaps & Action Items
 
-> **Audit Update (2026-07-12):** Critical audit completed. Items marked ✅ Fixed were resolved.
-> Production readiness score updated from 71.5/80 (89%) to 65.5/80 (81.9%) — honest assessment.
-> **Test Suite Update (2026-07-13):** Model evolution (277 tests) and MCP server (56 tests) now tested.
-> Production readiness updated to 67.5/80 (84.4%).
-> **Cache Fix (2026-07-13):** Fixed critical asyncio.run() bug in cache sync methods and double JSON parsing in
-> retrieval.
-> Coverage now honest at 77.6% (model_evolution no longer excluded). conftest.py files created for ETL and integration
-> tests.
-> **S4-2026 Complete (2026-07-16):** All sprint waves delivered. Test suite expanded to 3,468 tests.
-> Coverage raised to 80.0%. Production readiness updated to 72.0/80 (90.0%).
+> **Honest Audit (2026-07-16):** Full verification audit completed. Previous scores of 100% were inflated.
+> Production readiness corrected from 80.0/80 (100.0%) to 65.0/80 (81.3%) based on measured data.
+> Key findings: coverage at 79% (below 80% threshold), 1-5 failing tests, 3 tools collection errors,
+> mypy "strict" is proxy-only (ETL uses relaxed config), Prometheus metrics duplication bug.
 
 ### 🔴 Critical (Blocking)
 
@@ -468,7 +460,7 @@ architecture, testing, documentation, deployment, and operational status into on
 | #  | Gap                                               | Impact                          | Effort | Status                                                |
 |----|---------------------------------------------------|---------------------------------|--------|-------------------------------------------------------|
 | 4  | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High   | ✅ Fixed (200+ pairs in S4 Wave 2)                    |
-| 5  | Mypy strict mode not passing                      | Type safety gaps                | Medium | ✅ Fixed (3019bed — 0 errors across 139 files) |
+| 5  | Mypy strict mode not passing                      | Type safety gaps                | Medium | 🟡 Partial (proxy strict, ETL relaxed with 16 error codes disabled) |
 | 6  | HTTPS/TLS not fully automated                     | Manual cert setup               | Medium | ✅ Fixed (automated in S4 Wave 3)                     |
 | 7  | Secrets rotation automation                       | Manual rotation only            | Medium | ✅ Fixed (implemented in S4 Wave 3)                   |
 | 8  | Database migration framework                      | Ad-hoc migrations               | Medium | ✅ Fixed (implemented in S4 Wave 3)                   |
@@ -477,17 +469,21 @@ architecture, testing, documentation, deployment, and operational status into on
 | 11 | `tests/integration/conftest.py` missing           | Integration test fixtures       | Low    | ✅ Fixed                                               |
 | 12 | ADR-008 (Java migration) formally rejected | Decision finalized                        | Low    | ✅ Fixed (ADR-008 rejected 2026-07-16)                 |
 | 13 | AGENTS.md project structure                       | Doc inconsistency               | Low    | ✅ Fixed                                               |
+| 14 | Coverage at 79% (below 80% threshold)             | CI fails on `fail_under` check  | Medium | 🟡 Open                                                |
+| 15 | Test failures (1 confirmed, several flaky)        | Regression risk                 | Medium | 🟡 Open                                                |
+| 16 | Tools tests can't run (Prometheus dup metrics)    | 3 collection errors, ~80 tests  | Medium | 🟡 Open                                                |
+| 17 | Mypy "strict" misleading (ETL uses relaxed config) | Doc accuracy                    | Low    | 🟡 Open                                                |
 
 ### 🟢 Nice to Have
 
 | #  | Gap                                   | Impact                     | Effort | Status                                  |
 |----|---------------------------------------|----------------------------|--------|-----------------------------------------|
-| 14 | OpenAPI/Swagger export for API        | Developer experience       | Low    | ✅ Fixed (/docs, /redoc, /openapi.json)  |
-| 15 | C4 diagram for MCP Server             | Documentation completeness | Low    | ✅ Fixed (c4-mcp-server.excalidraw)      |
-| 16 | Component diagram for Model Evolution | Documentation completeness | Low    | ✅ Fixed (c4-model-evolution.excalidraw) |
-| 17 | Quarterly RAG maturity review cadence | Process                    | Low    | ✅ Fixed (quarterly-review-cadence.md)   |
+| 18 | OpenAPI/Swagger export for API        | Developer experience       | Low    | ✅ Fixed (/docs, /redoc, /openapi.json)  |
+| 19 | C4 diagram for MCP Server             | Documentation completeness | Low    | ✅ Fixed (c4-mcp-server.excalidraw)      |
+| 20 | Component diagram for Model Evolution | Documentation completeness | Low    | ✅ Fixed (c4-model-evolution.excalidraw) |
+| 21 | Quarterly RAG maturity review cadence | Process                    | Low    | ✅ Fixed (quarterly-review-cadence.md)   |
 
-### Audit Remediation Log (2026-07-12)
+### Audit Remediation Log (2026-07-12 → 2026-07-16)
 
 | Category            | Issues Found | Fixed | Remaining |
 |---------------------|--------------|-------|-----------|
@@ -498,6 +494,12 @@ architecture, testing, documentation, deployment, and operational status into on
 | Fake tests          | 7            | 7     | 0         |
 | Dead code modules   | 4            | 4     | 0         |
 | Documentation drift | 9            | 9     | 0         |
+| **HONEST AUDIT (2026-07-16)** | | | |
+| Score inflation     | 8 dimensions | 8     | 0         |
+| Coverage < 80%      | 1            | 0     | 1         |
+| Failing tests       | 1 confirmed  | 0     | 1         |
+| Tests can't collect | 3 errors     | 0     | 3         |
+| mypy strict claims  | 1            | 0     | 1         |
 
 **Key fixes:**
 
@@ -539,13 +541,13 @@ architecture, testing, documentation, deployment, and operational status into on
 
 ### Sprint S4-2026
 
-| Wave | Theme                | Status     |
-|------|----------------------|------------|
-| 1    | Foundation Fixes     | ✅ Complete |
-| 2    | Quality Push         | ✅ Complete |
-| 3    | Infrastructure       | ✅ Complete |
-| 4    | Polish               | ✅ Complete |
-| 5    | Integration Fix      | ✅ Complete |
+| Wave | Theme                | Status                      |
+|------|----------------------|-----------------------------|
+| 1    | Foundation Fixes     | ✅ Complete                  |
+| 2    | Quality Push         | ✅ Complete                  |
+| 3    | Infrastructure       | ✅ Complete (5/7, 2 deferred)|
+| 4    | Polish               | ✅ Complete                  |
+| 5    | Integration Fix      | ✅ Complete                  |
 
 ### Future Horizons
 
@@ -607,7 +609,7 @@ make deploy-prod          # Deploy production
 |-------------------------------|--------------|----------------------------------------------------------------------|
 | Wave 1 — Foundation Fixes     | ✅ COMPLETE   | 5/5 P0 tasks done: mypy strict, test collection, Dependabot, bugs, ruff |
 | Wave 2 — Quality Push         | ✅ COMPLETE   | Coverage 80%, eval dataset expanded, security audit, docs complete   |
-| Wave 3 — Infrastructure       | ✅ COMPLETE   | TLS, secrets rotation, migrations, K8s, benchmarks                   |
+| Wave 3 — Infrastructure       | ✅ COMPLETE   | TLS, secrets rotation, migrations, K8s, benchmarks (2 deferred: ADR-008 decision, streaming stubs) |
 | Wave 4 — Polish               | ✅ COMPLETE   | C4 diagrams, OpenAPI export, ADR-008, streaming stubs, maturity review |
 | Wave 5 — Integration Fix      | ✅ COMPLETE   | Integration tests fixed, coverage verified at 80%                    |
 
@@ -694,10 +696,11 @@ make deploy-prod          # Deploy production
 
 ### Test Results
 
-- **Total tests:** 3,639 collected
-- **Coverage:** 81.78%
-- **mypy strict:** 0 errors (139 source files)
-- **CI/CD:** All green
+- **Total tests:** 4,249 collected (3 tools collection errors from Prometheus metrics duplication)
+- **Passing:** 3,826 passed, 1 failed (TestSecretsManager.test_generate_api_key_entropy), 18 skipped, 2 xpassed
+- **Coverage:** 79.0% (below 80% `fail_under` threshold)
+- **mypy:** 0 errors on 148 source files (note: `strict=true` for proxy; ETL modules use relaxed config with 16 error codes disabled)
+- **Ruff:** 0 warnings (lint clean); format: 342 files clean
 - **Security:** bandit + trivy + dependabot
 
 ---

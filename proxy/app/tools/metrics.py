@@ -7,35 +7,52 @@ with a high-level ``ToolMetrics`` class.
 
 from __future__ import annotations
 
+from typing import Any
+
+import prometheus_client
 from prometheus_client import Counter, Gauge, Histogram
 
-tool_calls_total = Counter(
+
+def _reuse_metric(name: str, metric_cls: type) -> Any:
+    """Return an existing metric with the given name if already registered."""
+    registry = prometheus_client.REGISTRY
+    for collector in list(registry._collector_to_names):  # noqa: SLF001
+        try:
+            existing_names = registry._get_names(collector)  # type: ignore[no-untyped-call]
+        except Exception:
+            continue
+        if name in existing_names and isinstance(collector, metric_cls):
+            return collector
+    return None
+
+
+tool_calls_total: Counter = _reuse_metric("tool_calls_total", Counter) or Counter(
     "tool_calls_total",
     "Total number of tool calls",
     ["tool_name", "status"],
 )
 
-tool_errors_total = Counter(
+tool_errors_total: Counter = _reuse_metric("tool_errors_total", Counter) or Counter(
     "tool_errors_total",
     "Total number of tool errors",
     ["tool_name", "error_type"],
 )
 
-tool_duration_seconds = Histogram(
+tool_duration_seconds: Histogram = _reuse_metric("tool_duration_seconds", Histogram) or Histogram(
     "tool_duration_seconds",
     "Tool call duration in seconds",
     ["tool_name"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
 )
 
-tool_retry_count = Histogram(
+tool_retry_count: Histogram = _reuse_metric("tool_retry_count", Histogram) or Histogram(
     "tool_retry_count",
     "Number of retries per tool call",
     ["tool_name"],
     buckets=(0, 1, 2, 3, 5, 10),
 )
 
-tools_registered_total = Gauge(
+tools_registered_total: Gauge = _reuse_metric("tools_registered_total", Gauge) or Gauge(
     "tools_registered_total",
     "Total number of registered tools",
 )

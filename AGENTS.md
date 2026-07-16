@@ -187,17 +187,18 @@ rag-system/
 ├── config/                           # Monitoring configuration
 │   └── monitoring/                   # Prometheus + Grafana configs
 ├── tests/                            # Test suite
-│   ├── proxy/                        # Proxy unit tests (72 files)
-│   ├── etl/                          # ETL unit tests (22 files)
-│   ├── integration/                  # Integration tests (5 files)
-│   ├── e2e/                          # End-to-end tests (3 files)
-│   ├── performance/                  # Performance tests (2 files)
+│   ├── proxy/                        # Proxy unit tests (117 files)
+│   ├── etl/                          # ETL unit tests (26 files)
+│   ├── mcp_server/                   # MCP server tests (1 file)
+│   ├── integration/                  # Integration tests (10 files)
+│   ├── e2e/                          # End-to-end tests (4 files)
+│   ├── performance/                  # Performance tests (4 files)
 │   ├── resilience/                   # Chaos/resilience tests (2 files)
 │   └── conftest.py                   # Shared fixtures
 ├── docs/                             # Documentation (EN + RU)
 │   ├── en/adr/                       # Architecture Decision Records (14 ADRs)
 │   ├── en/diagrams/                  # C4 diagrams (SVG + Excalidraw)
-│   ├── en/guides/                    # Design & implementation guides (43 guides)
+│   ├── en/guides/                    # Design & implementation guides (44 guides)
 │   ├── ru/adr/                       # Russian translations of ADRs
 │   └── ru/guides/                    # Russian translations of guides
 ├── Makefile                          # Primary dev entry point (36 targets)
@@ -323,6 +324,9 @@ RAG-specific parameters on `/v1/chat/completions`:
 
 - `rag_version` — request a specific document version
 - `rag_force_refresh` — bypass response cache
+- `rag_skip_generation` — search-only mode (federation)
+- `rag_return_chunks` — return retrieved chunks in response
+- `rag_top_k` — override number of chunks after rerank
 - Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`
 
 ## Configuration

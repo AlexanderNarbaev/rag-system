@@ -451,15 +451,13 @@ class TestNeo4jImportFailure:
     """Cover Neo4j import failure path (lines 128-129)."""
 
     def test_neo4j_import_error_disables_graph(self):
+        """When neo4j is not installed, _GRAPH_ENABLED gets set to False at import time."""
         import proxy.app.core.retrieval as ret_mod
 
-        with patch("proxy.app.core.retrieval._GRAPH_ENABLED", True), patch.dict("sys.modules", {"neo4j": None}):
-            # Simulate import error by removing neo4j from sys.modules
-            # The code at module level already tries to import, we need to
-            # test that _GRAPH_ENABLED gets set to False
-            # Since the module is already loaded, just verify the pattern
-            if "neo4j" not in sys.modules:
-                ret_mod._GRAPH_ENABLED = False
+        if "neo4j" not in sys.modules:
+            assert ret_mod._GRAPH_ENABLED is False
+        else:
+            pytest.skip("neo4j is installed; import error path cannot be tested")
 
 
 class TestComputeDynamicTopK:

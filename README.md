@@ -311,9 +311,10 @@ rag-system/
 ├── tests/                 # Test suite
 │   ├── proxy/             # Proxy unit tests
 │   ├── etl/               # ETL unit tests
-│   ├── model_evolution/   # Model evolution tests
+│   ├── mcp_server/        # MCP server tests
 │   ├── integration/       # Integration tests
 │   ├── e2e/               # End-to-end tests
+│   ├── performance/       # Performance tests
 │   └── mcp_server/        # MCP server tests
 ├── docs/                  # Documentation (EN + RU)
 ├── scripts/               # Utility scripts

@@ -787,7 +787,8 @@ class TestRateLimiting:
 class TestConfigSecurity:
     """Tests for configuration security defaults."""
 
-    def test_jwt_secret_empty_by_default(self):
+    def test_jwt_secret_empty_by_default(self, monkeypatch):
+        monkeypatch.delenv("JWT_SECRET", raising=False)
         import importlib
 
         import proxy.app.shared.config as cfg
@@ -795,7 +796,8 @@ class TestConfigSecurity:
         importlib.reload(cfg)
         assert cfg.JWT_SECRET == ""
 
-    def test_neo4j_password_empty_by_default(self):
+    def test_neo4j_password_empty_by_default(self, monkeypatch):
+        monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
         import importlib
 
         import proxy.app.shared.config as cfg
@@ -803,7 +805,9 @@ class TestConfigSecurity:
         importlib.reload(cfg)
         assert cfg.NEO4J_PASSWORD == ""
 
-    def test_minio_credentials_empty_by_default(self):
+    def test_minio_credentials_empty_by_default(self, monkeypatch):
+        monkeypatch.delenv("MINIO_ACCESS_KEY", raising=False)
+        monkeypatch.delenv("MINIO_SECRET_KEY", raising=False)
         import importlib
 
         import proxy.app.shared.config as cfg

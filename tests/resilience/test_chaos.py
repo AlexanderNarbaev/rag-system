@@ -186,11 +186,21 @@ class TestLLMTimeout:
 
     def test_llm_timeout_streaming(self, client):
         """LLM timeout during streaming -> stream returns error event."""
+        hit = MagicMock()
+        hit.payload = {
+            "text": "RAG is a technique for augmenting LLMs.",
+            "source_type": "confluence",
+            "title": "RAG",
+            "version": "1.0",
+        }
+        hit.score = 0.95
+
         with (
-            patch("proxy.app.main.hybrid_search", return_value=[]),
-            patch("proxy.app.main.rerank_chunks", return_value=[]),
-            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
-            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.hybrid_search", return_value=[hit]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[(hit.payload, 0.95)]),
+            patch("proxy.app.main.build_context", return_value="RAG is a technique for augmenting LLMs."),
+            patch("proxy.app.main.should_generate_answer", return_value=(True, "")),
             patch("proxy.app.main.stream_completion", side_effect=Exception("LLM stream timeout")),
             patch("proxy.app.main.cache_manager", None),
             patch("proxy.app.main.log_interaction"),
@@ -250,8 +260,9 @@ class TestRapidRestart:
         with (
             patch("proxy.app.main.hybrid_search", return_value=[hit]),
             patch("proxy.app.main.rerank_chunks", return_value=[0]),
-            patch("proxy.app.main.deduplicate_chunks", return_value=[]),
-            patch("proxy.app.main.build_context", return_value=""),
+            patch("proxy.app.main.deduplicate_chunks", return_value=[(hit.payload, 0.95)]),
+            patch("proxy.app.main.build_context", return_value="RAG is a technique for augmenting LLMs."),
+            patch("proxy.app.main.should_generate_answer", return_value=(True, "")),
             patch("proxy.app.main.non_stream_completion", return_value="Recovered response"),
             patch("proxy.app.main.cache_manager", None),
             patch("proxy.app.main.log_interaction"),

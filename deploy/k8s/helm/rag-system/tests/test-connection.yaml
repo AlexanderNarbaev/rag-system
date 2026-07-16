@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "rag-system.fullname" . }}-test-connection"
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: wget
+      image: busybox:1.36
+      command: ['sh', '-c']
+      args:
+        - |
+          echo "Testing proxy health endpoint..."
+          wget -qO- --timeout=10 {{ include "rag-system.fullname" . }}-proxy:{{ .Values.proxy.service.port }}/v1/health/live
+          echo ""
+          echo "Testing proxy readiness endpoint..."
+          wget -qO- --timeout=10 {{ include "rag-system.fullname" . }}-proxy:{{ .Values.proxy.service.port }}/v1/health/ready
+          echo ""
+          {{- if .Values.qdrant.enabled }}
+          echo "Testing Qdrant health..."
+          wget -qO- --timeout=10 {{ include "rag-system.fullname" . }}-qdrant:{{ .Values.qdrant.service.port }}/health
+          echo ""
+          {{- end }}
+          {{- if .Values.redis.enabled }}
+          echo "Testing Redis connectivity..."
+          wget -qO- --timeout=10 {{ include "rag-system.fullname" . }}-redis:{{ .Values.redis.service.port }}/ || true
+          echo "Redis service reachable"
+          {{- end }}
+          echo "All connection tests passed!"

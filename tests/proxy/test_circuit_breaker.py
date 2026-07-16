@@ -853,7 +853,25 @@ class TestMetricsRegistration:
 
         import proxy.app.shared.circuit_breaker as cb_module
 
+        saved_breaker_open_error = cb_module.CircuitBreakerOpenError
+        saved_breaker_cls = cb_module.CircuitBreaker
+        saved_state = cb_module.State
+        saved_breakers = cb_module._breakers
+        saved_frozen = cb_module._frozen
+        saved_get_breaker = cb_module.get_breaker
+        saved_get_all_breakers = cb_module.get_all_breakers
+        saved_reset_all_breakers = cb_module.reset_all_breakers
+
         importlib.reload(cb_module)
+
+        cb_module.CircuitBreakerOpenError = saved_breaker_open_error
+        cb_module.CircuitBreaker = saved_breaker_cls
+        cb_module.State = saved_state
+        cb_module._breakers = saved_breakers
+        cb_module._frozen = saved_frozen
+        cb_module.get_breaker = saved_get_breaker
+        cb_module.get_all_breakers = saved_get_all_breakers
+        cb_module.reset_all_breakers = saved_reset_all_breakers
 
     def test_breaker_creation_does_not_raise_metric_error(self):
         from proxy.app.shared.circuit_breaker import CircuitBreaker

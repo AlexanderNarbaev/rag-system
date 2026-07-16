@@ -1,0 +1,57 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "rag-system.fullname" . }}-proxy
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.proxyLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "rag-system.proxySelector" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress controller namespace
+    {{- range .Values.networkPolicy.ingressNamespaceSelector }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+      ports:
+        {{- toYaml $.Values.networkPolicy.ingressPorts | nindent 8 }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution (kube-dns)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow intra-namespace traffic (Qdrant, Neo4j, Redis)
+    - to:
+        - podSelector: {}
+    # Allow external traffic (LLM endpoints, embedder, reranker)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+    {{- with .Values.networkPolicy.extraEgressRules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
