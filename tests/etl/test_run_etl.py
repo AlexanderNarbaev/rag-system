@@ -4,8 +4,6 @@
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestRunExtractConfluence:
     @patch("etl.scheduler.run_etl.ConfluenceExtractor")
@@ -78,7 +76,7 @@ class TestRunExtractJira:
                 "output_dir": str(tmp_path / "jira"),
             },
         }
-        result = run_extract_jira(config, mock_wal)
+        run_extract_jira(config, mock_wal)
         assert config["jira"].get("since_date") == "2025-01-01"
 
     @patch("etl.scheduler.run_etl.JiraExtractor")
@@ -96,7 +94,7 @@ class TestRunExtractJira:
                 "since_date": "2024-01-01",
             },
         }
-        result = run_extract_jira(config, mock_wal)
+        run_extract_jira(config, mock_wal)
         assert config["jira"]["since_date"] == "2024-01-01"
 
 
@@ -132,7 +130,7 @@ class TestRunExtractGitlab:
                 "output_dir": str(tmp_path / "gitlab"),
             },
         }
-        result = run_extract_gitlab(config, mock_wal)
+        run_extract_gitlab(config, mock_wal)
         assert config["gitlab"].get("since_date") == "2025-06-01"
 
 
@@ -195,7 +193,6 @@ class TestRunChunkingShutdown:
 class TestRunIndexingShutdown:
     def test_shutdown_stops_indexing(self):
         import etl.scheduler.run_etl as run_etl_mod
-
         from etl.scheduler.run_etl import run_indexing
 
         run_etl_mod._shutdown_requested = True
