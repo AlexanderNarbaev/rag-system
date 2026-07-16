@@ -514,78 +514,157 @@ services:
 
 ## 5. Kubernetes Deployment with Helm
 
-### 4.1 Helm Chart Structure
+### 5.1 Helm Chart Structure
 
 ```
-infra/helm/rag-system/
-├── Chart.yaml                     # Chart metadata
+deploy/k8s/helm/rag-system/
+├── Chart.yaml                     # Chart metadata (v0.2.0)
 ├── values.yaml                    # Default configuration values
-├── values-prod.yaml               # Production overrides
-├── values-airgap.yaml             # Air-gapped overrides
+├── .helmignore                    # Patterns to ignore when packaging
 ├── templates/
-│   ├── _helpers.tpl               # Name, label helpers
-│   ├── namespace.yaml
-│   ├── secrets.yaml               # Kubernetes Secret resource
-│   ├── configmap.yaml             # Non-sensitive config
-│   ├── proxy-deployment.yaml      # RAG Proxy Deployment
+│   ├── _helpers.tpl               # Name, label, serviceaccount helpers
+│   ├── proxy-deployment.yaml      # RAG Proxy Deployment (startup/liveness/readiness probes)
 │   ├── proxy-service.yaml         # Proxy ClusterIP Service
-│   ├── proxy-hpa.yaml             # Horizontal Pod Autoscaler
-│   ├── proxy-pdb.yaml             # Pod Disruption Budget
-│   ├── federation-deployment.yaml # Federation Proxy (port 8081)
-│   ├── federation-service.yaml
-│   ├── mcp-deployment.yaml        # MCP Server (port 8082)
-│   ├── mcp-service.yaml
-│   ├── qdrant-statefulset.yaml    # Qdrant StatefulSet
-│   ├── qdrant-service.yaml
-│   ├── neo4j-statefulset.yaml     # Neo4j StatefulSet
-│   ├── neo4j-service.yaml
-│   ├── redis-statefulset.yaml     # Redis Sentinel StatefulSet
-│   ├── redis-service.yaml
-│   ├── minio-deployment.yaml      # MinIO for model artifacts
-│   ├── mlflow-deployment.yaml     # MLflow tracking server
-│   ├── network-policy.yaml        # Network isolation rules
-│   ├── ingress.yaml               # Ingress with TLS
-│   ├── service-monitor.yaml       # Prometheus ServiceMonitor
-│   ├── backup-cronjob.yaml        # Automated backup CronJob
-│   └── training-cronjob.yaml      # Model fine-tuning CronJob
+│   ├── proxy-configmap.yaml       # Non-sensitive configuration (100+ env vars)
+│   ├── proxy-secrets.yaml         # Sensitive values (API keys, passwords, tokens)
+│   ├── proxy-hpa.yaml             # Horizontal Pod Autoscaler (CPU + memory metrics)
+│   ├── proxy-pdb.yaml             # Pod Disruption Budget (minAvailable/maxUnavailable)
+│   ├── serviceaccount.yaml        # ServiceAccount with optional IRSA annotations
+│   ├── networkpolicy.yaml         # Network isolation (ingress/egress rules)
+│   ├── ingress.yaml               # Ingress with TLS termination
+│   ├── qdrant-statefulset.yaml    # Qdrant StatefulSet + headless Service
+│   ├── neo4j-statefulset.yaml     # Neo4j StatefulSet + headless Service
+│   ├── redis-deployment.yaml      # Redis Deployment + Service + PVC
+│   └── tests/
+│       └── test-connection.yaml   # Helm test: validates proxy, Qdrant, Redis connectivity
 ```
 
-### 4.2 Quick Deploy
+### 5.2 Quick Deploy
 
 ```bash
 # 1. Create namespace
 kubectl create namespace rag-system
 
-# 2. Create required secrets
-kubectl create secret generic rag-secrets -n rag-system \
-  --from-literal=jwt-secret=$(openssl rand -hex 32) \
-  --from-literal=llm-api-key=your-llm-api-key \
-  --from-literal=neo4j-password=$(openssl rand -hex 16) \
-  --from-literal=minio-access-key=minioadmin \
-  --from-literal=minio-secret-key=$(openssl rand -hex 16) \
-  --from-literal=backup-s3-access-key=your-s3-access-key \
-  --from-literal=backup-s3-secret-key=your-s3-secret-key
+# 2. Install Helm chart (development)
+cd deploy/k8s/helm
+helm upgrade --install rag-system ./rag-system \
+  -n rag-system \
+  --set proxy.env.llmEndpoint=http://vllm:8000/v1 \
+  --set proxy.env.llmModelName=your-model-name \
+  --wait \
+  --timeout 10m
 
-# 3. Install Helm chart
-cd infra/helm
+# 3. Install with production overrides
 helm upgrade --install rag-system ./rag-system \
   -n rag-system \
   -f values.yaml \
-  -f values-prod.yaml \
-  --set proxy.replicas=3 \
-  --set qdrant.replicas=3 \
-  --set neo4j.replicas=3 \
+  --set proxy.replicaCount=3 \
+  --set proxy.autoscaling.enabled=true \
+  --set proxy.autoscaling.minReplicas=3 \
+  --set proxy.autoscaling.maxReplicas=10 \
+  --set qdrant.replicaCount=3 \
+  --set qdrant.persistence.size=100Gi \
+  --set proxy.env.logFormat=json \
+  --set proxy.env.metricsEnabled=true \
+  --set proxy.env.rateLimitEnabled=true \
+  --set podDisruptionBudget.enabled=true \
+  --set podDisruptionBudget.minAvailable=2 \
+  --set networkPolicy.enabled=true \
+  --set secrets.jwtSecret=$(openssl rand -hex 32) \
+  --set secrets.neo4jPassword=$(openssl rand -hex 16) \
   --wait \
   --timeout 10m
 
 # 4. Verify deployment
-kubectl get pods,svc,hpa,ing -n rag-system
+kubectl get pods,svc,hpa,pdb,netpol -n rag-system
 
-# 5. Check health
-kubectl exec -it deploy/rag-proxy -n rag-system -- curl -s localhost:8080/v1/health
+# 5. Run Helm tests
+helm test rag-system -n rag-system
+
+# 6. Check health
+kubectl exec -it deploy/rag-system-proxy -n rag-system -- curl -s localhost:8080/v1/health
 ```
 
-### 4.3 values.yaml Walkthrough
+### 5.3 Chart Features
+
+| Feature | Template | Description |
+|---------|----------|-------------|
+| **Startup Probe** | `proxy-deployment.yaml` | 150s grace period for model loading (`failureThreshold: 30`) |
+| **Liveness Probe** | `proxy-deployment.yaml` | `/v1/health/live` — restarts if process hangs |
+| **Readiness Probe** | `proxy-deployment.yaml` | `/v1/health/ready` — checks Qdrant + LLM connectivity |
+| **HPA** | `proxy-hpa.yaml` | CPU + memory autoscaling with scale-down stabilization |
+| **PDB** | `proxy-pdb.yaml` | Protects against voluntary disruptions during maintenance |
+| **NetworkPolicy** | `networkpolicy.yaml` | Restricts ingress to ingress-nginx; egress to DNS + intra-namespace |
+| **ServiceAccount** | `serviceaccount.yaml` | Supports IRSA/workload identity annotations |
+| **ConfigMap** | `proxy-configmap.yaml` | 100+ env vars synced from `config.py` |
+| **Secrets** | `proxy-secrets.yaml` | API keys, JWT, Neo4j password, Confluence/Jira/GitLab tokens |
+| **Anti-affinity** | all workloads | Spreads replicas across nodes (soft/hard) |
+| **Security Context** | all workloads | Non-root, drop ALL capabilities, no privilege escalation |
+
+### 5.4 Key Configuration
+
+```yaml
+# Essential values to set for production
+proxy:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+  env:
+    llmEndpoint: "http://vllm:8000/v1"
+    llmModelName: "your-model-name"
+    logFormat: "json"
+    metricsEnabled: "true"
+    rateLimitEnabled: "true"
+    authEnabled: "true"
+
+qdrant:
+  replicaCount: 3        # Must be odd for Raft consensus
+  persistence:
+    size: 100Gi
+
+neo4j:
+  enabled: true
+  persistence:
+    size: 50Gi
+
+redis:
+  enabled: true
+  persistence:
+    size: 20Gi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+networkPolicy:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: "nginx"
+  tls:
+    enabled: true
+    secretName: rag-system-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"   # Required for SSE streaming
+
+secrets:
+  jwtSecret: ""           # Set via --set or sealed-secrets
+  neo4jPassword: ""       # Set via --set or sealed-secrets
+  llmApiKey: ""           # Set via --set or sealed-secrets
+```
+
+### 5.5 values.yaml Walkthrough
+
+The full `values.yaml` reference is at `deploy/k8s/helm/rag-system/values.yaml`. Key sections:
 
 ```yaml
 # ── Global settings ──────────────────────────────────────
@@ -593,12 +672,11 @@ global:
   imageRegistry: ""             # Override for air-gapped (e.g., "registry.airgap.local")
   imagePullSecrets: []
   storageClass: "ssd"           # Use SSD-backed StorageClass
-  environment: "production"
 
 # ── RAG Proxy ───────────────────────────────────────────
 proxy:
   enabled: true
-  replicas: 3
+  replicaCount: 3
   image:
     repository: rag-system/proxy
     tag: "v2.0.0"
@@ -823,7 +901,7 @@ training:
   profile: "prod"              # dev / prod / ci
 ```
 
-### 4.4 K8s Secrets Management
+### 5.6 K8s Secrets Management
 
 Never store secrets in `values.yaml`. Use one of these approaches:
 
@@ -902,7 +980,7 @@ kubectl create secret generic rag-secrets -n rag-system \
   kubeseal --controller-namespace sealed-secrets -o yaml > templates/sealed-secrets.yaml
 ```
 
-### 4.5 Network Policies
+### 5.7 Network Policies
 
 ```yaml
 # templates/network-policy.yaml
@@ -952,7 +1030,7 @@ spec:
         - protocol: TCP
 ```
 
-### 4.6 Zero-Downtime Deployments
+### 5.8 Zero-Downtime Deployments
 
 ```bash
 # Standard rolling update (default strategy)
@@ -975,7 +1053,7 @@ helm upgrade --install rag-system ./rag-system -n rag-system \
 kubectl rollout undo deployment/rag-proxy -n rag-system
 ```
 
-### 4.7 Probes Reference
+### 5.9 Probes Reference
 
 | Probe         | Endpoint           | Purpose                    | Initial Delay | Period |
 |---------------|--------------------|----------------------------|---------------|--------|

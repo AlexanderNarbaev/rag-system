@@ -1,8 +1,8 @@
 apiVersion: v2
 name: rag-system
-description: RAG Knowledge Assistant — OpenAI-compatible proxy with Qdrant, Neo4j, Redis
+description: RAG Knowledge Assistant -- OpenAI-compatible proxy with Qdrant, Neo4j, Redis
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "1.0.0"
 keywords:
   - rag
@@ -12,8 +12,30 @@ keywords:
   - redis
   - openai
   - vector-search
+  - kubernetes
+  - helm
 maintainers:
   - name: RAG System Team
 home: https://github.com/AlexanderNarbaev/rag-system
 sources:
   - https://github.com/AlexanderNarbaev/rag-system
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: PodDisruptionBudget template
+    - kind: added
+      description: NetworkPolicy template
+    - kind: added
+      description: ServiceAccount template
+    - kind: added
+      description: Helm test for connection validation
+    - kind: added
+      description: StartupProbe for slow model loading
+    - kind: fixed
+      description: Template syntax errors
+    - kind: fixed
+      description: Deployment secretRef indentation
+    - kind: fixed
+      description: ConfigMap/values env var synchronization
+    - kind: improved
+      description: Comprehensive env var coverage from config.py

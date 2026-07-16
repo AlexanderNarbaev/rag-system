@@ -49,6 +49,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Create the name of the service account to use
+*/}}
+{{- define "rag-system.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+{{- default (include "rag-system.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
 Proxy labels
 */}}
 {{- define "rag-system.proxyLabels" -}}
@@ -131,52 +142,4 @@ Create the Redis URL
 */}}
 {{- define "rag-system.redisUrl" -}}
 {{- printf "redis://%s-redis:%d" (include "rag-system.fullname" .) (int .Values.redis.service.port) }}
-{{- end }}
-
-{{/*
-Federation labels
-*/}}
-{{- define "rag-system.federationLabels" -}}
-{{ include "rag-system.labels" . }}
-app.kubernetes.io/component: federation
-{{- end }}
-
-{{/*
-Federation selector
-*/}}
-{{- define "rag-system.federationSelector" -}}
-{{ include "rag-system.selectorLabels" . }}
-app.kubernetes.io/component: federation
-{{- end }}
-
-{{/*
-MCP Server labels
-*/}}
-{{- define "rag-system.mcpServerLabels" -}}
-{{ include "rag-system.labels" . }}
-app.kubernetes.io/component: mcp-server
-{{- end }}
-
-{{/*
-MCP Server selector
-*/}}
-{{- define "rag-system.mcpServerSelector" -}}
-{{ include "rag-system.selectorLabels" . }}
-app.kubernetes.io/component: mcp-server
-{{- end }}
-
-{{/*
-MLflow labels
-*/}}
-{{- define "rag-system.mlflowLabels" -}}
-{{ include "rag-system.labels" . }}
-app.kubernetes.io/component: mlflow
-{{- end }}
-
-{{/*
-MinIO labels
-*/}}
-{{- define "rag-system.minioLabels" -}}
-{{ include "rag-system.labels" . }}
-app.kubernetes.io/component: minio
 {{- end }}

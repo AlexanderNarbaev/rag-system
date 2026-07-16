@@ -1,46 +1,46 @@
-{ { - if .Values.redis.enabled } }
+{{- if .Values.redis.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: { { include "rag-system.fullname" . } }-redis
-  namespace: { { .Values.global.namespace | default .Release.Namespace } }
+  name: {{ include "rag-system.fullname" . }}-redis
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
   labels:
-    { { - include "rag-system.redisLabels" . | nindent 4 } }
+    {{- include "rag-system.redisLabels" . | nindent 4 }}
 spec:
-  replicas: { { .Values.redis.replicaCount } }
+  replicas: {{ .Values.redis.replicaCount }}
   selector:
     matchLabels:
-      { { - include "rag-system.redisSelector" . | nindent 6 } }
+      {{- include "rag-system.redisSelector" . | nindent 6 }}
   template:
     metadata:
       labels:
-        { { - include "rag-system.redisLabels" . | nindent 8 } }
+        {{- include "rag-system.redisLabels" . | nindent 8 }}
     spec:
       securityContext:
-        { { - toYaml .Values.redis.podSecurityContext | nindent 8 } }
+        {{- toYaml .Values.redis.podSecurityContext | nindent 8 }}
       containers:
         - name: redis
           securityContext:
-            { { - toYaml .Values.redis.securityContext | nindent 12 } }
+            {{- toYaml .Values.redis.securityContext | nindent 12 }}
           image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
-          imagePullPolicy: { { .Values.redis.image.pullPolicy } }
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
           ports:
             - name: redis
-              containerPort: { { .Values.redis.service.port } }
+              containerPort: {{ .Values.redis.service.port }}
               protocol: TCP
           args:
             - redis-server
-            { { - range splitList " " .Values.redis.args } }
-            - { { . } }
-            { { - end } }
+            {{- range splitList " " .Values.redis.args }}
+            - {{ . }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data
           resources:
-            { { - toYaml .Values.redis.resources | nindent 12 } }
+            {{- toYaml .Values.redis.resources | nindent 12 }}
           livenessProbe:
             tcpSocket:
-              port: { { .Values.redis.service.port } }
+              port: {{ .Values.redis.service.port }}
             initialDelaySeconds: 15
             periodSeconds: 20
           readinessProbe:
@@ -52,16 +52,16 @@ spec:
             periodSeconds: 10
       volumes:
         - name: data
-          { { - if .Values.redis.persistence.enabled } }
+          {{- if .Values.redis.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: { { include "rag-system.fullname" . } }-redis-data
+            claimName: {{ include "rag-system.fullname" . }}-redis-data
           {{- else }}
-          emptyDir: { }
-          { { - end } }
-      { { - if .Values.redis.podAntiAffinity.enabled } }
+          emptyDir: {}
+          {{- end }}
+      {{- if .Values.redis.podAntiAffinity.enabled }}
       affinity:
         podAntiAffinity:
-          { { - if eq .Values.redis.podAntiAffinity.type "hard" } }
+          {{- if eq .Values.redis.podAntiAffinity.type "hard" }}
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
@@ -70,7 +70,7 @@ spec:
                     values:
                       - redis
               topologyKey: kubernetes.io/hostname
-          { { - else } }
+          {{- else }}
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -81,46 +81,48 @@ spec:
                       values:
                         - redis
                 topologyKey: kubernetes.io/hostname
-          { { - end } }
-      { { - end } }
+          {{- end }}
+      {{- end }}
+{{- end }}
 
 ---
+{{- if .Values.redis.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: { { include "rag-system.fullname" . } }-redis
-  namespace: { { .Values.global.namespace | default .Release.Namespace } }
+  name: {{ include "rag-system.fullname" . }}-redis
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
   labels:
-    { { - include "rag-system.redisLabels" . | nindent 4 } }
+    {{- include "rag-system.redisLabels" . | nindent 4 }}
 spec:
   type: ClusterIP
   ports:
     - name: redis
-      port: { { .Values.redis.service.port } }
-      targetPort: { { .Values.redis.service.port } }
+      port: {{ .Values.redis.service.port }}
+      targetPort: {{ .Values.redis.service.port }}
       protocol: TCP
   selector:
-    { { - include "rag-system.redisSelector" . | nindent 4 } }
+    {{- include "rag-system.redisSelector" . | nindent 4 }}
+{{- end }}
 
 ---
-  { { - if .Values.redis.persistence.enabled } }
+{{- if and .Values.redis.enabled .Values.redis.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: { { include "rag-system.fullname" . } }-redis-data
-  namespace: { { .Values.global.namespace | default .Release.Namespace } }
+  name: {{ include "rag-system.fullname" . }}-redis-data
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
   labels:
-    { { - include "rag-system.redisLabels" . | nindent 4 } }
+    {{- include "rag-system.redisLabels" . | nindent 4 }}
 spec:
   accessModes:
-    - { { .Values.redis.persistence.accessMode } }
-  { { - if .Values.redis.persistence.storageClass } }
-  storageClassName: { { .Values.redis.persistence.storageClass } }
-  { { - else if .Values.global.storageClass } }
-  storageClassName: { { .Values.global.storageClass } }
-  { { - end } }
+    - {{ .Values.redis.persistence.accessMode }}
+  {{- if .Values.redis.persistence.storageClass }}
+  storageClassName: {{ .Values.redis.persistence.storageClass }}
+  {{- else if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass }}
+  {{- end }}
   resources:
     requests:
-      storage: { { .Values.redis.persistence.size } }
-  { { - end } }
-  { { - end } }
+      storage: {{ .Values.redis.persistence.size }}
+{{- end }}

@@ -65,11 +65,15 @@ from proxy.app.shared.config import (
   COMPRESSION_MIN_SIZE,
   CORS_ORIGINS,
   GRACEFUL_SHUTDOWN_ENABLED,
+  GRAPH_ENABLED,
   LLM_MODEL_NAME,
   LOG_DIR,  # noqa: F401 — re-export for test patching
   LOG_REQUESTS,  # noqa: F401 — re-export for test patching
   MAX_CHUNKS_AFTER_RERANK,
   MAX_CHUNKS_RETRIEVAL,
+  NEO4J_PASSWORD,
+  NEO4J_URI,
+  NEO4J_USER,
   OTEL_ENABLED,
   RATE_LIMIT_BURST,
   RATE_LIMIT_ENABLED,
@@ -81,6 +85,7 @@ from proxy.app.shared.config import (
   TOOLS_OPENAPI_SPECS,
   USE_LANGGRAPH,
   USE_REDIS,
+  USER_DB_PATH,
   WARMUP_ENABLED,
   WARMUP_ON_STARTUP,
 )
@@ -185,6 +190,28 @@ async def lifespan (app: FastAPI) -> AsyncIterator [None]:
       logger.warning ("OpenTelemetry tracing setup failed (non-blocking): %s", e)
 
   audit_logger = AuditLogger (log_dir = LOG_DIR)
+
+  # Run database migrations on startup
+  try:
+    from proxy.app.db.migrations import get_migration_manager
+
+    migration_manager = get_migration_manager(
+        db_path=USER_DB_PATH,
+        neo4j_uri=NEO4J_URI if GRAPH_ENABLED else None,
+        neo4j_user=NEO4J_USER if GRAPH_ENABLED else None,
+        neo4j_password=NEO4J_PASSWORD if GRAPH_ENABLED else None,
+    )
+    await migration_manager.initialize()
+    status = await migration_manager.get_status()
+    if status["pending_count"] > 0:
+        logger.info("Applying %d pending database migration(s)...", status["pending_count"])
+        applied = await migration_manager.upgrade()
+        logger.info("Applied %d migration(s) successfully", len(applied))
+    else:
+        logger.info("Database schema up to date (version %d)", status["current_version"])
+  except Exception as e:
+    logger.warning("Database migration check failed (non-blocking): %s", e)
+
   # Initialize cache
   if USE_REDIS and REDIS_URL:
     cache_manager = CacheManager (redis_url = REDIS_URL)

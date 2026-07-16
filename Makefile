@@ -4,6 +4,7 @@
 .PHONY: help install install-dev install-one-line setup wizard \
         test test-proxy test-etl test-integration \
         test-performance test-e2e test-resilience benchmark \
+        benchmark-baselines benchmark-compare \
         lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run docs all \
         etl etl-confluence etl-jira etl-gitlab \
@@ -69,8 +70,14 @@ test-e2e: ## Run end-to-end tests (requires running services)
 test-resilience: ## Run chaos and resilience tests
 	@cd $(ROOT) && python -m pytest tests/resilience/ -v -m chaos
 
-benchmark: ## Run performance benchmarks
+benchmark: ## Run performance benchmarks (pytest-benchmark micro-benchmarks)
 	@cd $(ROOT) && python -m pytest tests/performance/test_benchmarks.py -v --benchmark-only
+
+benchmark-baselines: ## Run latency baseline benchmarks and generate reports
+	@cd $(ROOT) && python scripts/run_benchmarks.py
+
+benchmark-compare: ## Run benchmarks and compare against saved baseline
+	@cd $(ROOT) && python scripts/run_benchmarks.py --compare tests/performance/latency_benchmarks.json
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 lint: ## Lint with ruff

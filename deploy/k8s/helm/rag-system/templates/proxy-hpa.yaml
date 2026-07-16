@@ -1,31 +1,35 @@
-{ { - if .Values.proxy.autoscaling.enabled } }
+{{- if .Values.proxy.autoscaling.enabled }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: { { include "rag-system.fullname" . } }-proxy
-  namespace: { { .Values.global.namespace | default .Release.Namespace } }
+  name: {{ include "rag-system.fullname" . }}-proxy
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
   labels:
-    { { - include "rag-system.proxyLabels" . | nindent 4 } }
+    {{- include "rag-system.proxyLabels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: { { include "rag-system.fullname" . } }-proxy
-  minReplicas: { { .Values.proxy.autoscaling.minReplicas } }
-  maxReplicas: { { .Values.proxy.autoscaling.maxReplicas } }
+    name: {{ include "rag-system.fullname" . }}-proxy
+  minReplicas: {{ .Values.proxy.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.proxy.autoscaling.maxReplicas }}
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: { { .Values.proxy.autoscaling.targetCPUUtilizationPercentage } }
-    { { - if .Values.proxy.autoscaling.targetMemoryUtilizationPercentage } }
+          averageUtilization: {{ .Values.proxy.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.proxy.autoscaling.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: { { .Values.proxy.autoscaling.targetMemoryUtilizationPercentage } }
-    { { - end } }
-  { { - end } }
+          averageUtilization: {{ .Values.proxy.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  {{- with .Values.proxy.autoscaling.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

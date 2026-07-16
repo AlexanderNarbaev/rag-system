@@ -1,70 +1,71 @@
-{ { - if .Values.neo4j.enabled } }
+{{- if .Values.neo4j.enabled }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: { { include "rag-system.fullname" . } }-neo4j
-  namespace: { { .Values.global.namespace | default .Release.Namespace } }
+  name: {{ include "rag-system.fullname" . }}-neo4j
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
   labels:
-    { { - include "rag-system.neo4jLabels" . | nindent 4 } }
+    {{- include "rag-system.neo4jLabels" . | nindent 4 }}
 spec:
-  serviceName: { { include "rag-system.fullname" . } }-neo4j
-  replicas: { { .Values.neo4j.replicaCount } }
+  serviceName: {{ include "rag-system.fullname" . }}-neo4j
+  replicas: {{ .Values.neo4j.replicaCount }}
   selector:
     matchLabels:
-      { { - include "rag-system.neo4jSelector" . | nindent 6 } }
+      {{- include "rag-system.neo4jSelector" . | nindent 6 }}
   template:
     metadata:
       labels:
-        { { - include "rag-system.neo4jLabels" . | nindent 8 } }
+        {{- include "rag-system.neo4jLabels" . | nindent 8 }}
     spec:
       securityContext:
-        { { - toYaml .Values.neo4j.podSecurityContext | nindent 8 } }
+        {{- toYaml .Values.neo4j.podSecurityContext | nindent 8 }}
       containers:
         - name: neo4j
           securityContext:
-            { { - toYaml .Values.neo4j.securityContext | nindent 12 } }
+            {{- toYaml .Values.neo4j.securityContext | nindent 12 }}
           image: "{{ .Values.neo4j.image.repository }}:{{ .Values.neo4j.image.tag }}"
-          imagePullPolicy: { { .Values.neo4j.image.pullPolicy } }
+          imagePullPolicy: {{ .Values.neo4j.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: { { .Values.neo4j.service.httpPort } }
+              containerPort: {{ .Values.neo4j.service.httpPort }}
               protocol: TCP
             - name: bolt
-              containerPort: { { .Values.neo4j.service.boltPort } }
+              containerPort: {{ .Values.neo4j.service.boltPort }}
               protocol: TCP
           env:
             - name: NEO4J_AUTH
               valueFrom:
                 secretKeyRef:
-                  name: { { include "rag-system.fullname" . } }-proxy-secrets
+                  name: {{ include "rag-system.fullname" . }}-proxy-secrets
                   key: NEO4J_PASSWORD
+                  optional: true
             - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-              value: { { .Values.neo4j.acceptLicenseAgreement | quote } }
+              value: {{ .Values.neo4j.acceptLicenseAgreement | quote }}
             - name: NEO4J_dbms_memory_pagecache_size
-              value: { { .Values.neo4j.pagecacheSize | quote } }
+              value: {{ .Values.neo4j.pagecacheSize | quote }}
             - name: NEO4J_dbms_memory_heap_initial__size
-              value: { { .Values.neo4j.heapInitialSize | quote } }
+              value: {{ .Values.neo4j.heapInitialSize | quote }}
             - name: NEO4J_dbms_memory_heap_max__size
-              value: { { .Values.neo4j.heapMaxSize | quote } }
+              value: {{ .Values.neo4j.heapMaxSize | quote }}
           volumeMounts:
             - name: data
               mountPath: /data
           resources:
-            { { - toYaml .Values.neo4j.resources | nindent 12 } }
+            {{- toYaml .Values.neo4j.resources | nindent 12 }}
           livenessProbe:
             tcpSocket:
-              port: { { .Values.neo4j.service.boltPort } }
+              port: {{ .Values.neo4j.service.boltPort }}
             initialDelaySeconds: 60
             periodSeconds: 30
           readinessProbe:
             tcpSocket:
-              port: { { .Values.neo4j.service.boltPort } }
+              port: {{ .Values.neo4j.service.boltPort }}
             initialDelaySeconds: 30
             periodSeconds: 10
-      { { - if .Values.neo4j.podAntiAffinity.enabled } }
+      {{- if .Values.neo4j.podAntiAffinity.enabled }}
       affinity:
         podAntiAffinity:
-          { { - if eq .Values.neo4j.podAntiAffinity.type "hard" } }
+          {{- if eq .Values.neo4j.podAntiAffinity.type "hard" }}
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
@@ -73,7 +74,7 @@ spec:
                     values:
                       - neo4j
               topologyKey: kubernetes.io/hostname
-          { { - else } }
+          {{- else }}
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
               podAffinityTerm:
@@ -84,45 +85,47 @@ spec:
                       values:
                         - neo4j
                 topologyKey: kubernetes.io/hostname
-          { { - end } }
-      { { - end } }
+          {{- end }}
+      {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: data
         labels:
-          { { - include "rag-system.neo4jLabels" . | nindent 10 } }
+          {{- include "rag-system.neo4jLabels" . | nindent 10 }}
       spec:
         accessModes:
-          - { { .Values.neo4j.persistence.accessMode } }
-        { { - if .Values.neo4j.persistence.storageClass } }
-        storageClassName: { { .Values.neo4j.persistence.storageClass } }
-        { { - else if .Values.global.storageClass } }
-        storageClassName: { { .Values.global.storageClass } }
-        { { - end } }
+          - {{ .Values.neo4j.persistence.accessMode }}
+        {{- if .Values.neo4j.persistence.storageClass }}
+        storageClassName: {{ .Values.neo4j.persistence.storageClass }}
+        {{- else if .Values.global.storageClass }}
+        storageClassName: {{ .Values.global.storageClass }}
+        {{- end }}
         resources:
           requests:
-            storage: { { .Values.neo4j.persistence.size } }
+            storage: {{ .Values.neo4j.persistence.size }}
+{{- end }}
 
 ---
+{{- if .Values.neo4j.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: { { include "rag-system.fullname" . } }-neo4j
-  namespace: { { .Values.global.namespace | default .Release.Namespace } }
+  name: {{ include "rag-system.fullname" . }}-neo4j
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
   labels:
-    { { - include "rag-system.neo4jLabels" . | nindent 4 } }
+    {{- include "rag-system.neo4jLabels" . | nindent 4 }}
 spec:
   type: ClusterIP
   clusterIP: None
   ports:
     - name: http
-      port: { { .Values.neo4j.service.httpPort } }
-      targetPort: { { .Values.neo4j.service.httpPort } }
+      port: {{ .Values.neo4j.service.httpPort }}
+      targetPort: {{ .Values.neo4j.service.httpPort }}
       protocol: TCP
     - name: bolt
-      port: { { .Values.neo4j.service.boltPort } }
-      targetPort: { { .Values.neo4j.service.boltPort } }
+      port: {{ .Values.neo4j.service.boltPort }}
+      targetPort: {{ .Values.neo4j.service.boltPort }}
       protocol: TCP
   selector:
-    { { - include "rag-system.neo4jSelector" . | nindent 4 } }
-  { { - end } }
+    {{- include "rag-system.neo4jSelector" . | nindent 4 }}
+{{- end }}

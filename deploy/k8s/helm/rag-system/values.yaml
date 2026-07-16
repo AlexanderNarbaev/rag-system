@@ -1,5 +1,9 @@
 # Default values for rag-system Helm chart.
 # This is a YAML-formatted file documenting configurable parameters.
+#
+# Usage:
+#   helm install rag-system ./deploy/k8s/helm/rag-system -f values.yaml
+#   helm install rag-system ./deploy/k8s/helm/rag-system -f values.yaml -f values-prod.yaml
 
 # -- Override the name of the chart
 nameOverride: ""
@@ -10,37 +14,39 @@ fullnameOverride: ""
 # Global configuration
 # =============================================================================
 global:
-  # -- Docker image registry
+  # -- Docker image registry (e.g., "registry.airgap.local/")
   imageRegistry: ""
-  # -- Image pull secrets
-  imagePullSecrets: [ ]
+  # -- Image pull secrets for private registries
+  imagePullSecrets: []
   # -- Storage class for PVCs (empty = default StorageClass)
   storageClass: ""
-  # -- Namespace all resources are deployed into
+  # -- Namespace all resources are deployed into (defaults to Release.Namespace)
   namespace: ""
 
 # =============================================================================
 # RAG Proxy — FastAPI application
 # =============================================================================
 proxy:
-  # -- Number of proxy replicas (start with 2 for HA)
+  # -- Enable/disable proxy deployment
+  enabled: true
+  # -- Number of proxy replicas (overridden by HPA when autoscaling is enabled)
   replicaCount: 2
 
   image:
     # -- Proxy image repository
     repository: rag-system/proxy
-    # -- Image pull policy
+    # -- Image pull policy (IfNotPresent for production, Always for dev)
     pullPolicy: IfNotPresent
-    # -- Image tag (overrides appVersion)
+    # -- Image tag (overrides Chart.appVersion)
     tag: ""
 
   # -- Image pull secrets for the proxy container
-  imagePullSecrets: [ ]
+  imagePullSecrets: []
 
-  # -- Additional pod annotations
-  podAnnotations: { }
+  # -- Additional pod annotations (e.g., Prometheus scrape config)
+  podAnnotations: {}
   # -- Additional pod labels
-  podLabels: { }
+  podLabels: {}
 
   # Pod security context
   podSecurityContext:
@@ -72,7 +78,17 @@ proxy:
       cpu: "1"
       memory: 2Gi
 
-  # -- liveness probe: checks the app is alive
+  # -- Startup probe: grace period for model loading (up to 150s)
+  startupProbe:
+    httpGet:
+      path: /v1/health/live
+      port: 8080
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+  # -- Liveness probe: checks the app is alive
   livenessProbe:
     httpGet:
       path: /v1/health/live
@@ -82,7 +98,7 @@ proxy:
     timeoutSeconds: 5
     failureThreshold: 3
 
-  # -- readiness probe: checks dependencies (Qdrant, LLM) are reachable
+  # -- Readiness probe: checks dependencies (Qdrant, LLM) are reachable
   readinessProbe:
     httpGet:
       path: /v1/health/ready
@@ -100,17 +116,24 @@ proxy:
     # -- Average CPU utilization percentage across pods
     targetCPUUtilizationPercentage: 70
     # -- Average memory utilization percentage across pods (optional)
-    targetMemoryUtilizationPercentage: ~
+    targetMemoryUtilizationPercentage: null
+    # -- HPA behavior (scale-down stabilization)
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
 
-  # -- Pod topology spread constraints
+  # -- Pod anti-affinity to spread replicas across nodes
   podAntiAffinity:
     enabled: true
     # -- soft = preferredDuringScheduling, hard = requiredDuringScheduling
     type: soft
 
+  # -- Extra environment variables (added directly to the container)
+  extraEnv: []
+
   # Environment variables injected from config values
   env:
-    # -- Qdrant host (usually the service name)
+    # -- Qdrant host (defaults to in-cluster service name)
     qdrantHost: ""
     # -- Qdrant port
     qdrantPort: "6333"
@@ -120,20 +143,26 @@ proxy:
     embedderModel: ""
     # -- Embedder device (cpu or cuda)
     embedderDevice: "cpu"
+    # -- Remote embedder endpoint (empty = local model)
+    embedderEndpoint: ""
+    # -- Embedder fallback to local model when remote unavailable
+    embedderFallbackLocal: "true"
     # -- Reranker model name (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2)
     rerankerModel: ""
     # -- Reranker max input length
     rerankerMaxLength: "512"
     # -- Reranker batch size
     rerankerBatchSize: "32"
+    # -- Remote reranker endpoint (empty = local model)
+    rerankerEndpoint: ""
+    # -- Reranker fallback to local model when remote unavailable
+    rerankerFallbackLocal: "true"
     # -- LLM endpoint URL
     llmEndpoint: ""
     # -- LLM model name
     llmModelName: ""
-    # -- LLM API key (also set via secrets)
-    llmApiKey: ""
-    # -- LLM provider type (vllm, llama_cpp, openai_compatible)
-    llmProvider: "vllm"
+    # -- LLM provider type (openai, anthropic, generic)
+    llmProviderType: "openai"
     # -- Request timeout for LLM calls (seconds)
     requestTimeout: "120"
     # -- Max retries for LLM calls
@@ -144,8 +173,6 @@ proxy:
     slmEndpoint: ""
     # -- SLM model name
     slmModelName: ""
-    # -- SLM API key
-    slmApiKey: ""
     # -- Max tokens for SLM responses
     slmMaxTokens: "256"
     # -- Max chunks to retrieve
@@ -154,14 +181,20 @@ proxy:
     maxChunksAfterRerank: "20"
     # -- Enable Redis cache
     useRedis: "false"
+    # -- Redis URL (defaults to in-cluster Redis)
+    redisUrl: ""
     # -- Enable LangGraph orchestration
     useLangGraph: "false"
+    # -- Enable adaptive routing
+    adaptiveRoutingEnabled: "false"
     # -- Max retrieval loops for agentic mode
     maxRetrievalLoops: "3"
     # -- Enable Neo4j graph knowledge base
     graphEnabled: "false"
-    # -- Neo4j URI
+    # -- Neo4j URI (defaults to in-cluster Neo4j)
     neo4jUri: ""
+    # -- Neo4j user
+    neo4jUser: "neo4j"
     # -- Enable graph expansion in RAG pipeline
     useGraphExpansion: "false"
     # -- Enable request logging
@@ -172,20 +205,28 @@ proxy:
     metricsEnabled: "true"
     # -- Log format (text or json)
     logFormat: "text"
+    # -- Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    logLevel: "INFO"
     # -- Enable rate limiting
     rateLimitEnabled: "false"
     # -- Rate limit per minute per IP
     rateLimitPerMinute: "60"
     # -- Rate limit burst
     rateLimitBurst: "10"
+    # -- Trusted proxy count for X-Forwarded-For
+    trustedProxyCount: "0"
     # -- CORS allowed origins
-    corsOrigins: "*"
+    corsOrigins: "http://localhost:3000,http://localhost:8080"
     # -- Enable JWT authentication
     authEnabled: "false"
     # -- JWT signing algorithm
     jwtAlgorithm: "HS256"
     # -- Token expiry hours
     tokenExpireHours: "24"
+    # -- Access token duration in minutes
+    accessTokenMinutes: "60"
+    # -- Refresh token duration in days
+    refreshTokenDays: "7"
     # -- Enable RBAC
     rbacEnabled: "false"
     # -- Keycloak URL (OIDC)
@@ -202,14 +243,72 @@ proxy:
     confidenceThreshold: "0.5"
     # -- Enable NLI grounding
     nliGroundingEnabled: "true"
+    # -- Enable self-critique
+    selfCritiqueEnabled: "true"
+    # -- Compression strategy (perplexity, keyword, none)
+    compressionStrategy: "keyword"
+    # -- Enable context reordering
+    reorderEnabled: "true"
+    # -- Enable CRAG decomposition
+    cragDecompositionEnabled: "true"
+    # -- Enable NLI model
+    nliModelEnabled: "false"
+    # -- Enable self-enrichment
+    enrichmentEnabled: "false"
+    # -- Enable HyDE (Hypothetical Document Embeddings)
+    hydeEnabled: "true"
+    # -- Enable reflection
+    reflectionEnabled: "true"
+    # -- Reflection depth
+    reflectionDepth: "2"
+    # -- Enable hallucination check
+    hallucinationCheckEnabled: "false"
     # -- Enable token optimizer
     tokenOptimizerEnabled: "true"
+    # -- Enable prefix caching (vLLM)
+    prefixCachingEnabled: "false"
+    # -- Eval dataset path
+    evalDatasetPath: "./data/eval_dataset.json"
+    # -- Enable admin alerts
+    adminAlertEnabled: "false"
+    # -- Admin alert endpoint
+    adminAlertEndpoint: ""
+    # -- Enable response compression
+    compressionEnabled: "true"
+    # -- Minimum size for compression (bytes)
+    compressionMinSize: "500"
+    # -- Compression level (1-9)
+    compressionLevel: "6"
+    # -- SSE chunk size
+    sseChunkSize: "4"
+    # -- Stream buffer size
+    streamBufferSize: "1"
+    # -- Enable warmup
+    warmupEnabled: "true"
+    # -- Warmup on startup
+    warmupOnStartup: "true"
     # -- Server host
     host: "0.0.0.0"
     # -- Server port
     port: "8080"
-    # -- Number of uvicorn workers
+    # -- Number of uvicorn workers (keep at 1)
     workers: "1"
+    # -- Enable tools / function calling
+    toolsEnabled: "false"
+    # -- Enable live source APIs
+    liveSourcesEnabled: "false"
+    # -- Enable I18N
+    i18nEnabled: "true"
+    # -- Default language
+    defaultLanguage: "en"
+    # -- Supported languages
+    supportedLanguages: "en,ru,de,fr,zh"
+    # -- SSL verification
+    sslVerify: "true"
+    # -- Graceful shutdown
+    gracefulShutdownEnabled: "true"
+    # -- Shutdown timeout (seconds)
+    shutdownTimeout: "30"
 
 # =============================================================================
 # Qdrant — Vector database (StatefulSet)
@@ -255,8 +354,6 @@ qdrant:
     accessMode: ReadWriteOnce
     # -- PVC size
     size: 50Gi
-    # -- Reclaim policy (Retain, Delete)
-    reclaimPolicy: Retain
 
   resources:
     limits:
@@ -266,7 +363,7 @@ qdrant:
       cpu: "500m"
       memory: 1Gi
 
-  # -- Pod topology spread constraints
+  # -- Pod anti-affinity
   podAntiAffinity:
     enabled: false
     type: soft
@@ -315,8 +412,6 @@ neo4j:
     accessMode: ReadWriteOnce
     # -- PVC size for data
     size: 20Gi
-    # -- Reclaim policy (Retain, Delete)
-    reclaimPolicy: Retain
 
   resources:
     limits:
@@ -335,7 +430,7 @@ neo4j:
   # -- Heap max size (e.g. 2G)
   heapMaxSize: "2G"
 
-  # -- Pod topology spread constraints
+  # -- Pod anti-affinity
   podAntiAffinity:
     enabled: false
     type: soft
@@ -394,7 +489,7 @@ redis:
   # -- Redis command arguments
   args: "--appendonly yes --maxmemory-policy allkeys-lru"
 
-  # -- Pod topology spread constraints
+  # -- Pod anti-affinity
   podAntiAffinity:
     enabled: false
     type: soft
@@ -407,10 +502,11 @@ ingress:
   enabled: false
   # -- Ingress class name (e.g. nginx, traefik)
   className: "nginx"
-  # -- Additional annotations (e.g. cert-manager)
-  annotations: { }
-    # kubernetes.io/ingress.class: nginx
-  # cert-manager.io/cluster-issuer: letsencrypt-prod
+  # -- Additional annotations (e.g. cert-manager, nginx proxy settings)
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    # nginx.ingress.kubernetes.io/proxy-buffering: "off"
   # -- TLS configuration
   tls:
     enabled: false
@@ -435,19 +531,31 @@ ingress:
           servicePort: 8080
 
 # =============================================================================
-# Secrets (do NOT commit real values — use --set or sealed-secrets)
+# Secrets (do NOT commit real values — use --set, sealed-secrets, or ESO)
 # =============================================================================
 secrets:
   # -- Neo4j password for authentication
   neo4jPassword: ""
   # -- JWT secret for token signing (at least 32 characters)
   jwtSecret: ""
+  # -- JWT public key (for RS256 verification)
+  jwtPublicKey: ""
   # -- Auth valid users as JSON: '{"admin":"password","expert":"password"}'
   authValidUsers: "{}"
   # -- LLM API key
   llmApiKey: ""
   # -- SLM API key
   slmApiKey: ""
+  # -- Embedder API key (for remote embedding services)
+  embedderApiKey: ""
+  # -- Reranker API key (for remote reranker services)
+  rerankerApiKey: ""
+  # -- Confluence API token
+  confluenceApiToken: ""
+  # -- Jira API token
+  jiraApiToken: ""
+  # -- GitLab API token
+  gitlabApiToken: ""
 
 # =============================================================================
 # Service account
@@ -457,30 +565,48 @@ serviceAccount:
   create: true
   # -- Service account name (empty = fullname)
   name: ""
-  # -- Service account annotations
-  annotations: { }
-  # -- Service account automount token
-  automount: true
+  # -- Service account annotations (e.g., for IRSA/workload identity)
+  annotations: {}
+  # -- Service account automount API token
+  automountServiceAccountToken: false
 
 # =============================================================================
-# Pod disruption budgets
+# Pod Disruption Budget
 # =============================================================================
 podDisruptionBudget:
   # -- Enable PDB for proxy
   enabled: false
-  # -- Min available pods
+  # -- Min available pods (mutually exclusive with maxUnavailable)
   minAvailable: 1
-  # -- Max unavailable pods (mutually exclusive with minAvailable)
-  maxUnavailable: ~
+  # -- Max unavailable pods
+  maxUnavailable: null
+
+# =============================================================================
+# Network Policy
+# =============================================================================
+networkPolicy:
+  # -- Enable NetworkPolicy for proxy pods
+  enabled: false
+  # -- Allow ingress from these namespace labels
+  ingressNamespaceSelector:
+    - kubernetes.io/metadata.name: ingress-nginx
+  # -- Allow ingress on these ports
+  ingressPorts:
+    - port: 8080
+      protocol: TCP
+  # -- Allow egress to DNS (kube-dns)
+  # -- Allow egress to intra-namespace pods
+  # -- Allow egress to external services (LLM, embedder endpoints)
+  extraEgressRules: []
 
 # =============================================================================
 # Node selector, tolerations, affinity
 # =============================================================================
 # -- Node selector for all pods
-nodeSelector: { }
+nodeSelector: {}
 
 # -- Tolerations for all pods
-tolerations: [ ]
+tolerations: []
 
 # -- Affinity rules for all pods
-affinity: { }
+affinity: {}
