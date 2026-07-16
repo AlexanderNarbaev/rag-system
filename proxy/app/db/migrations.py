@@ -28,7 +28,7 @@ import importlib
 import logging
 import pkgutil
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -88,17 +88,15 @@ def discover_migrations(package_path: str | None = None) -> None:
         package_path = str(Path(__file__).parent)
 
     package = Path(package_path)
-    for finder, name, is_pkg in pkgutil.iter_modules([str(package)]):
+    for _finder, name, _is_pkg in pkgutil.iter_modules([str(package)]):
         if name.startswith("migration_"):
             try:
                 module = importlib.import_module(f"proxy.app.db.{name}")
                 if hasattr(module, "MIGRATION"):
                     migration = module.MIGRATION
-                    if isinstance(migration, MigrationInfo):
-                        # Only register if not already registered
-                        if migration.version not in _migration_registry:
-                            register_migration(migration)
-                            logger.debug("Discovered migration: v%d - %s", migration.version, migration.name)
+                    if isinstance(migration, MigrationInfo) and migration.version not in _migration_registry:
+                        register_migration(migration)
+                        logger.debug("Discovered migration: v%d - %s", migration.version, migration.name)
             except Exception as e:
                 logger.warning("Failed to load migration module '%s': %s", name, e)
 
@@ -194,6 +192,7 @@ class MigrationManager:
         if self._neo4j_uri:
             try:
                 import importlib.util
+
                 neo4j_spec = importlib.util.find_spec("neo4j")
                 if neo4j_spec is not None:
                     from neo4j import AsyncGraphDatabase
@@ -230,9 +229,7 @@ class MigrationManager:
         await self.initialize()
         assert self._conn is not None
 
-        cursor = await self._conn.execute(
-            "SELECT MAX(version) FROM _migrations"
-        )
+        cursor = await self._conn.execute("SELECT MAX(version) FROM _migrations")
         row = await cursor.fetchone()
         return row[0] if row and row[0] is not None else 0
 
@@ -241,15 +238,11 @@ class MigrationManager:
         await self.initialize()
         assert self._conn is not None
 
-        cursor = await self._conn.execute(
-            "SELECT version FROM _migrations ORDER BY version"
-        )
+        cursor = await self._conn.execute("SELECT version FROM _migrations ORDER BY version")
         applied = {row[0] for row in await cursor.fetchall()}
 
         all_migrations = get_registered_migrations()
-        pending = [
-            m for v, m in sorted(all_migrations.items()) if v not in applied
-        ]
+        pending = [m for v, m in sorted(all_migrations.items()) if v not in applied]
         return pending
 
     async def applied_migrations(self) -> list[MigrationRecord]:
@@ -258,8 +251,7 @@ class MigrationManager:
         assert self._conn is not None
 
         cursor = await self._conn.execute(
-            "SELECT version, name, applied_at, execution_ms, checksum "
-            "FROM _migrations ORDER BY version"
+            "SELECT version, name, applied_at, execution_ms, checksum FROM _migrations ORDER BY version"
         )
         rows = await cursor.fetchall()
         return [
@@ -396,7 +388,8 @@ class MigrationManager:
 
             # Log failure
             await self._conn.execute(
-                """INSERT INTO _migration_log (version, action, details, executed_at, execution_ms, success, error_message)
+                """INSERT INTO _migration_log
+                   (version, action, details, executed_at, execution_ms, success, error_message)
                    VALUES (?, ?, ?, ?, ?, 0, ?)""",
                 (migration.version, "upgrade_failed", f"Failed: {migration.name}", now, execution_ms, str(e)),
             )
@@ -514,9 +507,17 @@ class MigrationManager:
 
             # Log failure
             await self._conn.execute(
-                """INSERT INTO _migration_log (version, action, details, executed_at, execution_ms, success, error_message)
+                """INSERT INTO _migration_log
+                   (version, action, details, executed_at, execution_ms, success, error_message)
                    VALUES (?, ?, ?, ?, ?, 0, ?)""",
-                (migration.version, "downgrade_failed", f"Failed rollback: {migration.name}", now, execution_ms, str(e)),
+                (
+                    migration.version,
+                    "downgrade_failed",
+                    f"Failed rollback: {migration.name}",
+                    now,
+                    execution_ms,
+                    str(e),
+                ),
             )
             await self._conn.commit()
 
@@ -573,9 +574,7 @@ class MigrationManager:
             return 0
 
         async with self._neo4j_driver.session() as session:
-            result = await session.run(
-                "MATCH (m:_Migration) RETURN m.version AS v ORDER BY v DESC LIMIT 1"
-            )
+            result = await session.run("MATCH (m:_Migration) RETURN m.version AS v ORDER BY v DESC LIMIT 1")
             record = await result.single()
             return record["v"] if record else 0
 

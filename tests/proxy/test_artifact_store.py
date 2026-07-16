@@ -2,9 +2,7 @@
 """Tests for proxy/app/model_evolution/artifact_store.py — local-mode ArtifactStore."""
 
 import os
-import shutil
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -153,7 +151,7 @@ class TestArtifactStoreS3Mode:
         store._client = mock_client
         store._local_mode = False
 
-        ref = store.upload_model("model", "1.0", str(src))
+        store.upload_model("model", "1.0", str(src))
         mock_client.upload_file.assert_called_once()
 
     def test_s3_download_model(self, tmp_path):
@@ -161,15 +159,13 @@ class TestArtifactStoreS3Mode:
         mock_client = MagicMock()
         paginator = MagicMock()
         mock_client.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [
-            {"Contents": [{"Key": "models/model/1.0/config.json"}]}
-        ]
+        paginator.paginate.return_value = [{"Contents": [{"Key": "models/model/1.0/config.json"}]}]
 
         store = ArtifactStore(bucket="my-bucket")
         store._client = mock_client
         store._local_mode = False
 
-        result = store.download_model("model", "1.0", str(tmp_path))
+        store.download_model("model", "1.0", str(tmp_path))
         mock_client.download_file.assert_called()
 
     def test_s3_download_empty_contents(self, tmp_path):
@@ -183,7 +179,7 @@ class TestArtifactStoreS3Mode:
         store._client = mock_client
         store._local_mode = False
 
-        result = store.download_model("model", "1.0", str(tmp_path))
+        store.download_model("model", "1.0", str(tmp_path))
         mock_client.download_file.assert_not_called()
 
     def test_s3_list_versions(self):
@@ -222,9 +218,7 @@ class TestArtifactStoreS3Mode:
         mock_client = MagicMock()
         paginator = MagicMock()
         mock_client.get_paginator.return_value = paginator
-        paginator.paginate.return_value = [
-            {"Contents": [{"Key": "models/model/1.0/file.bin"}]}
-        ]
+        paginator.paginate.return_value = [{"Contents": [{"Key": "models/model/1.0/file.bin"}]}]
 
         store = ArtifactStore(bucket="my-bucket")
         store._client = mock_client

@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from proxy.app.model_evolution.slm_trainer import (
+    ID_TO_INTENT,
     INTENT_LABELS,
     INTENT_TO_ID,
-    ID_TO_INTENT,
     SLMTrainer,
 )
 
@@ -119,39 +119,45 @@ class TestSLMTrainerUnit:
         assert trainer._fallback_predict("weather") == "simple_fact"
 
     def test_resolve_device_cpu(self, trainer):
-        from proxy.app.model_evolution.trainer import TrainingConfig, TrainerType
         from proxy.app.model_evolution.env_profile import EnvProfile
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
         config = TrainingConfig(trainer_type=TrainerType.SLM, env_profile=EnvProfile.DEV)
         assert trainer._resolve_device(config) == "cpu"
 
     def test_resolve_device_no_torch(self, trainer):
-        from proxy.app.model_evolution.trainer import TrainingConfig, TrainerType
         from proxy.app.model_evolution.env_profile import EnvProfile
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
         config = TrainingConfig(trainer_type=TrainerType.SLM, env_profile=EnvProfile.DEV)
         with patch("proxy.app.model_evolution.slm_trainer._TORCH_AVAILABLE", False):
             assert trainer._resolve_device(config) == "cpu"
 
     def test_resolve_target_modules_bert(self, trainer):
-        from proxy.app.model_evolution.trainer import TrainingConfig, TrainerType
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
         config = TrainingConfig(trainer_type=TrainerType.SLM, base_model="bert-base-uncased")
         modules = trainer._resolve_target_modules(config)
         assert "query" in modules
         assert "value" in modules
 
     def test_resolve_target_modules_roberta(self, trainer):
-        from proxy.app.model_evolution.trainer import TrainingConfig, TrainerType
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
         config = TrainingConfig(trainer_type=TrainerType.SLM, base_model="roberta-base")
         modules = trainer._resolve_target_modules(config)
         assert "query" in modules
 
     def test_resolve_target_modules_llama(self, trainer):
-        from proxy.app.model_evolution.trainer import TrainingConfig, TrainerType
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
         config = TrainingConfig(trainer_type=TrainerType.SLM, base_model="llama-3b")
         modules = trainer._resolve_target_modules(config)
         assert "q_proj" in modules
 
     def test_resolve_target_modules_default(self, trainer):
-        from proxy.app.model_evolution.trainer import TrainingConfig, TrainerType
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
         config = TrainingConfig(trainer_type=TrainerType.SLM, base_model="unknown-model")
         modules = trainer._resolve_target_modules(config)
         assert "q_proj" in modules

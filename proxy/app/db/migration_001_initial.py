@@ -76,9 +76,7 @@ async def check_existing_schema(conn: Any) -> None:
 
     This makes the migration idempotent for existing databases.
     """
-    cursor = await conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
-    )
+    cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
     exists = await cursor.fetchone()
     if exists:
         # Tables already exist — this is an existing database

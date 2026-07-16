@@ -6,7 +6,7 @@
 services:
   # ── Nginx (reverse proxy with TLS termination) ─────────────────────────────
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.27
     container_name: rag-nginx
     ports:
       - "443:443"   # HTTPS
@@ -149,7 +149,7 @@ services:
   # ── RAG proxy (FastAPI) ─────────────────────────────────────────────────────
   rag-proxy:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile.proxy
     container_name: rag-proxy
     # Port 8080 is only exposed to internal network (nginx handles external traffic)

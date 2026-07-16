@@ -1,9 +1,8 @@
 # ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for advanced retrieval classes: MultiHopGraphExplorer, CypherQueryGenerator, GlobalSearch, etc."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from datetime import UTC
+from unittest.mock import MagicMock
 
 from proxy.app.core.retrieval import (
     CypherQueryGenerator,
@@ -83,8 +82,9 @@ class TestApplyTimeDecay:
         assert result[0]["score"] == 0.8
 
     def test_recent_timestamp_boost(self):
-        from datetime import datetime, timezone
-        recent = datetime.now(timezone.utc).isoformat()
+        from datetime import datetime
+
+        recent = datetime.now(UTC).isoformat()
         chunks = [{"id": "1", "score": 0.5, "payload": {"updated_at": recent}}]
         result = apply_time_decay(chunks)
         # Recent documents get higher boost

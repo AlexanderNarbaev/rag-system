@@ -24,239 +24,239 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-logger = logging.getLogger (__name__)
+logger = logging.getLogger(__name__)
 
 
 class InMemoryCache:
-  """Simple in-memory cache with TTL expiration."""
+    """Simple in-memory cache with TTL expiration."""
 
-  # Default TTL for cache entries (1 hour)
-  DEFAULT_TTL_SECONDS = 3600
+    # Default TTL for cache entries (1 hour)
+    DEFAULT_TTL_SECONDS = 3600
 
-  def __init__ (self) -> None:
-    self._store: dict [str, tuple [Any, float]] = {}  # key -> (value, expire_timestamp)
+    def __init__(self) -> None:
+        self._store: dict[str, tuple[Any, float]] = {}  # key -> (value, expire_timestamp)
 
-  def _is_expired (self, expire_ts: float) -> bool:
-    return expire_ts < datetime.now (UTC).timestamp ()
+    def _is_expired(self, expire_ts: float) -> bool:
+        return expire_ts < datetime.now(UTC).timestamp()
 
-  def _get_value (self, key: str) -> Any | None:
-    """Internal sync get — used by both async and sync interfaces."""
-    if key not in self._store:
-      return None
-    value, expire_ts = self._store [key]
-    if self._is_expired (expire_ts):
-      del self._store [key]
-      return None
-    return value
+    def _get_value(self, key: str) -> Any | None:
+        """Internal sync get — used by both async and sync interfaces."""
+        if key not in self._store:
+            return None
+        value, expire_ts = self._store[key]
+        if self._is_expired(expire_ts):
+            del self._store[key]
+            return None
+        return value
 
-  def _set_value (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    """Internal sync set — used by both async and sync interfaces."""
-    expire_ts = datetime.now (UTC).timestamp () + ttl
-    self._store [key] = (value, expire_ts)
-    return True
+    def _set_value(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        """Internal sync set — used by both async and sync interfaces."""
+        expire_ts = datetime.now(UTC).timestamp() + ttl
+        self._store[key] = (value, expire_ts)
+        return True
 
-  async def get (self, key: str) -> Any | None:
-    return self._get_value (key)
+    async def get(self, key: str) -> Any | None:
+        return self._get_value(key)
 
-  async def set (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    return self._set_value (key, value, ttl)
+    async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        return self._set_value(key, value, ttl)
 
-  async def delete (self, key: str) -> bool:
-    if key in self._store:
-      del self._store [key]
-      return True
-    return False
+    async def delete(self, key: str) -> bool:
+        if key in self._store:
+            del self._store[key]
+            return True
+        return False
 
-  async def clear (self) -> None:
-    self._store.clear ()
+    async def clear(self) -> None:
+        self._store.clear()
 
-  # Синхронные методы — InMemoryCache не требует asyncio (данные в памяти)
-  def get_sync (self, key: str) -> Any | None:
-    return self._get_value (key)
+    # Синхронные методы — InMemoryCache не требует asyncio (данные в памяти)
+    def get_sync(self, key: str) -> Any | None:
+        return self._get_value(key)
 
-  def set_sync (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    return self._set_value (key, value, ttl)
+    def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        return self._set_value(key, value, ttl)
 
-  def delete_sync (self, key: str) -> bool:
-    if key in self._store:
-      del self._store [key]
-      return True
-    return False
+    def delete_sync(self, key: str) -> bool:
+        if key in self._store:
+            del self._store[key]
+            return True
+        return False
 
 
 class RedisCache:
-  """Redis-based cache with async and sync interfaces."""
+    """Redis-based cache with async and sync interfaces."""
 
-  def __init__ (self, redis_url: str) -> None:
-    self.redis_url = redis_url
-    self._client: Any = None
-    self._sync_client: Any = None
+    def __init__(self, redis_url: str) -> None:
+        self.redis_url = redis_url
+        self._client: Any = None
+        self._sync_client: Any = None
 
-  async def _get_client (self) -> Any:
-    if self._client is None:
-      try:
-        import redis.asyncio as redis
+    async def _get_client(self) -> Any:
+        if self._client is None:
+            try:
+                import redis.asyncio as redis
 
-        self._client = redis.from_url (self.redis_url, decode_responses = True)
-        # Проверяем соединение
-        await self._client.ping ()
-        logger.info (f"Connected to Redis at {self.redis_url}")
-      except ImportError:
-        logger.error ("redis.asyncio not installed. Install: pip install redis")
-        raise
-      except Exception as e:
-        logger.error (f"Failed to connect to Redis: {e}")
-        raise
-    return self._client
+                self._client = redis.from_url(self.redis_url, decode_responses=True)
+                # Проверяем соединение
+                await self._client.ping()
+                logger.info(f"Connected to Redis at {self.redis_url}")
+            except ImportError:
+                logger.error("redis.asyncio not installed. Install: pip install redis")
+                raise
+            except Exception as e:
+                logger.error(f"Failed to connect to Redis: {e}")
+                raise
+        return self._client
 
-  def _get_sync_client (self) -> Any:
-    """Get or create a sync Redis client for sync operations."""
-    if self._sync_client is None:
-      try:
-        import redis as sync_redis
+    def _get_sync_client(self) -> Any:
+        """Get or create a sync Redis client for sync operations."""
+        if self._sync_client is None:
+            try:
+                import redis as sync_redis
 
-        self._sync_client = sync_redis.from_url (self.redis_url, decode_responses = True)
-        self._sync_client.ping ()
-      except ImportError:
-        logger.error ("redis not installed. Install: pip install redis")
-        raise
-      except Exception as e:
-        logger.error ("Failed to create sync Redis client: %s", e)
-        raise
-    return self._sync_client
+                self._sync_client = sync_redis.from_url(self.redis_url, decode_responses=True)
+                self._sync_client.ping()
+            except ImportError:
+                logger.error("redis not installed. Install: pip install redis")
+                raise
+            except Exception as e:
+                logger.error("Failed to create sync Redis client: %s", e)
+                raise
+        return self._sync_client
 
-  async def get (self, key: str) -> Any | None:
-    client = await self._get_client ()
-    value = await client.get (key)
-    if value is None:
-      return None
-    try:
-      return json.loads (value)
-    except json.JSONDecodeError:
-      return value  # строка
+    async def get(self, key: str) -> Any | None:
+        client = await self._get_client()
+        value = await client.get(key)
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value  # строка
 
-  async def set (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    client = await self._get_client ()
-    if not isinstance (value, str):
-      value = json.dumps (value, ensure_ascii = False)
-    await client.setex (key, ttl, value)
-    return True
+    async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        client = await self._get_client()
+        if not isinstance(value, str):
+            value = json.dumps(value, ensure_ascii=False)
+        await client.setex(key, ttl, value)
+        return True
 
-  async def delete (self, key: str) -> bool:
-    client = await self._get_client ()
-    deleted: int = await client.delete (key)
-    return deleted > 0
+    async def delete(self, key: str) -> bool:
+        client = await self._get_client()
+        deleted: int = await client.delete(key)
+        return deleted > 0
 
-  async def clear (self) -> None:
-    client = await self._get_client ()
-    await client.flushdb ()
+    async def clear(self) -> None:
+        client = await self._get_client()
+        await client.flushdb()
 
-  # Синхронные обёртки — используют отдельный sync Redis клиент
-  def get_sync (self, key: str) -> Any | None:
-    try:
-      client = self._get_sync_client ()
-      value = client.get (key)
-      if value is None:
-        return None
-      try:
-        return json.loads (value)
-      except json.JSONDecodeError:
-        return value
-    except Exception as e:
-      logger.debug ("Redis get_sync failed: %s", e)
-      return None
+    # Синхронные обёртки — используют отдельный sync Redis клиент
+    def get_sync(self, key: str) -> Any | None:
+        try:
+            client = self._get_sync_client()
+            value = client.get(key)
+            if value is None:
+                return None
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+        except Exception as e:
+            logger.debug("Redis get_sync failed: %s", e)
+            return None
 
-  def set_sync (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    try:
-      client = self._get_sync_client ()
-      if not isinstance (value, str):
-        value = json.dumps (value, ensure_ascii = False)
-      client.setex (key, ttl, value)
-      return True
-    except Exception as e:
-      logger.debug ("Redis set_sync failed: %s", e)
-      return False
+    def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        try:
+            client = self._get_sync_client()
+            if not isinstance(value, str):
+                value = json.dumps(value, ensure_ascii=False)
+            client.setex(key, ttl, value)
+            return True
+        except Exception as e:
+            logger.debug("Redis set_sync failed: %s", e)
+            return False
 
-  def delete_sync (self, key: str) -> bool:
-    try:
-      client = self._get_sync_client ()
-      deleted: int = client.delete (key)
-      return deleted > 0
-    except Exception as e:
-      logger.debug ("Redis delete_sync failed: %s", e)
-      return False
+    def delete_sync(self, key: str) -> bool:
+        try:
+            client = self._get_sync_client()
+            deleted: int = client.delete(key)
+            return deleted > 0
+        except Exception as e:
+            logger.debug("Redis delete_sync failed: %s", e)
+            return False
 
-  async def close (self) -> None:
-    if self._client:
-      await self._client.close ()
-      self._client = None
-    if self._sync_client:
-      self._sync_client.close ()
-      self._sync_client = None
+    async def close(self) -> None:
+        if self._client:
+            await self._client.close()
+            self._client = None
+        if self._sync_client:
+            self._sync_client.close()
+            self._sync_client = None
 
 
 class CacheManager:
-  """
-  Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory.
-  """
+    """
+    Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory.
+    """
 
-  def __init__ (self, redis_url: str | None = None, use_redis: bool = True) -> None:
-    self.use_redis = use_redis and redis_url is not None
-    self._cache: RedisCache | InMemoryCache
-    if self.use_redis and redis_url is not None:
-      self._cache = RedisCache (redis_url)
-    else:
-      self._cache = InMemoryCache ()
-    logger.info (f"CacheManager initialized with {type (self._cache).__name__}")
+    def __init__(self, redis_url: str | None = None, use_redis: bool = True) -> None:
+        self.use_redis = use_redis and redis_url is not None
+        self._cache: RedisCache | InMemoryCache
+        if self.use_redis and redis_url is not None:
+            self._cache = RedisCache(redis_url)
+        else:
+            self._cache = InMemoryCache()
+        logger.info(f"CacheManager initialized with {type(self._cache).__name__}")
 
-  async def initialize (self) -> None:
-    """Для Redis: проверка подключения при старте."""
-    if self.use_redis and hasattr (self._cache, "_get_client"):
-      await self._cache._get_client ()
+    async def initialize(self) -> None:
+        """Для Redis: проверка подключения при старте."""
+        if self.use_redis and hasattr(self._cache, "_get_client"):
+            await self._cache._get_client()
 
-  async def get (self, key: str) -> Any | None:
-    return await self._cache.get (key)
+    async def get(self, key: str) -> Any | None:
+        return await self._cache.get(key)
 
-  async def set (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    return await self._cache.set (key, value, ttl)
+    async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        return await self._cache.set(key, value, ttl)
 
-  async def delete (self, key: str) -> bool:
-    return await self._cache.delete (key)
+    async def delete(self, key: str) -> bool:
+        return await self._cache.delete(key)
 
-  async def clear (self) -> None:
-    await self._cache.clear ()
+    async def clear(self) -> None:
+        await self._cache.clear()
 
-  async def close (self) -> None:
-    if hasattr (self._cache, "close"):
-      await self._cache.close ()
+    async def close(self) -> None:
+        if hasattr(self._cache, "close"):
+            await self._cache.close()
 
-  # Синхронные методы для обратной совместимости (используются в retrieval и rerank)
-  def get_sync (self, key: str) -> Any | None:
-    return self._cache.get_sync (key)
+    # Синхронные методы для обратной совместимости (используются в retrieval и rerank)
+    def get_sync(self, key: str) -> Any | None:
+        return self._cache.get_sync(key)
 
-  def set_sync (self, key: str, value: Any, ttl: int = 3600) -> bool:
-    return self._cache.set_sync (key, value, ttl)
+    def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
+        return self._cache.set_sync(key, value, ttl)
 
-  def delete_sync (self, key: str) -> bool:
-    return self._cache.delete_sync (key)
+    def delete_sync(self, key: str) -> bool:
+        return self._cache.delete_sync(key)
 
 
 # Пример использования
 if __name__ == "__main__":
-  async def test () -> None:
-    # In-memory
-    cache = CacheManager (use_redis = False)
-    await cache.set ("test_key", "hello", ttl = 10)
-    val = await cache.get ("test_key")
-    print (f"In-memory get: {val}")
 
-    # Redis (если доступен)
-    cache2 = CacheManager (redis_url = "redis://localhost:6379", use_redis = True)
-    await cache2.initialize ()
-    await cache2.set ("test_redis", {"data": 123}, ttl = 60)
-    val2 = await cache2.get ("test_redis")
-    print (f"Redis get: {val2}")
-    await cache2.close ()
+    async def test() -> None:
+        # In-memory
+        cache = CacheManager(use_redis=False)
+        await cache.set("test_key", "hello", ttl=10)
+        val = await cache.get("test_key")
+        print(f"In-memory get: {val}")
 
+        # Redis (если доступен)
+        cache2 = CacheManager(redis_url="redis://localhost:6379", use_redis=True)
+        await cache2.initialize()
+        await cache2.set("test_redis", {"data": 123}, ttl=60)
+        val2 = await cache2.get("test_redis")
+        print(f"Redis get: {val2}")
+        await cache2.close()
 
-  asyncio.run (test ())
+    asyncio.run(test())

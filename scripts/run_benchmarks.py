@@ -28,7 +28,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
@@ -257,10 +256,13 @@ def run_benchmarks(categories: list[str] | None = None) -> list[BenchmarkResult]
 
     # Build pytest command
     cmd = [
-        sys.executable, "-m", "pytest",
+        sys.executable,
+        "-m",
+        "pytest",
         str(test_file),
         "-v",
-        "-m", "benchmark",
+        "-m",
+        "benchmark",
         "--tb=short",
         "--no-header",
         "-s",  # Don't capture stdout so we can read the printed stats
@@ -288,7 +290,7 @@ def run_benchmarks(categories: list[str] | None = None) -> list[BenchmarkResult]
         cwd=str(Path(__file__).parent.parent),
     )
 
-    duration = time.perf_counter() - start_time
+    time.perf_counter() - start_time
     print(proc.stdout)
     if proc.stderr:
         print(proc.stderr, file=sys.stderr)
@@ -320,19 +322,21 @@ def _parse_benchmark_output(output: str) -> list[BenchmarkResult]:
         count = int(match.group(5))
         threshold = THRESHOLDS.get(name, 0.0)
 
-        results.append(BenchmarkResult(
-            name=name,
-            category=get_category(name),
-            count=count,
-            p50_ms=round(p50, 3),
-            p95_ms=round(p95, 3),
-            p99_ms=round(p99, 3),
-            min_ms=round(p50 * 0.8, 3),  # Approximate from p50
-            max_ms=round(p99 * 1.1, 3),  # Approximate from p99
-            mean_ms=round((p50 + p95 + p99) / 3, 3),
-            passed=(p95 <= threshold) if threshold > 0 else True,
-            threshold_ms=threshold,
-        ))
+        results.append(
+            BenchmarkResult(
+                name=name,
+                category=get_category(name),
+                count=count,
+                p50_ms=round(p50, 3),
+                p95_ms=round(p95, 3),
+                p99_ms=round(p99, 3),
+                min_ms=round(p50 * 0.8, 3),  # Approximate from p50
+                max_ms=round(p99 * 1.1, 3),  # Approximate from p99
+                mean_ms=round((p50 + p95 + p99) / 3, 3),
+                passed=(p95 <= threshold) if threshold > 0 else True,
+                threshold_ms=threshold,
+            )
+        )
 
     return results
 
@@ -383,6 +387,7 @@ def _get_cpu_count() -> int:
     """Get CPU count (logical cores)."""
     try:
         import os
+
         return os.cpu_count() or 0
     except Exception:
         return 0
@@ -429,8 +434,8 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
         "",
         "## Summary",
         "",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Total Benchmarks | {report.summary.get('total_benchmarks', 0)} |",
         f"| Passed | {report.summary.get('passed', 0)} |",
         f"| Failed | {report.summary.get('failed', 0)} |",
@@ -441,25 +446,27 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
     # Category breakdown
     cats = report.summary.get("categories", {})
     if cats:
-        lines.extend([
-            "### By Category",
-            "",
-            "| Category | Passed | Failed | Total |",
-            "|----------|--------|--------|-------|",
-        ])
+        lines.extend(
+            [
+                "### By Category",
+                "",
+                "| Category | Passed | Failed | Total |",
+                "|----------|--------|--------|-------|",
+            ]
+        )
         for cat_name, cat_data in sorted(cats.items()):
-            lines.append(
-                f"| {cat_name} | {cat_data['passed']} | {cat_data['failed']} | {cat_data['total']} |"
-            )
+            lines.append(f"| {cat_name} | {cat_data['passed']} | {cat_data['failed']} | {cat_data['total']} |")
         lines.append("")
 
     # Detailed results grouped by category
-    lines.extend([
-        "---",
-        "",
-        "## Detailed Results",
-        "",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            "## Detailed Results",
+            "",
+        ]
+    )
 
     current_cat = None
     for r in sorted(report.results, key=lambda x: (x.category, x.name)):
@@ -474,73 +481,76 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
         status_emoji = "OK" if r.passed else "!!"
         name_clean = r.name.replace("test_", "").replace("_", " ")
         lines.append(
-            f"| {name_clean} | {r.p50_ms:.3f} | {r.p95_ms:.3f} | {r.p99_ms:.3f} | {r.threshold_ms:.1f} | {status_emoji} {status} |"
+            f"| {name_clean} | {r.p50_ms:.3f} | {r.p95_ms:.3f} | {r.p99_ms:.3f} | "
+            f"{r.threshold_ms:.1f} | {status_emoji} {status} |"
         )
 
     lines.append("")
 
     # Baseline comparison section
-    lines.extend([
-        "---",
-        "",
-        "## Baseline Expectations (Reference Hardware)",
-        "",
-        "These baselines were measured on:",
-        "- **CPU:** Intel Xeon E5-2686 v4 (8 cores) or equivalent",
-        "- **RAM:** 32 GB",
-        "- **Python:** 3.12+",
-        "- **No GPU** (CPU-only benchmarks)",
-        "",
-        "### Component Latency Targets",
-        "",
-        "| Component | Target p50 | Target p95 | Notes |",
-        "|-----------|------------|------------|-------|",
-        "| Token estimation (short) | <0.1ms | <1.0ms | ~50 tokens, tiktoken fallback |",
-        "| Token estimation (long) | <1.0ms | <5.0ms | ~2500 tokens |",
-        "| SHA-256 hashing | <0.1ms | <0.5ms | ~2.6KB input |",
-        "| Embedding cache hit | <0.01ms | <0.1ms | In-memory lookup |",
-        "| Embedding cache miss | <0.1ms | <1.0ms | Full word-overlap scan |",
-        "| Cosine similarity (1024-d) | <0.1ms | <0.5ms | Single pair |",
-        "| RRF fusion (20 hits) | <0.1ms | <1.0ms | Two ranked lists |",
-        "| RRF fusion (50 hits) | <0.5ms | <2.0ms | Production top_k |",
-        "| Knee-point pruning | <0.5ms | <2.0ms | NumPy-based |",
-        "| Score filtering | <0.1ms | <1.0ms | Two-level threshold |",
-        "| ColBERT score (5x10) | <0.5ms | <5.0ms | 64-d tokens |",
-        "| ColBERT score (20x50) | <5.0ms | <50.0ms | 128-d tokens |",
-        "| Dedup (10 chunks) | <0.1ms | <1.0ms | SHA-256 hash |",
-        "| Dedup (50 chunks) | <0.5ms | <5.0ms | Production size |",
-        "| Dedup (200 chunks) | <2.0ms | <20.0ms | Stress test |",
-        "| Context build (5 chunks) | <0.5ms | <5.0ms | 4K token budget |",
-        "| Context build (20 chunks) | <2.0ms | <20.0ms | 16K token budget |",
-        "| Context reorder | <0.1ms | <1.0ms | LongContextReorder |",
-        "| Prepare context (15) | <5.0ms | <30.0ms | Full pipeline |",
-        "| Multi-hop BFS (2 hops) | <1.0ms | <10.0ms | 20 entities |",
-        "| Cypher generation | <0.1ms | <0.5ms | Pattern matching |",
-        "| Global search (20) | <0.5ms | <5.0ms | Keyword overlap |",
-        "| Time decay (20 chunks) | <0.5ms | <5.0ms | Exponential decay |",
-        "| Dynamic top-k | <1.0ms | <10.0ms | SLM + heuristic |",
-        "",
-        "### End-to-End (Mocked Services)",
-        "",
-        "| Endpoint | Target p50 | Target p95 | Notes |",
-        "|----------|------------|------------|-------|",
-        "| Chat (non-streaming) | <100ms | <5000ms | Framework overhead only |",
-        "| Chat (streaming) | <100ms | <5000ms | TTFT with mocked LLM |",
-        "| Health /live | <10ms | <200ms | Liveness probe |",
-        "| Models list | <20ms | <500ms | Static response |",
-        "",
-        "---",
-        "",
-        "## Tuning Recommendations",
-        "",
-        "1. **Embedding cache**: If cache hit latency >0.1ms, reduce cache size or use LRU eviction",
-        "2. **RRF fusion**: If >2ms for 50 hits, consider pre-sorting or using NumPy vectorization",
-        "3. **ColBERT scoring**: If >50ms for 20x50, reduce token dimensions or batch on GPU",
-        "4. **Deduplication**: If >20ms for 200 chunks, consider Bloom filter pre-filtering",
-        "5. **Context build**: If >30ms for 15 chunks, reduce metadata overhead or pre-compute hashes",
-        "6. **Graph traversal**: If >10ms for 2 hops, limit entity map connectivity or add indexing",
-        "",
-    ])
+    lines.extend(
+        [
+            "---",
+            "",
+            "## Baseline Expectations (Reference Hardware)",
+            "",
+            "These baselines were measured on:",
+            "- **CPU:** Intel Xeon E5-2686 v4 (8 cores) or equivalent",
+            "- **RAM:** 32 GB",
+            "- **Python:** 3.12+",
+            "- **No GPU** (CPU-only benchmarks)",
+            "",
+            "### Component Latency Targets",
+            "",
+            "| Component | Target p50 | Target p95 | Notes |",
+            "|-----------|------------|------------|-------|",
+            "| Token estimation (short) | <0.1ms | <1.0ms | ~50 tokens, tiktoken fallback |",
+            "| Token estimation (long) | <1.0ms | <5.0ms | ~2500 tokens |",
+            "| SHA-256 hashing | <0.1ms | <0.5ms | ~2.6KB input |",
+            "| Embedding cache hit | <0.01ms | <0.1ms | In-memory lookup |",
+            "| Embedding cache miss | <0.1ms | <1.0ms | Full word-overlap scan |",
+            "| Cosine similarity (1024-d) | <0.1ms | <0.5ms | Single pair |",
+            "| RRF fusion (20 hits) | <0.1ms | <1.0ms | Two ranked lists |",
+            "| RRF fusion (50 hits) | <0.5ms | <2.0ms | Production top_k |",
+            "| Knee-point pruning | <0.5ms | <2.0ms | NumPy-based |",
+            "| Score filtering | <0.1ms | <1.0ms | Two-level threshold |",
+            "| ColBERT score (5x10) | <0.5ms | <5.0ms | 64-d tokens |",
+            "| ColBERT score (20x50) | <5.0ms | <50.0ms | 128-d tokens |",
+            "| Dedup (10 chunks) | <0.1ms | <1.0ms | SHA-256 hash |",
+            "| Dedup (50 chunks) | <0.5ms | <5.0ms | Production size |",
+            "| Dedup (200 chunks) | <2.0ms | <20.0ms | Stress test |",
+            "| Context build (5 chunks) | <0.5ms | <5.0ms | 4K token budget |",
+            "| Context build (20 chunks) | <2.0ms | <20.0ms | 16K token budget |",
+            "| Context reorder | <0.1ms | <1.0ms | LongContextReorder |",
+            "| Prepare context (15) | <5.0ms | <30.0ms | Full pipeline |",
+            "| Multi-hop BFS (2 hops) | <1.0ms | <10.0ms | 20 entities |",
+            "| Cypher generation | <0.1ms | <0.5ms | Pattern matching |",
+            "| Global search (20) | <0.5ms | <5.0ms | Keyword overlap |",
+            "| Time decay (20 chunks) | <0.5ms | <5.0ms | Exponential decay |",
+            "| Dynamic top-k | <1.0ms | <10.0ms | SLM + heuristic |",
+            "",
+            "### End-to-End (Mocked Services)",
+            "",
+            "| Endpoint | Target p50 | Target p95 | Notes |",
+            "|----------|------------|------------|-------|",
+            "| Chat (non-streaming) | <100ms | <5000ms | Framework overhead only |",
+            "| Chat (streaming) | <100ms | <5000ms | TTFT with mocked LLM |",
+            "| Health /live | <10ms | <200ms | Liveness probe |",
+            "| Models list | <20ms | <500ms | Static response |",
+            "",
+            "---",
+            "",
+            "## Tuning Recommendations",
+            "",
+            "1. **Embedding cache**: If cache hit latency >0.1ms, reduce cache size or use LRU eviction",
+            "2. **RRF fusion**: If >2ms for 50 hits, consider pre-sorting or using NumPy vectorization",
+            "3. **ColBERT scoring**: If >50ms for 20x50, reduce token dimensions or batch on GPU",
+            "4. **Deduplication**: If >20ms for 200 chunks, consider Bloom filter pre-filtering",
+            "5. **Context build**: If >30ms for 15 chunks, reduce metadata overhead or pre-compute hashes",
+            "6. **Graph traversal**: If >10ms for 2 hops, limit entity map connectivity or add indexing",
+            "",
+        ]
+    )
 
     with open(path, "w") as f:
         f.write("\n".join(lines))
@@ -548,9 +558,7 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
     return path
 
 
-def compare_with_baseline(
-    results: list[BenchmarkResult], baseline_path: Path
-) -> list[dict[str, Any]]:
+def compare_with_baseline(results: list[BenchmarkResult], baseline_path: Path) -> list[dict[str, Any]]:
     """Compare current results against a baseline JSON file.
 
     Returns a list of comparison dicts with deltas.
@@ -568,18 +576,20 @@ def compare_with_baseline(
     for r in results:
         if r.name in baseline_map:
             bl = baseline_map[r.name]
-            delta_p50 = r.p50_ms - bl["p50_ms"]
+            r.p50_ms - bl["p50_ms"]
             delta_p95 = r.p95_ms - bl["p95_ms"]
             pct_change = ((r.p95_ms - bl["p95_ms"]) / bl["p95_ms"] * 100) if bl["p95_ms"] > 0 else 0
 
-            comparisons.append({
-                "name": r.name,
-                "baseline_p95_ms": bl["p95_ms"],
-                "current_p95_ms": r.p95_ms,
-                "delta_p95_ms": round(delta_p95, 3),
-                "change_pct": round(pct_change, 1),
-                "regression": delta_p95 > (bl["p95_ms"] * 0.2),  # >20% = regression
-            })
+            comparisons.append(
+                {
+                    "name": r.name,
+                    "baseline_p95_ms": bl["p95_ms"],
+                    "current_p95_ms": r.p95_ms,
+                    "delta_p95_ms": round(delta_p95, 3),
+                    "change_pct": round(pct_change, 1),
+                    "regression": delta_p95 > (bl["p95_ms"] * 0.2),  # >20% = regression
+                }
+            )
 
     return comparisons
 
@@ -595,13 +605,15 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--category", "-c",
+        "--category",
+        "-c",
         action="append",
         choices=list(CATEGORY_TESTS.keys()),
         help="Run only specific benchmark categories (can repeat). Default: all.",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("tests/performance"),
         help="Output directory for reports. Default: tests/performance/",
@@ -641,7 +653,7 @@ def main() -> None:
 
     print()
     print("=" * 70)
-    print(f"  Reports written:")
+    print("  Reports written:")
     print(f"    JSON: {json_path}")
     print(f"    MD:   {md_path}")
     print("=" * 70)

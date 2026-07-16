@@ -2,8 +2,7 @@
 """Tests for proxy/app/tools/openapi/discovery.py — OpenAPI spec discovery."""
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -15,7 +14,6 @@ from proxy.app.tools.openapi.discovery import (
     _parse_json,
     _parse_yaml,
 )
-
 
 SAMPLE_SPEC = {
     "openapi": "3.0.0",
@@ -56,9 +54,7 @@ SAMPLE_SPEC = {
                 "operationId": "getPet",
                 "summary": "Get a pet by ID",
                 "tags": ["pets"],
-                "parameters": [
-                    {"name": "petId", "in": "path", "required": True, "schema": {"type": "string"}}
-                ],
+                "parameters": [{"name": "petId", "in": "path", "required": True, "schema": {"type": "string"}}],
             },
             "delete": {
                 "operationId": "deletePet",

@@ -33,7 +33,6 @@ Examples:
 import argparse
 import asyncio
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 # Add project root to path
@@ -109,6 +108,7 @@ async def cmd_downgrade(manager, target_version: int, dry_run: bool = False) -> 
 
         print(f"  Would rollback from version {current} to {target_version}:")
         from proxy.app.db.migrations import get_registered_migrations
+
         all_migrations = get_registered_migrations()
         for v in range(current, target_version, -1):
             if v in all_migrations:
@@ -140,11 +140,8 @@ async def cmd_history(manager) -> None:
     print("-" * 70)
 
     for entry in log:
-        status = "✓" if entry["success"] else "✗"
-        print(
-            f"  v{entry['version']:<9} {entry['action']:<20} "
-            f"{entry['details'][:28]:<30} {entry['executed_at'][:19]}"
-        )
+        "✓" if entry["success"] else "✗"
+        print(f"  v{entry['version']:<9} {entry['action']:<20} {entry['details'][:28]:<30} {entry['executed_at'][:19]}")
         if entry.get("error_message"):
             print(f"    └─ Error: {entry['error_message'][:60]}")
 
@@ -173,7 +170,7 @@ async def cmd_create(name: str) -> None:
     # Template
     template = f'''# proxy/app/db/{filename}
 """
-Migration {next_version:03d}: {name.replace('_', ' ').replace('-', ' ').title()}
+Migration {next_version:03d}: {name.replace("_", " ").replace("-", " ").title()}
 
 Description of what this migration does.
 """
@@ -197,7 +194,7 @@ DOWN_SQL = """
 MIGRATION = MigrationInfo(
     version={next_version},
     name="{safe_name}",
-    description="Description of {name.replace('_', ' ').replace('-', ' ').title()}",
+    description="Description of {name.replace("_", " ").replace("-", " ").title()}",
     up_sql=UP_SQL,
     down_sql=DOWN_SQL,
     backend="sqlite",
@@ -227,19 +224,13 @@ def main():
 
     # Upgrade command
     upgrade_parser = subparsers.add_parser("upgrade", help="Apply pending migrations")
-    upgrade_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview changes without applying"
-    )
-    upgrade_parser.add_argument(
-        "--target", type=int, help="Apply up to this version"
-    )
+    upgrade_parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
+    upgrade_parser.add_argument("--target", type=int, help="Apply up to this version")
 
     # Downgrade command
     downgrade_parser = subparsers.add_parser("downgrade", help="Rollback migrations")
     downgrade_parser.add_argument("version", type=int, help="Target version to rollback to")
-    downgrade_parser.add_argument(
-        "--dry-run", action="store_true", help="Preview changes without applying"
-    )
+    downgrade_parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
 
     # History command
     subparsers.add_parser("history", help="Show migration audit log")

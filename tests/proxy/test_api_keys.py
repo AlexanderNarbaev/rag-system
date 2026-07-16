@@ -18,13 +18,13 @@ class TestApiKeyManager:
         assert key.startswith("sk-")
 
     def test_generate_key_with_roles(self, manager):
-        key = manager.generate_key("user1", roles=["admin", "user"])
+        manager.generate_key("user1", roles=["admin", "user"])
         keys = manager.list_keys("user1")
         assert len(keys) == 1
         assert keys[0].roles == ["admin", "user"]
 
     def test_generate_key_default_roles(self, manager):
-        key = manager.generate_key("user1")
+        manager.generate_key("user1")
         keys = manager.list_keys("user1")
         assert keys[0].roles == ["user"]
 
@@ -53,7 +53,7 @@ class TestApiKeyManager:
         assert manager.validate_key(key) is None
 
     def test_revoke_key(self, manager):
-        key = manager.generate_key("user1")
+        manager.generate_key("user1")
         keys = manager.list_keys("user1")
         assert manager.revoke_key(keys[0].key_id) is True
         assert keys[0].is_active is False
@@ -86,8 +86,7 @@ class TestApiKeyManager:
 
     def test_validate_key_updates_last_used(self, manager):
         key = manager.generate_key("user1")
-        result = manager.validate_key(key)
-        first_used = result.last_used
+        manager.validate_key(key)
         # Validate again
         result2 = manager.validate_key(key)
         assert result2.last_used is not None

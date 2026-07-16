@@ -3,7 +3,6 @@
 
 import pytest
 
-from proxy.app.tools.definition import ToolVisibility
 from proxy.app.tools.openapi.converter import (
     OpenAPIToolGenerator,
     _extract_parameters,
@@ -64,28 +63,28 @@ class TestTypeFromSchema:
     """Tests for _type_from_schema."""
 
     def test_string(self):
-        assert _type_from_schema({"type": "string"}) == str
+        assert _type_from_schema({"type": "string"}) == str  # noqa: E721
 
     def test_integer(self):
-        assert _type_from_schema({"type": "integer"}) == int
+        assert _type_from_schema({"type": "integer"}) == int  # noqa: E721
 
     def test_number(self):
-        assert _type_from_schema({"type": "number"}) == float
+        assert _type_from_schema({"type": "number"}) == float  # noqa: E721
 
     def test_boolean(self):
-        assert _type_from_schema({"type": "boolean"}) == bool
+        assert _type_from_schema({"type": "boolean"}) == bool  # noqa: E721
 
     def test_array(self):
-        assert _type_from_schema({"type": "array"}) == list
+        assert _type_from_schema({"type": "array"}) == list  # noqa: E721
 
     def test_object(self):
-        assert _type_from_schema({"type": "object"}) == dict
+        assert _type_from_schema({"type": "object"}) == dict  # noqa: E721
 
     def test_unknown_type_defaults_to_string(self):
-        assert _type_from_schema({"type": "unknown"}) == str
+        assert _type_from_schema({"type": "unknown"}) == str  # noqa: E721
 
     def test_no_type_defaults_to_string(self):
-        assert _type_from_schema({}) == str
+        assert _type_from_schema({}) == str  # noqa: E721
 
 
 class TestExtractParameters:
@@ -100,7 +99,7 @@ class TestExtractParameters:
         params = _extract_parameters(operation, {})
         assert len(params) == 1
         assert params[0].name == "limit"
-        assert params[0].type == int
+        assert params[0].type == int  # noqa: E721
 
     def test_path_params(self):
         operation = {
@@ -136,7 +135,11 @@ class TestExtractParameters:
         assert "age" in names
 
     def test_ref_in_parameter(self):
-        spec = {"components": {"parameters": {"LimitParam": {"name": "limit", "in": "query", "schema": {"type": "integer"}}}}}
+        spec = {
+            "components": {
+                "parameters": {"LimitParam": {"name": "limit", "in": "query", "schema": {"type": "integer"}}}
+            }
+        }
         operation = {"parameters": [{"$ref": "#/components/parameters/LimitParam"}]}
         params = _extract_parameters(operation, spec)
         assert len(params) == 1
@@ -155,13 +158,7 @@ class TestExtractParameters:
             }
         }
         operation = {
-            "requestBody": {
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/CreatePet"}
-                    }
-                }
-            }
+            "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreatePet"}}}}
         }
         params = _extract_parameters(operation, spec)
         assert len(params) == 1
@@ -228,16 +225,12 @@ class TestOpenAPIToolGenerator:
 
     def test_no_operation_id(self):
         operation = {"summary": "Get root"}
-        tool = OpenAPIToolGenerator.from_endpoint(
-            path="/", method="get", operation=operation, spec={}
-        )
+        tool = OpenAPIToolGenerator.from_endpoint(path="/", method="get", operation=operation, spec={})
         assert "get" in tool.name
 
     def test_description_fallback(self):
         operation = {"operationId": "test"}
-        tool = OpenAPIToolGenerator.from_endpoint(
-            path="/test", method="get", operation=operation, spec={}
-        )
+        tool = OpenAPIToolGenerator.from_endpoint(path="/test", method="get", operation=operation, spec={})
         assert "GET /test" in tool.description
 
 

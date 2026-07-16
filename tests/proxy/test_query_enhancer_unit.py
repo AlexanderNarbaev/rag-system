@@ -3,8 +3,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from proxy.app.core.query_enhancer import (
     QueryEnhancer,
     generate_query_variants,
@@ -106,6 +104,7 @@ class TestMultiQuerySearch:
     def test_search_failure_graceful(self):
         """Search failures for variants are handled gracefully."""
         call_count = 0
+
         def failing_search(**kwargs):
             nonlocal call_count
             call_count += 1
@@ -118,6 +117,7 @@ class TestMultiQuerySearch:
 
     def test_all_searches_fail(self):
         """Returns empty when all searches fail."""
+
         def failing_search(**kwargs):
             raise Exception("always fails")
 

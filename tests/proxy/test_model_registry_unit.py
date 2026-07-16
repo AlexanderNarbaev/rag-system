@@ -1,10 +1,6 @@
 # ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/model_evolution/model_registry.py — model registry."""
 
-import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from proxy.app.model_evolution.model_registry import ModelRegistry, ModelVersion

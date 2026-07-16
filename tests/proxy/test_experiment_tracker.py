@@ -2,9 +2,7 @@
 """Tests for proxy/app/model_evolution/experiment_tracker.py — local-mode ExperimentTracker."""
 
 import json
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

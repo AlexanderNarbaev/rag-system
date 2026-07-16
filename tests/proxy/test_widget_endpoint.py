@@ -2,9 +2,6 @@
 """Tests for proxy/app/api/widget.py — chat widget endpoints."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 import proxy.app.api.widget as widget_mod
 
@@ -33,9 +30,11 @@ class TestWidgetEndpoints:
     def test_serve_widget_function_exists(self):
         """serve_widget is an async function."""
         import asyncio
+
         assert asyncio.iscoroutinefunction(widget_mod.serve_widget)
 
     def test_serve_widget_js_function_exists(self):
         """serve_widget_js is an async function."""
         import asyncio
+
         assert asyncio.iscoroutinefunction(widget_mod.serve_widget_js)

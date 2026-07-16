@@ -1,10 +1,7 @@
 # ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/core/context/compression.py — CRAG decomposition and multimodal assembly."""
 
-import pytest
-
 from proxy.app.core.context.compression import (
-    MULTI_MODAL_ENABLED,
     assemble_multimodal_context,
     decompose_to_strips,
 )
@@ -17,7 +14,16 @@ class TestDecomposeToStrips:
         assert decompose_to_strips([]) == []
 
     def test_single_chunk(self):
-        chunks = [({"text": "This is sentence one. And this is sentence two.", "source_type": "confluence", "doc_title": "Doc"}, 0.9)]
+        chunks = [
+            (
+                {
+                    "text": "This is sentence one. And this is sentence two.",
+                    "source_type": "confluence",
+                    "doc_title": "Doc",
+                },
+                0.9,
+            )
+        ]
         strips = decompose_to_strips(chunks)
         assert len(strips) >= 2
         assert all(s.score == 0.9 for s in strips)
@@ -25,7 +31,16 @@ class TestDecomposeToStrips:
 
     def test_filters_short_sentences(self):
         """Sentences shorter than 10 chars are filtered out."""
-        chunks = [({"text": "Short. This is a longer sentence that passes the filter.", "source_type": "test", "doc_title": "D"}, 0.8)]
+        chunks = [
+            (
+                {
+                    "text": "Short. This is a longer sentence that passes the filter.",
+                    "source_type": "test",
+                    "doc_title": "D",
+                },
+                0.8,
+            )
+        ]
         strips = decompose_to_strips(chunks)
         # "Short." is < 10 chars, should be filtered
         assert all(len(s.text) >= 10 for s in strips)
@@ -111,6 +126,7 @@ class TestAssembleMultimodalContext:
     def test_multimodal_disabled(self):
         """When MULTI_MODAL_ENABLED is False, just joins chunks."""
         import proxy.app.core.context.compression as mod
+
         original = mod.MULTI_MODAL_ENABLED
         try:
             mod.MULTI_MODAL_ENABLED = False

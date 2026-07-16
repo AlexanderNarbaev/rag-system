@@ -2,8 +2,7 @@
 """Tests for proxy/app/core/evaluation.py — retrieval evaluation metrics."""
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

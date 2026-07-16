@@ -16,7 +16,6 @@ Run:  pytest tests/performance/test_latency_benchmarks.py -v -m benchmark --benc
 
 from __future__ import annotations
 
-import hashlib
 import json
 import random
 import sys
@@ -105,11 +104,31 @@ def _timed_ms(fn, *args, **kwargs) -> tuple[float, Any]:
 # ---------------------------------------------------------------------------
 
 _VOCAB = [
-    "authentication", "configuration", "deployment", "pipeline", "database",
-    "microservice", "kubernetes", "monitoring", "logging", "retrieval",
-    "embedding", "chunk", "reranker", "context", "token",
-    "vector", "search", "index", "graph", "query",
-    "latency", "throughput", "caching", "redis", "qdrant",
+    "authentication",
+    "configuration",
+    "deployment",
+    "pipeline",
+    "database",
+    "microservice",
+    "kubernetes",
+    "monitoring",
+    "logging",
+    "retrieval",
+    "embedding",
+    "chunk",
+    "reranker",
+    "context",
+    "token",
+    "vector",
+    "search",
+    "index",
+    "graph",
+    "query",
+    "latency",
+    "throughput",
+    "caching",
+    "redis",
+    "qdrant",
 ]
 
 
@@ -129,15 +148,17 @@ def _make_chunks(n: int, avg_words: int = 120) -> list[dict[str, Any]]:
     """Generate *n* synthetic chunk dicts with metadata."""
     chunks = []
     for i in range(n):
-        chunks.append({
-            "text": _make_text(avg_words),
-            "source_type": random.choice(["confluence", "jira", "gitlab"]),
-            "source_id": f"doc_{i % 10}",
-            "doc_title": f"Document {i % 5}",
-            "title": f"Section {i}",
-            "version": random.choice(["1.0", "1.1", "2.0"]),
-            "chunk_id": f"chunk_{i}",
-        })
+        chunks.append(
+            {
+                "text": _make_text(avg_words),
+                "source_type": random.choice(["confluence", "jira", "gitlab"]),
+                "source_id": f"doc_{i % 10}",
+                "doc_title": f"Document {i % 5}",
+                "title": f"Section {i}",
+                "version": random.choice(["1.0", "1.1", "2.0"]),
+                "chunk_id": f"chunk_{i}",
+            }
+        )
     return chunks
 
 
@@ -274,7 +295,9 @@ class TestRetrievalBenchmarks:
 
         hits_dense = [_FakeHit(f"doc_{i}", 0.9 - i * 0.04) for i in range(20)]
         hits_sparse = [_FakeHit(f"doc_{i}", 0.85 - i * 0.04) for i in range(20)]
-        stats = _run_benchmark("rrf_fusion_20", reciprocal_rank_fusion, results_dense=hits_dense, results_sparse=hits_sparse)
+        stats = _run_benchmark(
+            "rrf_fusion_20", reciprocal_rank_fusion, results_dense=hits_dense, results_sparse=hits_sparse
+        )
 
         assert stats.p50 < 1.0, f"rrf_fusion_20 p50={stats.p50:.3f}ms too high"
         print(f"\n  {stats.name}: p50={stats.p50:.3f}ms p95={stats.p95:.3f}ms p99={stats.p99:.3f}ms (n={stats.count})")
@@ -285,7 +308,9 @@ class TestRetrievalBenchmarks:
 
         hits_dense = [_FakeHit(f"doc_{i}", 0.9 - i * 0.015) for i in range(50)]
         hits_sparse = [_FakeHit(f"doc_{i}", 0.85 - i * 0.015) for i in range(50)]
-        stats = _run_benchmark("rrf_fusion_50", reciprocal_rank_fusion, results_dense=hits_dense, results_sparse=hits_sparse)
+        stats = _run_benchmark(
+            "rrf_fusion_50", reciprocal_rank_fusion, results_dense=hits_dense, results_sparse=hits_sparse
+        )
 
         assert stats.p50 < 2.0, f"rrf_fusion_50 p50={stats.p50:.3f}ms too high"
         print(f"\n  {stats.name}: p50={stats.p50:.3f}ms p95={stats.p95:.3f}ms p99={stats.p99:.3f}ms (n={stats.count})")
@@ -490,7 +515,9 @@ class TestGraphBenchmarks:
         from proxy.app.core.retrieval import MultiHopGraphExplorer
 
         explorer = MultiHopGraphExplorer(max_hops=2, max_results_per_hop=10)
-        entity_map = {f"entity_{i}": [f"entity_{j}" for j in range(max(0, i - 3), min(20, i + 4)) if j != i] for i in range(20)}
+        entity_map = {
+            f"entity_{i}": [f"entity_{j}" for j in range(max(0, i - 3), min(20, i + 4)) if j != i] for i in range(20)
+        }
         start = [f"entity_{i}" for i in range(5)]
 
         stats = _run_benchmark("multi_hop_bfs_2hops", explorer.explore, start_entities=start, entity_map=entity_map)
@@ -527,11 +554,18 @@ class TestGraphBenchmarks:
         from proxy.app.core.retrieval import GlobalSearch
 
         summaries = [
-            {"id": f"c_{i}", "summary": _make_text(100), "key_entities": [f"entity_{j}" for j in range(5)], "members": []}
+            {
+                "id": f"c_{i}",
+                "summary": _make_text(100),
+                "key_entities": [f"entity_{j}" for j in range(5)],
+                "members": [],
+            }
             for i in range(20)
         ]
         search = GlobalSearch(community_summaries=summaries)
-        stats = _run_benchmark("global_search_20", search.search, query="What are the main topics in the knowledge base?")
+        stats = _run_benchmark(
+            "global_search_20", search.search, query="What are the main topics in the knowledge base?"
+        )
 
         assert stats.p50 < 5.0, f"global_search p50={stats.p50:.3f}ms too high"
         print(f"\n  {stats.name}: p50={stats.p50:.3f}ms p95={stats.p95:.3f}ms p99={stats.p99:.3f}ms (n={stats.count})")
@@ -551,8 +585,11 @@ class TestScoringBenchmarks:
         from proxy.app.core.retrieval import apply_time_decay
 
         chunks = [
-            {"text": _make_text(50), "score": random.uniform(0.3, 0.9),
-             "payload": {"updated_at": f"2026-{random.randint(1, 7):02d}-{random.randint(1, 28):02d}T00:00:00Z"}}
+            {
+                "text": _make_text(50),
+                "score": random.uniform(0.3, 0.9),
+                "payload": {"updated_at": f"2026-{random.randint(1, 7):02d}-{random.randint(1, 28):02d}T00:00:00Z"},
+            }
             for _ in range(20)
         ]
         stats = _run_benchmark("time_decay_20", apply_time_decay, chunks=chunks)
@@ -590,17 +627,27 @@ class TestScoringBenchmarks:
 
 # Mock heavy external dependencies for the E2E tests
 _modules_to_mock = [
-    "qdrant_client", "qdrant_client.http", "qdrant_client.http.models",
-    "sentence_transformers", "langgraph", "langgraph.graph", "langgraph.checkpoint",
-    "neo4j", "redis", "redis.asyncio", "tiktoken", "bcrypt",
+    "qdrant_client",
+    "qdrant_client.http",
+    "qdrant_client.http.models",
+    "sentence_transformers",
+    "langgraph",
+    "langgraph.graph",
+    "langgraph.checkpoint",
+    "neo4j",
+    "redis",
+    "redis.asyncio",
+    "tiktoken",
+    "bcrypt",
 ]
 
 for mod in _modules_to_mock:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
 
-from proxy.app.main import app  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+
+from proxy.app.main import app  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

@@ -8,6 +8,7 @@ Sets up Neo4j constraints and indexes for the knowledge graph:
 - Full-text search indexes
 """
 
+import contextlib
 from typing import Any
 
 from proxy.app.db.migrations import MigrationInfo, register_migration
@@ -77,10 +78,8 @@ async def teardown_neo4j_schema(session: Any) -> None:
     ]
 
     for stmt in constraints_to_drop + indexes_to_drop:
-        try:
+        with contextlib.suppress(Exception):
             await session.run(stmt)
-        except Exception:
-            pass
 
 
 # ─── Migration Registration ──────────────────────────────────────────────────

@@ -1,8 +1,6 @@
 # ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/core/context/builder.py — context building functions."""
 
-import pytest
-
 from proxy.app.core.context.builder import (
     build_context,
     compute_chunk_hash,
@@ -125,7 +123,7 @@ class TestBuildContext:
         assert "second" in result
 
     def test_token_limit(self):
-        big_chunks = [( {"text": "word " * 500, "title": "T", "source_type": "a"}, 0.9)] * 20
+        big_chunks = [({"text": "word " * 500, "title": "T", "source_type": "a"}, 0.9)] * 20
         result = build_context(big_chunks, max_tokens=100)
         assert len(result) > 0
 
@@ -136,6 +134,3 @@ class TestPrepareContext:
     def test_empty(self):
         result = prepare_context([])
         assert result == "" or isinstance(result, str)
-
-
-

@@ -1,7 +1,6 @@
 # ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for rerank.py advanced features: TwoStageReranker, hybrid_rerank, colbert_score, etc."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,14 +8,11 @@ import pytest
 from proxy.app.core.rerank import (
     TwoStageReranker,
     _call_reranker_safe,
-    _fine_tune_full,
-    collect_training_pairs,
     colbert_score,
+    collect_training_pairs,
     cosine_similarity_single,
     fine_tune_reranker,
     hybrid_rerank,
-    rerank_chunks,
-    rerank_chunks_with_scores,
 )
 
 
@@ -102,6 +98,7 @@ class TestCallRerankerSafe:
         mock_reranker = MagicMock()
         mock_reranker.predict.return_value = [0.9, 0.8]
         import proxy.app.core.rerank as rerank_mod
+
         original = rerank_mod.reranker
         try:
             rerank_mod.reranker = mock_reranker
@@ -130,9 +127,7 @@ class TestCollectTrainingPairs:
             "positive_chunk_ids": ["c1"],
             "negative_chunk_ids": ["c2"],
         }
-        (tmp_path / "fb1.json").write_text(
-            __import__("json").dumps(feedback), encoding="utf-8"
-        )
+        (tmp_path / "fb1.json").write_text(__import__("json").dumps(feedback), encoding="utf-8")
         with patch("proxy.app.core.rerank.RERANKER_FT_ENABLED", True):
             with patch("proxy.app.core.rerank.FEEDBACK_LOG_DIR", str(tmp_path)):
                 pairs = collect_training_pairs()
@@ -186,6 +181,7 @@ class TestTwoStageReranker:
         r = TwoStageReranker(fast_model="test")
         mock_encoder = MagicMock()
         import numpy as np
+
         mock_encoder.encode.side_effect = [
             np.array([1.0, 0.0]),  # query
             np.array([[1.0, 0.0], [0.0, 1.0]]),  # docs
