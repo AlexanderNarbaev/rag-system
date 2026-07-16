@@ -83,7 +83,10 @@ class TestInteractionLogger:
 
     def test_log_feedback_writes_file(self, logger):
         logger.log_feedback(
-            request_id="req-1", feedback_type=FeedbackType.POSITIVE, comment="Great answer!", expert_id="expert-42"
+            request_id="req-1",
+            feedback_type=FeedbackType.POSITIVE,
+            comment="Great answer!",
+            expert_id="expert-42",
         )
         assert logger.feedback_file.exists()
         with open(logger.feedback_file) as f:
@@ -95,7 +98,9 @@ class TestInteractionLogger:
 
     def test_log_feedback_with_correction(self, logger):
         logger.log_feedback(
-            request_id="req-x", feedback_type=FeedbackType.CORRECTION, corrected_response="The correct answer is..."
+            request_id="req-x",
+            feedback_type=FeedbackType.CORRECTION,
+            corrected_response="The correct answer is...",
         )
         with open(logger.feedback_file) as f:
             record = json.loads(f.readline())
@@ -205,7 +210,11 @@ class TestExportTrainingDataset:
             user_feedback=FeedbackType.POSITIVE,
         )
         logger.log_interaction(
-            request_id="r3", user_query="What is Z?", context="ctx", response="bad", user_feedback=FeedbackType.NEGATIVE
+            request_id="r3",
+            user_query="What is Z?",
+            context="ctx",
+            response="bad",
+            user_feedback=FeedbackType.NEGATIVE,
         )
 
         output = tmp_path / "training.jsonl"
@@ -252,9 +261,9 @@ class TestExportIntentDataset:
 
             if "CI/CD" in query:
                 return IntentType.PROCEDURAL, 0.8
-            elif "Docker" in query:
+            if "Docker" in query:
                 return IntentType.FACTUAL, 0.9
-            elif "Compare" in query:
+            if "Compare" in query:
                 return IntentType.COMPARISON, 0.85
             return IntentType.UNKNOWN, 0.5
 

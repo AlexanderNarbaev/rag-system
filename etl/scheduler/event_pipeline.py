@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # etl/scheduler/event_pipeline.py
-"""
-Event-Driven Streaming Pipeline — orchestrates webhook → Redis Streams → consumer.
+"""Event-Driven Streaming Pipeline — orchestrates webhook → Redis Streams → consumer.
 
 Unifies the webhook server, stream producer, and stream consumer into a single
 coordinator that can be started/stopped as a long-running service. Replaces the
@@ -26,6 +25,7 @@ See Also:
     - etl/scheduler/stream_producer.py — Redis Streams XADD
     - etl/scheduler/stream_consumer.py — Redis Streams XREADGROUP
     - docs/en/guides/roadmap.md — Phase 6: Real-Time Indexing & Streaming
+
 """
 
 import asyncio
@@ -68,8 +68,7 @@ DEFAULT_BATCH_SIZE = 10
 
 
 class EventPipeline:
-    """
-    Orchestrates event-driven ETL: webhooks produce to Redis Streams,
+    """Orchestrates event-driven ETL: webhooks produce to Redis Streams,
     a consumer group processes events through extract → chunk → index.
 
     This is a **stub** — the consumer handlers currently return False
@@ -82,6 +81,7 @@ class EventPipeline:
         config: Full YAML configuration dict.
         state: Current pipeline lifecycle state.
         stats: Event processing counters (produced, consumed, errors).
+
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
@@ -235,8 +235,7 @@ class EventPipeline:
         logger.info("Consumer loop stopped")
 
     def process_event(self, event: dict[str, Any]) -> bool:
-        """
-        Process a single event through the pipeline.
+        """Process a single event through the pipeline.
 
         This is a **stub** — currently delegates to StreamConsumer.process_event()
         which returns False for all events (real chunk+index not yet wired in).
@@ -246,6 +245,7 @@ class EventPipeline:
 
         Returns:
             True if processed successfully, False otherwise.
+
         """
         if not self._consumer:
             logger.warning("Cannot process event: consumer not initialized")
@@ -259,8 +259,7 @@ class EventPipeline:
         return result
 
     async def start(self) -> None:
-        """
-        Start the event-driven pipeline.
+        """Start the event-driven pipeline.
 
         Connects to Redis, initializes producer/consumer/webhook components,
         and starts the webhook server and consumer loop as concurrent tasks.
@@ -304,8 +303,7 @@ class EventPipeline:
         )
 
     async def stop(self) -> None:
-        """
-        Stop the event-driven pipeline gracefully.
+        """Stop the event-driven pipeline gracefully.
 
         Signals the consumer to stop, waits for in-flight events,
         and closes the Redis connection.

@@ -354,11 +354,10 @@ class DocExtractor(BaseExtractor):
                     current_table = [stripped]
                 else:
                     current_table.append(stripped)
-            else:
-                if in_table:
-                    tables.append("\n".join(current_table))
-                    current_table = []
-                    in_table = False
+            elif in_table:
+                tables.append("\n".join(current_table))
+                current_table = []
+                in_table = False
         if in_table and current_table:
             tables.append("\n".join(current_table))
         return tables

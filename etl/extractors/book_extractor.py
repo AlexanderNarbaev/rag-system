@@ -110,7 +110,7 @@ class BookExtractor(BaseExtractor):
                             "content": section_text,
                             "level": heading_level,
                             "index": section_counter,
-                        }
+                        },
                     )
             else:
                 section_counter += 1
@@ -120,7 +120,7 @@ class BookExtractor(BaseExtractor):
                         "content": cleaned,
                         "level": 1,
                         "index": section_counter,
-                    }
+                    },
                 )
 
         for ch in chapters:
@@ -140,7 +140,7 @@ class BookExtractor(BaseExtractor):
                     "chapter_index": ch["index"],
                     "file_path": str(file_path),
                 },
-                access_level=self.config.source_type if self.config.source_type else "internal",
+                access_level=self.config.source_type or "internal",
             )
             documents.append(doc)
 

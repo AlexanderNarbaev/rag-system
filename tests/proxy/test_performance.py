@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: E402
 """Tests for proxy performance features (SSE streaming + compression)."""
 
 import sys

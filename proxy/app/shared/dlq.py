@@ -1,6 +1,5 @@
 # proxy/app/shared/dlq.py
-"""
-Dead Letter Queue for failed RAG pipeline messages with SQLite persistence.
+"""Dead Letter Queue for failed RAG pipeline messages with SQLite persistence.
 
 Provides a persistent, configurable DLQ for storing and retrying failed
 messages from any RAG component (retrieval, reranking, LLM, graph expansion).
@@ -97,6 +96,7 @@ class DeadLetterQueue:
         db_path: Path to the SQLite database file.
         max_retries: Maximum retry attempts before marking as dead.
         backoff_base: Base for exponential backoff (seconds).
+
     """
 
     _instances: dict[str, DeadLetterQueue] = {}
@@ -140,7 +140,8 @@ class DeadLetterQueue:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA busy_timeout=5000")
             self._local.conn = conn
-        return self._local.conn
+        _conn: sqlite3.Connection = self._local.conn
+        return _conn
 
     def _init_db(self) -> None:
         conn = sqlite3.connect(str(self.db_path))
@@ -160,13 +161,13 @@ class DeadLetterQueue:
                 next_retry_at REAL NOT NULL DEFAULT 0,
                 metadata TEXT NOT NULL DEFAULT '{}'
             )
-        """
+        """,
         )
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_dlq_queue_status ON dlq_messages(queue, status)"
+            "CREATE INDEX IF NOT EXISTS idx_dlq_queue_status ON dlq_messages(queue, status)",
         )
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_dlq_next_retry ON dlq_messages(next_retry_at)"
+            "CREATE INDEX IF NOT EXISTS idx_dlq_next_retry ON dlq_messages(next_retry_at)",
         )
         conn.commit()
         conn.close()
@@ -188,6 +189,7 @@ class DeadLetterQueue:
 
         Returns:
             The ID of the newly created message.
+
         """
         if max_retries is None:
             max_retries = self.max_retries
@@ -260,7 +262,7 @@ class DeadLetterQueue:
             next_retry = 0
         else:
             status = "pending"
-            next_retry = now + self.backoff_base ** retry_count
+            next_retry = now + self.backoff_base**retry_count
 
         conn.execute(
             """
@@ -274,7 +276,11 @@ class DeadLetterQueue:
         conn.commit()
         logger.debug(
             "DLQ '%s': nack message id=%d, retry=%d/%d, status=%s",
-            self.queue_name, message_id, retry_count, max_retries, status,
+            self.queue_name,
+            message_id,
+            retry_count,
+            max_retries,
+            status,
         )
         return True
 
@@ -287,6 +293,7 @@ class DeadLetterQueue:
 
         Returns:
             Dict with counts: {'processed': N, 'failed': N, 'dead': N}.
+
         """
         conn = self._get_conn()
         rows = conn.execute(
@@ -317,6 +324,7 @@ class DeadLetterQueue:
         Returns:
             List of DLQMessage objects with status='pending' ordered by creation time.
             Does NOT change their status. Use ack/nack after processing.
+
         """
         conn = self._get_conn()
         rows = conn.execute(
@@ -375,6 +383,7 @@ class DeadLetterQueue:
 
         Returns:
             Number of messages deleted.
+
         """
         conn = self._get_conn()
         if status is not None:

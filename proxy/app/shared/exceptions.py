@@ -1,6 +1,5 @@
 # proxy/app/exceptions.py
-"""
-Custom exception hierarchy for RAG system.
+"""Custom exception hierarchy for RAG system.
 
 Provides typed exceptions for better error handling, logging, and graceful degradation.
 Allows catch blocks to use specific exception types instead of generic Exception.

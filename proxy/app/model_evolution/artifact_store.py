@@ -69,6 +69,7 @@ class ArtifactStore:
 
         Returns:
             ArtifactRef with bucket, key, and URI.
+
         """
         key = f"models/{model_name}/{version}/"
         if self._client:
@@ -92,7 +93,7 @@ class ArtifactStore:
             bucket=self.bucket,
             key=key,
             uri=str(self._local_path / model_name / version) if self._local_mode else f"s3://{self.bucket}/{key}",
-        )  # noqa: E501
+        )
 
     def download_model(self, model_name: str, version: str, local_dir: str) -> str:
         """Download a model version to a local directory.
@@ -104,6 +105,7 @@ class ArtifactStore:
 
         Returns:
             Path to the downloaded model directory.
+
         """
         dest = Path(local_dir) / model_name / version
         dest.mkdir(parents=True, exist_ok=True)

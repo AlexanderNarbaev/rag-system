@@ -1,6 +1,5 @@
 # proxy/app/memory_manager.py
-"""
-Multi-tier memory architecture for RAG system.
+"""Multi-tier memory architecture for RAG system.
 
 Three-tier memory:
 1. WorkingMemoryStore - session-specific, TTL-based, Redis/in-memory
@@ -79,7 +78,7 @@ class ConversationMemory:
                 "content": content,
                 "timestamp": time.time(),
                 "metadata": metadata or {},
-            }
+            },
         )
         if len(self._turns) > self._max_turns_stored:
             self._turns = self._turns[-self._max_turns_stored :]

@@ -406,3 +406,105 @@ class TestCanAccessDocument:
     def test_restricted_without_allowed_users_fails(self):
         ctx = UserContext(user_id="9", username="alice", roles=["admin"])
         assert can_access_document(ctx, "restricted") is True  # admin bypass
+
+    def test_developer_access_confidential_with_groups(self):
+        ctx = UserContext(
+            user_id="10",
+            username="bob",
+            roles=["developer"],
+            groups=["engineering"],
+        )
+        assert can_access_document(ctx, "confidential", allowed_groups=["engineering"]) is True
+
+    def test_developer_access_confidential_without_groups(self):
+        ctx = UserContext(
+            user_id="11",
+            username="bob",
+            roles=["developer"],
+            groups=[],
+        )
+        assert can_access_document(ctx, "confidential", allowed_groups=["engineering"]) is False
+
+
+class TestBuildAccessFilterEdgeCases:
+    """Edge cases for build_access_filter."""
+
+    def test_viewer_with_groups_gets_only_level_filter(self):
+        ctx = UserContext(
+            user_id="1",
+            username="bob",
+            roles=["viewer"],
+            groups=["engineering"],
+        )
+        result = build_access_filter(ctx)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["key"] == "access_level"
+
+    def test_developer_no_groups_no_confidential_filter(self):
+        ctx = UserContext(
+            user_id="2",
+            username="alice",
+            roles=["developer"],
+            groups=[],
+        )
+        result = build_access_filter(ctx)
+        assert result is not None
+        has_group_filter = any(c["key"] == "allowed_groups" for c in result)
+        assert not has_group_filter
+
+    def test_read_only_role_falls_through(self):
+        ctx = UserContext(
+            user_id="3",
+            username="guest",
+            roles=["read_only"],
+        )
+        result = build_access_filter(ctx)
+        assert result is not None
+
+
+class TestBuildAccessFilterShouldEdgeCases:
+    """Edge cases for build_access_filter_should."""
+
+    def test_no_groups_skips_confidential_clause(self):
+        ctx = UserContext(
+            user_id="1",
+            username="bob",
+            roles=["developer"],
+            groups=[],
+        )
+        result = build_access_filter_should(ctx)
+        assert result is not None
+        should = result["should"]
+        has_confidential = any(
+            any(m.get("match", {}).get("value") == "confidential" for m in c.get("must", []))
+            for c in should
+        )
+        assert not has_confidential
+
+    def test_no_username_skips_restricted_clause(self):
+        ctx = UserContext(
+            user_id="2",
+            username="",
+            roles=["admin"],
+        )
+        from proxy.app.shared.access_control import _role_allowed_levels
+
+        levels = _role_allowed_levels(ctx)
+        assert "restricted" in levels
+
+    def test_expert_with_groups_includes_confidential(self):
+        ctx = UserContext(
+            user_id="3",
+            username="eve",
+            roles=["expert"],
+            groups=["security"],
+        )
+        result = build_access_filter_should(ctx)
+        assert result is not None
+        should = result["should"]
+        has_confidential = any(
+            any(m.get("match", {}).get("value") == "confidential" for m in c.get("must", []))
+            for c in should
+        )
+        assert has_confidential

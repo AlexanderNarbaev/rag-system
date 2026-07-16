@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117
 """Tests for proxy/app/llm_router.py - LLM routing with mocked aiohttp."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -45,7 +45,11 @@ class TestSendCompletionRequest:
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await _send_completion_request(
-                [{"role": "user", "content": "hi"}], temperature=0.2, max_tokens=100, stream=False, retry=0
+                [{"role": "user", "content": "hi"}],
+                temperature=0.2,
+                max_tokens=100,
+                stream=False,
+                retry=0,
             )
             assert result["choices"][0]["message"]["content"] == "answer"
             mock_response.close.assert_called_once()
@@ -131,7 +135,11 @@ class TestSendCompletionRequest:
 
         with patch("aiohttp.ClientSession", return_value=mock_session), patch("asyncio.sleep", AsyncMock()):
             result = await _send_completion_request(
-                [{"role": "user", "content": "hi"}], 0.2, 100, stream=False, retry=1
+                [{"role": "user", "content": "hi"}],
+                0.2,
+                100,
+                stream=False,
+                retry=1,
             )
             assert result["choices"][0]["message"]["content"] == "ok"
 

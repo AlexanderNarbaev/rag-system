@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # scripts/migrate.py
-"""
-Database migration CLI for the RAG System.
+"""Database migration CLI for the RAG System.
 
 Usage:
     python scripts/migrate.py status              # Show current migration status
@@ -28,6 +27,7 @@ Examples:
 
     # Create a new migration
     python scripts/migrate.py create add_user_preferences
+
 """
 
 import argparse
@@ -85,13 +85,12 @@ async def cmd_upgrade(manager, dry_run: bool = False, target: int | None = None)
                 print(f"    v{m.version}: {m.name} — {m.description}")
         else:
             print("  No pending migrations")
+    elif applied:
+        print(f"\n  ✓ Applied {len(applied)} migration(s):")
+        for m in applied:
+            print(f"    v{m.version}: {m.name} ({m.execution_ms:.1f}ms)")
     else:
-        if applied:
-            print(f"\n  ✓ Applied {len(applied)} migration(s):")
-            for m in applied:
-                print(f"    v{m.version}: {m.name} ({m.execution_ms:.1f}ms)")
-        else:
-            print("\n  No pending migrations to apply")
+        print("\n  No pending migrations to apply")
 
 
 async def cmd_downgrade(manager, target_version: int, dry_run: bool = False) -> None:

@@ -95,7 +95,7 @@ def build_access_filter(user_context: UserContext) -> list[dict[str, Any]] | Non
         {
             "key": "access_level",
             "match": {"any": allowed_levels},
-        }
+        },
     )
 
     # For confidential documents, additionally check group membership
@@ -104,7 +104,7 @@ def build_access_filter(user_context: UserContext) -> list[dict[str, Any]] | Non
             {
                 "key": "allowed_groups",
                 "match": {"any": user_context.groups},
-            }
+            },
         )
 
     # For restricted documents, check user list
@@ -113,7 +113,7 @@ def build_access_filter(user_context: UserContext) -> list[dict[str, Any]] | Non
             {
                 "key": "allowed_users",
                 "match": {"value": user_context.username},
-            }
+            },
         )
 
     return conditions
@@ -138,7 +138,7 @@ def build_access_filter_should(user_context: UserContext) -> dict[str, Any] | No
             {
                 "key": "access_level",
                 "match": {"any": base_levels},
-            }
+            },
         )
 
     # Confidential: requires group match
@@ -148,8 +148,8 @@ def build_access_filter_should(user_context: UserContext) -> dict[str, Any] | No
                 "must": [
                     {"key": "access_level", "match": {"value": "confidential"}},
                     {"key": "allowed_groups", "match": {"any": user_context.groups}},
-                ]
-            }
+                ],
+            },
         )
 
     # Restricted: requires allowed_users match
@@ -159,8 +159,8 @@ def build_access_filter_should(user_context: UserContext) -> dict[str, Any] | No
                 "must": [
                     {"key": "access_level", "match": {"value": "restricted"}},
                     {"key": "allowed_users", "match": {"value": user_context.username}},
-                ]
-            }
+                ],
+            },
         )
 
     if should_clauses:

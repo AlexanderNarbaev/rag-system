@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/tools/openapi_discovery.py — OpenAPI Auto-Discovery."""
 
 import sys
@@ -44,8 +43,8 @@ PETSORE_SPEC = {
                             "schema": {
                                 "type": "object",
                                 "properties": {"name": {"type": "string"}, "status": {"type": "string"}},
-                            }
-                        }
+                            },
+                        },
                     },
                 },
             },
@@ -62,7 +61,7 @@ PETSORE_SPEC = {
                         "required": True,
                         "schema": {"type": "integer"},
                         "description": "Pet ID",
-                    }
+                    },
                 ],
             },
             "delete": {
@@ -76,7 +75,7 @@ PETSORE_SPEC = {
                         "required": True,
                         "schema": {"type": "integer"},
                         "description": "Pet ID to delete",
-                    }
+                    },
                 ],
             },
         },
@@ -140,7 +139,7 @@ class TestOpenAPIDiscoveryAuto:
 
         pet_id_param = next(p for p in get_by_id.parameters if p.name == "petId")
         assert pet_id_param.required is True
-        assert pet_id_param.type is int  # noqa: E721
+        assert pet_id_param.type is int
 
     def test_query_params_extracted_as_optional_tool_param(self):
         from tools.openapi import DiscoveryMode, OpenAPIDiscovery
@@ -155,11 +154,11 @@ class TestOpenAPIDiscoveryAuto:
 
         limit = next(p for p in list_pets.parameters if p.name == "limit")
         assert limit.required is False
-        assert limit.type is int  # noqa: E721
+        assert limit.type is int
 
         status = next(p for p in list_pets.parameters if p.name == "status")
         assert status.required is False
-        assert status.type is str  # noqa: E721
+        assert status.type is str
         assert status.enum == ["available", "pending", "sold"]
 
     def test_request_body_json_mapped_to_tool_param(self):
@@ -237,8 +236,8 @@ class TestEndpointFallbackNaming:
                     "get": {
                         "summary": "Get user",
                         "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
-                    }
-                }
+                    },
+                },
             },
         }
         discovery = OpenAPIDiscovery()
@@ -261,8 +260,8 @@ class TestEndpointFallbackNaming:
                         "parameters": [
                             {"name": "limit", "in": "query", "type": "integer", "description": "Max results"},
                         ],
-                    }
-                }
+                    },
+                },
             },
         }
         discovery = OpenAPIDiscovery()

@@ -36,7 +36,7 @@ def extract_qa_pair(feedback_request: Any, interaction: dict[str, Any]) -> dict[
     query = interaction.get("query", "")
     response = interaction.get("response", "")
 
-    answer = feedback_request.correction if feedback_request.correction else response
+    answer = feedback_request.correction or response
 
     if not query or not answer:
         return None

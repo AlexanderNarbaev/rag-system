@@ -359,3 +359,131 @@ class TestToolInputSanitizer:
         assert "\x00" not in result["items"][0]
         assert "\r" not in result["items"][1]
         assert result["items"][2] == "c"
+
+
+class TestToolInputSanitizerTypeValidation:
+    """Tests for type validation of ToolInputSanitizer."""
+
+    def test_validate_float_type_valid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="temperature", type=float, required=True)]
+        errors = sanitizer.validate(params, {"temperature": 0.7})
+        assert errors == []
+
+    def test_validate_float_type_invalid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="temperature", type=float, required=True)]
+        errors = sanitizer.validate(params, {"temperature": "not_float"})
+        assert len(errors) >= 1
+
+    def test_validate_float_accepts_int(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="temperature", type=float, required=True)]
+        errors = sanitizer.validate(params, {"temperature": 1})
+        assert errors == []
+
+    def test_validate_bool_type_valid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="flag", type=bool, required=True)]
+        errors = sanitizer.validate(params, {"flag": True})
+        assert errors == []
+
+    def test_validate_bool_type_invalid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="flag", type=bool, required=True)]
+        errors = sanitizer.validate(params, {"flag": "true"})
+        assert len(errors) >= 1
+
+    def test_validate_dict_type_valid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="config", type=dict, required=True)]
+        errors = sanitizer.validate(params, {"config": {"key": "value"}})
+        assert errors == []
+
+    def test_validate_dict_type_invalid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="config", type=dict, required=True)]
+        errors = sanitizer.validate(params, {"config": "not_a_dict"})
+        assert len(errors) >= 1
+
+    def test_validate_int_rejects_bool(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="count", type=int, required=True)]
+        errors = sanitizer.validate(params, {"count": True})
+        assert len(errors) >= 1
+
+    def test_validate_float_rejects_bool(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="ratio", type=float, required=True)]
+        errors = sanitizer.validate(params, {"ratio": False})
+        assert len(errors) >= 1
+
+    def test_validate_list_items_int(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="ids", type=list, required=True, items_type=int)]
+        errors = sanitizer.validate(params, {"ids": [1, 2, 3]})
+        assert errors == []
+
+    def test_validate_list_items_int_invalid(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="ids", type=list, required=True, items_type=int)]
+        errors = sanitizer.validate(params, {"ids": ["a", "b"]})
+        assert len(errors) >= 1
+
+    def test_validate_list_items_int_rejects_bool(self):
+        from tools.definition import ToolParam
+        from tools.security import ToolInputSanitizer
+
+        sanitizer = ToolInputSanitizer()
+        params = [ToolParam(name="ids", type=list, required=True, items_type=int)]
+        errors = sanitizer.validate(params, {"ids": [True, False]})
+        assert len(errors) >= 1
+
+    def test_resolve_string_type_unknown(self):
+        from tools.security import _resolve_string_type
+
+        result = _resolve_string_type("unknown_type")
+        assert result is str
+
+    def test_resolve_string_type_all_types(self):
+        from tools.security import _resolve_string_type
+
+        assert _resolve_string_type("str") is str
+        assert _resolve_string_type("int") is int
+        assert _resolve_string_type("float") is float
+        assert _resolve_string_type("bool") is bool
+        assert _resolve_string_type("list") is list
+        assert _resolve_string_type("dict") is dict

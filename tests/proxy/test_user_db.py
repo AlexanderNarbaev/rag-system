@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 """Tests for proxy/app/auth/user_db.py — UserDatabase with aiosqlite."""
 
 import json
@@ -336,7 +335,7 @@ class TestLegacyMigration:
                 {
                     "admin": {"password": "admin-pass", "roles": ["admin"], "groups": ["ops"]},
                     "viewer": {"password": "view-pass", "roles": ["viewer"]},
-                }
+                },
             ),
         )
         monkeypatch.setattr("proxy.app.auth.user_db.BCRYPT_ROUNDS", 4)

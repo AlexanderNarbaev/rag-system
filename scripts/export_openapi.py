@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # scripts/export_openapi.py
-"""
-Export, validate, and document the RAG Proxy OpenAPI specification.
+"""Export, validate, and document the RAG Proxy OpenAPI specification.
 
 This script:
   1. Imports the FastAPI app from proxy.app.main
@@ -59,14 +58,15 @@ def extract_openapi_spec() -> dict[str, Any]:
     Raises:
         ImportError: if the proxy app cannot be imported.
         RuntimeError: if the spec cannot be generated.
+
     """
     try:
-        from proxy.app.main import app  # noqa: F811
+        from proxy.app.main import app
     except ImportError as exc:
         raise ImportError(
             f"Cannot import proxy.app.main — ensure dependencies are installed.\n"
             f"  Install: pip install -r requirements-proxy.txt\n"
-            f"  Error: {exc}"
+            f"  Error: {exc}",
         ) from exc
 
     try:

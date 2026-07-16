@@ -1,4 +1,4 @@
-# ruff: noqa: E501, E402, N803, B017
+# ruff: noqa: N803
 """Tests for etl/graph_builder/neo4j_loader.py — Neo4j loader coverage."""
 
 from unittest.mock import MagicMock, patch
@@ -23,7 +23,12 @@ class TestNeo4jLoaderInit:
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
         loader = Neo4jLoader(
-            uri="bolt://remote:7687", user="admin", password="secret", database="mydb", batch_size=100, max_retries=5
+            uri="bolt://remote:7687",
+            user="admin",
+            password="secret",
+            database="mydb",
+            batch_size=100,
+            max_retries=5,
         )
         assert loader.database == "mydb"
         assert loader.batch_size == 100

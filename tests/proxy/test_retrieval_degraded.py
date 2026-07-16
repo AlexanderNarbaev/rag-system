@@ -52,7 +52,7 @@ class TestOrchestratorDegradation:
     """Test that orchestrator nodes degrade gracefully."""
 
     def test_retrieve_node_returns_empty_on_failure(self):
-        """retrieve node returns empty chunks when hybrid_search fails."""
+        """Retrieve node returns empty chunks when hybrid_search fails."""
         from proxy.app.core.orchestrator.nodes import retrieve
 
         with patch("proxy.app.core.orchestrator.nodes._get_hybrid_search") as mock_get:

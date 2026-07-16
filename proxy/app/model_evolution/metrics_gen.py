@@ -101,7 +101,7 @@ def compute_bertscore(
             "bertscore_precision": float(P.mean()),
             "bertscore_recall": float(R.mean()),
             "bertscore_f1": float(F1.mean()),
-        }  # noqa: E501
+        }
     except ImportError:
         return {"bertscore_precision": 0.0, "bertscore_recall": 0.0, "bertscore_f1": 0.0}
 

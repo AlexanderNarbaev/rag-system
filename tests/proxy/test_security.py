@@ -91,8 +91,8 @@ class TestInputValidator:
         assert "RAG" in result
 
     def test_validate_query_unicode_emojis_removed(self):
-        result = InputValidator.validate_query("hello \U0001F600 world")
-        assert "\U0001F600" in result
+        result = InputValidator.validate_query("hello \U0001f600 world")
+        assert "\U0001f600" in result
 
     def test_validate_non_empty_valid(self):
         result = InputValidator.validate_non_empty("hello", max_len=100)
@@ -280,7 +280,7 @@ class TestSecretsManager:
             "config": {
                 "secrets": {"private_key": "top-secret", "public_name": "visible"},
                 "items": [{"token": "t1"}, {"name": "item"}],
-            }
+            },
         }
         result = SecretsManager.mask_in_response(data)
         assert result["config"]["secrets"]["private_key"] == "***"
@@ -565,6 +565,7 @@ class TestJwtSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.JWT_SECRET == "" or cfg.JWT_SECRET is None
 
@@ -572,6 +573,7 @@ class TestJwtSecurity:
         monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "")
         from proxy.app.auth.jwt import create_token
+
         with pytest.raises(ValueError, match="JWT_SECRET"):
             create_token(user_id="u1", username="alice")
 
@@ -585,6 +587,7 @@ class TestJwtSecurity:
         from fastapi import HTTPException
 
         from proxy.app.auth.jwt import verify_token
+
         fake_token = pyjwt.encode({"sub": "user", "exp": 9999999999}, "", algorithm="none")
         with pytest.raises(HTTPException) as exc_info:
             verify_token(fake_token)
@@ -599,6 +602,7 @@ class TestJwtSecurity:
         from fastapi import HTTPException
 
         from proxy.app.auth.jwt import create_token, verify_token
+
         token = create_token(user_id="u1", username="alice", expires_in_hours=-1)
         with pytest.raises(HTTPException) as exc_info:
             verify_token(token)
@@ -620,6 +624,7 @@ class TestJwtSecurity:
             patch("jwt.decode", return_value={"jti": "test-jti-123", "exp": int(time.time()) + 3600}),
         ):
             from proxy.app.auth.jwt import blacklist_access_token
+
             await blacklist_access_token("fake-token")
             mock_db.add_to_blacklist.assert_called_once()
 
@@ -630,6 +635,7 @@ class TestJwtSecurity:
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
         from proxy.app.auth.jwt import create_token, verify_token
+
         token = create_token(user_id="u1", username="alice")
         decoded = verify_token(token)
         assert decoded.user_id == "u1"
@@ -641,6 +647,7 @@ class TestJwtSecurity:
         monkeypatch.setattr("proxy.app.shared.config.JWT_PUBLIC_KEY", "")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_PUBLIC_KEY", "")
         from proxy.app.auth.jwt import _get_verify_key
+
         assert _get_verify_key() is None
 
 
@@ -651,6 +658,7 @@ class TestSQLInjectionSafety:
         import inspect
 
         from proxy.app.auth.user_db import UserDatabase
+
         source = inspect.getsource(UserDatabase.create_user)
         assert "?" in source
 
@@ -658,10 +666,19 @@ class TestSQLInjectionSafety:
         import inspect
 
         from proxy.app.auth.user_db import UserDatabase
+
         methods = [
-            "create_user", "get_user", "get_user_by_username", "verify_password",
-            "store_refresh_token", "consume_refresh_token", "add_to_blacklist",
-            "is_blacklisted", "update_user", "delete_user", "list_users",
+            "create_user",
+            "get_user",
+            "get_user_by_username",
+            "verify_password",
+            "store_refresh_token",
+            "consume_refresh_token",
+            "add_to_blacklist",
+            "is_blacklisted",
+            "update_user",
+            "delete_user",
+            "list_users",
         ]
         for method_name in methods:
             source = inspect.getsource(getattr(UserDatabase, method_name))
@@ -672,6 +689,7 @@ class TestSQLInjectionSafety:
         import inspect
 
         from proxy.app.auth.user_db import UserDatabase
+
         source = inspect.getsource(UserDatabase.create_user)
         assert "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)" in source
 
@@ -679,6 +697,7 @@ class TestSQLInjectionSafety:
         import inspect
 
         from proxy.app.auth.user_db import UserDatabase
+
         source = inspect.getsource(UserDatabase.update_user)
         assert "allowed" in source
         assert "email" in source
@@ -689,6 +708,7 @@ class TestRateLimiting:
 
     def test_token_bucket_basics(self):
         from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=10.0, burst=5)
         for _ in range(5):
             allowed, _ = bucket.consume()
@@ -699,6 +719,7 @@ class TestRateLimiting:
 
     def test_token_bucket_refill(self):
         from proxy.app.shared.rate_limiter import TokenBucket
+
         bucket = TokenBucket(rate=100.0, burst=5)
         for _ in range(5):
             bucket.consume()
@@ -770,6 +791,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.JWT_SECRET == ""
 
@@ -777,6 +799,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.NEO4J_PASSWORD == ""
 
@@ -784,6 +807,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.MINIO_ACCESS_KEY == ""
         assert cfg.MINIO_SECRET_KEY == ""
@@ -792,6 +816,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.AUTH_ENABLED is False
         assert cfg.RBAC_ENABLED is False
@@ -800,6 +825,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.RATE_LIMIT_ENABLED is False
 
@@ -807,6 +833,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.SANITIZE_INPUT is True
 
@@ -814,6 +841,7 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.USER_DB_PATH == "./data/users.db"
 
@@ -821,5 +849,6 @@ class TestConfigSecurity:
         import importlib
 
         import proxy.app.shared.config as cfg
+
         importlib.reload(cfg)
         assert cfg.BCRYPT_ROUNDS >= 10

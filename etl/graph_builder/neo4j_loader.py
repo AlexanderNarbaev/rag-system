@@ -1,6 +1,5 @@
 # etl/graph_builder/neo4j_loader.py
-"""
-Загрузка графа знаний в Neo4j.
+"""Загрузка графа знаний в Neo4j.
 Использует официальный драйвер Neo4j.
 Поддерживает:
 - Пакетную загрузку узлов и рёбер
@@ -26,9 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class Neo4jLoader:
-    """
-    Загрузчик графа знаний в Neo4j.
-    """
+    """Загрузчик графа знаний в Neo4j."""
 
     def __init__(
         self,
@@ -39,8 +36,7 @@ class Neo4jLoader:
         batch_size: int = 500,
         max_retries: int = 3,
     ):
-        """
-        :param uri: Neo4j URI (bolt://localhost:7687)
+        """:param uri: Neo4j URI (bolt://localhost:7687)
         :param user: имя пользователя
         :param password: пароль
         :param database: имя базы данных
@@ -117,8 +113,7 @@ class Neo4jLoader:
         return False
 
     def create_constraints_and_indexes(self):
-        """
-        Создаёт необходимые ограничения и индексы для оптимальной производительности.
+        """Создаёт необходимые ограничения и индексы для оптимальной производительности.
         Запускается один раз при инициализации.
         """
         constraints = [
@@ -143,8 +138,7 @@ class Neo4jLoader:
                 logger.warning(f"Failed to create constraint/index: {e}")
 
     def load_entities(self, entities: list[dict]) -> int:
-        """
-        Загружает пакет сущностей в Neo4j.
+        """Загружает пакет сущностей в Neo4j.
         Каждая сущность должна иметь поля: id, name, type, source_id, properties (dict)
         Возвращает количество обработанных узлов.
         """
@@ -192,8 +186,7 @@ class Neo4jLoader:
         return total
 
     def load_relations(self, relations: list[dict]) -> int:
-        """
-        Загружает пакет отношений.
+        """Загружает пакет отношений.
         Каждое отношение должно содержать: source, target, type, properties (dict)
         Возвращает количество обработанных рёбер.
         """
@@ -236,8 +229,7 @@ class Neo4jLoader:
         return total
 
     def delete_outdated_entities(self, valid_source_ids: list[str]):
-        """
-        Удаляет сущности, которые больше не встречаются в актуальных источниках.
+        """Удаляет сущности, которые больше не встречаются в актуальных источниках.
         source_id - идентификаторы документов/частичных источников, которые были обработаны.
         Удаляются все узлы, у которых source_id не входит в valid_source_ids.
         """
@@ -274,9 +266,7 @@ class Neo4jLoader:
         return 0
 
     def delete_outdated_relations(self, max_age_days: int = 30):
-        """
-        Удаляет отношения, которые не обновлялись более max_age_days (опционально).
-        """
+        """Удаляет отношения, которые не обновлялись более max_age_days (опционально)."""
         if not self.driver:
             raise RuntimeError("Not connected to Neo4j")
 
@@ -347,8 +337,7 @@ def batch_load_from_extractor(
     clear_old: bool = False,
     valid_source_ids: list[str] = None,
 ):
-    """
-    Удобная функция для загрузки сущностей и отношений из extractor'а.
+    """Удобная функция для загрузки сущностей и отношений из extractor'а.
     :param loader: экземпляр Neo4jLoader
     :param entities: список словарей с полями id, name, type, source_id, properties
     :param relations: список словарей с полями source, target, type, properties
@@ -396,7 +385,7 @@ if __name__ == "__main__":
         },
     ]
     sample_relations = [
-        {"source": "abc123", "target": "def456", "type": "WORKS_ON", "properties": {"since": "2025-01-01"}}
+        {"source": "abc123", "target": "def456", "type": "WORKS_ON", "properties": {"since": "2025-01-01"}},
     ]
 
     with Neo4jLoader(**config) as loader:

@@ -1,6 +1,5 @@
 # proxy/app/tracing.py
-"""
-OpenTelemetry distributed tracing setup for RAG proxy.
+"""OpenTelemetry distributed tracing setup for RAG proxy.
 
 Provides:
 - setup_tracing() — initializes OTLP exporter and SDK when OTEL_ENABLED=true
@@ -27,6 +26,7 @@ Configuration via environment variables (see config.py):
 
 import logging
 from contextlib import contextmanager
+from functools import wraps
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -56,13 +56,13 @@ except ImportError:
 _OTEL_SDK_AVAILABLE = False
 
 try:
-    from opentelemetry.sdk.resources import SERVICE_NAME, Resource  # noqa: F811
+    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 except ImportError:
     SERVICE_NAME = "service.name"
     Resource = None  # type: ignore[assignment,misc]
 
 try:
-    from opentelemetry.sdk.trace import TracerProvider  # noqa: F811
+    from opentelemetry.sdk.trace import TracerProvider
 except ImportError:
     TracerProvider = None  # type: ignore[assignment,misc]
 
@@ -107,6 +107,7 @@ def _load_config() -> None:
             OTEL_EXPORTER_ENDPOINT,
             OTEL_SERVICE_NAME,
         )
+
         _OTEL_ENABLED = OTEL_ENABLED
         _OTEL_EXPORTER_ENDPOINT = OTEL_EXPORTER_ENDPOINT
         _OTEL_SERVICE_NAME = OTEL_SERVICE_NAME
@@ -271,12 +272,12 @@ def setup_tracing(service_name: str = "rag-proxy") -> None:
                 exporter,
                 schedule_delay_millis=_OTEL_BATCH_TIMEOUT * 1000,
                 max_export_batch_size=512,
-            )
+            ),
         )
-        _otel_trace.set_tracer_provider(provider)  # type: ignore[union-attr]
+        _otel_trace.set_tracer_provider(provider)
         _tracer_provider = provider
         global _tracer
-        _tracer = _otel_trace.get_tracer(service_name)  # type: ignore[union-attr]
+        _tracer = _otel_trace.get_tracer(service_name)
         _tracing_initialized = True
         logger.info(
             "OpenTelemetry tracing initialized (service=%s, endpoint=%s)",
@@ -297,6 +298,7 @@ def get_current_span() -> Any:
 
     Returns:
         The active span, or a non-recording no-op span if no tracing is active.
+
     """
     if _OTEL_AVAILABLE and _otel_trace is not None:
         return _otel_trace.get_current_span()
@@ -311,6 +313,7 @@ def add_event(name: str, attributes: dict[str, Any] | None = None) -> None:
     Args:
         name: Event name (e.g., "cache.hit", "llm.token_limit.exceeded").
         attributes: Optional key-value pairs to attach to the event.
+
     """
     span = get_current_span()
     if span.is_recording():
@@ -324,6 +327,7 @@ def set_span_error(exc: Exception) -> None:
 
     Args:
         exc: The exception to record.
+
     """
     span = get_current_span()
     if span.is_recording():
@@ -342,6 +346,7 @@ def span_context_from_headers(headers: dict[str, str]) -> Any:
 
     Returns:
         A Context object, or None if no traceparent header is present.
+
     """
     if not _OTEL_AVAILABLE or _otel_extract is None:
         return None
@@ -351,15 +356,15 @@ def span_context_from_headers(headers: dict[str, str]) -> Any:
     if not has_traceparent:
         return None
 
-    class _HeaderGetter(_TextMapGetter):  # type: ignore[valid-type,misc]
-        def get(self, carrier: dict[str, str], key: str) -> list[str] | None:
+    class _HeaderGetter(_TextMapGetter[str]):  # type: ignore[misc,override,unused-ignore]
+        def get(self, carrier: dict[str, str], key: str) -> list[str] | None:  # type: ignore[override]
             val = carrier.get(key)
             return [val] if val is not None else None
 
-        def keys(self, carrier: dict[str, str]) -> list[str]:
+        def keys(self, carrier: dict[str, str]) -> list[str]:  # type: ignore[override]
             return list(carrier.keys())
 
-    return _otel_extract(headers, getter=_HeaderGetter())  # type: ignore[union-attr]
+    return _otel_extract(headers, getter=_HeaderGetter())  # type: ignore[misc]
 
 
 def inject_context_to_headers(headers: dict[str, str]) -> None:
@@ -369,18 +374,17 @@ def inject_context_to_headers(headers: dict[str, str]) -> None:
 
     Args:
         headers: Dict of header names to values (mutated in place).
+
     """
     if not _OTEL_AVAILABLE or _otel_inject is None:
         return
-    _otel_inject(headers)  # type: ignore[union-attr]
+    _otel_inject(headers)
 
 
 # ── Decorator for function-level instrumentation ────────────────────────────
 
-from functools import wraps
 
-
-def traced(span_name: str | None = None, attributes: dict[str, Any] | None = None):
+def traced(span_name: str | None = None, attributes: dict[str, Any] | None = None) -> Any:
     """Decorate a function to create a span around its execution.
 
     Can also be used as a context manager::
@@ -392,13 +396,14 @@ def traced(span_name: str | None = None, attributes: dict[str, Any] | None = Non
     Args:
         span_name: Name for the span. Defaults to ``module.func_name``.
         attributes: Optional attributes to set on the span at start.
+
     """
 
-    def decorator(func):
+    def decorator(func: Any) -> Any:
         name = span_name or f"{func.__module__}.{func.__name__}"
 
         @wraps(func)
-        def sync_wrapper(*args, **kwargs):
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             t = _get_tracer()
             with t.start_as_current_span(name) as span:
                 if attributes:
@@ -413,7 +418,7 @@ def traced(span_name: str | None = None, attributes: dict[str, Any] | None = Non
                     raise
 
         @wraps(func)
-        async def async_wrapper(*args, **kwargs):
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             t = _get_tracer()
             with t.start_as_current_span(name) as span:
                 if attributes:

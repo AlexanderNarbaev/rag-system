@@ -1,6 +1,5 @@
 # proxy/app/remote_services.py
-"""
-Remote service adapters for embedding and reranking.
+"""Remote service adapters for embedding and reranking.
 
 Provides factory functions that automatically select between:
 - Remote HTTP-based services (OpenAI-compatible /v1/embeddings, Cohere-compatible /v1/rerank)
@@ -123,7 +122,7 @@ class RemoteEmbeddingClient:
                 "input": input_list,
                 "model": self._model,
                 "encoding_format": "float",
-            }
+            },
         ).encode("utf-8")
 
         try:
@@ -205,7 +204,7 @@ class RemoteRerankerClient:
                     "query": "test",
                     "documents": ["test document"],
                     "top_n": 1,
-                }
+                },
             ).encode("utf-8")
             req = urllib.request.Request(
                 self._rerank_url,
@@ -255,7 +254,7 @@ class RemoteRerankerClient:
                     "query": query,
                     "documents": documents,
                     "top_n": len(documents),
-                }
+                },
             ).encode("utf-8")
 
             try:
@@ -335,23 +334,23 @@ def create_embedder() -> Any:
             )
         else:
             raise ConnectionError(
-                f"Remote embedder at {EMBEDDER_ENDPOINT} is unreachable and EMBEDDER_FALLBACK_LOCAL is false."
+                f"Remote embedder at {EMBEDDER_ENDPOINT} is unreachable and EMBEDDER_FALLBACK_LOCAL is false.",
             )
 
     # Local fallback
     try:
-        from sentence_transformers import SentenceTransformer  # noqa: F811
+        from sentence_transformers import SentenceTransformer
     except ImportError as err:
         raise ImportError(
             "sentence-transformers is required for local embedding. "
             "Set EMBEDDER_ENDPOINT to use a remote service, or install "
-            "sentence-transformers."
+            "sentence-transformers.",
         ) from err
 
     if not EMBEDDER_MODEL:
         raise ValueError(
             "EMBEDDER_MODEL is required when using local embedding. "
-            "Set EMBEDDER_ENDPOINT for remote, or EMBEDDER_MODEL for local."
+            "Set EMBEDDER_ENDPOINT for remote, or EMBEDDER_MODEL for local.",
         )
 
     logger.info("Loading local embedder: %s on %s", EMBEDDER_MODEL, EMBEDDER_DEVICE)
@@ -393,7 +392,7 @@ def create_reranker() -> Any:
             )
         else:
             raise ConnectionError(
-                f"Remote reranker at {RERANKER_ENDPOINT} is unreachable and RERANKER_FALLBACK_LOCAL is false."
+                f"Remote reranker at {RERANKER_ENDPOINT} is unreachable and RERANKER_FALLBACK_LOCAL is false.",
             )
 
     # Local fallback
@@ -403,13 +402,13 @@ def create_reranker() -> Any:
         raise ImportError(
             "sentence-transformers is required for local reranking. "
             "Set RERANKER_ENDPOINT to use a remote service, or install "
-            "sentence-transformers."
+            "sentence-transformers.",
         ) from err
 
     if not RERANKER_MODEL:
         raise ValueError(
             "RERANKER_MODEL is required when using local reranking. "
-            "Set RERANKER_ENDPOINT for remote, or RERANKER_MODEL for local."
+            "Set RERANKER_ENDPOINT for remote, or RERANKER_MODEL for local.",
         )
 
     logger.info(

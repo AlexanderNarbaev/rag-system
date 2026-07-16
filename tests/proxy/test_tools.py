@@ -131,7 +131,7 @@ class TestExecuteTool:
                     "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
                 },
                 handler=add,
-            )
+            ),
         )
         result = execute_tool("add", {"a": 2, "b": 3}, registry)
         assert result.content == "5"
@@ -148,7 +148,7 @@ class TestExecuteTool:
                 description="Search",
                 parameters_schema={},
                 handler=search,
-            )
+            ),
         )
         result = execute_tool("search", {"query": "RAG", "top_k": 3}, registry)
         assert result.content == "Found 3 results for 'RAG'"
@@ -172,7 +172,7 @@ class TestExecuteTool:
                 description="Always fails",
                 parameters_schema={},
                 handler=failing,
-            )
+            ),
         )
         result = execute_tool("failing", {}, registry)
         assert result.error is not None
@@ -226,7 +226,7 @@ class TestHandleFunctionCall:
                 description="Echoes input",
                 parameters_schema={},
                 handler=lambda text: f"Echo: {text}",
-            )
+            ),
         )
         return reg
 

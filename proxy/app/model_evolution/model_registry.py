@@ -275,7 +275,7 @@ class ModelRegistry:
         data = {
             "models": {
                 name: {ver: mv.to_dict() for ver, mv in versions.items()} for name, versions in self._models.items()
-            }
+            },
         }
         tmp_path = self._store_path.with_suffix(self._store_path.suffix + ".tmp")
         with open(tmp_path, "w", encoding="utf-8") as f:

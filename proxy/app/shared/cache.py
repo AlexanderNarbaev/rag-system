@@ -1,6 +1,5 @@
 # proxy/app/cache.py
-"""
-Cache manager with Redis and in-memory fallback.
+"""Cache manager with Redis and in-memory fallback.
 
 Used for:
 - Embedding vectors (dense)
@@ -97,9 +96,21 @@ class RedisCache:
             try:
                 import redis.asyncio as redis
 
-                self._client = redis.from_url(self.redis_url, decode_responses=True)
-                # Проверяем соединение
-                await self._client.ping()
+                from proxy.app.shared.retry import RetryConfig, async_retry
+
+                async def _connect() -> Any:
+                    client = redis.from_url(self.redis_url, decode_responses=True)
+                    await client.ping()
+                    return client
+
+                self._client = await async_retry(
+                    _connect,
+                    config=RetryConfig(
+                        max_attempts=3,
+                        base_delay=1.0,
+                        jitter=True,
+                    ),
+                )
                 logger.info(f"Connected to Redis at {self.redis_url}")
             except ImportError:
                 logger.error("redis.asyncio not installed. Install: pip install redis")
@@ -115,8 +126,21 @@ class RedisCache:
             try:
                 import redis as sync_redis
 
-                self._sync_client = sync_redis.from_url(self.redis_url, decode_responses=True)
-                self._sync_client.ping()
+                from proxy.app.shared.retry import RetryConfig, sync_retry
+
+                def _connect() -> Any:
+                    client = sync_redis.from_url(self.redis_url, decode_responses=True)
+                    client.ping()
+                    return client
+
+                self._sync_client = sync_retry(
+                    _connect,
+                    config=RetryConfig(
+                        max_attempts=3,
+                        base_delay=1.0,
+                        jitter=True,
+                    ),
+                )
             except ImportError:
                 logger.error("redis not installed. Install: pip install redis")
                 raise
@@ -196,17 +220,18 @@ class RedisCache:
 
 
 class CacheManager:
-    """
-    Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory.
-    """
+    """Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory."""
 
     def __init__(self, redis_url: str | None = None, use_redis: bool = True) -> None:
         self.use_redis = use_redis and redis_url is not None
         self._cache: RedisCache | InMemoryCache
+        self._cache_type: str
         if self.use_redis and redis_url is not None:
             self._cache = RedisCache(redis_url)
+            self._cache_type = "redis"
         else:
             self._cache = InMemoryCache()
+            self._cache_type = "memory"
         logger.info(f"CacheManager initialized with {type(self._cache).__name__}")
 
     async def initialize(self) -> None:
@@ -215,7 +240,16 @@ class CacheManager:
             await self._cache._get_client()
 
     async def get(self, key: str) -> Any | None:
-        return await self._cache.get(key)
+        result = await self._cache.get(key)
+        if result is not None:
+            from proxy.app.shared.metrics import record_cache_hit
+
+            record_cache_hit(self._cache_type)
+        else:
+            from proxy.app.shared.metrics import record_cache_miss
+
+            record_cache_miss(self._cache_type)
+        return result
 
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
         return await self._cache.set(key, value, ttl)
@@ -232,7 +266,16 @@ class CacheManager:
 
     # Синхронные методы для обратной совместимости (используются в retrieval и rerank)
     def get_sync(self, key: str) -> Any | None:
-        return self._cache.get_sync(key)
+        result = self._cache.get_sync(key)
+        if result is not None:
+            from proxy.app.shared.metrics import record_cache_hit
+
+            record_cache_hit(self._cache_type)
+        else:
+            from proxy.app.shared.metrics import record_cache_miss
+
+            record_cache_miss(self._cache_type)
+        return result
 
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
         return self._cache.set_sync(key, value, ttl)

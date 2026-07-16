@@ -20,76 +20,76 @@ from ._legacy import (
     ToolRegistry,
 )
 from ._legacy import (
-    ToolResult as ToolResult,  # noqa: F401  # re-export
+    ToolResult as ToolResult,  # re-export
 )
 from ._legacy import (
-    _get_document_metadata as _get_document_metadata,  # noqa: F401  # re-export
+    _get_document_metadata as _get_document_metadata,  # re-export
 )
 from ._legacy import (
-    _search_by_version as _search_by_version,  # noqa: F401  # re-export
+    _search_by_version as _search_by_version,  # re-export
 )
 from ._legacy import (
-    _search_documents as _search_documents,  # noqa: F401  # re-export
+    _search_documents as _search_documents,  # re-export
 )
 from ._legacy import (
-    execute_tool as execute_tool,  # noqa: F401  # re-export
+    execute_tool as execute_tool,  # re-export
 )
 from ._legacy import (
     get_tool_registry as _legacy_get_tool_registry,  # noqa: F401  # re-export (aliased to avoid conflict)
 )
 from ._legacy import (
-    handle_function_call as handle_function_call,  # noqa: F401  # re-export
+    handle_function_call as handle_function_call,  # re-export
 )
 from .definition import (
-    _UNSET as _UNSET,  # noqa: F401  # re-export
+    _UNSET as _UNSET,  # re-export
 )
 from .definition import (
-    RetryPolicy as RetryPolicy,  # noqa: F401  # re-export
+    RetryPolicy as RetryPolicy,  # re-export
 )
 from .definition import (
-    ToolCall as ToolCall,  # noqa: F401  # re-export
+    ToolCall as ToolCall,  # re-export
 )
 from .definition import (
     ToolDefinition as NewToolDefinition,
 )
 from .definition import (
-    ToolParam as ToolParam,  # noqa: F401  # re-export
+    ToolParam as ToolParam,  # re-export
 )
 from .definition import (
     ToolResult as NewToolResult,  # noqa: F401  # aliased re-export
 )
 from .definition import (
-    ToolVisibility as ToolVisibility,  # noqa: F401  # re-export
+    ToolVisibility as ToolVisibility,  # re-export
 )
 from .errors import (
-    ToolDependencyError as ToolDependencyError,  # noqa: F401  # re-export
+    ToolDependencyError as ToolDependencyError,  # re-export
 )
 from .errors import (
-    ToolError as ToolError,  # noqa: F401  # re-export
+    ToolError as ToolError,  # re-export
 )
 from .errors import (
     ToolError as ToolErrorBase,  # noqa: F401  # re-export (aliased for backward compat)
 )
 from .errors import (
-    ToolExecutionError as ToolExecutionError,  # noqa: F401  # re-export
+    ToolExecutionError as ToolExecutionError,  # re-export
 )
 from .errors import (
-    ToolNotFoundError as ToolNotFoundError,  # noqa: F401  # re-export
+    ToolNotFoundError as ToolNotFoundError,  # re-export
 )
 from .errors import (
-    ToolPermissionError as ToolPermissionError,  # noqa: F401  # re-export
+    ToolPermissionError as ToolPermissionError,  # re-export
 )
 from .errors import (
-    ToolRateLimitError as ToolRateLimitError,  # noqa: F401  # re-export
+    ToolRateLimitError as ToolRateLimitError,  # re-export
 )
 from .errors import (
-    ToolTimeoutError as ToolTimeoutError,  # noqa: F401  # re-export
+    ToolTimeoutError as ToolTimeoutError,  # re-export
 )
 from .errors import (
-    ToolValidationError as ToolValidationError,  # noqa: F401  # re-export
+    ToolValidationError as ToolValidationError,  # re-export
 )
 from .errors import (
-    classify_error as classify_error,  # noqa: F401  # re-export
+    classify_error as classify_error,  # re-export
 )
 
 _global_registry = None
@@ -176,7 +176,7 @@ def _register_builtin_tools(
                 },
                 handler=search_documents,
                 category="search",
-            )
+            ),
         )
         legacy_registry.register(
             ToolDefinition(
@@ -193,7 +193,7 @@ def _register_builtin_tools(
                 },
                 handler=search_by_version,
                 category="search",
-            )
+            ),
         )
         legacy_registry.register(
             ToolDefinition(
@@ -208,7 +208,7 @@ def _register_builtin_tools(
                 },
                 handler=get_document_metadata,
                 category="metadata",
-            )
+            ),
         )
 
 
@@ -279,6 +279,6 @@ def format_tools_for_llm(tools: list[Any]) -> list[dict[str, Any]]:
                         "description": t.description,
                         "parameters": t.parameters_schema,
                     },
-                }
+                },
             )
     return formatted

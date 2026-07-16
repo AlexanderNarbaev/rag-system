@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from proxy.app.tools.errors import ToolError as ToolErrorBase  # noqa: E402, F401
+from proxy.app.tools.errors import ToolError as ToolErrorBase  # noqa: F401
 
 _UNSET: Any = object()
 

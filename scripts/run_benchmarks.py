@@ -239,8 +239,7 @@ THRESHOLDS: dict[str, float] = {
     "chat_completion_stream": 5000.0,
     "health_live": 200.0,
     "models_list": 500.0,
-    # Cache benchmarks
-    "rerank_cache_key": 0.5,
+    # Cache benchmarks (rerank_cache_key_threshold replaces rerank_cache_key)
     "embedding_cache_hit_ratio": 0.0,  # ratio-based, not ms
     "concurrent_cache_access": 0.0,
     "two_stage_cache_effective": 0.0,
@@ -252,9 +251,8 @@ THRESHOLDS: dict[str, float] = {
     "memory_stable_context": 0.0,
     "cache_memory_bound": 0.0,
     "global_search_1000": 50.0,
-    # New test function names
+    # New test function names (test_rerank_cache_key_generation_threshold replaces test_rerank_cache_key_generation)
     "test_embedding_cache_hit_ratio": 0.0,
-    "test_rerank_cache_key_generation": 0.5,
     "test_in_memory_cache_concurrent_access": 0.0,
     "test_two_stage_reranker_cache": 0.0,
     "test_concurrent_context_build": 50.0,
@@ -287,6 +285,7 @@ def run_benchmarks(categories: list[str] | None = None) -> list[BenchmarkResult]
 
     Returns:
         List of BenchmarkResult objects.
+
     """
     test_file = Path(__file__).parent.parent / "tests" / "performance" / "test_latency_benchmarks.py"
 
@@ -375,7 +374,7 @@ def _parse_benchmark_output(output: str) -> list[BenchmarkResult]:
                 mean_ms=round((p50 + p95 + p99) / 3, 3),
                 passed=(p95 <= threshold) if threshold > 0 else True,
                 threshold_ms=threshold,
-            )
+            ),
         )
 
     return results
@@ -492,7 +491,7 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
                 "",
                 "| Category | Passed | Failed | Total |",
                 "|----------|--------|--------|-------|",
-            ]
+            ],
         )
         for cat_name, cat_data in sorted(cats.items()):
             lines.append(f"| {cat_name} | {cat_data['passed']} | {cat_data['failed']} | {cat_data['total']} |")
@@ -505,7 +504,7 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
             "",
             "## Detailed Results",
             "",
-        ]
+        ],
     )
 
     current_cat = None
@@ -522,7 +521,7 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
         name_clean = r.name.replace("test_", "").replace("_", " ")
         lines.append(
             f"| {name_clean} | {r.p50_ms:.3f} | {r.p95_ms:.3f} | {r.p99_ms:.3f} | "
-            f"{r.threshold_ms:.1f} | {status_emoji} {status} |"
+            f"{r.threshold_ms:.1f} | {status_emoji} {status} |",
         )
 
     lines.append("")
@@ -589,7 +588,7 @@ def write_markdown_report(report: BenchmarkReport, output_dir: Path) -> Path:
             "5. **Context build**: If >30ms for 15 chunks, reduce metadata overhead or pre-compute hashes",
             "6. **Graph traversal**: If >10ms for 2 hops, limit entity map connectivity or add indexing",
             "",
-        ]
+        ],
     )
 
     with open(path, "w") as f:
@@ -628,7 +627,7 @@ def compare_with_baseline(results: list[BenchmarkResult], baseline_path: Path) -
                     "delta_p95_ms": round(delta_p95, 3),
                     "change_pct": round(pct_change, 1),
                     "regression": delta_p95 > (bl["p95_ms"] * 0.2),  # >20% = regression
-                }
+                },
             )
 
     return comparisons
@@ -726,7 +725,7 @@ def main() -> None:
                 print(
                     f"    {c['name']}: "
                     f"p95 {c['baseline_p95_ms']:.3f}ms -> {c['current_p95_ms']:.3f}ms "
-                    f"({c['change_pct']:+.1f}%) [{status}]"
+                    f"({c['change_pct']:+.1f}%) [{status}]",
                 )
                 if c["regression"]:
                     regressions += 1

@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/api/widget.py — chat widget endpoints."""
 
 from pathlib import Path

@@ -76,8 +76,7 @@ class ProviderType(StrEnum):
 
 
 class ProviderAdapter:
-    """
-    Base adapter for translating between internal format and provider-specific format.
+    """Base adapter for translating between internal format and provider-specific format.
 
     Internal canonical format is OpenAI-compatible:
     - Messages: [{"role": "...", "content": "...", "tool_calls": [...], "tool_call_id": "..."}]
@@ -110,8 +109,7 @@ class ProviderAdapter:
 
 
 class MultiProviderRouter:
-    """
-    Routes LLM requests through the appropriate provider adapter.
+    """Routes LLM requests through the appropriate provider adapter.
     Handles streaming and non-streaming with transparent translation.
     Supports per-request provider_type override for multi-provider routing.
     """
@@ -206,7 +204,7 @@ class MultiProviderRouter:
                         "tool_call_id": tr.tool_call_id,
                         "name": tr.name,
                         "content": tr.content,
-                    }
+                    },
                 )
 
         payload = adapter.translate_request(messages, temperature, max_tokens, tools, stream)
@@ -220,31 +218,27 @@ class MultiProviderRouter:
         timeout = ClientTimeout(total=_get_config("REQUEST_TIMEOUT", _DEFAULT_REQUEST_TIMEOUT))
 
         for attempt in range(retry + 1):
+            session = None
+            response = None
             try:
                 session = aiohttp.ClientSession()
                 response = await session.post(url, json=payload, headers=headers, timeout=timeout)
                 if response.status != 200:
                     error_text = await response.text()
-                    response.close()
-                    await session.close()
-                    logger.error(f"LLM API error {response.status}: {error_text}")
                     raise LLMError(f"LLM returned {response.status}: {error_text}")
 
                 if stream:
                     _record_llm_success()
                     return session, response, adapter
-                else:
-                    data = await response.json()
-                    response.close()
-                    await session.close()
-                    translated = adapter.translate_response(data)
-                    if "choices" not in translated or not translated["choices"]:
-                        raise LLMError(
-                            f"Invalid response format from LLM: "
-                            f"missing 'choices' in response. Keys: {list(translated.keys())}"
-                        )
-                    _record_llm_success()
-                    return translated
+                data = await response.json()
+                translated = adapter.translate_response(data)
+                if "choices" not in translated or not translated["choices"]:
+                    raise LLMError(
+                        f"Invalid response format from LLM: "
+                        f"missing 'choices' in response. Keys: {list(translated.keys())}",
+                    )
+                _record_llm_success()
+                return translated
             except (TimeoutError, ClientError, LLMError) as e:
                 logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
                 # Do not retry client errors (4xx) — they indicate a request problem that won't resolve
@@ -257,6 +251,11 @@ class MultiProviderRouter:
                 else:
                     _record_llm_failure()
                     raise LLMError(f"LLM request failed after {retry + 1} attempts: {e}") from e
+            finally:
+                if response is not None and not stream:
+                    response.close()
+                if session is not None and not stream:
+                    await session.close()
 
     async def stream_completion(
         self,
@@ -376,7 +375,7 @@ class MultiProviderRouter:
                     temperature,
                     max_tokens,
                     provider_type=provider_type,
-                )
+                ),
             )
         finally:
             loop.close()

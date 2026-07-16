@@ -14,14 +14,14 @@ from proxy.app.shared.exceptions import StorageError
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_boto3_client():
     """Return a mock boto3 S3 client."""
     client = MagicMock()
     return client
 
 
-@pytest.fixture()
+@pytest.fixture
 def minio_client(mock_boto3_client):
     """Return a MinioClient with mocked boto3."""
     # Import the module first so patch can resolve it
@@ -129,9 +129,9 @@ class TestListFiles:
                         "Size": 100,
                         "LastModified": datetime(2025, 1, 1, tzinfo=UTC),
                         "ETag": '"abc123"',
-                    }
-                ]
-            }
+                    },
+                ],
+            },
         ]
         mock_boto3_client.get_paginator.return_value = paginator_mock
 
@@ -247,7 +247,8 @@ class TestHealthCheck:
         from botocore.exceptions import EndpointConnectionError
 
         mock_boto3_client.list_buckets.side_effect = EndpointConnectionError(
-            endpoint_url="http://localhost:9000", error_msg="Connection refused"
+            endpoint_url="http://localhost:9000",
+            error_msg="Connection refused",
         )
         with pytest.raises(StorageError, match="health check failed"):
             minio_client.health_check()

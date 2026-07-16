@@ -1,6 +1,5 @@
 # proxy/app/core/kb_manager.py
-"""
-Knowledge Base Manager — multi-KB support with SQLite metadata and Qdrant collections.
+"""Knowledge Base Manager — multi-KB support with SQLite metadata and Qdrant collections.
 
 Inspired by RAGFlow's Knowledgebase model: each KB has its own Qdrant collection,
 embedding model config, and document tracking. Metadata lives in SQLite; vectors
@@ -186,7 +185,8 @@ class KnowledgeBaseManager:
         conn = self._get_conn()
         try:
             row = conn.execute(
-                "SELECT * FROM knowledge_bases WHERE id = ? AND status != 'deleted'", (kb_id,)
+                "SELECT * FROM knowledge_bases WHERE id = ? AND status != 'deleted'",
+                (kb_id,),
             ).fetchone()
             if row is None:
                 return None
@@ -199,7 +199,8 @@ class KnowledgeBaseManager:
         conn = self._get_conn()
         try:
             row = conn.execute(
-                "SELECT * FROM knowledge_bases WHERE name = ? AND status != 'deleted'", (name,)
+                "SELECT * FROM knowledge_bases WHERE name = ? AND status != 'deleted'",
+                (name,),
             ).fetchone()
             if row is None:
                 return None
@@ -215,7 +216,7 @@ class KnowledgeBaseManager:
                 rows = conn.execute("SELECT * FROM knowledge_bases ORDER BY created_at DESC").fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM knowledge_bases WHERE status != 'deleted' ORDER BY created_at DESC"
+                    "SELECT * FROM knowledge_bases WHERE status != 'deleted' ORDER BY created_at DESC",
                 ).fetchall()
             return [self._row_to_kb(row) for row in rows]
         finally:

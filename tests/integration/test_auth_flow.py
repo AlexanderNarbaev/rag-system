@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/integration/test_auth_flow.py
 """Integration tests for authentication and authorization flow.
 

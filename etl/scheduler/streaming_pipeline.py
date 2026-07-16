@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-ETL Pipeline — Parallel extraction with streaming indexing.
+"""ETL Pipeline — Parallel extraction with streaming indexing.
 
 Extracts from Confluence, Jira, GitLab in parallel with concurrency limits.
 Streams chunks directly to Qdrant instead of saving locally first.
@@ -40,8 +39,7 @@ logger = logging.getLogger("etl-pipeline")
 
 
 class StreamingETLPipeline:
-    """
-    Parallel ETL pipeline with streaming indexing.
+    """Parallel ETL pipeline with streaming indexing.
 
     - Extracts from multiple sources concurrently
     - Chunks and indexes directly to Qdrant (no local storage)
@@ -177,7 +175,7 @@ class StreamingETLPipeline:
                         "hash": chunk.hash if hasattr(chunk, "hash") else "",
                         "position": chunk.position if hasattr(chunk, "position") else 0,
                         "metadata": metadata,
-                    }
+                    },
                 )
 
             # Index directly to Qdrant
@@ -354,7 +352,7 @@ class StreamingETLPipeline:
                 logger.info("Shutdown requested — stopping Confluence extraction")
                 break
 
-            logger.info(f"Processing space: {space if space else 'ALL'}")
+            logger.info(f"Processing space: {space or 'ALL'}")
 
             # Get page list (metadata only)
             pages = await loop.run_in_executor(None, extractor._get_all_pages, space)
@@ -373,7 +371,7 @@ class StreamingETLPipeline:
         logger.info(
             f"Confluence done: {self.stats['confluence']['pages']} pages, "
             f"{self.stats['confluence']['chunks']} chunks, "
-            f"{self.stats['confluence']['errors']} errors"
+            f"{self.stats['confluence']['errors']} errors",
         )
 
     async def _run_jira(self, extractor: JiraExtractor):
@@ -405,7 +403,7 @@ class StreamingETLPipeline:
         logger.info(
             f"Jira done: {self.stats['jira']['issues']} issues, "
             f"{self.stats['jira']['chunks']} chunks, "
-            f"{self.stats['jira']['errors']} errors"
+            f"{self.stats['jira']['errors']} errors",
         )
 
     async def _run_gitlab(self, extractor: GitLabExtractor):
@@ -431,15 +429,15 @@ class StreamingETLPipeline:
         logger.info(
             f"GitLab done: {self.stats['gitlab']['projects']} projects, "
             f"{self.stats['gitlab']['chunks']} chunks, "
-            f"{self.stats['gitlab']['errors']} errors"
+            f"{self.stats['gitlab']['errors']} errors",
         )
 
     async def run(self, sources: list[str] | None = None):
-        """
-        Run the ETL pipeline.
+        """Run the ETL pipeline.
 
         Args:
             sources: List of sources to run. None = all configured sources.
+
         """
         start_time = time.time()
 

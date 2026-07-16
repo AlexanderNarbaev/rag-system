@@ -158,7 +158,7 @@ class TestVersionExtractionInQueryProcessing:
 
         # Explicit version override would happen at caller level
         explicit_version = "2.0"
-        effective = explicit_version if explicit_version else extracted
+        effective = explicit_version or extracted
         assert effective == "2.0"
 
 
@@ -371,7 +371,7 @@ class TestOrchestratorFlow:
                     "context": "",
                     "answer": "",
                     "sufficient": False,
-                }
+                },
             )
             assert "answer" in result
             assert "RAG" in result["answer"]
@@ -429,7 +429,7 @@ class TestOrchestratorFlow:
                     "context": "",
                     "answer": "",
                     "sufficient": False,
-                }
+                },
             )
             assert "answer" in result
 

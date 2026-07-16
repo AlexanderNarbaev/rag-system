@@ -176,6 +176,7 @@ class HotReloadWatcher:
         Args:
             file_patterns: Optional list of fnmatch patterns for adapter
                 files. Defaults to common adapter file patterns if None.
+
         """
         self._file_patterns = file_patterns if file_patterns is not None else list(self._DEFAULT_FILE_PATTERNS)
         logger.debug(
@@ -344,6 +345,7 @@ class AdapterManager:
 
         Raises:
             AdapterError: If the adapter fails to load.
+
         """
         with self._lock:
             adapter = self._adapters.get(name)
@@ -400,6 +402,7 @@ class AdapterManager:
 
         Raises:
             AdapterError: If the adapter cannot be unloaded.
+
         """
         with self._lock:
             adapter = self._adapters.get(name)
@@ -456,6 +459,7 @@ class AdapterManager:
 
         Raises:
             AdapterError: If hot-reload fails. The old adapter stays ACTIVE.
+
         """
         with self._lock:
             old_adapter = self._adapters.get(name)
@@ -558,6 +562,7 @@ class AdapterManager:
             name: The adapter name.
             path: Directory to watch for new versions.
             poll_interval: Seconds between polls.
+
         """
         with self._lock:
             if name in self._watchers:
@@ -605,6 +610,7 @@ class AdapterManager:
         Args:
             default_path: Base directory to scan for new versions.
                           Each adapter's name is used as subdirectory.
+
         """
         with self._lock:
             for name, adapter in list(self._adapters.items()):
@@ -681,6 +687,7 @@ def setup_signal_handlers(manager: AdapterManager | None = None) -> None:
     Args:
         manager: The AdapterManager instance to reload. If None, the
                  global singleton is used.
+
     """
     global _sighup_registered
     if _sighup_registered:

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # scripts/download_models_offline.py
-"""
-Скрипт для загрузки всех моделей, необходимых для RAG-системы, в офлайн-режиме.
+"""Скрипт для загрузки всех моделей, необходимых для RAG-системы, в офлайн-режиме.
 Запускается на машине с доступом в интернет. Скачанные модели копируются в защищённый контур.
 
 Download script for all models needed by the RAG system in air-gapped environments.
@@ -50,7 +49,7 @@ def download_cross_encoder(model_name: str):
     from sentence_transformers import CrossEncoder
 
     logger.info(f"Downloading cross-encoder model: {model_name}")
-    _ = CrossEncoder(model_name)  # noqa: F841 — triggers download/cache
+    _ = CrossEncoder(model_name)
     logger.info(f"Model cached at {HF_HOME}")
     return Path(HF_HOME)
 
@@ -94,8 +93,7 @@ def download_gguf_model(url: str, output_path: Path):
     response = requests.get(url, stream=True, timeout=300)
     response.raise_for_status()
     with open(output_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+        f.writelines(response.iter_content(chunk_size=8192))
     logger.info(f"Saved to {output_path}")
     return output_path
 
@@ -112,11 +110,17 @@ def main():
     )
     parser.add_argument("--embedder-model", type=str, default="", help="Embedding model name (e.g. BAAI/bge-m3)")
     parser.add_argument(
-        "--reranker-model", type=str, default="", help="Reranker model name (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2)"
+        "--reranker-model",
+        type=str,
+        default="",
+        help="Reranker model name (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2)",
     )
     parser.add_argument("--spacy-model", type=str, default="", help="spaCy model name (e.g. ru_core_news_sm)")
     parser.add_argument(
-        "--slm-model", type=str, default="", help="Small Language Model HF ID (e.g. google/gemma-2b-it)"
+        "--slm-model",
+        type=str,
+        default="",
+        help="Small Language Model HF ID (e.g. google/gemma-2b-it)",
     )
     parser.add_argument("--gguf-url", type=str, default="", help="URL for GGUF LLM download")
     parser.add_argument("--gguf-output", type=str, default="llm-model.gguf", help="Output filename for GGUF file")

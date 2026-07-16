@@ -1,4 +1,4 @@
-# ruff: noqa: E501, E402, N803, B017
+# ruff: noqa: E501, N803
 """Tests for etl/scheduler/run_etl.py — ETL orchestrator coverage."""
 
 import json
@@ -98,7 +98,7 @@ class TestCollectAllDocuments:
                 "author_name": "dev1",
                 "created_at": "2025-01-01",
                 "diff": [{"new_path": "src/main.py", "diff": "+print('fixed')"}],
-            }
+            },
         ]
         (proj_dir / "commits.json").write_text(json.dumps(commits_data))
 
@@ -125,7 +125,7 @@ class TestCollectAllDocuments:
                 "state": "merged",
                 "author": {"username": "dev2"},
                 "discussions": [{"notes": [{"author": "reviewer1", "body": "LGTM"}]}],
-            }
+            },
         ]
         (proj_dir / "merge_requests.json").write_text(json.dumps(mrs_data))
 
@@ -176,7 +176,7 @@ class TestRunChunking:
                 "content": "content",
                 "content_type": "markdown",
                 "metadata": {"version": "1.0"},
-            }
+            },
         ]
         output_dir = tmp_path / "chunks"
         result = run_chunking(docs, mock_chunker, output_dir)
@@ -196,7 +196,7 @@ class TestRunChunking:
                 "content": "content",
                 "content_type": "markdown",
                 "metadata": {},
-            }
+            },
         ]
         output_dir = tmp_path / "chunks"
         result = run_chunking(docs, mock_chunker, output_dir)
@@ -286,7 +286,7 @@ class TestMainFunction:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(
             "confluence:\n  base_url: http://test\n  output_dir: /tmp/out\njira:\n  base_url: http://jira\n  output_dir: "
-            "/tmp/out\ngitlab:\n  base_url: http://gitlab\n  output_dir: /tmp/out\n"
+            "/tmp/out\ngitlab:\n  base_url: http://gitlab\n  output_dir: /tmp/out\n",
         )
         mock_config.return_value = {
             "confluence": {"base_url": "http://test", "output_dir": "/tmp/out"},

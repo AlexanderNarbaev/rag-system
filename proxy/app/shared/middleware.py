@@ -1,6 +1,5 @@
 # proxy/app/middleware.py
-"""
-Custom middleware for RAG proxy:
+"""Custom middleware for RAG proxy:
 - Request ID injection (X-Request-ID)
 - Request logging (method, path, status, duration)
 - Correlation ID propagation
@@ -60,8 +59,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
-    """
-    Propagates X-Correlation-ID header.
+    """Propagates X-Correlation-ID header.
     If absent from request, generates and injects a new one.
     """
 

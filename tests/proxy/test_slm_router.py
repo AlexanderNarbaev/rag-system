@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117
 """Tests for proxy/app/slm_router.py - SLM routing with mocked _call_slm_sync."""
 
 import json

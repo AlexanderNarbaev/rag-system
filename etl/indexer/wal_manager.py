@@ -1,6 +1,5 @@
 # etl/indexer/wal_manager.py
-"""
-Универсальный менеджер Write-Ahead Log (WAL) для ETL-пайплайнов.
+"""Универсальный менеджер Write-Ahead Log (WAL) для ETL-пайплайнов.
 Используется для:
 - Инкрементальных выгрузок (Confluence, Jira, GitLab)
 - Индексации чанков в Qdrant
@@ -28,14 +27,12 @@ logger = logging.getLogger(__name__)
 
 
 class WALManager:
-    """
-    Менеджер WAL для ETL-процессов.
+    """Менеджер WAL для ETL-процессов.
     Каждый pipeline (например, 'confluence_extractor', 'jira_extractor', 'indexing') имеет свою секцию.
     """
 
     def __init__(self, wal_path: Path, use_lock: bool = True, lock_timeout: int = 30):
-        """
-        :param wal_path: путь к JSON-файлу WAL
+        """:param wal_path: путь к JSON-файлу WAL
         :param use_lock: использовать ли файловую блокировку (требуется pip install filelock)
         :param lock_timeout: таймаут ожидания блокировки (секунды)
         """
@@ -74,8 +71,7 @@ class WALManager:
             raise
 
     def _update_wal(self, update_func: Any) -> None:
-        """
-        Безопасное обновление WAL с блокировкой.
+        """Безопасное обновление WAL с блокировкой.
         update_func принимает текущие данные и возвращает обновлённые.
         """
         lock = self._get_lock()
@@ -90,8 +86,7 @@ class WALManager:
             self._write_wal(new_data)
 
     def get_checkpoint(self, pipeline: str, key: str | None = None) -> Any:
-        """
-        Получает чекпоинт для указанного pipeline.
+        """Получает чекпоинт для указанного pipeline.
         Если key указан, возвращает конкретное значение (или None).
         Иначе возвращает весь словарь чекпоинта для этого pipeline.
         """
@@ -102,8 +97,7 @@ class WALManager:
         return pipeline_data
 
     def set_checkpoint(self, pipeline: str, updates: dict[str, Any]):
-        """
-        Обновляет чекпоинт для pipeline. Добавляет/перезаписывает переданные ключи.
+        """Обновляет чекпоинт для pipeline. Добавляет/перезаписывает переданные ключи.
         Автоматически добавляет метку времени обновления '_updated_at'.
         """
         updates_with_time = updates.copy()
@@ -119,9 +113,7 @@ class WALManager:
         logger.debug(f"Updated checkpoint for pipeline '{pipeline}': {list(updates.keys())}")
 
     def update_last_run(self, pipeline: str, last_run: str | datetime | None = None) -> None:
-        """
-        Удобный метод для обновления временной метки последнего успешного запуска.
-        """
+        """Удобный метод для обновления временной метки последнего успешного запуска."""
         if last_run is None:
             last_run = datetime.now(UTC).isoformat()
         elif isinstance(last_run, datetime):
@@ -151,8 +143,7 @@ class WALManager:
         return str(result) if result is not None else None
 
     def update_hash_state(self, pipeline: str, doc_id: str, chunk_hash: str) -> None:
-        """
-        Для версионирования чанков: сохраняет хеш документа.
+        """Для версионирования чанков: сохраняет хеш документа.
         Может использоваться вместе с ChunkVersionStore, но дублирует функциональность.
         """
         # Получаем текущий словарь хешей
@@ -165,8 +156,7 @@ class WALManager:
         return str(hash_map.get(doc_id)) if hash_map.get(doc_id) is not None else None
 
     def reset_pipeline(self, pipeline: str, keep_last_run: bool = False) -> None:
-        """
-        Сбрасывает чекпоинт для указанного pipeline.
+        """Сбрасывает чекпоинт для указанного pipeline.
         Если keep_last_run=True, сохраняет только last_run.
         """
 
@@ -192,8 +182,7 @@ class WALManager:
         return list(data.keys())
 
     def vacuum(self, max_age_days: int = 30) -> None:
-        """
-        Очищает устаревшие записи (например, старые hash_map, чтобы WAL не разрастался).
+        """Очищает устаревшие записи (например, старые hash_map, чтобы WAL не разрастался).
         Удаляет hash_map для pipeline, если их возраст больше max_age_days.
         """
 
@@ -232,7 +221,8 @@ if __name__ == "__main__":
 
     # Обновляем чекпоинт для Confluence
     wal.set_checkpoint(
-        PIPELINE_CONFLUENCE, {"last_run": "2025-06-01T00:00:00", "space_keys": ["DEV", "OPS"], "total_pages": 1250}
+        PIPELINE_CONFLUENCE,
+        {"last_run": "2025-06-01T00:00:00", "space_keys": ["DEV", "OPS"], "total_pages": 1250},
     )
 
     # Обновляем last_run для Jira

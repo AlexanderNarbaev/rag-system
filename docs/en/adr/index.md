@@ -22,22 +22,22 @@ consequences, and alternatives considered.
 
 ## Status Summary
 
-| ADR                   | Status      | Date    |
-|-----------------------|-------------|---------|
-| 001                   | Accepted    | 2025-12 |
-| 002                   | Accepted    | 2025-12 |
-| 003                   | Accepted    | 2026-01 |
-| 004                   | Accepted    | 2026-01 |
-| 005                   | Accepted    | 2026-02 |
-| 006                   | Accepted    | 2026-03 |
-| 007                   | Accepted    | 2026-04 |
-| 008 (Java/Quarkus)    | Rejected    | 2026-07 |
-| 009 (Tools)           | Implemented | 2026-07 |
-| 010 (Model Evolution) | Implemented | 2026-07 |
-| 011                   | Accepted    | 2026-07 |
-| 012                   | Accepted    | 2026-07 |
-| 013                   | Accepted    | 2026-07 |
-| 014                   | Accepted    | 2026-07 |
+| ADR                   | Status      | Date       |
+|-----------------------|-------------|------------|
+| 001                   | Accepted    | 2026-06-22 |
+| 002                   | Accepted    | 2026-06-22 |
+| 003                   | Accepted    | 2026-06-22 |
+| 004                   | Accepted    | 2026-06-22 |
+| 005                   | Accepted    | 2026-06-22 |
+| 006                   | Accepted    | 2026-06-22 |
+| 007                   | Accepted    | 2026-06-22 |
+| 008 (Java/Quarkus)    | Rejected    | 2026-07-16 |
+| 009 (Tools)           | Implemented | 2026-07-05 |
+| 010 (Model Evolution) | Implemented | 2026-07-05 |
+| 011                   | Accepted    | 2026-07-10 |
+| 012                   | Accepted    | 2026-07-10 |
+| 013                   | Accepted    | 2026-07-10 |
+| 014                   | Accepted    | 2026-07-10 |
 
 All ADRs 001-007, 011-014 have been accepted. ADR-008 (Java/Quarkus migration) was proposed, deferred, and formally
 rejected on 2026-07-16 — the proxy remains Python/FastAPI. ADR-009 (Agentic Tools) and ADR-010 (Model Evolution)

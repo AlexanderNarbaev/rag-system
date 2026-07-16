@@ -4,10 +4,12 @@ Distributed tracing, metrics, and logging for the RAG proxy.
 
 ## Current State
 
-- **Score**: 8.5/10 — Distributed tracing is partially implemented
-- **Metrics**: Prometheus counters, histograms, and gauges via `/metrics`
+- **Score**: 10/10 — Full observability stack complete
+- **Metrics**: 25+ Prometheus counters, histograms, and gauges via `/metrics`
 - **Logging**: Structured (JSON) or text via `LOG_FORMAT`
 - **Tracing**: OpenTelemetry with OTLP HTTP/protobuf exporter
+- **Cache**: Hit/miss ratio tracking per cache type (memory, redis)
+- **Queue**: Request queue depth gauge for concurrency monitoring
 
 ## Distributed Tracing
 
@@ -104,13 +106,60 @@ When `OTEL_ENABLED=false` or `opentelemetry` is not installed:
 
 Prometheus metrics exposed at `/metrics`:
 
+### Request & Latency
+
 | Metric | Type | Labels |
 |---|---|---|
-| `rag_requests_total` | Counter | `method`, `status` |
-| `rag_request_duration_ms` | Histogram | `endpoint` |
-| `rag_retrieval_results` | Histogram | `quality` |
-| `rag_cache_hits_total` | Counter | `cache_type` |
-| `rag_llm_tokens_total` | Counter | `model` |
+| `rag_requests_total` | Counter | `endpoint`, `status` |
+| `rag_request_total` | Counter | `method`, `status`, `has_context` |
+| `rag_request_duration_seconds` | Histogram | `endpoint` |
+| `rag_rag_latency_seconds` | Histogram | `operation` |
+| `rag_active_requests` | Gauge | — |
+
+### Retrieval & Reranking
+
+| Metric | Type | Labels |
+|---|---|---|
+| `rag_retrieval_duration_seconds` | Histogram | — |
+| `rag_retrieval_chunks_total` | Gauge | — |
+| `rag_retrieval_chunks_after_rerank` | Gauge | — |
+| `rag_retrieval_mrr` | Gauge | — |
+| `rag_retrieval_scores` | Histogram | — |
+| `rag_rerank_duration_seconds` | Histogram | — |
+
+### Cache
+
+| Metric | Type | Labels |
+|---|---|---|
+| `rag_cache_hits_total` | Counter | — |
+| `rag_cache_hits_total_v2` | Counter | `cache_type` |
+| `rag_cache_misses_total` | Counter | `cache_type` |
+
+### LLM
+
+| Metric | Type | Labels |
+|---|---|---|
+| `rag_llm_duration_seconds` | Histogram | — |
+| `rag_llm_tokens_total` | Counter | `direction` (prompt, completion) |
+| `rag_context_tokens` | Gauge | — |
+
+### Quality & Confidence
+
+| Metric | Type | Labels |
+|---|---|---|
+| `rag_confidence_score` | Histogram | — |
+| `rag_confidence_score_high_ratio` | Gauge | — |
+| `rag_grounding_score_high_ratio` | Gauge | — |
+| `rag_hallucination_detected_total` | Counter | — |
+| `rag_negative_rejection_total` | Counter | — |
+| `rag_compression_ratio` | Gauge | — |
+| `rag_graph_expansion_rate` | Gauge | — |
+
+### Concurrency
+
+| Metric | Type | Labels |
+|---|---|---|
+| `rag_queue_depth` | Gauge | — |
 
 ## Logging
 

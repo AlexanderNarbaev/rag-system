@@ -98,8 +98,7 @@ def _dynamic_top_k(query: str, *, max_default: int = 50) -> int:
 
 
 def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Переписывает запрос с помощью LLM для улучшения ретривала.
+    """Переписывает запрос с помощью LLM для улучшения ретривала.
     Используется при первом входе или когда контекст признан недостаточным.
     """
     query = state["query"]
@@ -122,7 +121,9 @@ def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
 
     try:
         rewritten = _get_non_stream_completion_sync()(
-            [{"role": "user", "content": prompt}], temperature=0.1, max_tokens=100
+            [{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=100,
         )
         rewritten = rewritten.strip()
         logger.info(f"Rewritten query: '{query}' -> '{rewritten}'")
@@ -133,8 +134,7 @@ def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def retrieve(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Выполняет гибридный поиск в Qdrant.
+    """Выполняет гибридный поиск в Qdrant.
     Использует переписанный запрос, если есть, иначе оригинальный.
     Применяет time-decay бустинг для версионированных документов.
     Gracefully returns empty results when Qdrant is unavailable.
@@ -162,8 +162,7 @@ def retrieve(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def graph_expand(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Расширяет запрос с помощью графа знаний (Neo4j).
+    """Расширяет запрос с помощью графа знаний (Neo4j).
     Возвращает дополнительные сущности или связанные документы.
     """
     if not USE_GRAPH_EXPANSION:
@@ -181,8 +180,7 @@ def graph_expand(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def check_sufficiency(state: dict[str, Any]) -> Literal["rewrite", "rerank"]:
-    """
-    Оценивает, достаточно ли релевантны извлечённые чанки.
+    """Оценивает, достаточно ли релевантны извлечённые чанки.
     Если средний балл или покрытие низкое -> инициирует повторное переписывание.
     """
     chunks = state.get("retrieved_chunks", [])
@@ -201,9 +199,7 @@ def check_sufficiency(state: dict[str, Any]) -> Literal["rewrite", "rerank"]:
 
 
 def rerank(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Выполняет кросс-энкодер реранкинг извлечённых чанков.
-    """
+    """Выполняет кросс-энкодер реранкинг извлечённых чанков."""
     chunks = state.get("retrieved_chunks", [])
     if not chunks:
         return {"reranked_chunks": []}
@@ -222,8 +218,7 @@ def rerank(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_context_node(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Собирает финальный контекст из отреранжированных чанков и графового расширения.
+    """Собирает финальный контекст из отреранжированных чанков и графового расширения.
     Применяет extractive-компрессию если контекст превышает токен-бюджет.
     """
     chunks_with_scores = state.get("reranked_chunks", [])
@@ -251,8 +246,7 @@ def build_context_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def generate(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Генерация ответа с использованием контекста.
+    """Генерация ответа с использованием контекста.
     Поддерживает как потоковый, так и обычный режим.
     """
     user_query = state["query"]
@@ -469,7 +463,7 @@ def call_tools(state: dict[str, Any]) -> dict[str, Any]:
                     "name": result.name,
                     "content": result.content,
                     "error": result.error,
-                }
+                },
             )
             logger.info("Tool %s executed successfully", result.name)
         except Exception as e:
@@ -481,7 +475,7 @@ def call_tools(state: dict[str, Any]) -> dict[str, Any]:
                     "name": func_name,
                     "content": f"Error: {e}",
                     "error": str(e),
-                }
+                },
             )
 
     return {

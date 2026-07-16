@@ -165,7 +165,7 @@ class TestConfluenceGetPageVersions:
             "results": [
                 {"number": 1, "when": "2025-01-01T00:00:00Z"},
                 {"number": 2, "when": "2025-01-02T00:00:00Z"},
-            ]
+            ],
         }
         versions = ex._get_page_versions("12345")
         assert len(versions) == 2

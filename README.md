@@ -317,6 +317,7 @@ rag-system/
 │   └── mcp_server/        # MCP server tests
 ├── docs/                  # Documentation (EN + RU)
 ├── scripts/               # Utility scripts
+├── tui/                   # Terminal UI for RAG interaction
 ├── Makefile               # Primary dev entry point
 └── pyproject.toml         # Python project config
 ```

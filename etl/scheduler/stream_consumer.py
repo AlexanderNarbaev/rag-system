@@ -1,6 +1,5 @@
 # etl/scheduler/stream_consumer.py
-"""
-Redis Streams consumer for real-time ETL event processing.
+"""Redis Streams consumer for real-time ETL event processing.
 Consumes events from Redis Streams using consumer groups (XREADGROUP),
 processes extract → chunk → embed → index, acknowledges on success,
 and claims pending messages on startup for crash recovery.
@@ -108,11 +107,10 @@ class StreamConsumer:
 
         if source == "confluence":
             return self._process_confluence_event(event_type, doc_id, payload)
-        elif source == "gitlab":
+        if source == "gitlab":
             return self._process_gitlab_event(event_type, doc_id, payload)
-        else:
-            logger.warning("Unsupported source: %s", source)
-            return False
+        logger.warning("Unsupported source: %s", source)
+        return False
 
     def _process_confluence_event(self, event_type: str, doc_id: str, payload: dict) -> bool:
         """Process a Confluence event through chunk → embed → index.
@@ -275,8 +273,9 @@ def main():
     redis_port = int(os.environ.get("REDIS_PORT", streaming_cfg.get("redis_port", 6379)))
     stream_key = os.environ.get("REDIS_STREAM_KEY", streaming_cfg.get("redis_stream_key", DEFAULT_STREAM_KEY))
     consumer_group = os.environ.get(
-        "REDIS_CONSUMER_GROUP", streaming_cfg.get("redis_consumer_group", DEFAULT_CONSUMER_GROUP)
-    )  # noqa: E501
+        "REDIS_CONSUMER_GROUP",
+        streaming_cfg.get("redis_consumer_group", DEFAULT_CONSUMER_GROUP),
+    )
 
     try:
         import redis

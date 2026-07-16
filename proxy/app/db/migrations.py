@@ -1,6 +1,5 @@
 # proxy/app/db/migrations.py
-"""
-Database migration framework for the RAG System.
+"""Database migration framework for the RAG System.
 
 Provides:
 - MigrationManager for SQLite and Neo4j schema management
@@ -251,7 +250,7 @@ class MigrationManager:
         assert self._conn is not None
 
         cursor = await self._conn.execute(
-            "SELECT version, name, applied_at, execution_ms, checksum FROM _migrations ORDER BY version"
+            "SELECT version, name, applied_at, execution_ms, checksum FROM _migrations ORDER BY version",
         )
         rows = await cursor.fetchall()
         return [
@@ -305,6 +304,7 @@ class MigrationManager:
 
         Returns:
             List of applied migration records
+
         """
         await self.initialize()
         assert self._conn is not None
@@ -413,6 +413,7 @@ class MigrationManager:
 
         Returns:
             List of rolled-back migration records
+
         """
         await self.initialize()
         assert self._conn is not None
@@ -564,7 +565,7 @@ class MigrationManager:
                 """
                 CREATE CONSTRAINT migration_version IF NOT EXISTS
                 FOR (m:_Migration) REQUIRE m.version IS UNIQUE
-                """
+                """,
             )
             logger.info("Neo4j migration tracking initialized")
 

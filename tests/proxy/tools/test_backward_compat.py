@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: N817
 """Tests for proxy/app/tools backward compatibility — Task 3 TDD.
 
 Verifies that:

@@ -1,6 +1,5 @@
 # proxy/app/query_enhancer.py
-"""
-Query enhancement for better retrieval quality.
+"""Query enhancement for better retrieval quality.
 
 Supports:
 - HyDE (Hypothetical Document Embedding): generate a fake answer, use it for search
@@ -131,8 +130,7 @@ class QueryEnhancer:
 
 
 def generate_query_variants(query: str, num_variants: int = 3) -> list[str]:
-    """
-    Generate multiple query formulations for better retrieval.
+    """Generate multiple query formulations for better retrieval.
 
     Based on: Rewrite-Retrieve-Read (arxiv:2305.14283)
 
@@ -223,8 +221,7 @@ def multi_query_search(
     num_variants: int = 3,
     top_k: int = 10,
 ) -> list[dict[str, Any]]:
-    """
-    Search with multiple query variants and fuse results with RRF.
+    """Search with multiple query variants and fuse results with RRF.
 
     Chains pairwise RRF fusions when more than two result sets are present,
     since ``reciprocal_rank_fusion`` accepts exactly two lists.

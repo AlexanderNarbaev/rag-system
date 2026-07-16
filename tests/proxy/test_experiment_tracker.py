@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/model_evolution/experiment_tracker.py — local-mode ExperimentTracker."""
 
 import json

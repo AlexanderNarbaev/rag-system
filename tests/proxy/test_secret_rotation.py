@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817
 """Tests for proxy/app/auth/secret_rotation.py — Secrets rotation automation."""
 
 import json

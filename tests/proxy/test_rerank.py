@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117
 """Tests for proxy/app/rerank.py - reranking module with mocked CrossEncoder."""
 
 from unittest.mock import MagicMock, patch
@@ -115,7 +115,9 @@ class TestRerankChunks:
             patch("proxy.app.core.rerank.cache_manager", None),
         ):
             mock_init.side_effect = lambda: setattr(
-                __import__("proxy.app.core.rerank", fromlist=["reranker"]), "reranker", MagicMock()
+                __import__("proxy.app.core.rerank", fromlist=["reranker"]),
+                "reranker",
+                MagicMock(),
             )
             import proxy.app.core.rerank as rerank_mod
 

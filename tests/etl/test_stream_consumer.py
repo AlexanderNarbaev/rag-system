@@ -37,7 +37,7 @@ def sample_confluence_event():
                     "space": {"key": "DEV"},
                     "body": {"storage": {"value": "<p>Test content</p>"}},
                 },
-            }
+            },
         ),
     }
 
@@ -53,7 +53,7 @@ def sample_gitlab_event():
             {
                 "object_kind": "push",
                 "commits": [{"id": "abc123", "message": "Test commit"}],
-            }
+            },
         ),
     }
 
@@ -161,7 +161,7 @@ class TestStreamProcessing:
                     (b"1719000000000-0", event1),
                     (b"1719000000000-1", event2),
                 ],
-            ]
+            ],
         ]
 
         consumer = StreamConsumer(redis_client=mock_redis_client)

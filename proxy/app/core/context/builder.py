@@ -24,8 +24,7 @@ class KnowledgeStrip:
 
 
 def compute_chunk_hash(chunk: dict[str, Any]) -> str:
-    """
-    Вычисляет хеш чанка на основе текста и ключевых метаданных (игнорирует score, position и т.д.).
+    """Вычисляет хеш чанка на основе текста и ключевых метаданных (игнорирует score, position и т.д.).
     Используется для дедупликации.
     """
     text = chunk.get("text", "")
@@ -41,8 +40,7 @@ def deduplicate_chunks(
     chunks_with_scores: list[tuple[dict[str, Any], float]],
     method: str = "hash",
 ) -> list[tuple[dict[str, Any], float]]:
-    """
-    Дедупликация списка чанков.
+    """Дедупликация списка чанков.
     :param chunks_with_scores: список пар (chunk_dict, score)
     :param method: "hash" (по SHA-256), "similarity" (по порогу косинусного сходства, пока не реализован)
     :return: отфильтрованный список (сохраняется первый встреченный чанк с данным хешом)
@@ -59,8 +57,7 @@ def deduplicate_chunks(
 
 
 def group_by_semantic_key(chunks_with_scores: list[tuple[dict[str, Any], float]]) -> list[tuple[dict[str, Any], float]]:
-    """
-    Группирует чанки с одинаковым semantic_key (поле в чанке) и объединяет их текст.
+    """Группирует чанки с одинаковым semantic_key (поле в чанке) и объединяет их текст.
     Это позволяет вернуть связанные фрагменты как один блок.
     """
     groups = defaultdict(list)
@@ -84,8 +81,7 @@ def group_by_semantic_key(chunks_with_scores: list[tuple[dict[str, Any], float]]
 
 
 def estimate_tokens(text: str) -> int:
-    """
-    Грубая оценка количества токенов (4 символа ~ 1 токен для рус/англ).
+    """Грубая оценка количества токенов (4 символа ~ 1 токен для рус/англ).
     Для точности использовать tiktoken.
     """
     return len(text) // 4
@@ -124,8 +120,7 @@ def reorder_chunks(
 
 
 def extract_relevant_segments(text: str, query: str) -> str:
-    """
-    Find query-relevant sentences in text.
+    """Find query-relevant sentences in text.
     Uses word overlap scoring at the sentence level — keeps sentences
     that share significant vocabulary with the query.
     """
@@ -165,8 +160,7 @@ def build_context(
     sort_by_score: bool = True,
     lang: str | None = None,
 ) -> str:
-    """
-    Собирает контекст из отреранжированных и продедуплицированных чанков.
+    """Собирает контекст из отреранжированных и продедуплицированных чанков.
     :param chunks_with_scores: список пар (chunk, score)
     :param max_tokens: максимальное количество токенов в финальном контексте
     :param include_metadata: добавлять ли заголовки с метаданными перед каждым чанком
@@ -239,7 +233,9 @@ def build_context(
 
             optimizer = TokenOptimizer()
             compressed = optimizer.compress_context(
-                [c for c, _ in chunks_with_scores], max_tokens=max_tokens, strategy="hierarchical"
+                [c for c, _ in chunks_with_scores],
+                max_tokens=max_tokens,
+                strategy="hierarchical",
             )
             if compressed:
                 final_context = compressed
@@ -259,9 +255,7 @@ def prepare_context(
     group_semantic: bool = False,
     lang: str | None = None,
 ) -> str:
-    """
-    High-level function: dedup, version resolution, grouping, context assembly.
-    """
+    """High-level function: dedup, version resolution, grouping, context assembly."""
     if not chunks_with_scores:
         return ""
 

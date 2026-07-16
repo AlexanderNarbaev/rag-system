@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117
 """Tests for rerank.py advanced features: TwoStageReranker, hybrid_rerank, colbert_score, etc."""
 
 from unittest.mock import MagicMock, patch
@@ -77,7 +77,7 @@ class TestHybridRerank:
                     "query_tokens": [[1, 0]],
                     "colbert_tokens": [[1, 0]],
                 },
-            }
+            },
         ]
         with patch("proxy.app.core.rerank.rerank_chunks") as mock_rerank:
             mock_rerank.return_value = [0]

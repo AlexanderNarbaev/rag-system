@@ -1,4 +1,3 @@
-# ruff: noqa: E501, E402
 """Tests for etl/extractors/doc_extractor.py — doc extractor coverage."""
 
 from unittest.mock import MagicMock
@@ -55,7 +54,7 @@ class TestExtractMarkdown:
 
         md_file = tmp_path / "test.md"
         md_file.write_text(
-            "# Main Title\n\nSome content.\n\n## Section 1\n\nMore content.\n\n## Section 2\n\nEven more."
+            "# Main Title\n\nSome content.\n\n## Section 1\n\nMore content.\n\n## Section 2\n\nEven more.",
         )
 
         results = extractor._extract_markdown(md_file)
@@ -224,7 +223,15 @@ class TestMakeDocument:
         file_path = tmp_path / "test.md"
         file_path.write_text("content")
         doc = extractor._make_document(
-            file_path, "Test Title", "content", "markdown", 0, 1, ["code1"], ["table1"], ["link1"]
+            file_path,
+            "Test Title",
+            "content",
+            "markdown",
+            0,
+            1,
+            ["code1"],
+            ["table1"],
+            ["link1"],
         )
         assert doc.title == "Test Title"
         assert doc.content == "content"

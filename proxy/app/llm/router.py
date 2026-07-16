@@ -1,6 +1,5 @@
 # proxy/app/llm_router.py
-"""
-LLM request routing via OpenAI-compatible API.
+"""LLM request routing via OpenAI-compatible API.
 
 Provides streaming and non-streaming completion functions with automatic
 retry on failure. This is the legacy router — prefer provider.py's
@@ -62,15 +61,14 @@ async def _send_completion_request(
 
             if stream:
                 return session, response
-            else:
-                data = await response.json()
-                response.close()
-                await session.close()
-                if "choices" not in data or not data["choices"]:
-                    raise LLMError(
-                        f"Invalid response format from LLM: missing 'choices' in response. Keys: {list(data.keys())}"
-                    )
-                return data
+            data = await response.json()
+            response.close()
+            await session.close()
+            if "choices" not in data or not data["choices"]:
+                raise LLMError(
+                    f"Invalid response format from LLM: missing 'choices' in response. Keys: {list(data.keys())}",
+                )
+            return data
         except (TimeoutError, ClientError, LLMError) as e:
             logger.warning(f"LLM request attempt {attempt + 1}/{retry + 1} failed: {e}")
             if attempt < retry:
@@ -85,7 +83,11 @@ async def stream_completion(
     max_tokens: int = 4096,
 ) -> AsyncIterator[dict[str, Any]]:
     session, response = await _send_completion_request(
-        messages, temperature, max_tokens, stream=True, retry=MAX_RETRIES
+        messages,
+        temperature,
+        max_tokens,
+        stream=True,
+        retry=MAX_RETRIES,
     )
 
     try:
@@ -113,9 +115,7 @@ async def non_stream_completion(
     temperature: float = 0.2,
     max_tokens: int = 4096,
 ) -> str:
-    """
-    Не-потоковая генерация, возвращает полный текст ответа.
-    """
+    """Не-потоковая генерация, возвращает полный текст ответа."""
     data = await _send_completion_request(messages, temperature, max_tokens, stream=False, retry=MAX_RETRIES)
     try:
         content: str = data["choices"][0]["message"]["content"]

@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: E402, SIM105
 """Tests for proxy/app/main.py - FastAPI application with mocked dependencies."""
 
 import sys
@@ -925,7 +925,7 @@ class TestStartupToolDiscovery:
         async def _run():
             try:
                 await provider.discover()
-            except Exception:  # noqa: SIM105
+            except Exception:
                 pass  # Non-blocking: log warning, continue
 
         import asyncio

@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for hallucination detection and benchmarking."""
 
 from proxy.app.core.hallucination import (
@@ -16,7 +15,7 @@ class TestExtractFactualClaims:
 
     def test_extract_simple_claims(self):
         claims = extract_factual_claims(
-            "Python was created by Guido van Rossum. It is widely used for web development."
+            "Python was created by Guido van Rossum. It is widely used for web development.",
         )
         assert len(claims) >= 1
 
@@ -26,7 +25,7 @@ class TestExtractFactualClaims:
 
     def test_extract_numeric_claims(self):
         claims = extract_factual_claims(
-            "The server has 64 GB of RAM. It runs at 3.5 GHz. The temperature is 72 degrees."
+            "The server has 64 GB of RAM. It runs at 3.5 GHz. The temperature is 72 degrees.",
         )
         assert len(claims) >= 2
 
@@ -36,7 +35,7 @@ class TestExtractFactualClaims:
 
     def test_extract_bulleted_claims(self):
         claims = extract_factual_claims(
-            "- Kubernetes is an orchestrator.\n- Docker provides containerization.\n- Helm is a package manager."
+            "- Kubernetes is an orchestrator.\n- Docker provides containerization.\n- Helm is a package manager.",
         )
         assert len(claims) >= 2
 

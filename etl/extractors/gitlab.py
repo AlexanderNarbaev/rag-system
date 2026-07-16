@@ -1,6 +1,5 @@
 # etl/extractors/gitlab.py
-"""
-Выгрузка данных из GitLab (Self-Hosted) с поддержкой:
+"""Выгрузка данных из GitLab (Self-Hosted) с поддержкой:
 - Проекты (все или по списку)
 - Коммиты (полные метаданные + diff файлов)
 - Ветки
@@ -33,8 +32,7 @@ logger = logging.getLogger(__name__)
 
 class GitLabExtractor:
     def __init__(self, config: dict[str, Any]):
-        """
-        config: {
+        """config: {
             "url": "https://gitlab.internal.company.com",
             "token": "personal_access_token",      # or use "api_key" as alternative
             "api_key": "",                          # alternative to "token"
@@ -153,7 +151,10 @@ class GitLabExtractor:
                     raise
 
     def _paginated_get(
-        self, endpoint: str, params: dict[str, Any] | None = None, per_page: int = 100
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        per_page: int = 100,
     ) -> Iterator[dict[str, Any]]:
         """Пагинированный сбор всех элементов (постранично)."""
         page = 1
@@ -175,11 +176,10 @@ class GitLabExtractor:
                 proj = self._request(f"/api/v4/projects/{pid}")
                 projects.append(proj)
             return projects
-        else:
-            logger.info("Fetching ALL projects from GitLab (project_ids is empty)...")
-            projects = list(self._paginated_get("/api/v4/projects", {"simple": True}))
-            logger.info(f"Fetched {len(projects)} project(s) from GitLab API")
-            return projects
+        logger.info("Fetching ALL projects from GitLab (project_ids is empty)...")
+        projects = list(self._paginated_get("/api/v4/projects", {"simple": True}))
+        logger.info(f"Fetched {len(projects)} project(s) from GitLab API")
+        return projects
 
     def get_commits(self, project_id: int, since: str | None = None) -> list[dict[str, Any]]:
         """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
@@ -251,7 +251,7 @@ class GitLabExtractor:
                         "created_at": note["created_at"],
                         "body": note["body"],
                         "type": note.get("type", "regular"),  # DiffNote, etc.
-                    }
+                    },
                 )
             result.append({"id": disc["id"], "notes": notes})
         return result
@@ -368,7 +368,7 @@ class GitLabExtractor:
             files_data = []
             if self.fetch_files:
                 # Для каждого коммита (или последнего) получаем изменённые файлы, но лучше взять из последнего коммита на  # noqa: E501
-                # main  # noqa: E501
+                # main
                 # Или сканируем репозиторий через API дерева (неэффективно). Для простоты:
                 # Берём корневую структуру и выбираем файлы по фильтру.
                 try:

@@ -171,6 +171,7 @@ class SecurityHeaders:
 
         Returns:
             Combined security headers dictionary.
+
         """
         headers = dict(cls.DEFAULT_HEADERS)
         if extra:
@@ -246,6 +247,7 @@ class DependencyScanner:
 
         Returns:
             List of vulnerability findings (empty if none found).
+
         """
         findings = []
         if not os.path.exists(req_file):
@@ -272,10 +274,10 @@ class DependencyScanner:
                                     "version": version,
                                     "vulnerability": vuln,
                                     "severity": "MEDIUM",
-                                }
+                                },
                             )
 
         return findings
 
 
-__all__ = ["InputValidator", "SecretsManager", "SecurityHeaders", "DependencyScanner", "PasswordStrengthValidator"]
+__all__ = ["DependencyScanner", "InputValidator", "PasswordStrengthValidator", "SecretsManager", "SecurityHeaders"]

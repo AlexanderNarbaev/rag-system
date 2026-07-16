@@ -1,6 +1,5 @@
 # proxy/app/shared/config_validator.py
-"""
-Configuration validation — startup checks for required settings.
+"""Configuration validation — startup checks for required settings.
 
 Validates that all required environment variables are set and that
 external services (Qdrant, LLM, Redis) are reachable before the
@@ -41,7 +40,7 @@ def validate_config() -> list[ValidationResult]:
                 component="LLM_ENDPOINT",
                 status="error",
                 message="LLM_ENDPOINT is required. Set it to your LLM backend URL.",
-            )
+            ),
         )
     elif not llm_endpoint.startswith(("http://", "https://")):
         results.append(
@@ -49,7 +48,7 @@ def validate_config() -> list[ValidationResult]:
                 component="LLM_ENDPOINT",
                 status="error",
                 message=f"LLM_ENDPOINT must start with http:// or https://, got: {llm_endpoint}",
-            )
+            ),
         )
     else:
         results.append(
@@ -57,7 +56,7 @@ def validate_config() -> list[ValidationResult]:
                 component="LLM_ENDPOINT",
                 status="ok",
                 message=f"Configured: {llm_endpoint}",
-            )
+            ),
         )
 
     # --- Qdrant settings ---
@@ -68,7 +67,7 @@ def validate_config() -> list[ValidationResult]:
             component="QDRANT",
             status="ok",
             message=f"Configured: {qdrant_host}:{qdrant_port}",
-        )
+        ),
     )
 
     # --- Collection name ---
@@ -78,7 +77,7 @@ def validate_config() -> list[ValidationResult]:
             component="COLLECTION_NAME",
             status="ok",
             message=f"Default collection: {collection_name}",
-        )
+        ),
     )
 
     # --- Redis (optional) ---
@@ -90,7 +89,7 @@ def validate_config() -> list[ValidationResult]:
                 component="REDIS",
                 status="warning",
                 message="USE_REDIS is enabled but REDIS_URL is not set. Falling back to in-memory cache.",
-            )
+            ),
         )
     elif use_redis:
         results.append(
@@ -98,7 +97,7 @@ def validate_config() -> list[ValidationResult]:
                 component="REDIS",
                 status="ok",
                 message=f"Configured: {redis_url}",
-            )
+            ),
         )
     else:
         results.append(
@@ -106,7 +105,7 @@ def validate_config() -> list[ValidationResult]:
                 component="REDIS",
                 status="ok",
                 message="Disabled (using in-memory cache)",
-            )
+            ),
         )
 
     # --- Neo4j (optional) ---
@@ -119,7 +118,7 @@ def validate_config() -> list[ValidationResult]:
                     component="NEO4J",
                     status="warning",
                     message="GRAPH_ENABLED is true but NEO4J_URI is not set.",
-                )
+                ),
             )
         else:
             results.append(
@@ -127,7 +126,7 @@ def validate_config() -> list[ValidationResult]:
                     component="NEO4J",
                     status="ok",
                     message=f"Configured: {neo4j_uri}",
-                )
+                ),
             )
     else:
         results.append(
@@ -135,7 +134,7 @@ def validate_config() -> list[ValidationResult]:
                 component="NEO4J",
                 status="ok",
                 message="Graph expansion disabled",
-            )
+            ),
         )
 
     # --- Auth (optional) ---
@@ -148,7 +147,7 @@ def validate_config() -> list[ValidationResult]:
                     component="AUTH",
                     status="warning",
                     message="AUTH_ENABLED but JWT_SECRET_KEY is default or empty. Set a strong secret.",
-                )
+                ),
             )
         else:
             results.append(
@@ -156,7 +155,7 @@ def validate_config() -> list[ValidationResult]:
                     component="AUTH",
                     status="ok",
                     message="Authentication enabled",
-                )
+                ),
             )
     else:
         results.append(
@@ -164,7 +163,7 @@ def validate_config() -> list[ValidationResult]:
                 component="AUTH",
                 status="ok",
                 message="Authentication disabled",
-            )
+            ),
         )
 
     # --- LangGraph (optional) ---
@@ -174,7 +173,7 @@ def validate_config() -> list[ValidationResult]:
             component="LANGGRAPH",
             status="ok",
             message="Enabled" if use_langgraph else "Disabled",
-        )
+        ),
     )
 
     return results

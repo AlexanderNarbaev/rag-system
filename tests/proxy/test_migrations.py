@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817
 """Tests for proxy/app/db/migrations.py — Database migration framework."""
 
 from pathlib import Path
@@ -260,7 +259,7 @@ class TestMigrationManagerInit:
         """Should create _migrations and _migration_log tables."""
         conn = initialized_manager._conn
         cursor = await conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('_migrations', '_migration_log')"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('_migrations', '_migration_log')",
         )
         rows = await cursor.fetchall()
         table_names = [r[0] for r in rows]

@@ -25,8 +25,8 @@ from proxy.app.tools.openapi.discovery import (
 
 __all__ = [
     "ACTION_METHODS",
-    "DiscoveryMode",
     "HTTP_METHODS",
+    "DiscoveryMode",
     "OpenAPIDiscovery",
     "OpenAPIProvider",
     "OpenAPIToolGenerator",

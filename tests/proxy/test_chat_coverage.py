@@ -2,6 +2,7 @@
 
 Uses the same pattern as test_main.py: mock heavy deps first, then patch proxy.app.main.
 """
+
 import asyncio
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,24 +13,29 @@ from fastapi.responses import StreamingResponse
 
 # Mock heavy dependencies BEFORE any imports from proxy.app
 _modules_to_mock = [
-    "qdrant_client", "qdrant_client.http", "qdrant_client.http.models",
-    "sentence_transformers", "langgraph", "langgraph.graph", "langgraph.checkpoint",
-    "neo4j", "redis", "redis.asyncio", "tiktoken", "bcrypt",
+    "qdrant_client",
+    "qdrant_client.http",
+    "qdrant_client.http.models",
+    "sentence_transformers",
+    "langgraph",
+    "langgraph.graph",
+    "langgraph.checkpoint",
+    "neo4j",
+    "redis",
+    "redis.asyncio",
+    "tiktoken",
+    "bcrypt",
 ]
 for mod in _modules_to_mock:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
 
 # Now import proxy.app.main to ensure module is available
-import proxy.app.main as _real_main
 
-from proxy.app.api.chat import (
+from proxy.app.api.chat import (  # noqa: E402
     ChatCompletionRequest,
     ChatCompletionResponse,
-    ChatCompletionResponseChoice,
     ChatMessage,
-    StreamOptimizer,
-    generate_request_id,
     chat_completions,
 )
 
@@ -69,9 +75,13 @@ class TestChatCompletionsBasic:
             messages=[ChatMessage(role="user", content="test")],
         )
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
         assert exc_info.value.status_code == 400
 
     def test_no_user_message_400(self, raw_request, user):
@@ -81,9 +91,13 @@ class TestChatCompletionsBasic:
             messages=[ChatMessage(role="system", content="system msg")],
         )
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
         assert exc_info.value.status_code == 400
 
 
@@ -105,7 +119,7 @@ class TestChatCompletionsSpanRecording:
                 False,
                 [{"chunk_id": "h", "title": "T", "relevance": 0.9}],
                 None,
-            )
+            ),
         )
         mock_m.audit_logger = MagicMock()
         mock_m.non_stream_completion = AsyncMock(return_value="Test answer")
@@ -124,9 +138,13 @@ class TestChatCompletionsSpanRecording:
                 model="test-model",
                 messages=[ChatMessage(role="user", content="test query")],
             )
-            response = asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            response = asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
             assert response is not None
             # Span attribute setting should have been called
             set_attr_calls = [c for c in mock_span.method_calls if "set_attribute" in str(c)]
@@ -138,10 +156,12 @@ class TestChatCompletionsSpanRecording:
         mock_span.is_recording.return_value = True
 
         setup_main.process_rag_query = AsyncMock(
-            return_value=("ctx", [{"role": "user", "content": "q"}], False, [], None)
+            return_value=("ctx", [{"role": "user", "content": "q"}], False, [], None),
         )
+
         async def mock_stream(*args, **kwargs):
             yield {"choices": [{"delta": {"content": "test"}, "index": 0}]}
+
         setup_main.stream_completion = mock_stream
 
         with (
@@ -154,9 +174,13 @@ class TestChatCompletionsSpanRecording:
                 messages=[ChatMessage(role="user", content="stream test")],
                 stream=True,
             )
-            response = asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            response = asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
             assert isinstance(response, StreamingResponse)
 
 
@@ -194,9 +218,13 @@ class TestChatCompletionsErrorPaths:
                 messages=[ChatMessage(role="user", content="test")],
             )
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.run(chat_completions(
-                    request=request, raw_request=raw_request, user=user,
-                ))
+                asyncio.run(
+                    chat_completions(
+                        request=request,
+                        raw_request=raw_request,
+                        user=user,
+                    ),
+                )
             assert exc_info.value.status_code == 503
 
     def test_rag_query_error_503(self, raw_request, user):
@@ -217,9 +245,13 @@ class TestChatCompletionsErrorPaths:
                 stream=False,
             )
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.run(chat_completions(
-                    request=request, raw_request=raw_request, user=user,
-                ))
+                asyncio.run(
+                    chat_completions(
+                        request=request,
+                        raw_request=raw_request,
+                        user=user,
+                    ),
+                )
             assert exc_info.value.status_code == 503
 
     def test_streaming_error_yields_error_event(self, raw_request, user):
@@ -249,9 +281,13 @@ class TestChatCompletionsErrorPaths:
                 messages=[ChatMessage(role="user", content="stream test")],
                 stream=True,
             )
-            response = asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            response = asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
             assert isinstance(response, StreamingResponse)
 
     def test_skip_generation(self, raw_request, user):
@@ -263,7 +299,7 @@ class TestChatCompletionsErrorPaths:
         mock_main.request_tracker = MagicMock()
         mock_main.extract_version_from_query = MagicMock(return_value=None)
         mock_main.process_rag_query = AsyncMock(
-            return_value=("ctx", "answer", False, [{"chunk_id": "h1", "title": "T"}], None)
+            return_value=("ctx", "answer", False, [{"chunk_id": "h1", "title": "T"}], None),
         )
         mock_main.audit_logger = MagicMock()
 
@@ -274,9 +310,13 @@ class TestChatCompletionsErrorPaths:
                 stream=False,
                 rag_skip_generation=True,
             )
-            response = asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            response = asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
             assert isinstance(response, ChatCompletionResponse)
             assert response.rag_sources is not None
 
@@ -320,13 +360,18 @@ class TestStreamingRefusalPath:
                 messages=[ChatMessage(role="user", content="obscure query")],
                 stream=True,
             )
-            response = asyncio.run(chat_completions(
-                request=request, raw_request=raw_request, user=user,
-            ))
+            response = asyncio.run(
+                chat_completions(
+                    request=request,
+                    raw_request=raw_request,
+                    user=user,
+                ),
+            )
             assert isinstance(response, StreamingResponse)
 
 
 class TestRouterExists:
     def test_router_has_routes(self):
         from proxy.app.api.chat import router
+
         assert hasattr(router, "routes")

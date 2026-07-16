@@ -142,7 +142,7 @@ class SLMTrainer(TrainerBase):
         try:
             if not _TRANSFORMERS_AVAILABLE or not _PEFT_AVAILABLE:
                 raise RuntimeError(
-                    "transformers and peft are required. Install: pip install transformers peft accelerate"
+                    "transformers and peft are required. Install: pip install transformers peft accelerate",
                 )
 
             device_map = self._resolve_device(config)

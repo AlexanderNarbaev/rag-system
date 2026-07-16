@@ -1,6 +1,5 @@
 # proxy/app/slm_router.py
-"""
-Small Language Model (SLM) routing and auxiliary tasks.
+"""Small Language Model (SLM) routing and auxiliary tasks.
 
 SLM is used for fast, low-cost operations:
 - Intent classification (greeting, factual, procedural, etc.)
@@ -91,6 +90,7 @@ class LocalSLMClient:
         context_size: LLM context size in tokens.
         threads: Number of CPU threads.
         port: Port for the llama-server HTTP API.
+
     """
 
     def __init__(
@@ -371,9 +371,7 @@ def _call_slm_sync(prompt: str, max_tokens: int = 256, temperature: float = 0.1)
 
 
 def classify_intent(query: str) -> tuple[IntentType, float]:
-    """
-    Классифицирует интент пользователя. Возвращает (тип, уверенность).
-    """
+    """Классифицирует интент пользователя. Возвращает (тип, уверенность)."""
     prompt = f"""Классифицируй следующий вопрос пользователя по типу:
 - greeting: приветствие, благодарность, общая фраза без запроса информации
 - simple_fact: простой вопрос да/нет или об одном известном понятии
@@ -402,14 +400,14 @@ def get_complexity_score(intent: IntentType) -> int:
 
 def get_query_complexity(query: str) -> int:
     """Classify query intent and return its complexity score (1-10).
-    Falls back to 5 if SLM is unavailable."""
+    Falls back to 5 if SLM is unavailable.
+    """
     intent, _ = classify_intent(query)
     return get_complexity_score(intent)
 
 
 def decompose_query(query: str, max_subqueries: int = 3) -> list[str]:
-    """
-    Разбивает сложный запрос на несколько подзапросов.
+    """Разбивает сложный запрос на несколько подзапросов.
     Возвращает список подзапросов (строки).
     """
     prompt = f"""Разбей следующий сложный вопрос на {max_subqueries} простых подвопроса, которые можно искать отдельно.
@@ -435,17 +433,14 @@ def decompose_query(query: str, max_subqueries: int = 3) -> list[str]:
 
 
 def needs_retrieval(intent: IntentType) -> bool:
-    """
-    Определяет, нужен ли поиск в базе знаний для данного интента.
-    """
+    """Определяет, нужен ли поиск в базе знаний для данного интента."""
     if intent in (IntentType.GREETING, IntentType.SIMPLE_FACT, IntentType.UNKNOWN):  # noqa: SIM103
         return False
     return True
 
 
 def rewrite_query_slm(query: str) -> str:
-    """
-    Переписывает запрос для улучшения ретривала.
+    """Переписывает запрос для улучшения ретривала.
     Более лёгкая версия, чем в orchestator, использует SLM.
     """
     prompt = f"""Перепиши следующий вопрос в эффективный поисковый запрос для технической документации.
@@ -462,9 +457,7 @@ def rewrite_query_slm(query: str) -> str:
 
 
 def extract_entities_slm(query: str) -> list[str]:
-    """
-    Извлекает ключевые сущности (технологии, проекты, имена) из запроса.
-    """
+    """Извлекает ключевые сущности (технологии, проекты, имена) из запроса."""
     prompt = f"""Извлеки из следующего вопроса ключевые сущности: технологии, проекты, номера задач, имена людей.
 Верни ответ в виде JSON списка строк.
 
@@ -487,8 +480,7 @@ def extract_entities_slm(query: str) -> list[str]:
 
 
 def score_query_complexity(query: str) -> int:
-    """
-    Score query complexity on a 1-10 scale based on heuristics and SLM classification.
+    """Score query complexity on a 1-10 scale based on heuristics and SLM classification.
 
     Complexity factors:
     - Word count (more words = more complex)
@@ -498,6 +490,7 @@ def score_query_complexity(query: str) -> int:
 
     Returns:
         Complexity score from 1 (simple) to 10 (highly complex).
+
     """
     score = 1
     word_count = len(query.split())
@@ -537,7 +530,7 @@ def score_query_complexity(query: str) -> int:
     score += min(comp_count, 3)
 
     # Multi-question indicator
-    if query_lower.count("?") > 1 or query_lower.count("?") == 1 and word_count > 10:
+    if query_lower.count("?") > 1 or (query_lower.count("?") == 1 and word_count > 10):
         score += 1
 
     # SLM-based refinement (if available)
@@ -558,8 +551,7 @@ def score_query_complexity(query: str) -> int:
 
 
 def dynamic_top_k_from_complexity(complexity: int, max_default: int = 50) -> int:
-    """
-    Map query complexity score (1-10) to a retrieval top_k value.
+    """Map query complexity score (1-10) to a retrieval top_k value.
 
     Mapping:
       1 → 5, 2 → 5, 3 → 10, 4 → 10, 5 → 15,
@@ -570,9 +562,7 @@ def dynamic_top_k_from_complexity(complexity: int, max_default: int = 50) -> int
 
 
 def should_use_graph(intent: IntentType, query: str) -> bool:
-    """
-    Определяет, стоит ли использовать граф знаний для расширения.
-    """
+    """Определяет, стоит ли использовать граф знаний для расширения."""
     # Если запрос содержит явные связи между сущностями
     relation_words = ["связан", "зависит", "использует", "относится", "принадлежит", "содержит"]
     has_relation = any(word in query.lower() for word in relation_words)
@@ -612,6 +602,7 @@ def classify_intent_multilingual(query: str) -> tuple[IntentType, float]:
 
     Returns:
         Tuple of (IntentType, confidence 0.0-1.0).
+
     """
     if not query:
         return IntentType.UNKNOWN, 0.0

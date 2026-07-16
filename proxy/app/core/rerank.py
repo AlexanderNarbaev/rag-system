@@ -1,6 +1,5 @@
 # proxy/app/rerank.py
-"""
-Reranking module for the RAG proxy.
+"""Reranking module for the RAG proxy.
 
 Uses a Cross-Encoder model for precise chunk ranking. Supports batch processing,
 result caching (Redis/in-memory), automatic text truncation to model max_length,
@@ -123,8 +122,7 @@ def _get_cache_key(query: str, chunk_text: str) -> str:
 
 
 def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: bool = True) -> list[int]:
-    """
-    Выполняет реранкинг списка чанков по релевантности запросу.
+    """Выполняет реранкинг списка чанков по релевантности запросу.
 
     :param query: поисковый запрос
     :param chunks: список текстов чанков
@@ -198,9 +196,7 @@ def rerank_chunks_with_scores(
     top_k: int = 20,
     use_cache: bool = True,
 ) -> list[tuple[int, float]]:
-    """
-    Возвращает пары (индекс, score) для top_k чанков.
-    """
+    """Возвращает пары (индекс, score) для top_k чанков."""
     indices = rerank_chunks(query, chunks, top_k, use_cache)
     # Получаем скоры для этих индексов
     if not reranker:
@@ -226,8 +222,7 @@ def cosine_similarity_single(a: list[float], b: list[float]) -> float:
 
 
 def colbert_score(query_tokens: list[list[float]], doc_tokens: list[list[float]]) -> float:
-    """
-    Compute ColBERT late interaction score.
+    """Compute ColBERT late interaction score.
     Each query token attends to all document tokens, takes max, then sums.
 
     This is faster than cross-encoder and more accurate than bi-encoder.
@@ -254,8 +249,7 @@ def hybrid_rerank(
     colbert_weight: float = 0.3,
     cross_encoder_weight: float = 0.7,
 ) -> list[dict[str, Any]]:
-    """
-    Two-stage reranking:
+    """Two-stage reranking:
     1. ColBERT late interaction (fast, token-level)
     2. Cross-encoder (precise, semantic-level)
 
@@ -294,8 +288,7 @@ def hybrid_rerank(
 
 
 class TwoStageReranker:
-    """
-    Two-stage reranking for optimal latency/quality tradeoff.
+    """Two-stage reranking for optimal latency/quality tradeoff.
 
     Stage 1: Fast embedding-based scoring (30-50ms)
     Stage 2: Cross-encoder scoring (150-400ms) on top-K from stage 1
@@ -339,8 +332,7 @@ class TwoStageReranker:
         return self._fast_encoder
 
     def fast_score(self, query: str, documents: list[str]) -> list[float]:
-        """
-        Stage 1: Fast embedding-based scoring.
+        """Stage 1: Fast embedding-based scoring.
         Uses cosine similarity between query and document embeddings.
         Caches query and document embeddings to avoid re-encoding.
         """
@@ -395,8 +387,7 @@ class TwoStageReranker:
         documents: list[dict[str, Any]],
         text_key: str = "text",
     ) -> list[dict[str, Any]]:
-        """
-        Two-stage reranking:
+        """Two-stage reranking:
         1. Fast embed scoring → select top fast_top_k
         2. Cross-encoder scoring → select final_top_k
         """
@@ -553,9 +544,8 @@ def _fine_tune_with_lora(pairs: list[tuple[str, str, float]], epochs: int = 3) -
                 job.metrics.get("ndcg_at_10", 0.0),
             )
             return job.artifact_uri
-        else:
-            logger.error("Reranker LoRA training failed: %s", job.error_message)
-            return None
+        logger.error("Reranker LoRA training failed: %s", job.error_message)
+        return None
     except Exception as e:
         logger.error("Reranker LoRA training failed: %s", e)
         return None

@@ -1,4 +1,3 @@
-# ruff: noqa: E501, E402
 """Tests for proxy/app/core/retrieval.py — additional coverage."""
 
 from datetime import UTC, datetime

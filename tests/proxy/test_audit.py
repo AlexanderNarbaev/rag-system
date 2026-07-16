@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/audit.py audit logging module."""
 
 import datetime
@@ -207,7 +206,12 @@ class TestAuditLogger:
     def test_query_history_limit(self, audit_logger):
         for i in range(10):
             audit_logger.log_query(
-                user_id="u1", query=f"q{i}", response_preview="r", chunks=1, duration_ms=10, tokens=1
+                user_id="u1",
+                query=f"q{i}",
+                response_preview="r",
+                chunks=1,
+                duration_ms=10,
+                tokens=1,
             )
         results = audit_logger.query_history(limit=3)
         assert len(results) == 3
@@ -219,7 +223,12 @@ class TestAuditLogger:
         time.sleep(0.01)
         t2 = datetime.datetime.now(datetime.UTC).isoformat()
         audit_logger.log_query(
-            user_id="u1", query="even_later", response_preview="r", chunks=1, duration_ms=10, tokens=1
+            user_id="u1",
+            query="even_later",
+            response_preview="r",
+            chunks=1,
+            duration_ms=10,
+            tokens=1,
         )
         results = audit_logger.query_history(user_id="u1", limit=10, start_time=t2)
         assert len(results) == 1
@@ -298,3 +307,181 @@ class TestRequestTracker:
         tracker.start("req_m", metadata={"user": "alice", "model": "test-model"})
         tracker.complete("req_m")
         assert tracker.active_requests == 0
+
+
+class TestAuditLoggerEdgeCases:
+    """Tests for AuditLogger edge cases and error handling."""
+
+    @pytest.fixture
+    def audit_logger(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield AuditLogger(log_dir=tmpdir)
+
+    def test_log_query_with_metadata(self, audit_logger):
+        audit_logger.log_query(
+            user_id="u1",
+            query="test",
+            response_preview="resp",
+            chunks=3,
+            duration_ms=50,
+            tokens=30,
+            metadata={"source": "confluence"},
+        )
+        with open(audit_logger._audit_file) as f:
+            lines = f.readlines()
+        assert len(lines) == 1
+
+    def test_log_config_change_with_none_values(self, audit_logger):
+        audit_logger.log_config_change(
+            user_id="admin",
+            key="SECRET_KEY",
+            old_value=None,
+            new_value=None,
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["details"]["old_value"] == "***"
+        assert event["details"]["new_value"] == "***"
+
+    def test_log_config_change_with_short_value(self, audit_logger):
+        audit_logger.log_config_change(
+            user_id="admin",
+            key="DEBUG",
+            old_value="true",
+            new_value="false",
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["details"]["old_value"] == "***"
+
+    def test_log_config_change_with_long_value(self, audit_logger):
+        audit_logger.log_config_change(
+            user_id="admin",
+            key="API_KEY",
+            old_value="sk-very-long-api-key-1234567890abcdef",
+            new_value="sk-very-long-api-key-abcdef1234567890",
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert "***" in event["details"]["old_value"]
+
+    def test_log_error_without_context(self, audit_logger):
+        audit_logger.log_error(
+            error_type="TimeoutError",
+            error_msg="Request timed out",
+            stack_trace=None,
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["event_type"] == "error"
+
+    def test_log_auth_not_login(self, audit_logger):
+        audit_logger.log_auth(
+            user_id="u1",
+            action="refresh",
+            success=True,
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["event_type"] == "auth"
+
+    def test_log_trace(self, audit_logger):
+        audit_logger.log_trace(
+            request_id="req_trace_1",
+            user_id="u1",
+            query="test query",
+            chunks_count=5,
+            rerank_scores=[0.9, 0.8, 0.7, 0.6],
+            duration_ms=150.0,
+            tokens=200,
+            confidence=0.85,
+            feedback_id="fb_123",
+            client_ip="10.0.0.1",
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["event_type"] == "trace"
+        assert event["details"]["rerank_scores_distribution"]["rerank_count"] == 4
+
+    def test_log_trace_no_optional_fields(self, audit_logger):
+        audit_logger.log_trace(
+            request_id="req_min",
+            user_id=None,
+            query="minimal",
+            chunks_count=0,
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["event_type"] == "trace"
+
+    def test_log_trace_low_confidence(self, audit_logger):
+        audit_logger.log_trace(
+            request_id="req_low",
+            user_id="u1",
+            query="test",
+            chunks_count=2,
+            confidence=0.3,
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["result_status"] == "low_confidence"
+
+    def test_query_history_no_cutoff_on_invalid_start_time(self, audit_logger):
+        audit_logger.log_query(user_id="u1", query="q", response_preview="r", chunks=1, duration_ms=10, tokens=5)
+        results = audit_logger.query_history(user_id="u1", start_time="invalid_date")
+        assert len(results) == 1
+
+    def test_query_history_skips_blank_and_corrupt_lines(self, audit_logger):
+
+        audit_logger.log_query(user_id="u1", query="q1", response_preview="r1", chunks=1, duration_ms=10, tokens=5)
+        with open(audit_logger._audit_file, "a") as f:
+            f.write("\n")
+            f.write("not valid json\n")
+            f.write('{"user_id": "u1", "timestamp": "2025-01-01T00:00:00Z", "event_type": "query"}\n')
+        results = audit_logger.query_history(user_id="u1")
+        assert len(results) >= 2
+
+    def test_query_history_empty_file(self, audit_logger):
+        results = audit_logger.query_history()
+        assert isinstance(results, list)
+
+    def test_export_report_with_timestamps(self, audit_logger):
+        t_start = "2025-01-01T00:00:00+00:00"
+        t_end = "2030-12-31T23:59:59+00:00"
+        audit_logger.log_query(user_id="u1", query="q", response_preview="r", chunks=1, duration_ms=10, tokens=5)
+        report_str = audit_logger.export_report(start_time=t_start, end_time=t_end)
+        data = json.loads(report_str)
+        assert data["summary"]["total_events"] == 1
+
+    def test_log_trace_empty_rerank_scores(self, audit_logger):
+        audit_logger.log_trace(
+            request_id="req_trace",
+            user_id="u1",
+            query="test",
+            chunks_count=3,
+            rerank_scores=[],
+        )
+        with open(audit_logger._audit_file) as f:
+            event = json.loads(f.readline())
+        assert event["details"]["rerank_scores_distribution"] == {}
+
+    def test_export_report_with_file_read_error(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            al = AuditLogger(log_dir=tmpdir)
+            al.log_query(user_id="u1", query="q", response_preview="r", chunks=1, duration_ms=10, tokens=5)
+
+            def failing_read(*args, **kwargs):
+                raise OSError("Disk error")
+
+            monkeypatch.setattr("builtins.open", failing_read)
+            report = al.export_report(start_time="2025-01-01T00:00:00", end_time="2025-12-31T00:00:00")
+            data = json.loads(report)
+            assert "error" in data
+
+    def test_export_report_skips_corrupt_json(self, audit_logger):
+        audit_logger.log_query(user_id="u1", query="q1", response_preview="r1", chunks=1, duration_ms=10, tokens=5)
+        with open(audit_logger._audit_file, "a") as f:
+            f.write("corrupt line\n")
+        report = audit_logger.export_report(start_time="2025-01-01T00:00:00", end_time="2030-12-31T00:00:00")
+        data = json.loads(report)
+        assert data["summary"]["total_events"] >= 1

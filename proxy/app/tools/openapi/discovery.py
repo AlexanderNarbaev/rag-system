@@ -246,7 +246,7 @@ def _parse_yaml(text: str) -> dict[str, Any]:
             raise ImportError("yaml not available")
         except ImportError:
             raise ImportError(
-                "PyYAML is required for YAML OpenAPI specs. Install it with: pip install pyyaml"
+                "PyYAML is required for YAML OpenAPI specs. Install it with: pip install pyyaml",
             ) from None
 
     if not isinstance(result, dict):

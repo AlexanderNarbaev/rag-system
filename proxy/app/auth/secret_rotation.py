@@ -1,6 +1,5 @@
 # proxy/app/auth/secret_rotation.py
-"""
-Secrets rotation automation for the RAG proxy.
+"""Secrets rotation automation for the RAG proxy.
 
 Provides:
 - JWT signing key rotation (RSA-2048/EC P-256) with grace period for old keys
@@ -196,6 +195,7 @@ class SecretRotationManager:
 
         Returns:
             RotationRecord with the operation details.
+
         """
         await self._ensure_initialized()
         rotation_id = f"rot_jwt_{secrets.token_hex(8)}"
@@ -296,6 +296,7 @@ class SecretRotationManager:
 
         Returns:
             RotationRecord with the operation details.
+
         """
         await self._ensure_initialized()
         rotation_id = f"rot_api_{secrets.token_hex(8)}"
@@ -401,6 +402,7 @@ class SecretRotationManager:
 
         Returns:
             True if the signal was sent successfully.
+
         """
         return await self._signal_reload()
 

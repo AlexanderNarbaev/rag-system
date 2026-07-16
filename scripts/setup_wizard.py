@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-RAG System Configuration Wizard
+"""RAG System Configuration Wizard
 
 Interactive setup wizard for configuring the RAG proxy environment.
 Generates proxy/.env from user inputs with validation and connectivity testing.

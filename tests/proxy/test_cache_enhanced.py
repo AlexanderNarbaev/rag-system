@@ -1,4 +1,3 @@
-# ruff: noqa: E501, E402
 """Tests for proxy/app/shared/cache.py — additional cache coverage."""
 
 import pytest

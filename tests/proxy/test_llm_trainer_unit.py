@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/model_evolution/llm_trainer.py — unit tests without GPU deps."""
 
 import json

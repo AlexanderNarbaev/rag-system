@@ -1,6 +1,5 @@
 # proxy/app/metrics.py
-"""
-Prometheus metrics module for RAG proxy observability.
+"""Prometheus metrics module for RAG proxy observability.
 Exposes counters, histograms, and gauges for monitoring.
 """
 
@@ -119,6 +118,17 @@ RAG_CACHE_HITS = Counter(
     ["cache_type"],
 )
 
+RAG_CACHE_MISSES = Counter(
+    "rag_cache_misses_total",
+    "Cache miss count",
+    ["cache_type"],
+)
+
+RAG_QUEUE_DEPTH = Gauge(
+    "rag_queue_depth",
+    "Current request queue depth",
+)
+
 RAG_LLM_TOKENS = Counter(
     "rag_llm_tokens_total",
     "LLM token usage",
@@ -160,6 +170,16 @@ def record_retrieval(score: float, duration: float) -> None:
 def record_cache_hit(cache_type: str) -> None:
     """Record cache hit."""
     RAG_CACHE_HITS.labels(cache_type=cache_type).inc()
+
+
+def record_cache_miss(cache_type: str) -> None:
+    """Record cache miss."""
+    RAG_CACHE_MISSES.labels(cache_type=cache_type).inc()
+
+
+def set_queue_depth(depth: int) -> None:
+    """Set current request queue depth."""
+    RAG_QUEUE_DEPTH.set(depth)
 
 
 def record_llm_tokens(prompt_tokens: int, completion_tokens: int) -> None:

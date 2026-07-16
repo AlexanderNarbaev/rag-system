@@ -44,8 +44,7 @@ class TestExportTrainingDataset:
     def _write_hitl_log(self, tmpdir: str, entries: list[dict]) -> str:
         log_path = os.path.join(tmpdir, "hitl.jsonl")
         with open(log_path, "w") as f:
-            for entry in entries:
-                f.write(json.dumps(entry) + "\n")
+            f.writelines(json.dumps(entry) + "\n" for entry in entries)
         return log_path
 
     def test_empty_log_returns_empty_dataset(self):

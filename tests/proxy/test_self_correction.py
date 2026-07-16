@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for self-correction engine: CRAG, reorder, self-critique, LLMLingua compression."""
 
 import pytest
@@ -29,7 +28,7 @@ class TestDecomposeToStrips:
                     "source_type": "docs",
                 },
                 0.95,
-            )
+            ),
         ]
         strips = decompose_to_strips(chunks_with_scores)
         assert len(strips) >= 1

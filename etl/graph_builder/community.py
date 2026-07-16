@@ -1,5 +1,4 @@
-"""
-GraphRAG Community Detection
+"""GraphRAG Community Detection
 
 Implements Leiden algorithm for community detection in knowledge graphs.
 Based on: https://arxiv.org/abs/2404.16130 (Microsoft GraphRAG)
@@ -29,8 +28,7 @@ class Community:
 
 
 class CommunityDetector:
-    """
-    Detects communities in knowledge graphs using Leiden algorithm.
+    """Detects communities in knowledge graphs using Leiden algorithm.
 
     Usage:
         detector = CommunityDetector()
@@ -47,8 +45,7 @@ class CommunityDetector:
         entities: list[dict[str, Any]],
         relationships: list[dict[str, Any]],
     ) -> list[Community]:
-        """
-        Detect communities using simple connected components + clustering.
+        """Detect communities using simple connected components + clustering.
 
         For production, use Neo4j GDS Leiden algorithm.
         This is a simplified version for demonstration.
@@ -121,13 +118,13 @@ class CommunityDetector:
         entities: list[dict[str, Any]],
         summary_fn: Callable[..., Any] | None = None,
     ) -> list[Community]:
-        """
-        Generate summaries for each community.
+        """Generate summaries for each community.
 
         Args:
             communities: Detected communities
             entities: Entity data for context
             summary_fn: Optional custom summary function
+
         """
         entity_map = {e.get("id", e.get("name", "")): e for e in entities}
 
@@ -174,7 +171,7 @@ class CommunityDetector:
                     "summary": comm.summary,
                     "key_entities": comm.key_entities,
                     "metadata": comm.metadata,
-                }
+                },
             )
 
         Path(path).parent.mkdir(parents=True, exist_ok=True)

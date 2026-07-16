@@ -1,5 +1,4 @@
-"""
-FLARE: Forward-Looking Active REtrieval
+"""FLARE: Forward-Looking Active REtrieval
 
 Monitors generation confidence and triggers re-retrieval when low-confidence
 tokens appear. Based on arxiv:2305.06983
@@ -28,8 +27,7 @@ FLARE_CONTEXT_WINDOW = 500  # Characters to use as query
 
 
 class FLAREController:
-    """
-    Controls active retrieval during generation.
+    """Controls active retrieval during generation.
 
     Usage:
         controller = FLAREController(search_fn, rerank_fn)
@@ -91,8 +89,7 @@ class FLAREController:
         generate_fn: Callable[..., Any] | None = None,
         max_tokens: int = 1000,
     ) -> dict[str, Any]:
-        """
-        Generate response with FLARE active retrieval.
+        """Generate response with FLARE active retrieval.
 
         Returns dict with:
         - response: generated text

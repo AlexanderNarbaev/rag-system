@@ -1,6 +1,5 @@
 # proxy/app/db/migration_002_api_keys.py
-"""
-Migration 002: Add API keys table.
+"""Migration 002: Add API keys table.
 
 Adds API key management for programmatic access:
 - api_keys table for storing hashed API keys

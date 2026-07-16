@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 """Tests for proxy/app/auth/jwt.py — token pair creation, refresh, blacklist, and OIDC discovery.
 
 Complements test_auth.py (basic create/verify) and test_auth_enhanced.py (middleware/aliases).

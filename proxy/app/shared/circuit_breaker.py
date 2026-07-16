@@ -1,6 +1,5 @@
 # proxy/app/circuit_breaker.py
-"""
-Circuit breaker pattern for external service calls with Prometheus metrics.
+"""Circuit breaker pattern for external service calls with Prometheus metrics.
 
 Protects against cascading failures by opening the circuit after N consecutive
 failures, then testing recovery via half-open state after a cooldown period.
@@ -93,6 +92,7 @@ class CircuitBreaker:
         CLOSED (0): Normal operation — calls pass through.
         OPEN (1): Failing — calls are rejected immediately.
         HALF_OPEN (2): Testing recovery — limited calls allowed.
+
     """
 
     CLOSED = State.CLOSED
@@ -113,6 +113,7 @@ class CircuitBreaker:
             failure_threshold: Number of consecutive failures before opening.
             cooldown_seconds: Time to wait before transitioning from OPEN to HALF_OPEN.
             half_open_max: Maximum number of test calls allowed in HALF_OPEN state.
+
         """
         self.name = name
         self.failure_threshold = failure_threshold
@@ -230,6 +231,7 @@ class CircuitBreaker:
         Raises:
             CircuitBreakerOpenError: If the circuit is open and rejects the call.
             The original exception from fn if it fails.
+
         """
         self._check_and_enter()
         try:
@@ -262,6 +264,7 @@ class CircuitBreaker:
         Raises:
             CircuitBreakerOpenError: If the circuit is open and rejects the call.
             The original exception from fn if it fails.
+
         """
         self._check_and_enter()
         try:
@@ -303,6 +306,7 @@ def get_breaker(
 
     Returns:
         The existing or newly created CircuitBreaker instance.
+
     """
     if name not in _breakers:
         _breakers[name] = CircuitBreaker(

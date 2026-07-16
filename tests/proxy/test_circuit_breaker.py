@@ -21,7 +21,7 @@ def _reset_breakers():
     reset_all_breakers()
     _breakers.clear()
     yield
-    _frozen = False  # noqa: F811
+    _frozen = False
     reset_all_breakers()
     _breakers.clear()
 

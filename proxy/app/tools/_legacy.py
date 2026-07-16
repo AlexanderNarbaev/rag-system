@@ -1,6 +1,5 @@
 # proxy/app/tools.py
-"""
-Pluggable tool registry and function calling handler.
+"""Pluggable tool registry and function calling handler.
 Supports OpenAI-compatible function calling with pluggable tools
 that can wrap retrieval, live sources, or custom handlers.
 
@@ -83,7 +82,7 @@ def format_tools_for_llm(tools: list[ToolDefinition]) -> list[dict[str, Any]]:
                     "description": t.description,
                     "parameters": t.parameters_schema,
                 },
-            }
+            },
         )
     return formatted
 
@@ -218,7 +217,7 @@ def get_tool_registry() -> ToolRegistry:
                     },
                     handler=_search_documents,
                     category="search",
-                )
+                ),
             )
             _tools_pkg._global_registry.register(
                 ToolDefinition(
@@ -235,7 +234,7 @@ def get_tool_registry() -> ToolRegistry:
                     },
                     handler=_search_by_version,
                     category="search",
-                )
+                ),
             )
             _tools_pkg._global_registry.register(
                 ToolDefinition(
@@ -250,6 +249,6 @@ def get_tool_registry() -> ToolRegistry:
                     },
                     handler=_get_document_metadata,
                     category="metadata",
-                )
+                ),
             )
     return _tools_pkg._global_registry  # type: ignore[no-any-return]

@@ -1,6 +1,5 @@
 # proxy/app/ldap_auth.py
-"""
-LDAP / Active Directory authentication module.
+"""LDAP / Active Directory authentication module.
 
 Provides optional LDAP authentication alongside the local SQLite user database.
 When AD_ENABLED=true, the login endpoint first attempts LDAP bind before
@@ -39,6 +38,7 @@ async def authenticate_ldap(username: str, password: str) -> dict[str, Any] | No
 
     Returns:
         User dict (from SQLite) or None if authentication fails.
+
     """
     if not AD_ENABLED or not AD_URL:
         return None

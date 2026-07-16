@@ -35,12 +35,12 @@ from proxy.app.core.rerank import rerank_chunks  # noqa: F401 — re-export for 
 from proxy.app.core.retrieval import hybrid_search  # noqa: F401 — re-export for test patching
 from proxy.app.llm.provider import non_stream_completion  # noqa: F401 — re-export for test patching
 from proxy.app.llm.provider.utils import non_stream_completion_sync  # noqa: F401 — re-export for test patching
-from proxy.app.llm.slm import IntentType, classify_intent  # noqa: F401 — re-export for test patching
+from proxy.app.llm.slm import IntentType, classify_intent
 
 __all__ = [
     "END",
-    "IntentType",
     "LANGGRAPH_AVAILABLE",
+    "IntentType",
     "MemorySaver",
     "RAGOrchestrator",
     "RAGState",

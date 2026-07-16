@@ -1,6 +1,5 @@
 # proxy/app/grounding.py
-"""
-Context grounding score for RAG answer verification.
+"""Context grounding score for RAG answer verification.
 
 Computes cosine similarity between the answer embedding and context embedding
 to estimate how well the generated answer is grounded in the retrieved context.
@@ -31,8 +30,7 @@ def _get_embedder() -> Any:
 
 
 def compute_grounding(answer: str, context: str) -> float:
-    """
-    Compute a context grounding score for an answer given the context.
+    """Compute a context grounding score for an answer given the context.
 
     Uses cosine similarity between the answer embedding and context embedding.
     Returns a float in [0.0, 1.0] where higher values indicate stronger grounding.
@@ -44,6 +42,7 @@ def compute_grounding(answer: str, context: str) -> float:
     Returns:
         Grounding score (0.0 = ungrounded, 1.0 = perfectly grounded).
         Returns 0.0 if either string is empty or embedder is unavailable.
+
     """
     if not answer or not context:
         return 0.0

@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117, E402
 """Tests for proxy/app/warmup.py - model warm-up with graceful degradation."""
 
 import sys

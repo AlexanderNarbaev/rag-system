@@ -74,8 +74,7 @@ class OpenAIAdapter(ProviderAdapter):
 
 
 class AnthropicAdapter(ProviderAdapter):
-    """
-    Adapter for Anthropic Claude API.
+    """Adapter for Anthropic Claude API.
     Translates between OpenAI message format and Anthropic Messages API format.
     """
 
@@ -130,9 +129,9 @@ class AnthropicAdapter(ProviderAdapter):
                                 "type": "tool_result",
                                 "tool_use_id": msg.get("tool_call_id", ""),
                                 "content": msg.get("content", ""),
-                            }
+                            },
                         ],
-                    }
+                    },
                 )
             else:
                 anthropic_messages.append({"role": "user", "content": msg.get("content", "")})
@@ -169,7 +168,7 @@ class AnthropicAdapter(ProviderAdapter):
                             "name": block.get("name", ""),
                             "arguments": json.dumps(block.get("input", {})),
                         },
-                    }
+                    },
                 )
 
         return {
@@ -186,7 +185,7 @@ class AnthropicAdapter(ProviderAdapter):
                         "tool_calls": tool_calls or None,
                     },
                     "finish_reason": response_data.get("stop_reason", "stop"),
-                }
+                },
             ],
             "usage": {
                 "prompt_tokens": response_data.get("usage", {}).get("input_tokens", 0),
@@ -227,10 +226,10 @@ class AnthropicAdapter(ProviderAdapter):
                             "index": 0,
                             "delta": {"content": delta.get("text", "")},
                             "finish_reason": None,
-                        }
+                        },
                     ],
                 }
-            elif delta.get("type") == "input_json_delta":
+            if delta.get("type") == "input_json_delta":
                 return {
                     "id": data.get("index", ""),
                     "object": "chat.completion.chunk",
@@ -242,11 +241,11 @@ class AnthropicAdapter(ProviderAdapter):
                                     {
                                         "index": 0,
                                         "function": {"arguments": delta.get("partial_json", "")},
-                                    }
-                                ]
+                                    },
+                                ],
                             },
                             "finish_reason": None,
-                        }
+                        },
                     ],
                 }
         elif event_type == "message_delta":
@@ -258,7 +257,7 @@ class AnthropicAdapter(ProviderAdapter):
                         "index": 0,
                         "delta": {},
                         "finish_reason": data.get("delta", {}).get("stop_reason", "stop"),
-                    }
+                    },
                 ],
             }
 
@@ -266,8 +265,7 @@ class AnthropicAdapter(ProviderAdapter):
 
 
 class OllamaAdapter(OpenAIAdapter):
-    """
-    Adapter for Ollama API (OpenAI-compatible by default via ollama serve).
+    """Adapter for Ollama API (OpenAI-compatible by default via ollama serve).
     Has minor differences: no Authorization header, model endpoint variant.
     """
 
@@ -293,8 +291,7 @@ class OllamaAdapter(OpenAIAdapter):
 
 
 class GenericAdapter(OpenAIAdapter):
-    """
-    Adapter for any generic REST API endpoint.
+    """Adapter for any generic REST API endpoint.
     Uses a configurable request/response transformation.
     """
 

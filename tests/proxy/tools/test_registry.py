@@ -8,6 +8,7 @@ import asyncio
 import sys
 from abc import ABC
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -246,7 +247,7 @@ class TestRegistryListTools:
                 category="search",
                 tags=["fast"],
                 provider="sdk",
-            )
+            ),
         )
         self.registry.register(
             _make_tool(
@@ -255,7 +256,7 @@ class TestRegistryListTools:
                 category="admin",
                 tags=["slow"],
                 provider="declarative",
-            )
+            ),
         )
         self.registry.register(
             _make_tool(
@@ -264,7 +265,7 @@ class TestRegistryListTools:
                 category="search",
                 tags=["fast", "beta"],
                 provider="openapi",
-            )
+            ),
         )
 
     def test_list_tools_all(self):
@@ -371,7 +372,7 @@ class TestRegistryExecute:
                 name="bad",
                 parameters=[],  # no required params
                 handler=bad_handler,
-            )
+            ),
         )
 
         result = registry.execute("bad", {})
@@ -450,7 +451,7 @@ class TestGetToolsForLLM:
                 parameters=[
                     ToolParam(name="query", type=str, description="Search query"),
                 ],
-            )
+            ),
         )
 
         tools = registry.get_tools_for_llm(provider_type="openai")
@@ -648,3 +649,147 @@ class TestProviderStubs:
         provider = OpenAPIProvider()
         tools = asyncio.run(provider.discover())
         assert tools == []
+
+
+class TestGetToolsForLLM:
+    """Tests for get_tools_for_llm method."""
+
+    def test_anthropic_format(self):
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        tool = _make_tool(name="search", description="Search tool")
+        registry.register(tool)
+        tools = registry.get_tools_for_llm(provider_type="anthropic")
+        assert len(tools) == 1
+
+    def test_unknown_provider_defaults_to_openai(self):
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        tool = _make_tool(name="search", description="Search tool")
+        registry.register(tool)
+        tools = registry.get_tools_for_llm(provider_type="unknown")
+        assert len(tools) == 1
+
+    def test_respects_role_visibility(self):
+        from tools.definition import ToolVisibility
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        public_tool = _make_tool(name="public_search", visibility=ToolVisibility.PUBLIC)
+        admin_tool = _make_tool(name="admin_tool", visibility=ToolVisibility.ADMIN)
+        registry.register(public_tool)
+        registry.register(admin_tool)
+        tools = registry.get_tools_for_llm(user_role="admin")
+        assert len(tools) == 2
+        tools_user = registry.get_tools_for_llm(user_role="user")
+        assert len(tools_user) == 1
+
+
+class TestExecuteNonString:
+    """Tests for execute methods when handler returns non-string."""
+
+    def test_execute_returns_non_string(self):
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+
+        def int_handler(**kw):
+            return 42
+
+        tool = _make_tool(
+            name="int_tool",
+            handler=int_handler,
+            parameters=[],
+        )
+        registry.register(tool)
+        result = registry.execute("int_tool", {})
+        assert result.content == "42"
+
+    @pytest.mark.asyncio
+    async def test_execute_async_returns_non_string(self):
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+
+        async def int_async_handler(**kw):
+            return 42
+
+        tool = _make_tool(
+            name="async_int_tool",
+            handler=lambda **kw: "sync",
+            async_handler=int_async_handler,
+            parameters=[],
+        )
+        registry.register(tool)
+        result = await registry.execute_async("async_int_tool", {})
+        assert result.content == "42"
+
+
+class TestValidateTool:
+    """Tests for validate_tool method."""
+
+    def test_validate_tool_with_issues(self):
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        tool = _make_tool(name="", description="", handler=None, async_handler=None)
+        issues = registry.validate_tool(tool)
+        assert len(issues) >= 2
+
+    def test_validate_tool_duplicate_params(self):
+        from tools.definition import ToolParam
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        tool = _make_tool(
+            name="dup_params",
+            description="Has duplicate params",
+            parameters=[
+                ToolParam(name="q", type=str),
+                ToolParam(name="q", type=int),
+            ],
+        )
+        issues = registry.validate_tool(tool)
+        assert "Duplicate" in " ".join(issues)
+
+
+class TestDiscoverSync:
+    """Tests for sync discover method."""
+
+    def test_discover_success(self):
+        from tools.registry import EnhancedToolRegistry, SDKProvider
+
+        registry = EnhancedToolRegistry()
+        tool = _make_tool(name="discovered_tool")
+        try:
+            SDKProvider._sdk_registered_tools = [tool]
+            result = registry.discover(SDKProvider())
+            assert len(result) == 1
+        finally:
+            SDKProvider._sdk_registered_tools = []
+
+    def test_discover_error_handling(self):
+        from unittest.mock import MagicMock
+
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        bad_provider = MagicMock()
+        bad_provider.provider_name = "bad"
+        bad_provider.discover = MagicMock(side_effect=RuntimeError("discovery failed"))
+        result = registry.discover(bad_provider)
+        assert result == []
+
+    def test_discover_from_provider_alias(self):
+        from unittest.mock import MagicMock
+
+        from tools.registry import EnhancedToolRegistry
+
+        registry = EnhancedToolRegistry()
+        mock_provider = MagicMock()
+        mock_provider.provider_name = "mock"
+        mock_provider.discover = MagicMock(return_value=[])
+        result = registry.discover_from_provider(mock_provider)
+        assert result == []

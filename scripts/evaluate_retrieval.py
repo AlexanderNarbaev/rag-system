@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Automated retrieval quality evaluation pipeline.
+"""Automated retrieval quality evaluation pipeline.
 
 Computes standard IR metrics from HITL-interaction logs or a JSONL query-document
 labeled dataset:
@@ -246,12 +245,11 @@ def generate_eval_dataset_template(output_path: str, num_examples: int = 10):
                 "query": f"<Insert query {i + 1} here>",
                 "relevant_docs": ["<doc_id_1>", "<doc_id_2>"],
                 "notes": "<Optional: why these docs are relevant>",
-            }
+            },
         )
 
     with open(output_path, "w", encoding="utf-8") as f:
-        for entry in template_entries:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        f.writelines(json.dumps(entry, ensure_ascii=False) + "\n" for entry in template_entries)
 
     logger.info(f"Template dataset written to {output_path} ({num_examples} entries)")
 
@@ -333,7 +331,7 @@ def main():
         if not any(retrieved_lists):
             logger.warning(
                 "No retrieved_docs in dataset. Use --run-retrieval to execute retrieval, "
-                "or add 'retrieved_docs' field to dataset entries."
+                "or add 'retrieved_docs' field to dataset entries.",
             )
             sys.exit(1)
 

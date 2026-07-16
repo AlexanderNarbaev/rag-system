@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: E402
 """Performance latency tests for the RAG proxy with mocked external services.
 
 Tests measure latency through the FastAPI TestClient with all external services

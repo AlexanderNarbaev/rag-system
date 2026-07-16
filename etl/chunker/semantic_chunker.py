@@ -1,6 +1,5 @@
 # etl/chunker/semantic_chunker.py
-"""
-Семантический чанкинг для RAG-системы.
+"""Семантический чанкинг для RAG-системы.
 Реализует MDKeyChunker (Semantic Chunker) с извлечением метаданных и каскадированием.
 Поддерживает HTML и Markdown, LLM-обогащение (опционально).
 """
@@ -59,14 +58,12 @@ class Chunk:
 
 
 class SemanticChunker:
-    """
-    Базовый семантический чанкер. Разбивает документ на структурные блоки:
+    """Базовый семантический чанкер. Разбивает документ на структурные блоки:
     заголовки (h1-h3), абзацы, списки, таблицы. Поддерживает HTML и Markdown.
     """
 
     def __init__(self, max_tokens: int = 1500, overlap_tokens: int = 200, min_chunk_tokens: int = 100):
-        """
-        :param max_tokens: максимальное количество токенов в чанке (для эмбеддера)
+        """:param max_tokens: максимальное количество токенов в чанке (для эмбеддера)
                            Research-backed optimal: 1500 tokens (~6000 chars) for retrieval quality.
                            See: https://habr.com/ru/articles/1029740/
         :param overlap_tokens: перекрытие между чанками (токены)
@@ -82,8 +79,7 @@ class SemanticChunker:
         return len(text) // 4
 
     def _split_by_headings(self, html: str) -> list[dict[str, Any]]:
-        """
-        Разбивает HTML на секции по заголовкам h1, h2, h3.
+        """Разбивает HTML на секции по заголовкам h1, h2, h3.
         Возвращает список {heading: str, content: str}
         """
         if BeautifulSoup is None:
@@ -136,8 +132,7 @@ class SemanticChunker:
         return merged
 
     def _prepend_context(self, chunk_text: str, metadata: dict) -> str:
-        """
-        Prepend document-level context to chunk text for better embedding.
+        """Prepend document-level context to chunk text for better embedding.
         This helps preserve context that gets lost when chunking.
 
         Pattern from Anthropic's contextual chunking approach.
@@ -160,8 +155,7 @@ class SemanticChunker:
         return chunk_text
 
     def chunk_html(self, html: str, source_metadata: dict[str, Any]) -> list[Chunk]:
-        """
-        Нарезка HTML-документа на семантические чанки.
+        """Нарезка HTML-документа на семантические чанки.
         :param html: HTML-строка документа
         :param source_metadata: базовые метаданные (source_type, doc_title, version и т.д.)
         :return: список Chunk
@@ -186,11 +180,10 @@ class SemanticChunker:
                         chunks.append(chunk)
                         position += 1
                     current_text = f"## {heading}\n" + para
+                elif not current_text:
+                    current_text = para
                 else:
-                    if not current_text:
-                        current_text = para
-                    else:
-                        current_text += "\n\n" + para
+                    current_text += "\n\n" + para
             if current_text:
                 chunk = self._create_chunk(current_text, position, source_metadata, heading)
                 chunks.append(chunk)
@@ -243,9 +236,7 @@ class SemanticChunker:
 
 
 class MetadataEnricher:
-    """
-    Обогащение чанков метаданными с использованием NLP (spaCy) и опционально SLM.
-    """
+    """Обогащение чанков метаданными с использованием NLP (spaCy) и опционально SLM."""
 
     def __init__(self, use_slm: bool = False, slm_endpoint: str | None = None):
         self.use_slm = use_slm
@@ -316,7 +307,9 @@ Text: {chunk_text[:1500]}
 
 Output JSON:"""
             resp = requests.post(
-                self.slm_endpoint, json={"prompt": prompt, "max_tokens": 300, "temperature": 0.3}, timeout=10
+                self.slm_endpoint,
+                json={"prompt": prompt, "max_tokens": 300, "temperature": 0.3},
+                timeout=10,
             )
             if resp.status_code == 200:
                 result = resp.json()
@@ -338,17 +331,14 @@ Output JSON:"""
 
 
 class MDKeyChunker:
-    """
-    Полноценный семантический чанкер с каскадированием метаданных и биновой упаковкой.
-    """
+    """Полноценный семантический чанкер с каскадированием метаданных и биновой упаковкой."""
 
     def __init__(self, base_chunker: SemanticChunker, enricher: MetadataEnricher):
         self.base = base_chunker
         self.enricher = enricher
 
     def process_document(self, content: str, content_type: str, source_metadata: dict[str, Any]) -> list[Chunk]:
-        """
-        Основной метод: нарезка, обогащение, каскадирование метаданных.
+        """Основной метод: нарезка, обогащение, каскадирование метаданных.
         :param content: HTML или Markdown строка
         :param content_type: "html" или "markdown"
         :param source_metadata: словарь с source_type, doc_title, version, source_id
@@ -411,7 +401,7 @@ class MDKeyChunker:
         """Объединяет чанки с одинаковым semantic_key в один, сохраняя порядок."""
         groups = {}
         for ch in chunks:
-            key = ch.semantic_key if ch.semantic_key else f"_unique_{ch.hash}"
+            key = ch.semantic_key or f"_unique_{ch.hash}"
             if key not in groups:
                 groups[key] = []
             groups[key].append(ch)
@@ -451,8 +441,7 @@ class MDKeyChunker:
 
 
 class AdaptiveChunker:
-    """
-    Adaptive chunking that adjusts chunk size based on document structure.
+    """Adaptive chunking that adjusts chunk size based on document structure.
 
     Strategy:
     - Headers/sections: chunk by section (natural boundaries)
@@ -477,8 +466,7 @@ class AdaptiveChunker:
         self.overlap_ratio = overlap_ratio
 
     def _detect_structure(self, text: str) -> list[dict[str, Any]]:
-        """
-        Detect document structure: headers, code blocks, tables, paragraphs.
+        """Detect document structure: headers, code blocks, tables, paragraphs.
         Returns list of structural elements.
         """
         elements = []
@@ -499,7 +487,7 @@ class AdaptiveChunker:
                         "text": line,
                         "start": current_pos,
                         "end": current_pos + len(line) + 1,
-                    }
+                    },
                 )
 
             # Code block detection
@@ -519,7 +507,7 @@ class AdaptiveChunker:
                         "text": code_text,
                         "start": current_pos,
                         "end": current_pos + len(code_text) + 1,
-                    }
+                    },
                 )
 
             # Table detection
@@ -536,7 +524,7 @@ class AdaptiveChunker:
                         "text": table_text,
                         "start": current_pos,
                         "end": current_pos + len(table_text) + 1,
-                    }
+                    },
                 )
                 i -= 1  # Will be incremented at end of loop
 
@@ -548,7 +536,7 @@ class AdaptiveChunker:
                         "text": line,
                         "start": current_pos,
                         "end": current_pos + len(line) + 1,
-                    }
+                    },
                 )
 
             current_pos += len(line) + 1
@@ -615,7 +603,7 @@ class AdaptiveChunker:
                                 "text": current_chunk.strip(),
                                 "start": elem["start"],
                                 "end": elem["start"] + len(current_chunk),
-                            }
+                            },
                         )
                     current_chunk = sentence
                 else:
@@ -628,7 +616,7 @@ class AdaptiveChunker:
                         "text": current_chunk.strip(),
                         "start": elem["start"],
                         "end": elem["start"] + len(current_chunk),
-                    }
+                    },
                 )
 
         return result
@@ -649,8 +637,7 @@ class AdaptiveChunker:
         return overlapped
 
     def chunk(self, text: str) -> list[dict[str, Any]]:
-        """
-        Adaptive chunking: detect structure, merge small, split large.
+        """Adaptive chunking: detect structure, merge small, split large.
 
         Returns list of chunks with:
         - text: chunk content
@@ -672,8 +659,7 @@ class AdaptiveChunker:
         return final
 
     def chunk_markdown(self, markdown_text: str, source_metadata: dict[str, Any] | None = None) -> list[Chunk]:
-        """
-        Chunk markdown text and return Chunk objects compatible with the pipeline.
+        """Chunk markdown text and return Chunk objects compatible with the pipeline.
 
         :param markdown_text: Raw markdown text
         :param source_metadata: Optional metadata dict with source_type, doc_title, etc.

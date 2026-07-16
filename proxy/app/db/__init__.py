@@ -1,6 +1,5 @@
 # proxy/app/db/__init__.py
-"""
-Database migration framework for the RAG System.
+"""Database migration framework for the RAG System.
 
 Provides:
 - MigrationManager for SQLite and Neo4j schema management

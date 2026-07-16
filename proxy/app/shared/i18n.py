@@ -1,6 +1,5 @@
 # proxy/app/i18n.py
-"""
-Multi-language support: language detection, prompt templates, fallback messages.
+"""Multi-language support: language detection, prompt templates, fallback messages.
 Language detection uses character-set analysis — no external API required (air-gapped).
 Supports: English (EN), Russian (RU), German (DE), French (FR), Chinese (ZH).
 """
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_LANGUAGES: set[str] = (
     set(CONFIG_SUPPORTED_LANGUAGES) if isinstance(CONFIG_SUPPORTED_LANGUAGES, list) else {"en", "ru", "de", "fr", "zh"}
-)  # noqa: E501
+)
 
 _CJK_RANGES = [
     (0x4E00, 0x9FFF),
@@ -137,7 +136,7 @@ _FR_COMMON_WORDS = {
     "ceux",
     "celles",
     "certains",
-    "certaines",  # noqa: E501
+    "certaines",
     "votre",
     "notre",
     "sera",
@@ -200,6 +199,7 @@ def detect_language(text: str | None) -> str:
 
     Returns:
         ISO 639-1 language code: en, ru, de, fr, zh.
+
     """
     if not text:
         return DEFAULT_LANGUAGE
@@ -279,16 +279,12 @@ SYSTEM_PROMPTS: dict[str, str] = {
 FALLBACK_MESSAGES: dict[str, str] = {
     "en": "I don't have enough information to answer this question. Please try rephrasing or check the source "
     "documents.",
-    # noqa: E501
     "ru": "У меня недостаточно информации, чтобы ответить на этот вопрос. Пожалуйста, переформулируйте запрос или "
     "проверьте исходные документы.",
-    # noqa: E501
     "de": "Ich habe nicht genügend Informationen, um diese Frage zu beantworten. Bitte versuchen Sie, "
     "die Frage umzuformulieren, oder überprüfen Sie die Quelldokumente.",
-    # noqa: E501
     "fr": "Je ne dispose pas d'assez d'informations pour répondre à cette question. Veuillez reformuler ou vérifier "
     "les documents sources.",
-    # noqa: E501
     "zh": "我没有足够的信息来回答这个问题。请尝试重新表述您的问题，或查阅源文档。",
 }
 
@@ -303,6 +299,7 @@ def get_system_prompt(lang: str | None = None) -> str:
 
     Returns:
         System prompt string.
+
     """
     if not I18N_ENABLED:
         return SYSTEM_PROMPTS["en"]
@@ -321,6 +318,7 @@ def get_fallback_message(lang: str | None = None) -> str:
 
     Returns:
         Fallback message string.
+
     """
     if not I18N_ENABLED:
         return FALLBACK_MESSAGES["en"]

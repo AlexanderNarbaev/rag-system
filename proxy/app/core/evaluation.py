@@ -1,6 +1,5 @@
 # proxy/app/evaluation.py
-"""
-Retrieval evaluation pipeline for RAG system.
+"""Retrieval evaluation pipeline for RAG system.
 
 Computes standard IR metrics:
 - MRR (Mean Reciprocal Rank)
@@ -81,6 +80,7 @@ def compute_all_metrics(
 
     Returns:
         Dictionary with MRR, Recall@k, nDCG@k, Precision@k, and num_queries.
+
     """
     metrics: dict[str, float] = {}
 
@@ -229,6 +229,7 @@ def evaluate_cross_lingual_retrieval(
     Returns:
         Dict with source_lang, target_lang, monolingual metrics,
         cross_lingual metrics, comparison delta, and num_queries.
+
     """
     source_lang, target_lang = lang_pair
 
@@ -314,6 +315,7 @@ def run_cross_lingual_benchmark() -> list[dict[str, Any]]:
 
     Returns:
         List of results dicts, one per language pair.
+
     """
     pairs = [
         ("en", "de"),
@@ -336,6 +338,6 @@ def run_cross_lingual_benchmark() -> list[dict[str, Any]]:
                     "error": str(e),
                     "monolingual": {},
                     "cross_lingual": {},
-                }
+                },
             )
     return results

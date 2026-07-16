@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/context_builder.py functions."""
 
 from proxy.app.core.context import (

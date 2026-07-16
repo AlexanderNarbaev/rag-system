@@ -270,7 +270,7 @@ def compute_confidence(
             unsupported_preview = nli_report.unsupported[:3]
             uncertainties.append(
                 f"NLI: {nli_report.supported_claims}/{nli_report.total_claims} claims grounded. "
-                f"Unsupported: {unsupported_preview}"
+                f"Unsupported: {unsupported_preview}",
             )
         score = 0.6 * score + 0.4 * nli_score
 
@@ -334,6 +334,7 @@ def evaluate_retrieval_quality(query: str, chunks: list[dict[str, Any]]) -> Retr
 
     Returns:
         RetrievalQualityReport with classification and statistics.
+
     """
     if not chunks:
         return RetrievalQualityReport(
@@ -415,6 +416,7 @@ def verify_answer_claims(answer: str, context: str) -> VerificationReport:
 
     Returns:
         VerificationReport with supported/unsupported claims and verification rate.
+
     """
     if not answer or not answer.strip():
         return VerificationReport(verification_rate=0.0)
@@ -561,6 +563,7 @@ def should_generate_answer(chunks: list[dict[str, Any]], min_strong_sources: int
 
     Returns:
         Tuple of (should_generate: bool, reason: str).
+
     """
     if not chunks:
         return False, "No relevant documents found in knowledge base"
@@ -576,7 +579,6 @@ def should_generate_answer(chunks: list[dict[str, Any]], min_strong_sources: int
                 f"(need {min_strong_sources}). "
                 f"Insufficient data for reliable answer."
             )
-        else:
-            return False, "No sufficiently relevant sources found. Cannot provide reliable answer."
+        return False, "No sufficiently relevant sources found. Cannot provide reliable answer."
 
     return True, "Sufficient relevant sources found"

@@ -101,7 +101,7 @@ class TestStartupDiscoveryIntegration:
                 tags=["hybrid"],
                 visibility=ToolVisibility.PUBLIC,
                 provider="sdk",
-            )
+            ),
         )
         registry.register(
             ToolDefinition(
@@ -112,7 +112,7 @@ class TestStartupDiscoveryIntegration:
                 tags=["openapi", "pets"],
                 visibility=ToolVisibility.PUBLIC,
                 provider="openapi",
-            )
+            ),
         )
         registry.register(
             ToolDefinition(
@@ -123,7 +123,7 @@ class TestStartupDiscoveryIntegration:
                 tags=["declarative", "scheduled"],
                 visibility=ToolVisibility.PUBLIC,
                 provider="declarative",
-            )
+            ),
         )
 
         with patch("proxy.app.main.get_enhanced_registry", return_value=registry):
@@ -163,7 +163,7 @@ class TestStartupDiscoveryIntegration:
                 tags=[],
                 visibility=ToolVisibility.PUBLIC,
                 provider="sdk",
-            )
+            ),
         )
         registry.register(
             ToolDefinition(
@@ -174,7 +174,7 @@ class TestStartupDiscoveryIntegration:
                 tags=[],
                 visibility=ToolVisibility.PUBLIC,
                 provider="openapi",
-            )
+            ),
         )
 
         with patch("proxy.app.main.get_enhanced_registry", return_value=registry):
@@ -208,7 +208,7 @@ class TestStartupDiscoveryIntegration:
                 visibility=ToolVisibility.PUBLIC,
                 version="1.0.0",
                 provider="sdk",
-            )
+            ),
         )
 
         with patch("proxy.app.main.get_enhanced_registry", return_value=registry):

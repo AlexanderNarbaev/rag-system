@@ -1,4 +1,3 @@
-# ruff: noqa: E501, E402
 """Tests for proxy/app/tools/registry.py — additional coverage."""
 
 from unittest.mock import AsyncMock
@@ -90,7 +89,7 @@ class TestEnhancedToolRegistry:
 
     def test_list_tools_by_visibility(self):
         self.registry.register(
-            ToolDefinition(name="v1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC)
+            ToolDefinition(name="v1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC),
         )
         result = self.registry.list_tools(visibility_filter="user")
         assert len(result) >= 1
@@ -201,14 +200,14 @@ class TestEnhancedToolRegistry:
 
     def test_get_tools_for_llm_openai(self):
         self.registry.register(
-            ToolDefinition(name="llm1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC)
+            ToolDefinition(name="llm1", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC),
         )
         tools = self.registry.get_tools_for_llm(provider_type="openai", user_role="user")
         assert len(tools) >= 1
 
     def test_get_tools_for_llm_anthropic(self):
         self.registry.register(
-            ToolDefinition(name="llm2", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC)
+            ToolDefinition(name="llm2", description="d", handler=lambda: "", visibility=ToolVisibility.PUBLIC),
         )
         tools = self.registry.get_tools_for_llm(provider_type="anthropic", user_role="user")
         assert len(tools) >= 1

@@ -524,6 +524,7 @@ async def create_token_pair(user: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         dict with access_token, refresh_token, token_type, expires_in.
+
     """
     import secrets as _secrets
 

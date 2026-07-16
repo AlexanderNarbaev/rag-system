@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: E402
 """E2E tests for the full RAG pipeline with mocked external services.
 
 Tests the complete flow: HTTP request -> FastAPI -> RAG pipeline -> response.

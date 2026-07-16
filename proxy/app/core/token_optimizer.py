@@ -1,6 +1,5 @@
 # proxy/app/token_optimizer.py
-"""
-Token economy module for RAG context assembly.
+"""Token economy module for RAG context assembly.
 
 Implements:
 - Token counting with BPE awareness
@@ -24,8 +23,7 @@ def _tokenize_words(text: str) -> list[str]:
 
 
 def count_bpe_tokens(text: str) -> int:
-    """
-    Estimate token count approximating BPE behavior.
+    """Estimate token count approximating BPE behavior.
     Most words become 1-2 subword tokens on average (~1.3 per word).
     """
     if not text:
@@ -38,8 +36,7 @@ class TokenOptimizer:
     """Optimizes token usage in RAG context assembly."""
 
     def estimate_token_cost(self, text: str) -> int:
-        """
-        Accurate token counting with BPE awareness.
+        """Accurate token counting with BPE awareness.
         Uses a combination of word-based BPE estimate and char/4 rule.
         """
         if not text:
@@ -50,8 +47,7 @@ class TokenOptimizer:
         return max(1, int(char_estimate * 0.4 + word_estimate * 0.6))
 
     def compress_context(self, chunks: list[dict[str, Any]], max_tokens: int, strategy: str = "relevance") -> str:
-        """
-        Compress context using the specified strategy.
+        """Compress context using the specified strategy.
 
         Strategies:
         - 'relevance': keep only the most relevant sentences (Relevant Segment Extraction)
@@ -64,15 +60,14 @@ class TokenOptimizer:
 
         if strategy == "relevance":
             return self._compress_relevance(chunks, max_tokens)
-        elif strategy == "proposition":
+        if strategy == "proposition":
             return self._compress_proposition(chunks, max_tokens)
-        elif strategy == "summary":
+        if strategy == "summary":
             return self._compress_summary(chunks, max_tokens)
-        elif strategy == "hierarchical":
+        if strategy == "hierarchical":
             return self._compress_hierarchical(chunks, max_tokens)
-        else:
-            logger.warning(f"Unknown compression strategy '{strategy}', falling back to relevance")
-            return self._compress_relevance(chunks, max_tokens)
+        logger.warning(f"Unknown compression strategy '{strategy}', falling back to relevance")
+        return self._compress_relevance(chunks, max_tokens)
 
     def _compress_relevance(self, chunks: list[dict[str, Any]], max_tokens: int) -> str:
         """Keep top chunks, truncate each to fit token budget."""
@@ -139,8 +134,7 @@ class TokenOptimizer:
         return "\n\n".join(parts)
 
     def _compress_hierarchical(self, chunks: list[dict[str, Any]], max_tokens: int) -> str:
-        """
-        Tiered detail:
+        """Tiered detail:
         - Top-3 chunks: full text
         - Next 5: first 3 sentences
         - Rest: title/first sentence only
@@ -213,8 +207,7 @@ class TokenOptimizer:
         return "\n\n".join(result_parts)
 
     def smart_token_budget(self, available_tokens: int, num_chunks: int) -> dict[str, int]:
-        """
-        Allocate token budget across system_prompt, context_per_chunk, history, and response.
+        """Allocate token budget across system_prompt, context_per_chunk, history, and response.
 
         Returns a dict with:
         - 'system_prompt': tokens for system prompt (instructions)
@@ -250,8 +243,7 @@ class TokenOptimizer:
         }
 
     def surround_chunks(self, chunks: list[dict[str, Any]], nearby_count: int = 2) -> list[dict[str, Any]]:
-        """
-        Expand chunks with surrounding context from the same document.
+        """Expand chunks with surrounding context from the same document.
         For chunks sharing the same source_id, returns nearby neighbors.
         If chunks have a 'chunk_index' field, uses it for ordering.
         Returns deduplicated expanded list.
@@ -294,8 +286,7 @@ class TokenOptimizer:
         return expanded
 
     def enrich_chunk_headers(self, chunk: dict[str, Any], doc_context: dict[str, Any]) -> dict[str, Any]:
-        """
-        Add document-level context as chunk header.
+        """Add document-level context as chunk header.
         Modifies chunk in place (text gets a header prefix) and returns it.
 
         doc_context should have keys: title, section, doc_type, version

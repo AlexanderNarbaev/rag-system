@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/integration/test_etl_pipeline.py
 """Integration tests for the ETL pipeline (extract -> chunk -> index).
 
@@ -111,7 +110,6 @@ class TestFullExtractChunkIndexPipeline:
 
     def test_full_extract_chunk_index_flow(self, mock_confluence_extractor, mock_chunker, mock_qdrant_indexer):
         """Full pipeline: extract Confluence -> chunk -> index in Qdrant."""
-
         # Simulate extraction
         extractor = mock_confluence_extractor.return_value
         extractor.run()

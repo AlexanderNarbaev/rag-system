@@ -1,6 +1,5 @@
 # tui/app.py
-"""
-RAG System — Terminal UI (TUI).
+"""RAG System — Terminal UI (TUI).
 
 Provides a terminal-based management interface using Textual for
 monitoring, configuration, and administration of the RAG proxy system.

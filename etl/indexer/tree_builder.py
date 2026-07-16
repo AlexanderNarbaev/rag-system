@@ -1,5 +1,4 @@
-"""
-RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
+"""RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
 
 Builds hierarchical summaries from chunks for multi-level retrieval.
 Based on: https://arxiv.org/abs/2401.18059
@@ -36,8 +35,7 @@ class TreeNode:
 
 
 class RaptorTreeBuilder:
-    """
-    Builds hierarchical tree from chunks using recursive clustering + summarization.
+    """Builds hierarchical tree from chunks using recursive clustering + summarization.
 
     Usage:
         builder = RaptorTreeBuilder(max_cluster_size=5)
@@ -65,8 +63,7 @@ class RaptorTreeBuilder:
         return combined
 
     def _cluster_texts(self, texts: list[str], max_size: int = 5) -> list[list[int]]:
-        """
-        Simple clustering: group consecutive texts into clusters of max_size.
+        """Simple clustering: group consecutive texts into clusters of max_size.
         For production, use proper clustering (KMeans, GMM, etc.)
         """
         clusters = []
@@ -76,8 +73,7 @@ class RaptorTreeBuilder:
         return clusters
 
     def build_tree(self, chunks: list[dict[str, Any]]) -> dict[str, TreeNode]:
-        """
-        Build RAPTOR tree from chunks.
+        """Build RAPTOR tree from chunks.
 
         Returns dict of node_id -> TreeNode
         """

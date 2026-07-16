@@ -1,6 +1,5 @@
 # etl/extractors/jira.py
-"""
-Выгрузка данных из Jira (Self-Hosted) с поддержкой:
+"""Выгрузка данных из Jira (Self-Hosted) с поддержкой:
 - Задачи (issues) с полным набором полей
 - Комментарии
 - Changelog (история изменений полей)
@@ -34,8 +33,7 @@ logger = logging.getLogger(__name__)
 
 class JiraExtractor:
     def __init__(self, config: dict[str, Any]):
-        """
-        config: {
+        """config: {
             "url": "https://jira.internal.company.com",
             "username": "bot",                   # опционально для Basic Auth
             "token": "api_token_or_password",    # Bearer токен или пароль
@@ -173,8 +171,7 @@ class JiraExtractor:
         return data.get("transitions", [])
 
     def _get_sprints_for_issue(self, issue_key: str) -> list[dict[str, Any]]:
-        """
-        Получает спринты, связанные с задачей (через agile API).
+        """Получает спринты, связанные с задачей (через agile API).
         Требует установленного дополнения Jira Agile (Greenhopper).
         """
         endpoint = f"/rest/agile/1.0/issue/{issue_key}"
@@ -202,8 +199,7 @@ class JiraExtractor:
                     safe_name = f"attachment_{attachment_id}.bin"
                 file_path = issue_dir / safe_name
                 with open(file_path, "wb") as f:
-                    for chunk in resp.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                    f.writelines(resp.iter_content(chunk_size=8192))
                 return str(file_path)
             except requests.exceptions.ConnectionError as e:
                 logger.warning(f"Attachment download connection error (attempt {attempt + 1}/{max_retries + 1}): {e}")
@@ -214,7 +210,7 @@ class JiraExtractor:
                 else:
                     logger.error(
                         f"Failed to download attachment {attachment_id} for {issue_key}"
-                        f" after {max_retries + 1} attempts: {e}"
+                        f" after {max_retries + 1} attempts: {e}",
                     )
                     return None
             except requests.exceptions.Timeout as e:
@@ -226,7 +222,7 @@ class JiraExtractor:
                 else:
                     logger.error(
                         f"Failed to download attachment {attachment_id} for {issue_key}"
-                        f" after {max_retries + 1} attempts: {e}"
+                        f" after {max_retries + 1} attempts: {e}",
                     )
                     return None
             except Exception as e:
@@ -277,7 +273,7 @@ class JiraExtractor:
                     "updated": com.get("updated", ""),
                     "body": comment_body,
                     "links": self._extract_links_from_text(comment_body),
-                }
+                },
             )
 
         # Changelog (история изменений)
@@ -293,7 +289,7 @@ class JiraExtractor:
                         "field": item.get("field", ""),
                         "from": item.get("fromString", ""),
                         "to": item.get("toString", ""),
-                    }
+                    },
                 )
 
         # Вложения
@@ -310,7 +306,7 @@ class JiraExtractor:
                         "created": att.get("created", ""),
                         "author": att.get("author", {}).get("displayName", ""),
                         "local_path": local_path,
-                    }
+                    },
                 )
         else:
             attachments = [

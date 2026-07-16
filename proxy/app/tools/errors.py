@@ -98,7 +98,6 @@ class ToolPermissionError(ToolError):
             retryable=False,
             message=message
             or f"Permission denied for tool '{tool_name}' (requires {required_visibility}, user has {user_role})",
-            # noqa: E501
         )
         self.required_visibility = required_visibility
         self.user_role = user_role

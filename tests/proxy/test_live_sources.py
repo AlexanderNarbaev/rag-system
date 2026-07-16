@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117
 """Tests for proxy/app/live_sources.py — Live Confluence/Jira/GitLab API clients."""
 
 import sys
@@ -65,8 +65,8 @@ class TestConfluenceLiveClient:
                         {"id": "456", "title": "API Docs", "type": "page", "space": {"key": "ENG"}},
                     ],
                     "size": 2,
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -109,8 +109,8 @@ class TestConfluenceLiveClient:
                     "type": "page",
                     "space": {"key": "DEV", "name": "Development"},
                     "body": {"view": {"value": "<p>RAG content here</p>"}},
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -135,8 +135,8 @@ class TestConfluenceLiveClient:
                 json_data={
                     "results": [{"id": "1", "title": "Cached", "type": "page", "space": {"key": "DEV"}}],
                     "size": 1,
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -181,8 +181,8 @@ class TestJiraLiveClient:
                         },
                     ],
                     "total": 1,
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -223,8 +223,8 @@ class TestJiraLiveClient:
                         "assignee": {"displayName": "Ivan Ivanov"},
                         "issuetype": {"name": "Task"},
                     },
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -237,7 +237,7 @@ class TestJiraLiveClient:
     @pytest.mark.asyncio
     async def test_get_jira_issue_not_found(self, client):
         mock_session = make_mock_session(
-            get_response=make_mock_response(status=404, text_data='{"errorMessages":["Issue does not exist"]}')
+            get_response=make_mock_response(status=404, text_data='{"errorMessages":["Issue does not exist"]}'),
         )
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -273,8 +273,8 @@ class TestGitLabLiveClient:
                         "description": "Corporate RAG",
                     },
                     {"id": 2, "name": "ML Pipeline", "path_with_namespace": "team/ml-pipeline", "description": ""},
-                ]
-            )
+                ],
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -310,8 +310,8 @@ class TestGitLabLiveClient:
                     "content": "IyBSQUcgU3lzdGVtCgpUaGlzIGlzIHRoZSBSQUcgc3lzdGVtLg==",
                     "encoding": "base64",
                     "ref": "main",
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):
@@ -323,7 +323,7 @@ class TestGitLabLiveClient:
     @pytest.mark.asyncio
     async def test_get_gitlab_file_not_found(self, client):
         mock_session = make_mock_session(
-            get_response=make_mock_response(status=404, text_data='{"message":"404 File not found"}')
+            get_response=make_mock_response(status=404, text_data='{"message":"404 File not found"}'),
         )
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
@@ -341,8 +341,8 @@ class TestGitLabLiveClient:
                     "content": "print('hello')",
                     "encoding": "text",
                     "ref": "main",
-                }
-            )
+                },
+            ),
         )
 
         with _enable_client(client), patch("aiohttp.ClientSession", return_value=mock_session):

@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_version_from_query(query: str) -> str | None:
-    """
-    Извлекает версию документа из текстового запроса.
+    """Извлекает версию документа из текстового запроса.
     Поддерживаемые паттерны:
     - v1.2, v2.0.1
     - version 1.2
@@ -44,8 +43,7 @@ def resolve_versions(
     chunks_with_scores: list[tuple[dict[str, Any], float]],
     requested_version: str | None = None,
 ) -> list[tuple[dict[str, Any], float]]:
-    """
-    Разрешение версий: для каждого документа (source_id) оставляет чанки только одной версии.
+    """Разрешение версий: для каждого документа (source_id) оставляет чанки только одной версии.
     Если запрошена конкретная версия (requested_version) – оставляет только её.
     Иначе – выбирает чанки с максимальной версией (игнорируя устаревшие).
     Предполагается, что версия хранится в поле 'version' чанка (строка, например "1.2" или "2025-01-01").
@@ -84,6 +82,6 @@ def resolve_versions(
         resolved.append(best_chunk)
 
     logger.debug(
-        f"Version resolution: {len(chunks_with_scores)} -> {len(resolved)} chunks (requested: {requested_version})"
+        f"Version resolution: {len(chunks_with_scores)} -> {len(resolved)} chunks (requested: {requested_version})",
     )
     return resolved

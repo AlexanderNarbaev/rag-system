@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/conftest.py
 """Shared fixtures for RAG system integration tests."""
 

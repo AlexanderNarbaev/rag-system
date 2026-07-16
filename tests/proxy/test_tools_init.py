@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/tools/__init__.py — tool registry and formatting."""
 
 from proxy.app.tools import (

@@ -83,7 +83,6 @@ def _make_http_handler(
     allowed_hosts: list[str] | None = None,
 ) -> Any:
     """Create an async HTTP handler callable for a declarative tool."""
-
     _method = method
     _url_template = url_template
     _headers = headers or {}
@@ -154,7 +153,6 @@ def _make_shell_handler(
     env_whitelist: list[str] | None = None,
 ) -> Any:
     """Create a shell command handler callable with safety checks."""
-
     _command = command
     _allowed_commands = allowed_commands
     _allowed_paths = allowed_paths or []
@@ -225,7 +223,7 @@ def _build_params(raw_params: dict[str, Any]) -> list[ToolParam]:
                 required=spec.get("required", False),
                 default=spec.get("default", _UNSET),
                 enum=spec.get("enum"),
-            )
+            ),
         )
     return params
 
@@ -251,7 +249,7 @@ class DeclarativeToolSchema:
             "tools": {
                 "type": "array",
                 "items": {"$ref": "#/$defs/DeclarativeTool"},
-            }
+            },
         },
         "$defs": {
             "DeclarativeTool": {

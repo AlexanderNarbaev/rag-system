@@ -16,10 +16,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -169,10 +166,9 @@ def _lightweight_check(claim: str, context: str) -> tuple[str, float]:
 
     if combined >= 0.4:
         return "entailment", combined
-    elif combined <= 0.15:
+    if combined <= 0.15:
         return "contradiction", 1.0 - combined
-    else:
-        return "neutral", 0.5
+    return "neutral", 0.5
 
 
 def _check_claim_nli(claim: str, context: str) -> tuple[str, float]:
@@ -241,7 +237,7 @@ def evaluate_nli(
                 "claim": claim,
                 "label": label,
                 "confidence": round(confidence, 3),
-            }
+            },
         )
 
         if label == "entailment":

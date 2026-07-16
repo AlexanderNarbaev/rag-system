@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/model_evolution/artifact_store.py — local-mode ArtifactStore."""
 
 import os
@@ -188,7 +187,7 @@ class TestArtifactStoreS3Mode:
         paginator = MagicMock()
         mock_client.get_paginator.return_value = paginator
         paginator.paginate.return_value = [
-            {"CommonPrefixes": [{"Prefix": "models/model/1.0/"}, {"Prefix": "models/model/2.0/"}]}
+            {"CommonPrefixes": [{"Prefix": "models/model/1.0/"}, {"Prefix": "models/model/2.0/"}]},
         ]
 
         store = ArtifactStore(bucket="my-bucket")

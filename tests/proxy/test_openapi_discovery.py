@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/tools/openapi/discovery.py — OpenAPI spec discovery."""
 
 import json
@@ -26,7 +25,7 @@ SAMPLE_SPEC = {
                 "summary": "List all pets",
                 "tags": ["pets"],
                 "parameters": [
-                    {"name": "limit", "in": "query", "schema": {"type": "integer"}, "description": "Max results"}
+                    {"name": "limit", "in": "query", "schema": {"type": "integer"}, "description": "Max results"},
                 ],
             },
             "post": {
@@ -43,9 +42,9 @@ SAMPLE_SPEC = {
                                     "age": {"type": "integer", "description": "Pet age"},
                                 },
                                 "required": ["name"],
-                            }
-                        }
-                    }
+                            },
+                        },
+                    },
                 },
             },
         },

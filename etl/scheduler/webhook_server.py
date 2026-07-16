@@ -1,6 +1,5 @@
 # etl/scheduler/webhook_server.py
-"""
-FastAPI webhook server for real-time Confluence and GitLab event ingestion.
+"""FastAPI webhook server for real-time Confluence and GitLab event ingestion.
 Accepts webhook events, validates HMAC signatures, and produces to Redis Streams.
 Returns 202 Accepted immediately; processing happens asynchronously.
 """
@@ -177,7 +176,7 @@ def main():
         redis_port,
         stream_key,
         "enabled" if webhook_enabled else "disabled",
-    )  # noqa: E501
+    )
     uvicorn.run(app, host=webhook_host, port=webhook_port)
 
 

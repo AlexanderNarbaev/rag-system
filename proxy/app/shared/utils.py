@@ -1,6 +1,5 @@
 # proxy/app/utils.py
-"""
-Вспомогательные утилиты для RAG-прокси.
+"""Вспомогательные утилиты для RAG-прокси.
 - Хеширование строк и объектов
 - Оценка количества токенов (tiktoken или приближение)
 - Безопасная обрезка текста
@@ -27,9 +26,7 @@ except ImportError:
 
 
 def compute_hash(data: Any) -> str:
-    """
-    Вычисляет SHA-256 хеш от любого объекта (сериализуемого в JSON).
-    """
+    """Вычисляет SHA-256 хеш от любого объекта (сериализуемого в JSON)."""
     if isinstance(data, str):  # noqa: SIM108
         content = data
     else:
@@ -38,8 +35,7 @@ def compute_hash(data: Any) -> str:
 
 
 def estimate_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
-    """
-    Оценивает количество токенов в тексте.
+    """Оценивает количество токенов в тексте.
     Использует tiktoken, если доступен, иначе приближённое правило (4 символа ~ 1 токен).
     """
     if not text:
@@ -56,9 +52,7 @@ def estimate_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
 
 
 def truncate_by_tokens(text: str, max_tokens: int, model: str = "gpt-3.5-turbo") -> str:
-    """
-    Обрезает текст до указанного количества токенов.
-    """
+    """Обрезает текст до указанного количества токенов."""
     if estimate_tokens(text, model) <= max_tokens:
         return text
     # Грубое приближение: обрезаем символы
@@ -69,8 +63,7 @@ def truncate_by_tokens(text: str, max_tokens: int, model: str = "gpt-3.5-turbo")
 
 
 def generate_request_id() -> str:
-    """
-    Генерирует уникальный ID для запроса.
+    """Генерирует уникальный ID для запроса.
     Формат: rag_<timestamp>_<uuid_short>
     """
     timestamp = int(time.time() * 1000)
@@ -79,9 +72,7 @@ def generate_request_id() -> str:
 
 
 def format_metadata(metadata: dict[str, Any]) -> str:
-    """
-    Форматирует метаданные для включения в контекст.
-    """
+    """Форматирует метаданные для включения в контекст."""
     if not metadata:
         return ""
     parts = []
@@ -92,16 +83,12 @@ def format_metadata(metadata: dict[str, Any]) -> str:
 
 
 def now_iso() -> str:
-    """
-    Возвращает текущее время в ISO формате.
-    """
+    """Возвращает текущее время в ISO формате."""
     return datetime.now(UTC).isoformat()
 
 
 def safe_json_loads(s: str, default: Any = None) -> Any:
-    """
-    Безопасно парсит JSON, возвращает default при ошибке.
-    """
+    """Безопасно парсит JSON, возвращает default при ошибке."""
     try:
         return json.loads(s)
     except json.JSONDecodeError:
@@ -109,24 +96,19 @@ def safe_json_loads(s: str, default: Any = None) -> Any:
 
 
 def extract_issue_keys(text: str) -> list[str]:
-    """
-    Извлекает Jira-like issue ключи из текста (например, PROJ-123).
-    """
+    """Извлекает Jira-like issue ключи из текста (например, PROJ-123)."""
     pattern = r"\b[A-Z][A-Z0-9]+-\d+\b"
     return re.findall(pattern, text)
 
 
 def extract_urls(text: str) -> list[str]:
-    """
-    Извлекает URL из текста.
-    """
+    """Извлекает URL из текста."""
     pattern = r'https?://[^\s<>"\']+'
     return re.findall(pattern, text)
 
 
 def mask_sensitive_data(text: str, secrets: list[str] | None = None) -> str:
-    """
-    Маскирует чувствительные данные (токены, пароли) в логах.
+    """Маскирует чувствительные данные (токены, пароли) в логах.
     По умолчанию маскирует строки, похожие на токены (40+ символов).
     """
     if not text:
@@ -141,16 +123,12 @@ def mask_sensitive_data(text: str, secrets: list[str] | None = None) -> str:
 
 
 def chunk_list(lst: list[Any], chunk_size: int) -> list[list[Any]]:
-    """
-    Разбивает список на чанки указанного размера.
-    """
+    """Разбивает список на чанки указанного размера."""
     return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def safe_divide(a: float, b: float, default: float = 0.0) -> float:
-    """
-    Безопасное деление (защита от деления на ноль).
-    """
+    """Безопасное деление (защита от деления на ноль)."""
     return a / b if b != 0 else default
 
 

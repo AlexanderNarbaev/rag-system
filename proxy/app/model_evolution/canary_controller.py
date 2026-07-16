@@ -41,6 +41,7 @@ class CanaryConfig:
         min_samples: Minimum samples before rollback evaluation.
         rollback_thresholds: Metric thresholds dict {name: (threshold, comparison)}.
         cooldown_seconds: Cooldown period after rollback before retry.
+
     """
 
     model_name: str = ""
@@ -52,7 +53,7 @@ class CanaryConfig:
         default_factory=lambda: {
             "error_rate": (0.05, "gt"),
             "p95_latency_ms": (10000, "gt"),
-        }
+        },
     )
     cooldown_seconds: int = 3600
 
@@ -141,6 +142,7 @@ class CanaryController:
 
         Raises:
             ValueError: If canary_percent is outside [0.0, 1.0].
+
         """
         if not 0.0 <= canary_percent <= 1.0:
             raise ValueError(f"canary_percent must be between 0.0 and 1.0, got {canary_percent}")
@@ -160,7 +162,7 @@ class CanaryController:
 
             canary_split_ratio.labels(model=model_name).set(canary_percent)
             canary_phase_gauge.labels(model=model_name).set(
-                self._phase_to_int(self._phase.get(model_name, CanaryPhase.IDLE))
+                self._phase_to_int(self._phase.get(model_name, CanaryPhase.IDLE)),
             )
 
     def configure(
@@ -183,6 +185,7 @@ class CanaryController:
             min_samples: Minimum requests before rollback evaluation.
             rollback_thresholds: Metric thresholds for automatic rollback.
             cooldown_seconds: Post-rollback cooldown period.
+
         """
         with self._lock:
             config = CanaryConfig(
@@ -219,6 +222,7 @@ class CanaryController:
 
         Returns:
             "stable" or "canary" — the selected model target.
+
         """
         with self._lock:
             config = self._configs.get(model_name)
@@ -254,6 +258,7 @@ class CanaryController:
             target: Which model served the request ("stable" or "canary").
             success: Whether the request was successful.
             latency_ms: Request duration in milliseconds.
+
         """
         outcome = "success" if success else "error"
         canary_result_total.labels(model=model_name, target=target, outcome=outcome).inc()
@@ -287,6 +292,7 @@ class CanaryController:
 
         Returns:
             Dictionary with metric names and current values.
+
         """
         with self._lock:
             model_stats = self._stats.get(model_name, {})
@@ -322,6 +328,7 @@ class CanaryController:
 
         Returns:
             True if rollback is warranted, False otherwise.
+
         """
         with self._lock:
             config = self._configs.get(model_name)
@@ -367,6 +374,7 @@ class CanaryController:
 
         Args:
             model_name: Target model identifier.
+
         """
         with self._lock:
             if model_name not in self._configs:
@@ -388,6 +396,7 @@ class CanaryController:
 
         Args:
             model_name: Target model identifier.
+
         """
         with self._lock:
             config = self._configs.get(model_name)
@@ -411,6 +420,7 @@ class CanaryController:
         Returns:
             Dict mapping model_name to status dict with phase,
             split, metrics, and config details.
+
         """
         with self._lock:
             names = [model_name] if model_name else list(self._configs.keys())
@@ -457,6 +467,7 @@ class CanaryController:
 
         Args:
             model_name: Specific model to reset, or all if None.
+
         """
         with self._lock:
             if model_name:

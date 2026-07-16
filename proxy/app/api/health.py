@@ -127,10 +127,9 @@ def _check_tls() -> tuple[str, dict[str, Any]]:
         # Determine status
         if tls_info["enabled"] and tls_info["certificate_valid"]:
             return "ok", tls_info
-        elif tls_info["enabled"]:
+        if tls_info["enabled"]:
             return "degraded", tls_info
-        else:
-            return "disabled", tls_info
+        return "disabled", tls_info
 
     except Exception as e:
         return f"error: {e}", {}

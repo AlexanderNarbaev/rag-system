@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/core/context/compression.py — CRAG decomposition and multimodal assembly."""
 
 from proxy.app.core.context.compression import (
@@ -22,7 +21,7 @@ class TestDecomposeToStrips:
                     "doc_title": "Doc",
                 },
                 0.9,
-            )
+            ),
         ]
         strips = decompose_to_strips(chunks)
         assert len(strips) >= 2
@@ -39,7 +38,7 @@ class TestDecomposeToStrips:
                     "doc_title": "D",
                 },
                 0.8,
-            )
+            ),
         ]
         strips = decompose_to_strips(chunks)
         # "Short." is < 10 chars, should be filtered

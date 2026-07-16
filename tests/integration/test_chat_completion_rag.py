@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/integration/test_chat_completion_rag.py
 """Integration tests for the full RAG chat completion pipeline.
 
@@ -63,7 +62,7 @@ class TestChatCompletionRAGPipeline:
             [
                 {"text": "RAG combines retrieval with generation.", "source_type": "confluence", "title": "RAG Guide"},
                 {"text": "CI/CD pipelines automate deployment.", "source_type": "gitlab", "title": "CI/CD Setup"},
-            ]
+            ],
         )
 
         async def mock_llm(messages, **kwargs):
@@ -112,7 +111,7 @@ class TestChatCompletionRAGPipeline:
                     "title": "Search Module",
                     "version": "1.0",
                 },
-            ]
+            ],
         )
 
         async def mock_llm(messages, **kwargs):
@@ -149,7 +148,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "RAG context chunk.", "source_type": "confluence"},
-            ]
+            ],
         )
 
         async def mock_llm(messages, **kwargs):
@@ -176,7 +175,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "Highly relevant RAG context.", "source_type": "confluence"},
-            ]
+            ],
         )
 
         async def mock_llm(messages, **kwargs):
@@ -246,7 +245,7 @@ class TestChatCompletionRAGPipeline:
             [
                 {"text": "RAG context for multi-turn.", "source_type": "confluence"},
                 {"text": "Hybrid search combines vectors.", "source_type": "confluence"},
-            ]
+            ],
         )
 
         captured_messages = []
@@ -285,7 +284,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "Versioned content.", "version": "2.0"},
-            ]
+            ],
         )
 
         async def mock_llm(messages, **kwargs):
@@ -315,7 +314,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "Some context.", "source_type": "confluence"},
-            ]
+            ],
         )
 
         async def mock_llm(messages, **kwargs):
@@ -344,7 +343,7 @@ class TestChatCompletionRAGPipeline:
             [
                 {"text": "RAG is a powerful technique for LLMs.", "source_type": "confluence", "title": "RAG Guide"},
                 {"text": "RAG combines retrieval with generation.", "source_type": "confluence", "title": "Overview"},
-            ]
+            ],
         )
 
         captured_messages = []
@@ -375,7 +374,7 @@ class TestChatCompletionRAGPipeline:
         search_results = _make_scored_points(
             [
                 {"text": "Some text.", "source_type": "confluence"},
-            ]
+            ],
         )
 
         with (

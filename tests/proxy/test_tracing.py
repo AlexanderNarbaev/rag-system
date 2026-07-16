@@ -1,8 +1,8 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/shared/tracing.py — OpenTelemetry distributed tracing stubs."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestTracingNoOpWhenDisabled:
@@ -82,7 +82,7 @@ class TestTracingSetup:
 
     def test_setup_tracing_initializes_provider(self):
         """setup_tracing() should create a TracerProvider and exporter."""
-        from proxy.app.shared.tracing import _tracing_initialized, _tracer_provider, setup_tracing
+        from proxy.app.shared.tracing import _tracer_provider, _tracing_initialized, setup_tracing
 
         was_initialized = _tracing_initialized
         old_provider = _tracer_provider
@@ -100,7 +100,6 @@ class TestTracingSetup:
                 patch.object(tracing_mod, "OTLPSpanExporter") as mock_exporter_cls,
                 patch.object(tracing_mod, "BatchSpanProcessor") as mock_bsp_cls,
                 patch.object(tracing_mod, "TracerProvider") as mock_provider_cls,
-                patch.object(tracing_mod, "_otel_trace") as mock_otel_trace,
             ):
                 mock_provider = MagicMock()
                 mock_provider_cls.return_value = mock_provider
@@ -298,55 +297,55 @@ class TestTracingModuleExports:
     """Verify that tracing.py exports the expected symbols."""
 
     def test_exports_tracer(self):
-        """tracing module should export a tracer instance."""
+        """Tracing module should export a tracer instance."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "tracer")
 
     def test_exports_setup_tracing(self):
-        """tracing module should export setup_tracing function."""
+        """Tracing module should export setup_tracing function."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "setup_tracing")
         assert callable(tracing_mod.setup_tracing)
 
     def test_exports_get_current_span(self):
-        """tracing module should export get_current_span function."""
+        """Tracing module should export get_current_span function."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "get_current_span")
         assert callable(tracing_mod.get_current_span)
 
     def test_exports_add_event(self):
-        """tracing module should export add_event function."""
+        """Tracing module should export add_event function."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "add_event")
         assert callable(tracing_mod.add_event)
 
     def test_exports_set_span_error(self):
-        """tracing module should export set_span_error function."""
+        """Tracing module should export set_span_error function."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "set_span_error")
         assert callable(tracing_mod.set_span_error)
 
     def test_exports_span_context_from_headers(self):
-        """tracing module should export span_context_from_headers."""
+        """Tracing module should export span_context_from_headers."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "span_context_from_headers")
         assert callable(tracing_mod.span_context_from_headers)
 
     def test_exports_inject_context_to_headers(self):
-        """tracing module should export inject_context_to_headers."""
+        """Tracing module should export inject_context_to_headers."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "inject_context_to_headers")
         assert callable(tracing_mod.inject_context_to_headers)
 
     def test_exports_traced_decorator(self):
-        """tracing module should export traced decorator."""
+        """Tracing module should export traced decorator."""
         import proxy.app.shared.tracing as tracing_mod
 
         assert hasattr(tracing_mod, "traced")
@@ -450,9 +449,9 @@ class TestTraceContextMiddleware:
         """TraceContextMiddleware should handle requests without trace headers."""
         import pytest
 
-        TraceContextMiddleware = pytest.importorskip("proxy.app.shared.middleware").TraceContextMiddleware
+        trace_context_middleware = pytest.importorskip("proxy.app.shared.middleware").TraceContextMiddleware
 
-        assert TraceContextMiddleware is not None
+        assert trace_context_middleware is not None
 
 
 class TestTracingStubsIntegration:
@@ -460,7 +459,7 @@ class TestTracingStubsIntegration:
 
     def test_chat_imports_tracing(self):
         """chat.py should import tracing utilities."""
-        from proxy.app.api.chat import tracer, add_event, get_current_span
+        from proxy.app.api.chat import add_event, get_current_span, tracer
 
         assert tracer is not None
         assert callable(add_event)
@@ -468,14 +467,14 @@ class TestTracingStubsIntegration:
 
     def test_retrieval_imports_tracing(self):
         """retrieval.py should import tracing utilities."""
-        from proxy.app.core.retrieval import tracer, add_event
+        from proxy.app.core.retrieval import add_event, tracer
 
         assert tracer is not None
         assert callable(add_event)
 
     def test_rerank_imports_tracing(self):
         """rerank.py should import tracing utilities."""
-        from proxy.app.core.rerank import tracer, add_event
+        from proxy.app.core.rerank import add_event, tracer
 
         assert tracer is not None
         assert callable(add_event)
@@ -486,3 +485,202 @@ class TestTracingStubsIntegration:
 
         assert callable(span_context_from_headers)
         assert tracer is not None
+
+
+class TestTracingWithOtelAvailable:
+    """Tests that exercise code paths when OTEL is available."""
+
+    def test_setup_tracing_sdk_not_available(self):
+        """setup_tracing should return when SDK not available but API is."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_initialized = tracing_mod._tracing_initialized
+        try:
+            tracing_mod._OTEL_ENABLED = True
+            tracing_mod._OTEL_AVAILABLE = True
+            tracing_mod._OTEL_SDK_AVAILABLE = False
+            tracing_mod._tracing_initialized = False
+
+            from proxy.app.shared.tracing import setup_tracing
+
+            result = setup_tracing()
+            assert result is None
+        finally:
+            tracing_mod._tracing_initialized = was_initialized
+
+    def test_noop_span_get_span_context(self):
+        """NoOpSpan.get_span_context should return NoOpSpanContext."""
+        from proxy.app.shared.tracing import _NoOpSpan, _NoOpSpanContext
+
+        span = _NoOpSpan()
+        ctx = span.get_span_context()
+        assert isinstance(ctx, _NoOpSpanContext)
+        assert ctx.trace_id == 0
+        assert ctx.span_id == 0
+        assert ctx.is_remote is False
+
+    def test_noop_tracer_start_span(self):
+        """NoOpTracer.start_span should return NoOpSpan."""
+        from proxy.app.shared.tracing import _NOOP_TRACER, _NoOpSpan
+
+        span = _NOOP_TRACER.start_span("test")
+        assert isinstance(span, _NoOpSpan)
+        assert not span.is_recording()
+
+    def test_noop_span_add_event(self):
+        """NoOpSpan.add_event should not raise."""
+        from proxy.app.shared.tracing import _NoOpSpan
+
+        span = _NoOpSpan()
+        span.add_event("test.event", {"key": "value"})
+
+    def test_noop_span_record_exception(self):
+        """NoOpSpan.record_exception should not raise."""
+        from proxy.app.shared.tracing import _NoOpSpan
+
+        span = _NoOpSpan()
+        span.record_exception(ValueError("test"))
+
+    def test_noop_span_set_status(self):
+        """NoOpSpan.set_status should not raise."""
+        from proxy.app.shared.tracing import _NoOpSpan
+
+        span = _NoOpSpan()
+        span.set_status("OK")
+
+    def test_noop_span_end(self):
+        """NoOpSpan.end should not raise."""
+        from proxy.app.shared.tracing import _NoOpSpan
+
+        span = _NoOpSpan()
+        span.end()
+
+    def test_noop_span_set_attributes(self):
+        """NoOpSpan.set_attributes should not raise."""
+        from proxy.app.shared.tracing import _NoOpSpan
+
+        span = _NoOpSpan()
+        span.set_attributes({"key": "value"})
+
+    def test_get_tracer_when_otel_not_available(self):
+        """_get_tracer should return NoOpTracer when OTEL not available."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_otel_available = tracing_mod._OTEL_AVAILABLE
+        old_tracer = tracing_mod._tracer
+        try:
+            tracing_mod._tracer = None
+            tracing_mod._OTEL_AVAILABLE = False
+            tracing_mod._otel_trace = None
+
+            from proxy.app.shared.tracing import _get_tracer
+
+            tracer_obj = _get_tracer()
+            from proxy.app.shared.tracing import _NoOpTracer
+
+            assert isinstance(tracer_obj, _NoOpTracer)
+        finally:
+            tracing_mod._OTEL_AVAILABLE = was_otel_available
+            tracing_mod._tracer = old_tracer
+
+    def test_traced_with_custom_attributes(self):
+        """@traced should set custom attributes on span."""
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.attrs", attributes={"service": "rag", "version": "1.0"})
+        def my_func():
+            return 42
+
+        result = my_func()
+        assert result == 42
+
+    def test_traced_no_span_name_uses_default(self):
+        """@traced without span_name uses module.func_name."""
+        from proxy.app.shared.tracing import traced
+
+        @traced()
+        def my_default_func():
+            return 7
+
+        assert my_default_func() == 7
+
+    def test_span_context_from_headers_with_traceparent(self):
+        """span_context_from_headers should extract context from traceparent."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_available = tracing_mod._OTEL_AVAILABLE
+        was_extract = tracing_mod._otel_extract
+        try:
+            tracing_mod._OTEL_AVAILABLE = True
+            mock_extract = MagicMock(return_value={"trace_id": 123})
+            tracing_mod._otel_extract = mock_extract
+
+            from proxy.app.shared.tracing import span_context_from_headers
+
+            result = span_context_from_headers({"traceparent": "00-123-456-01"})
+            assert result is not None
+        finally:
+            tracing_mod._OTEL_AVAILABLE = was_available
+            tracing_mod._otel_extract = was_extract
+
+    def test_span_context_from_headers_no_otel(self):
+        """span_context_from_headers should return None when OTEL not available."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_available = tracing_mod._OTEL_AVAILABLE
+        was_extract = tracing_mod._otel_extract
+        try:
+            tracing_mod._OTEL_AVAILABLE = False
+            tracing_mod._otel_extract = None
+
+            from proxy.app.shared.tracing import span_context_from_headers
+
+            result = span_context_from_headers({"traceparent": "00-123-456-01"})
+            assert result is None
+        finally:
+            tracing_mod._OTEL_AVAILABLE = was_available
+            tracing_mod._otel_extract = was_extract
+
+    def test_inject_context_to_headers_with_otel(self):
+        """inject_context_to_headers should inject when OTEL available."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_available = tracing_mod._OTEL_AVAILABLE
+        was_inject = tracing_mod._otel_inject
+        try:
+            tracing_mod._OTEL_AVAILABLE = True
+            mock_inject = MagicMock()
+            tracing_mod._otel_inject = mock_inject
+
+            from proxy.app.shared.tracing import inject_context_to_headers
+
+            headers: dict[str, str] = {}
+            inject_context_to_headers(headers)
+            mock_inject.assert_called_once()
+        finally:
+            tracing_mod._OTEL_AVAILABLE = was_available
+            tracing_mod._otel_inject = was_inject
+
+    @pytest.mark.asyncio
+    async def test_traced_async_with_exception(self):
+        """@traced async should handle exceptions without crashing."""
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.async_exc")
+        async def async_fail():
+            raise RuntimeError("async fail")
+
+        with pytest.raises(RuntimeError, match="async fail"):
+            await async_fail()
+
+    def test_traced_sync_with_exception_records(self):
+        """@traced sync should record exception on span."""
+
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.sync_exc")
+        def failing_func():
+            raise ValueError("sync fail")
+
+        with pytest.raises(ValueError, match="sync fail"):
+            failing_func()

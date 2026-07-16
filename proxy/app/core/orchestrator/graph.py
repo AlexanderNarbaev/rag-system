@@ -85,7 +85,7 @@ def build_rag_graph() -> Any:
     if not LANGGRAPH_AVAILABLE or StateGraph is None:
         raise RuntimeError(
             "LangGraph is not installed. Install with: pip install langgraph. "
-            "Or set USE_LANGGRAPH=false to disable agentic orchestration."
+            "Or set USE_LANGGRAPH=false to disable agentic orchestration.",
         )
     builder = StateGraph(RAGState)
 

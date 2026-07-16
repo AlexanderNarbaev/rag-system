@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # etl/scheduler/run_etl.py
-"""
-Главный оркестратор ETL-пайплайна для RAG-системы.
+"""Главный оркестратор ETL-пайплайна для RAG-системы.
 Запускает все этапы:
 1. Extract: Confluence, Jira, GitLab (параллельно, с graceful degradation)
 2. Chunking: семантическая нарезка документов
@@ -130,8 +129,7 @@ def _run_extractor_safe(name: str, extract_fn, config: dict, wal: WALManager) ->
 
 
 def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
-    """
-    Собирает все извлечённые документы из директорий extractors.
+    """Собирает все извлечённые документы из директорий extractors.
     Обрабатывает отсутствующие директории gracefully (Extractor мог не запуститься).
     """
     documents = []
@@ -171,7 +169,7 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                                 "updated_at": data.get("updated_at", ""),
                                 "url": f"{conflu_dir.name}",
                             },
-                        }
+                        },
                     )
 
         elif source_name == "jira":
@@ -205,7 +203,7 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                                 "created": data.get("created", ""),
                                 "updated": data.get("updated", ""),
                             },
-                        }
+                        },
                     )
 
         elif source_name == "gitlab":
@@ -244,7 +242,7 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                                     "namespace": namespace,
                                     "visibility": visibility,
                                 },
-                            }
+                            },
                         )
                 mr_file = gitlab_dir / "merge_requests.json"
                 if mr_file.exists():
@@ -270,7 +268,7 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                                     "namespace": namespace,
                                     "visibility": visibility,
                                 },
-                            }
+                            },
                         )
                 files_dir = gitlab_dir / "files"
                 if files_dir.exists():
@@ -289,7 +287,7 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                                     "namespace": namespace,
                                     "visibility": visibility,
                                 },
-                            }
+                            },
                         )
 
     return documents
@@ -340,7 +338,7 @@ def run_graph_extraction(
     chunk_inputs = []
     for ch in chunks:
         chunk_inputs.append(
-            {"text": ch["text"], "source_id": ch.get("source_id", "unknown"), "metadata": ch.get("metadata", {})}
+            {"text": ch["text"], "source_id": ch.get("source_id", "unknown"), "metadata": ch.get("metadata", {})},
         )
     entities, relations = entity_extractor.extract_batch(chunk_inputs)
     logger.info(f"Extracted {len(entities)} entities and {len(relations)} relations")
@@ -394,8 +392,10 @@ def main():
     parser.add_argument("--force-reindex", action="store_true", help="Force reindex all documents (ignore WAL)")
     parser.add_argument("--reset-wal", action="store_true", help="Reset all WAL checkpoints before run")
     parser.add_argument(
-        "--streaming", action="store_true", help="Start streaming ETL (webhook + consumer) alongside batch"
-    )  # noqa: E501
+        "--streaming",
+        action="store_true",
+        help="Start streaming ETL (webhook + consumer) alongside batch",
+    )
     parser.add_argument("--webhook-only", action="store_true", help="Start only webhook server")
     parser.add_argument("--consumer-only", action="store_true", help="Start only stream consumer")
     args = parser.parse_args()
@@ -548,7 +548,8 @@ def main():
             min_chunk_tokens=chunker_config.get("min_chunk_tokens", 100),
         )
         enricher = MetadataEnricher(
-            use_slm=chunker_config.get("use_slm", False), slm_endpoint=chunker_config.get("slm_endpoint")
+            use_slm=chunker_config.get("use_slm", False),
+            slm_endpoint=chunker_config.get("slm_endpoint"),
         )
         md_chunker = MDKeyChunker(base_chunker, enricher)
         chunks_output_dir = Path(chunker_config.get("output_dir", "./chunks"))
@@ -637,8 +638,9 @@ def main():
             redis_port = int(os.environ.get("REDIS_PORT", streaming_cfg.get("redis_port", 6379)))
             stream_key = os.environ.get("REDIS_STREAM_KEY", streaming_cfg.get("redis_stream_key", "etl:events"))
             consumer_group = os.environ.get(
-                "REDIS_CONSUMER_GROUP", streaming_cfg.get("redis_consumer_group", "etl-workers")
-            )  # noqa: E501
+                "REDIS_CONSUMER_GROUP",
+                streaming_cfg.get("redis_consumer_group", "etl-workers"),
+            )
 
             try:
                 rclient = redis.Redis(host=redis_host, port=redis_port, socket_connect_timeout=2)

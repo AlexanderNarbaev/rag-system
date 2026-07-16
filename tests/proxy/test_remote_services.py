@@ -1,4 +1,3 @@
-# ruff: noqa: E501, E402
 """Tests for proxy/app/llm/remote_services.py."""
 
 import json
@@ -81,8 +80,8 @@ class TestRemoteEmbeddingClient:
                 "data": [
                     {"embedding": [0.1, 0.2, 0.3], "index": 0},
                     {"embedding": [0.4, 0.5, 0.6], "index": 1},
-                ]
-            }
+                ],
+            },
         ).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
@@ -268,8 +267,8 @@ class TestRemoteRerankerClient:
                 "results": [
                     {"index": 0, "relevance_score": 0.9},
                     {"index": 1, "relevance_score": 0.3},
-                ]
-            }
+                ],
+            },
         ).encode("utf-8")
         mock_resp.__enter__ = MagicMock(return_value=mock_resp)
         mock_resp.__exit__ = MagicMock(return_value=False)
@@ -397,7 +396,7 @@ class TestRemoteRerankerClient:
         def mock_urlopen(req, timeout=60):
             mock_resp = MagicMock()
             mock_resp.read.return_value = json.dumps({"results": [{"index": 0, "relevance_score": 0.8}]}).encode(
-                "utf-8"
+                "utf-8",
             )
             mock_resp.__enter__ = MagicMock(return_value=mock_resp)
             mock_resp.__exit__ = MagicMock(return_value=False)

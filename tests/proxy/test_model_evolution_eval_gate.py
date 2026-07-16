@@ -95,7 +95,7 @@ class TestEvalGatePass:
             thresholds=[
                 _threshold("accuracy", 0.85, "gte"),
                 _threshold("loss", 0.1, "lt"),
-            ]
+            ],
         )
         result = EvalGate.evaluate({"accuracy": 0.90, "loss": 0.05}, cfg)
         assert result.status == GateStatus.PASS
@@ -130,7 +130,7 @@ class TestEvalGateFail:
             thresholds=[
                 _threshold("accuracy", 0.85, "gte"),
                 _threshold("f1", 0.80, "gte"),
-            ]
+            ],
         )
         result = EvalGate.evaluate({"accuracy": 0.50, "f1": 0.60}, cfg)
         assert result.status == GateStatus.FAIL
@@ -142,7 +142,7 @@ class TestEvalGateFail:
             thresholds=[
                 _threshold("accuracy", 0.85, "gte", severity="fail"),
                 _threshold("latency", 100, "lte", severity="warn"),
-            ]
+            ],
         )
         result = EvalGate.evaluate({"accuracy": 0.50, "latency": 200}, cfg)
         assert result.status == GateStatus.FAIL
@@ -160,7 +160,7 @@ class TestEvalGateWarn:
         cfg = _gate_config(
             thresholds=[
                 _threshold("latency", 100, "lte", severity="warn"),
-            ]
+            ],
         )
         result = EvalGate.evaluate({"latency": 200}, cfg)
         assert result.status == GateStatus.WARN
@@ -172,7 +172,7 @@ class TestEvalGateWarn:
             thresholds=[
                 _threshold("accuracy", 0.85, "gte", severity="fail"),
                 _threshold("latency", 100, "lte", severity="warn"),
-            ]
+            ],
         )
         result = EvalGate.evaluate({"accuracy": 0.90, "latency": 200}, cfg)
         assert result.status == GateStatus.WARN

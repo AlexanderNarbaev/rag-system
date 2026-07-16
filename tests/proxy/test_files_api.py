@@ -26,7 +26,7 @@ def _make_user_context(username="testuser", roles=None):
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def client():
     """Return a TestClient with mocked auth and MinIO."""
     # Import modules first so patch can resolve them
@@ -131,7 +131,7 @@ class TestListFiles:
                 "size": 100,
                 "last_modified": "2025-01-01T00:00:00",
                 "etag": "abc123",
-            }
+            },
         ]
 
         response = c.get("/v1/files")

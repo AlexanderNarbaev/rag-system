@@ -1,5 +1,7 @@
 """Tests for retrieval.py edge cases: DENSE_VECTOR_NAME cache, namespace/language filters,
-filter_results_by_score branches, sparse paths with circuit breaker, knee pruning edge cases."""
+filter_results_by_score branches, sparse paths with circuit breaker, knee pruning edge cases.
+"""
+
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -120,12 +122,15 @@ class TestHybridSearchEdgeCases:
         mock_dense_response.points = [mock_point]
 
         mock_cb = MagicMock()
+        circuit_breaker_open = RuntimeError
         try:
-            from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError
-        except ImportError:
-            CircuitBreakerOpenError = RuntimeError
+            from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError as _CBE  # noqa: N814
 
-        mock_cb.call_sync.side_effect = CircuitBreakerOpenError("open")
+            circuit_breaker_open = _CBE
+        except ImportError:
+            pass
+
+        mock_cb.call_sync.side_effect = circuit_breaker_open("open")
 
         stored_cb = ret_mod._get_cb
         try:
@@ -152,10 +157,13 @@ class TestHybridSearchEdgeCases:
         mock_dense_resp.points = [mock_dense_point]
 
         mock_cb = MagicMock()
+        circuit_breaker_open = RuntimeError
         try:
-            from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError
+            from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError as _CBE  # noqa: N814
+
+            circuit_breaker_open = _CBE
         except ImportError:
-            CircuitBreakerOpenError = RuntimeError
+            pass
 
         stored_cb = ret_mod._get_cb
         try:
@@ -168,7 +176,7 @@ class TestHybridSearchEdgeCases:
                 patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
             ):
                 mock_qdrant.query_points.return_value = mock_dense_resp
-                mock_cb.call_sync.side_effect = [mock_dense_resp, CircuitBreakerOpenError("open")]
+                mock_cb.call_sync.side_effect = [mock_dense_resp, circuit_breaker_open("open")]
                 result = ret_mod.hybrid_search("test")
                 assert len(result) >= 1
         finally:
@@ -348,8 +356,6 @@ class TestComputeDenseEmbeddingCache:
 
     def test_cache_returns_list_directly(self):
         """Cover line 268 - cache returns already-parsed list."""
-        import json
-
         cached = [0.9, 0.8, 0.7]
         mock_cache = MagicMock()
         mock_cache.get_sync.return_value = cached
@@ -407,7 +413,10 @@ class TestGraphExpandQueryElse:
 
         def record_maker(entity, etype, related):
             rec = MagicMock()
-            rec.__getitem__ = lambda s, k, e=entity, t=etype, r=related: {"entity": e, "type": t, "related": r}.get(k, [])
+            rec.__getitem__ = lambda s, k, e=entity, t=etype, r=related: {"entity": e, "type": t, "related": r}.get(
+                k,
+                [],
+            )
             return rec
 
         mock_session.run.return_value = [record_maker("Entity1", "Concept", [])]
@@ -418,7 +427,9 @@ class TestGraphExpandQueryElse:
             patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
             patch("proxy.app.core.retrieval.neo4j_driver", mock_driver),
         ):
-            result = __import__("proxy.app.core.retrieval", fromlist=["graph_expand_query"]).graph_expand_query("test entity")
+            result = __import__("proxy.app.core.retrieval", fromlist=["graph_expand_query"]).graph_expand_query(
+                "test entity",
+            )
             assert "Entity1" in result
 
     def test_graph_no_match(self):
@@ -442,15 +453,13 @@ class TestNeo4jImportFailure:
     def test_neo4j_import_error_disables_graph(self):
         import proxy.app.core.retrieval as ret_mod
 
-        with patch("proxy.app.core.retrieval._GRAPH_ENABLED", True):
-            with patch.dict("sys.modules", {"neo4j": None}):
-                # Simulate import error by removing neo4j from sys.modules
-                # The code at module level already tries to import, we need to
-                # test that _GRAPH_ENABLED gets set to False
-                # Since the module is already loaded, just verify the pattern
-                if "neo4j" not in sys.modules:
-                    ret_mod._GRAPH_ENABLED = False
-                pass
+        with patch("proxy.app.core.retrieval._GRAPH_ENABLED", True), patch.dict("sys.modules", {"neo4j": None}):
+            # Simulate import error by removing neo4j from sys.modules
+            # The code at module level already tries to import, we need to
+            # test that _GRAPH_ENABLED gets set to False
+            # Since the module is already loaded, just verify the pattern
+            if "neo4j" not in sys.modules:
+                ret_mod._GRAPH_ENABLED = False
 
 
 class TestComputeDynamicTopK:
@@ -507,7 +516,6 @@ class TestKneePointPruningEdgeCases:
     def test_knee_pruning_logs(self):
         """Cover lines 527-528 - knee pruning log."""
         from proxy.app.core.retrieval import knee_point_pruning
-        import logging
 
         results = [
             self._make_mock_scored_point("a", 0.9),
@@ -594,8 +602,18 @@ class TestGlobalSearch:
         from proxy.app.core.retrieval import GlobalSearch
 
         summaries = [
-            {"id": "c1", "summary": "AI and machine learning topics", "key_entities": ["AI", "ML"], "members": ["doc1"]},
-            {"id": "c2", "summary": "Database optimization techniques", "key_entities": ["DB", "SQL"], "members": ["doc2"]},
+            {
+                "id": "c1",
+                "summary": "AI and machine learning topics",
+                "key_entities": ["AI", "ML"],
+                "members": ["doc1"],
+            },
+            {
+                "id": "c2",
+                "summary": "Database optimization techniques",
+                "key_entities": ["DB", "SQL"],
+                "members": ["doc2"],
+            },
         ]
         gs = GlobalSearch(summaries)
         results = gs.search("AI machine learning")

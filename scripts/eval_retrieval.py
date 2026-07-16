@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Retrieval Evaluation Script
+"""Retrieval Evaluation Script
 
 Computes MRR, Recall@k, nDCG@k, Precision@k for the retrieval system.
 
@@ -76,8 +75,7 @@ def evaluate(
     search_fn: Callable | None = None,
     top_k: int = 20,
 ) -> dict[str, Any]:
-    """
-    Evaluate retrieval quality on the dataset.
+    """Evaluate retrieval quality on the dataset.
 
     Returns dict with aggregate metrics.
     """

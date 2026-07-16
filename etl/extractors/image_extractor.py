@@ -39,7 +39,7 @@ def extract_images_from_html(html: str) -> list[ImageInfo]:
 
     if BS4_AVAILABLE:
         try:
-            soup = BeautifulSoup(html, "html.parser")  # noqa: F821
+            soup = BeautifulSoup(html, "html.parser")
             for img in soup.find_all("img"):
                 src = str(img.get("src", "") or "")
                 if not src or src.startswith("data:"):

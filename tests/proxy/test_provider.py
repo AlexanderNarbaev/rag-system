@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117
+# ruff: noqa: SIM117
 """Tests for proxy/app/llm/provider.py — MultiProviderRouter and adapters."""
 
 import json
@@ -430,12 +430,12 @@ class TestMultiProviderRouter:
                                         "name": "search",
                                         "arguments": json.dumps({"query": "test"}),
                                     },
-                                }
+                                },
                             ],
-                        }
-                    }
-                ]
-            }
+                        },
+                    },
+                ],
+            },
         )
         mock_response.close = MagicMock()
 
@@ -522,7 +522,7 @@ class TestAnthropicRouting:
         mock_response.json = AsyncMock(
             return_value={
                 "choices": [{"message": {"content": "hi"}}],
-            }
+            },
         )
         mock_response.close = MagicMock()
 

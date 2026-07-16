@@ -1,6 +1,5 @@
 # etl/indexer/live_vector_lake.py
-"""
-LiveVectorLake: двухуровневое хранение чанков для RAG-системы.
+"""LiveVectorLake: двухуровневое хранение чанков для RAG-системы.
 - Горячий слой: Qdrant (векторный индекс для быстрого поиска)
 - Холодный слой: Parquet/Delta Lake (история всех версий, дельта-обновления)
 
@@ -32,9 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class LiveVectorLake:
-    """
-    Реализует паттерн LiveVectorLake для версионирования и инкрементальной индексации.
-    """
+    """Реализует паттерн LiveVectorLake для версионирования и инкрементальной индексации."""
 
     def __init__(
         self,
@@ -43,8 +40,7 @@ class LiveVectorLake:
         cold_storage_dir: Path,
         use_delta: bool = False,
     ):
-        """
-        :param qdrant_indexer: экземпляр QdrantHybridIndexer для горячего слоя
+        """:param qdrant_indexer: экземпляр QdrantHybridIndexer для горячего слоя
         :param version_store: экземпляр ChunkVersionStore для WAL и хеширования
         :param cold_storage_dir: директория для холодного хранилища (Parquet/Delta)
         :param use_delta: использовать ли Delta Lake (требуется delta-rs), иначе Parquet
@@ -68,8 +64,7 @@ class LiveVectorLake:
             self.delta_available = False
 
     def _append_to_cold_storage(self, doc_id: str, chunks: list[dict], operation: str = "upsert"):
-        """
-        Добавляет версию чанков в холодное хранилище.
+        """Добавляет версию чанков в холодное хранилище.
         Сохраняется полный снапшот документа или инкрементальные изменения.
         """
         if not PANDAS_AVAILABLE:
@@ -117,8 +112,7 @@ class LiveVectorLake:
         logger.debug(f"Appended {len(chunks)} chunks to cold storage for doc {doc_id}")
 
     def sync_document(self, doc_id: str, new_chunks: list[dict], force: bool = False) -> tuple[int, int]:
-        """
-        Синхронизирует документ: обновляет горячий слой (Qdrant) и холодное хранилище.
+        """Синхронизирует документ: обновляет горячий слой (Qdrant) и холодное хранилище.
         Возвращает (added_count, deleted_count).
         """
         # Определяем, какие чанки добавить/удалить
@@ -149,8 +143,7 @@ class LiveVectorLake:
         return added_count, deleted_count
 
     def bulk_sync(self, documents: dict[str, list[dict]], force: bool = False) -> dict[str, tuple[int, int]]:
-        """
-        Синхронизирует несколько документов.
+        """Синхронизирует несколько документов.
         :param documents: {doc_id: [chunks]}
         :return: {doc_id: (added, deleted)}
         """
@@ -181,8 +174,7 @@ class LiveVectorLake:
         return df.tail(limit)
 
     def rollback_document(self, doc_id: str, to_timestamp: str) -> int:
-        """
-        Откатывает документ к указанной временной метке.
+        """Откатывает документ к указанной временной метке.
         Восстанавливает состояние чанков из холодного хранилища и переиндексирует в Qdrant.
         """
         history = self.get_document_history(doc_id)
@@ -215,7 +207,7 @@ class LiveVectorLake:
                         "keywords": json.loads(row["keywords"]) if row["keywords"] else [],
                         "entities": json.loads(row["entities"]) if row["entities"] else [],
                         "summary": row["summary"],
-                    }
+                    },
                 )
                 seen_hashes.add(row["chunk_hash"])
 
@@ -242,8 +234,7 @@ def incremental_index_pipeline(
     new_chunks: list[dict],
     force_reindex: bool = False,
 ) -> bool:
-    """
-    Готовая функция для инкрементальной индексации: сравнивает хеши, обновляет Qdrant и cold storage.
+    """Готовая функция для инкрементальной индексации: сравнивает хеши, обновляет Qdrant и cold storage.
     Возвращает True, если были изменения.
     """
     added, deleted = live_lake.sync_document(doc_id, new_chunks, force=force_reindex)
@@ -260,7 +251,9 @@ if __name__ == "__main__":
     qdrant_idx.create_collection(recreate=True)
 
     version_store = ChunkVersionStore(
-        hot_dir=Path("./test_hot"), cold_dir=Path("./test_cold_version_store"), wal_path=Path("./test_wal/wal.json")
+        hot_dir=Path("./test_hot"),
+        cold_dir=Path("./test_cold_version_store"),
+        wal_path=Path("./test_wal/wal.json"),
     )
 
     live_lake = LiveVectorLake(
@@ -284,7 +277,7 @@ if __name__ == "__main__":
             "keywords": ["test"],
             "entities": [],
             "summary": "Test summary",
-        }
+        },
     ]
     live_lake.sync_document(doc_id, chunks_v1)
 
@@ -301,7 +294,7 @@ if __name__ == "__main__":
             "keywords": ["test", "updated"],
             "entities": [],
             "summary": "Updated summary",
-        }
+        },
     ]
     live_lake.sync_document(doc_id, chunks_v2)
 

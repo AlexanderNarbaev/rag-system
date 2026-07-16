@@ -320,7 +320,7 @@ class TestSaveChunksToJson:
                 entities=["ORG:Acme"],
                 hypothetical_questions=["What is this?"],
                 source_type="wiki",
-            )
+            ),
         ]
         output = tmp_path / "chunks.json"
         save_chunks_to_json(chunks, output)

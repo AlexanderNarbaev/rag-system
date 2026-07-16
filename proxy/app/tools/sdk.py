@@ -41,7 +41,7 @@ def _unwrap_annotated(typ: type) -> type:
     if origin is Annotated:
         args = get_args(typ)
         if args:
-            return cast(type, args[0])
+            return cast("type", args[0])
     return typ
 
 
@@ -87,7 +87,7 @@ def _extract_items_type(typ: type) -> type | None:
     if origin is list:
         args = get_args(typ)
         if args:
-            return cast(type, args[0])
+            return cast("type", args[0])
     return None
 
 
@@ -345,7 +345,7 @@ class ToolBuilder:
                 default=default,
                 enum=enum,
                 items_type=items_type,
-            )
+            ),
         )
         return self
 

@@ -1,6 +1,5 @@
 # etl/chunker/hash_versioning.py
-"""
-Версионирование чанков для RAG-системы.
+"""Версионирование чанков для RAG-системы.
 Реализует:
 - Вычисление SHA-256 хеша для чанка (на основе текста + метаданных)
 - Сравнение с предыдущей версией для детекции изменений
@@ -29,8 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def compute_chunk_hash(chunk: dict[str, Any]) -> str:
-    """
-    Вычисляет SHA-256 хеш чанка на основе текста и ключевых метаданных.
+    """Вычисляет SHA-256 хеш чанка на основе текста и ключевых метаданных.
     Игнорирует поля, которые могут меняться без изменения содержимого (например, extracted_at).
     """
     # Берём только значимые поля
@@ -51,16 +49,14 @@ def compute_chunk_hash(chunk: dict[str, Any]) -> str:
 
 
 class ChunkVersionStore:
-    """
-    Хранилище версий чанков с поддержкой инкрементальных обновлений.
+    """Хранилище версий чанков с поддержкой инкрементальных обновлений.
     Поддерживает:
     - LiveVectorLake: hot (текущие чанки) и cold storage (история)
     - WAL (checkpoint) для быстрого восстановления
     """
 
     def __init__(self, hot_dir: Path, cold_dir: Path, wal_path: Path):
-        """
-        :param hot_dir: директория с текущими чанками (например, для быстрой индексации в Qdrant)
+        """:param hot_dir: директория с текущими чанками (например, для быстрой индексации в Qdrant)
         :param cold_dir: директория с историей версий (Parquet/JSON-логи)
         :param wal_path: путь к WAL-файлу (сохраняет последние хеши для каждого документа)
         """
@@ -120,8 +116,7 @@ class ChunkVersionStore:
         new_chunks: list[dict],
         force: bool = False,
     ) -> tuple[list[dict], list[dict]]:
-        """
-        Сравнивает новые чанки с последними известными (по хешу) и возвращает:
+        """Сравнивает новые чанки с последними известными (по хешу) и возвращает:
         - chunks_to_add: список чанков, которые новые или изменились
         - chunks_to_delete: список хешей чанков, которые больше не существуют (удалены из источника)
         При force=True все чанки считаются изменившимися.
@@ -143,12 +138,11 @@ class ChunkVersionStore:
         for h, ch in new_map.items():
             if h not in old_map:
                 added.append(ch)
-            else:
-                # Хеш совпадает, но возможно изменились метаданные, не влияющие на хеш? Сравниваем тексты
-                if old_map[h].get("text") != ch.get("text"):
-                    added.append(ch)  # текст изменился -> переиндексируем
-                    # Сохраняем в историю
-                    self._append_to_cold_storage(doc_id, ch, old_hash=h)
+            # Хеш совпадает, но возможно изменились метаданные, не влияющие на хеш? Сравниваем тексты
+            elif old_map[h].get("text") != ch.get("text"):
+                added.append(ch)  # текст изменился -> переиндексируем
+                # Сохраняем в историю
+                self._append_to_cold_storage(doc_id, ch, old_hash=h)
 
         # Чанки, которые были в старом, но отсутствуют в новом (удалены)
         deleted = [h for h in old_map if h not in new_map]
@@ -259,8 +253,7 @@ class ChunkVersionStore:
                         f.writelines(lines[-keep_versions:])
 
     def reset(self, doc_id: str | None = None) -> None:
-        """
-        Полный сброс WAL и hot-данных для документа или всех.
+        """Полный сброс WAL и hot-данных для документа или всех.
         Используется для переиндексации.
         """
         if doc_id:
@@ -284,11 +277,11 @@ class ChunkVersionStore:
 
 # Вспомогательная функция для инкрементальной индексации в Qdrant
 def get_incremental_chunks(
-    version_store: ChunkVersionStore, doc_id: str, new_chunks: list[dict[str, Any]]
+    version_store: ChunkVersionStore,
+    doc_id: str,
+    new_chunks: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """
-    Возвращает только те чанки, которые нужно переиндексировать в Qdrant (добавить/обновить).
-    """
+    """Возвращает только те чанки, которые нужно переиндексировать в Qdrant (добавить/обновить)."""
     added, _ = version_store.update_document_chunks(doc_id, new_chunks)
     return added
 
@@ -296,7 +289,9 @@ def get_incremental_chunks(
 if __name__ == "__main__":
     # Пример использования
     store = ChunkVersionStore(
-        hot_dir=Path("./test_hot"), cold_dir=Path("./test_cold"), wal_path=Path("./test_wal/wal.json")
+        hot_dir=Path("./test_hot"),
+        cold_dir=Path("./test_cold"),
+        wal_path=Path("./test_wal/wal.json"),
     )
 
     # Фиктивные чанки

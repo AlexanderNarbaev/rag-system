@@ -198,7 +198,7 @@ class TestGitLabWebhook:
                 "title": "Add hybrid search module",
                 "author": {"name": "ivanov", "email": "ivanov@company.com"},
                 "timestamp": "2025-06-18T12:00:00Z",
-            }
+            },
         ],
         "repository": {"name": "rag-system", "url": "git@gitlab:team/rag-system.git"},
     }

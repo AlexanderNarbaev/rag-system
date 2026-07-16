@@ -1,6 +1,5 @@
 # proxy/app/api/files.py
-"""
-File management API endpoints.
+"""File management API endpoints.
 
 Provides upload, download, listing, metadata, and deletion of files
 stored in MinIO via S3-compatible API.
@@ -176,6 +175,7 @@ async def list_files(
 
     Args:
         prefix: Optional key prefix to filter results (e.g. ``uploads/``).
+
     """
     try:
         raw_files = minio.list_files(prefix=prefix)
@@ -220,7 +220,7 @@ async def download_file(
         logger.error("File download failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    filename = meta.get("metadata", {}).get("original_filename", file_id.split("/")[-1])
+    filename = meta.get("metadata", {}).get("original_filename", file_id.rsplit("/", maxsplit=1)[-1])
     content_type = meta.get("content_type", "application/octet-stream")
 
     return StreamingResponse(
@@ -245,6 +245,7 @@ async def get_presigned_url(
     Args:
         file_id: The file identifier (object key).
         expiration: URL expiration in seconds (default: 3600, max: 604800).
+
     """
     if expiration < 60 or expiration > 604800:
         raise HTTPException(

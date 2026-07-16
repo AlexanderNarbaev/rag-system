@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
-    from bs4 import BeautifulSoup as _BS4  # noqa: F401, N814
+    from bs4 import BeautifulSoup as _BS4  # noqa: N814
 
     BS4_AVAILABLE = True
 except ImportError:

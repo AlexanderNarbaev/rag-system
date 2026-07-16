@@ -40,7 +40,7 @@ def mock_confluence_page():
             "storage": {
                 "value": "<p>This is test content with <strong>bold</strong> text.</p>",
                 "representation": "storage",
-            }
+            },
         },
         "version": {"number": 3, "when": "2025-01-15T10:30:00.000Z", "by": {"displayName": "John Doe"}},
         "history": {"createdDate": "2024-06-01T08:00:00.000Z"},

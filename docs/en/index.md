@@ -272,8 +272,8 @@ curl -X POST http://localhost:8081/v1/search \
 | **Reliability**   | 90%             | Circuit breakers, exponential backoff, graceful degradation |
 | **Performance**   | 80%             | Benchmarks, caching, connection pooling                     |
 | **Operations**    | 90%             | K8s Helm, deploy scripts, backup/restore, runbook           |
-| **Documentation** | 100%            | 14 ADRs, 43 EN guides, 30 RU guides, API examples           |
-| **Overall**       | **90%** (72/80) | Production-ready                                            |
+| **Documentation** | 100%            | 14 ADRs, 44 EN guides, 30 RU guides, OpenAPI spec, changelog |
+| **Overall**       | **95.6%** (76.5/80) | Production-ready                                           |
 
 [Full assessment →](guides/best-practices-checklist.md)
 

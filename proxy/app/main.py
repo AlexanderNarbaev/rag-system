@@ -1,6 +1,5 @@
 # proxy/app/main.py
-"""
-OpenAI-compatible RAG proxy server.
+"""OpenAI-compatible RAG proxy server.
 
 Supports:
 - /v1/chat/completions (stream + non-stream) via api/chat router
@@ -67,7 +66,7 @@ from proxy.app.shared.config import (
     GRACEFUL_SHUTDOWN_ENABLED,
     GRAPH_ENABLED,
     LLM_MODEL_NAME,
-    LOG_DIR,  # noqa: F401 — re-export for test patching
+    LOG_DIR,
     LOG_REQUESTS,  # noqa: F401 — re-export for test patching
     MAX_CHUNKS_AFTER_RERANK,
     MAX_CHUNKS_RETRIEVAL,
@@ -348,8 +347,7 @@ async def process_rag_query(
     user_context: UserContext | None = None,
     top_k_override: int | None = None,
 ) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]], dict[str, float]]:
-    """
-    Core RAG pipeline: search → filter → rerank → dedup → context → LLM.
+    """Core RAG pipeline: search → filter → rerank → dedup → context → LLM.
 
     Steps:
         1. Cache check (Redis/in-memory)
@@ -367,6 +365,7 @@ async def process_rag_query(
         Tuple of (response_text_or_context, messages_or_context, from_cache, sources).
         When stream=True, second element is the messages list for LLM streaming.
         When stream=False, first element is the final response text.
+
     """
     if user_context is None:
         user_context = UserContext.anonymous()
@@ -426,7 +425,7 @@ async def process_rag_query(
         if len(filtered_chunks) < len(chunk_dicts):
             logger.info(
                 f"Access control filtered {len(chunk_dicts) - len(filtered_chunks)} "
-                f"chunks (user={user_context.username}, roles={user_context.roles})"
+                f"chunks (user={user_context.username}, roles={user_context.roles})",
             )
 
         if not filtered_chunks:
@@ -465,7 +464,7 @@ async def process_rag_query(
                             "version": chunk.get("version", "unknown"),
                             "relevance": round(score, 4),
                             "text_preview": chunk.get("text", "")[:200],
-                        }
+                        },
                     )
 
             # 6. Retrieval quality evaluation (CRAG-style)
@@ -475,7 +474,8 @@ async def process_rag_query(
                 c_copy["score"] = s
                 chunks_for_eval.append(c_copy)
             confidence, action, quality_processed = retrieval_evaluator.evaluate_and_act(
-                query=user_query, retrieved_chunks=chunks_for_eval
+                query=user_query,
+                retrieved_chunks=chunks_for_eval,
             )
             logger.info(f"Retrieval quality: confidence={confidence:.3f}, action={action}")
 
@@ -522,7 +522,8 @@ async def process_rag_query(
                 # 7. Smart token budget allocation
                 available_tokens = 130_000  # approximate context window budget for LLM
                 budget = token_optimizer.smart_token_budget(
-                    available_tokens=available_tokens, num_chunks=len(unique_chunks)
+                    available_tokens=available_tokens,
+                    num_chunks=len(unique_chunks),
                 )
 
                 # 8. Context compression with budget
@@ -530,14 +531,16 @@ async def process_rag_query(
 
                 if budget["context_total"] < len(raw_context) // 4:
                     context = token_optimizer.compress_context(
-                        [c for c, _ in unique_chunks], max_tokens=budget["context_total"], strategy="hierarchical"
+                        [c for c, _ in unique_chunks],
+                        max_tokens=budget["context_total"],
+                        strategy="hierarchical",
                     )
                 else:
                     context = raw_context
 
                 logger.info(
                     f"Token budget: system={budget['system_prompt']}, "
-                    f"context={budget['context_total']}, response={budget['response']}"
+                    f"context={budget['context_total']}, response={budget['response']}",
                 )
 
     # 9. Negative evidence check — refuse to hallucinate if retrieval is insufficient
@@ -564,48 +567,48 @@ async def process_rag_query(
     # 11. LLM call
     if stream:
         return context, messages_for_llm, False, sources, {}
-    else:
-        try:
-            response_text = await non_stream_completion(
-                messages_for_llm, temperature=temperature, max_tokens=max_tokens
-            )
-        except Exception as llm_err:
-            logger.error("LLM completion failed: %s", llm_err, exc_info=True)
-            response_text = (
-                "Извините, сервис LLM временно недоступен. "
-                "Пожалуйста, попробуйте позже или обратитесь к администратору."
-            )
-        if cache_manager and not force_refresh:
-            await cache_manager.set(cache_key, response_text, ttl=DEFAULT_CACHE_TTL_SECONDS)
-
-        # 11.5 Self-critique verification
-        from proxy.app.core.confidence import self_critique_answer
-
-        is_valid, critique_score, critique_reason = await self_critique_answer(
-            query=user_query,
-            context=context,
-            answer=response_text,
+    try:
+        response_text = await non_stream_completion(
+            messages_for_llm,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
-        if not is_valid:
-            logger.warning(
-                f"Self-critique failed: {critique_reason} (score={critique_score:.1f})"
-            )  # Low confidence answers get
-            # flagged in metadata
+    except Exception as llm_err:
+        logger.error("LLM completion failed: %s", llm_err, exc_info=True)
+        response_text = (
+            "Извините, сервис LLM временно недоступен. Пожалуйста, попробуйте позже или обратитесь к администратору."
+        )
+    if cache_manager and not force_refresh:
+        await cache_manager.set(cache_key, response_text, ttl=DEFAULT_CACHE_TTL_SECONDS)
 
-        # 12. Compute RAGAS evaluation scores
-        ragas_scores: dict[str, float] = {}
-        if chunks_for_eval:
-            from proxy.app.core.ragas_eval import evaluate_rag_response
+    # 11.5 Self-critique verification
+    from proxy.app.core.confidence import self_critique_answer
 
-            context_texts = [c.get("text", "") for c in chunks_for_eval]
-            ragas_scores = evaluate_rag_response(
-                question=user_query,
-                answer=response_text,
-                contexts=context_texts,
-            )
-            logger.info(f"RAGAS scores: {ragas_scores}")
+    is_valid, critique_score, critique_reason = await self_critique_answer(
+        query=user_query,
+        context=context,
+        answer=response_text,
+    )
+    if not is_valid:
+        logger.warning(
+            f"Self-critique failed: {critique_reason} (score={critique_score:.1f})",
+        )  # Low confidence answers get
+        # flagged in metadata
 
-        return response_text, context, False, sources, ragas_scores
+    # 12. Compute RAGAS evaluation scores
+    ragas_scores: dict[str, float] = {}
+    if chunks_for_eval:
+        from proxy.app.core.ragas_eval import evaluate_rag_response
+
+        context_texts = [c.get("text", "") for c in chunks_for_eval]
+        ragas_scores = evaluate_rag_response(
+            question=user_query,
+            answer=response_text,
+            contexts=context_texts,
+        )
+        logger.info(f"RAGAS scores: {ragas_scores}")
+
+    return response_text, context, False, sources, ragas_scores
 
 
 # ---------------------------------------------------------------------------

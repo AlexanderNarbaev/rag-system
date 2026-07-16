@@ -55,6 +55,7 @@ class TrainingConfig:
 
         Returns:
             Configured TrainingConfig instance.
+
         """
         preset = get_preset(profile)
         preset.update(overrides)
@@ -154,7 +155,7 @@ class TrainerRegistry:
         """Get the trainer class for a given type. Raises KeyError if not found."""
         if trainer_type not in self._registry:  # type: ignore[attr-defined]
             raise KeyError(f"No trainer registered for type: {trainer_type}")
-        return cast(type[TrainerBase], self._registry[trainer_type])  # type: ignore[attr-defined]
+        return cast("type[TrainerBase]", self._registry[trainer_type])  # type: ignore[attr-defined]
 
     def list_types(self) -> list[TrainerType]:
         """Return all registered trainer types."""

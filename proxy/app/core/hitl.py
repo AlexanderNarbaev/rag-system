@@ -1,6 +1,5 @@
 # proxy/app/hitl.py
-"""
-Human-in-the-Loop модуль для сбора обратной связи.
+"""Human-in-the-Loop модуль для сбора обратной связи.
 Функции:
 - Логирование всех запросов и ответов (с метаданными)
 - Сохранение исправлений от экспертов
@@ -41,8 +40,7 @@ class FeedbackType(StrEnum):
 
 
 class InteractionLogger:
-    """
-    Логирует взаимодействия пользователя с системой.
+    """Логирует взаимодействия пользователя с системой.
     Сохраняет: запрос, контекст, ответ, временные метки, метаданные.
     """
 
@@ -96,9 +94,7 @@ class InteractionLogger:
         user_feedback: FeedbackType | None = None,
         corrected_response: str | None = None,
     ) -> None:
-        """
-        Записывает одно взаимодействие в JSON Lines файл.
-        """
+        """Записывает одно взаимодействие в JSON Lines файл."""
         record = {
             "request_id": request_id,
             "timestamp": datetime.now(UTC).isoformat(),
@@ -128,9 +124,7 @@ class InteractionLogger:
         corrected_response: str | None = None,
         expert_id: str | None = None,
     ) -> None:
-        """
-        Записывает обратную связь от пользователя или эксперта.
-        """
+        """Записывает обратную связь от пользователя или эксперта."""
         record = {
             "request_id": request_id,
             "timestamp": datetime.now(UTC).isoformat(),
@@ -179,9 +173,7 @@ async def log_interaction(
     response: str,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """
-    Асинхронная обёртка для логирования (неблокирующая).
-    """
+    """Асинхронная обёртка для логирования (неблокирующая)."""
     if not LOG_REQUESTS:
         return
     logger = get_logger()
@@ -218,8 +210,7 @@ def log_feedback_sync(
 
 # Функция для экспорта датасета для fine-tuning
 def export_training_dataset(output_path: Path, min_length: int = 50, use_processor: bool = False) -> None:
-    """
-    Экспортирует пары (вопрос, ответ) из взаимодействий, у которых есть положительная обратная связь
+    """Экспортирует пары (вопрос, ответ) из взаимодействий, у которых есть положительная обратная связь
     или исправленные ответы, в формат для fine-tuning.
 
     When ``use_processor=True``, delegates to ``DataProcessor.export_training_dataset()``
@@ -243,14 +234,12 @@ def export_training_dataset(output_path: Path, min_length: int = 50, use_process
             training_pairs.append({"prompt": item["user_query"], "completion": item["response"]})
 
     with open(output_path, "w", encoding="utf-8") as f:
-        for pair in training_pairs:
-            f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+        f.writelines(json.dumps(pair, ensure_ascii=False) + "\n" for pair in training_pairs)
     logger.info(f"Exported {len(training_pairs)} training pairs to {output_path}")
 
 
 def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingual: bool = False) -> None:
-    """
-    Экспортирует пары (query, intent) из логов взаимодействий
+    """Экспортирует пары (query, intent) из логов взаимодействий
     в формат JSONL для обучения классификатора интентов.
 
     :param output_path: Путь к выходному JSONL-файлу.
@@ -277,8 +266,7 @@ def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingua
         intent_pairs.append({"query": query, "intent": intent.value})
 
     with open(output_path, "w", encoding="utf-8") as f:
-        for pair in intent_pairs:
-            f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+        f.writelines(json.dumps(pair, ensure_ascii=False) + "\n" for pair in intent_pairs)
     logger.info(f"Exported {len(intent_pairs)} intent pairs to {output_path}")
 
 

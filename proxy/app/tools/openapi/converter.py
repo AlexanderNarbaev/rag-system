@@ -104,7 +104,7 @@ def _extract_parameters(
                 required=required and location == "path",
                 default=default_val if default_val is not _UNSET else _UNSET,
                 enum=enum_values,
-            )
+            ),
         )
 
     # Request body (JSON only for now)
@@ -143,7 +143,7 @@ def _extract_parameters(
                             description=prop_schema.get("description", ""),
                             required=prop_name in required_list,
                             enum=prop_schema.get("enum"),
-                        )
+                        ),
                     )
 
     return params

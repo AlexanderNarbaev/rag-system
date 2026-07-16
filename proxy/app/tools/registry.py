@@ -374,10 +374,9 @@ class EnhancedToolRegistry:
 
         if provider_type == "openai":
             return [t.to_openai_format() for t in tools]
-        elif provider_type == "anthropic":
+        if provider_type == "anthropic":
             return [t.to_anthropic_format() for t in tools]
-        else:
-            return [t.to_openai_format() for t in tools]
+        return [t.to_openai_format() for t in tools]
 
     # ── Validation ──────────────────────────────────────────────────────
 

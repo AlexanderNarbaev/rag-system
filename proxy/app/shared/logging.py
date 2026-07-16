@@ -1,6 +1,5 @@
 # proxy/app/logging_config.py
-"""
-Structured logging configuration for RAG proxy.
+"""Structured logging configuration for RAG proxy.
 Supports JSON and text formats, request ID propagation, sensitive data masking.
 """
 
@@ -108,8 +107,7 @@ def get_log_level() -> int:
 
 
 def setup_logging(level: int | None = None) -> logging.Handler:
-    """
-    Configures root logger and returns the configured handler.
+    """Configures root logger and returns the configured handler.
     Uses LOG_FORMAT env var: 'json' for structured JSON, 'text' for console.
     Uses LOG_LEVEL env var: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO).
     """

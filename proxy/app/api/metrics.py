@@ -16,5 +16,6 @@ async def metrics() -> Response:
     Returns:
         Response containing all registered counters, histograms, and gauges
         in Prometheus exposition format.
+
     """
     return metrics_endpoint()

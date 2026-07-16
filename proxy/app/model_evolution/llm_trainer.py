@@ -84,7 +84,7 @@ class LLMTrainer(TrainerBase):
         """
         result: list[dict[str, Any]] = []
         for item in training_data:
-            if "messages" in item and item["messages"]:
+            if item.get("messages"):
                 result.append({"messages": item["messages"]})
         return result
 
@@ -277,7 +277,9 @@ class LLMTrainer(TrainerBase):
     # ── Evaluation ─────────────────────────────────────────────────────────
 
     def evaluate(  # type: ignore[override]
-        self, eval_data: list[dict[str, Any]], model: Any = None
+        self,
+        eval_data: list[dict[str, Any]],
+        model: Any = None,
     ) -> dict[str, float]:
         """Compute evaluation metrics on held-out data.
 

@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: SIM117
 """Tests for self-reflection loops and verification in Level 5 RAG."""
 
 from unittest.mock import patch
@@ -36,7 +36,8 @@ class TestSelfReflectionNode:
             "reflection_count": 0,
         }
         with patch(
-            "proxy.app.llm.slm._call_slm_sync", return_value="PARTIALLY_SUPPORTED\nMISSING: release date details"
+            "proxy.app.llm.slm._call_slm_sync",
+            return_value="PARTIALLY_SUPPORTED\nMISSING: release date details",
         ):
             with patch("proxy.app.shared.config.REFLECTION_ENABLED", True):
                 result = self_reflection(state)

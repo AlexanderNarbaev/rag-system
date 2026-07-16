@@ -92,7 +92,8 @@ _LOGIN_COOLDOWN_SECONDS = 900
 
 def _check_login_rate_limit(identifier: str) -> None:
     """Check and update login rate limit for an identifier (username or IP).
-    Raises HTTPException if rate limit exceeded."""
+    Raises HTTPException if rate limit exceeded.
+    """
     now = time.time()
     if identifier in _LOGIN_ATTEMPTS:
         count, first_attempt = _LOGIN_ATTEMPTS[identifier]
@@ -106,9 +107,8 @@ def _check_login_rate_limit(identifier: str) -> None:
                     status_code=429,
                     detail=f"Too many login attempts. Try again in {wait} seconds.",
                 )
-            else:
-                _LOGIN_ATTEMPTS[identifier] = (1, now)
-                return
+            _LOGIN_ATTEMPTS[identifier] = (1, now)
+            return
         _LOGIN_ATTEMPTS[identifier] = (count + 1, first_attempt)
     else:
         _LOGIN_ATTEMPTS[identifier] = (1, now)

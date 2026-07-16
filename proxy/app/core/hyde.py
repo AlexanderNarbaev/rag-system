@@ -30,6 +30,7 @@ def generate_hypothetical_answer(query: str) -> str:
 
     Returns:
         A hypothetical answer string, or the original query on failure.
+
     """
     if not query or not query.strip():
         return ""
@@ -61,6 +62,7 @@ def embed_hypothetical(hypothesis: str) -> list[float]:
 
     Returns:
         A dense embedding vector as a list of floats, or empty list on failure.
+
     """
     if not hypothesis or not hypothesis.strip():
         return []
@@ -92,6 +94,7 @@ def hyde_search(
 
     Returns:
         List of Qdrant ScoredPoint objects (or dicts). Empty list on failure.
+
     """
     if top_k is None:
         top_k = MAX_CHUNKS_RETRIEVAL
@@ -121,7 +124,7 @@ def hyde_search(
             initialize_retrieval()
 
         try:
-            from qdrant_client.http import models  # noqa: F811
+            from qdrant_client.http import models
         except ImportError:
             logger.warning("Qdrant client not available for HyDE search")
             return hybrid_search(query=query, version=version, top_k=top_k)
@@ -150,7 +153,7 @@ def hyde_search(
         results = response.points
 
         logger.info(f"HyDE search returned {len(results)} chunks for query: '{query[:60]}...'")
-        return results
+        return results  # type: ignore[no-any-return]
 
     except Exception as e:
         logger.warning(f"HyDE search failed: {e}, falling back to direct search")

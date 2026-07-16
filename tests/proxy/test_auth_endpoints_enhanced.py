@@ -1,4 +1,4 @@
-# ruff: noqa: E501, E402, N803, B017
+# ruff: noqa: B017
 """Tests for proxy/app/api/auth_endpoints.py — auth endpoint coverage."""
 
 import pytest

@@ -432,7 +432,7 @@ class TestRetrievalQualityReport:
         assert report.recommendations == ["Looks good"]
 
     def test_default_recommendations_is_empty_list(self):
-        """recommendations should default to empty list."""
+        """Recommendations should default to empty list."""
         report = RetrievalQualityReport(
             classification="Incorrect",
             correct_count=0,

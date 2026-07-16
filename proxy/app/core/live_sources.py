@@ -1,6 +1,5 @@
 # proxy/app/live_sources.py
-"""
-Live API clients for Confluence, Jira, and GitLab.
+"""Live API clients for Confluence, Jira, and GitLab.
 Provides real-time queries to corporate data sources with caching and graceful degradation.
 
 Each client:
@@ -163,7 +162,7 @@ class ConfluenceLiveClient(_CacheMixin):
                         page_type=item.get("type", "page"),
                         body=body,
                         url=f"{self.base_url}/content/{item.get('id', '')}",
-                    )
+                    ),
                 )
             self._set_cache(cache_key, results)
             return results
@@ -246,7 +245,7 @@ class JiraLiveClient(_CacheMixin):
                 "jql": jql,
                 "maxResults": max_results,
                 "fields": "summary,description,status,priority,assignee,issuetype",
-            }  # noqa: E501
+            }
 
             timeout = ClientTimeout(total=LIVE_REQUEST_TIMEOUT)
             async with aiohttp.ClientSession(headers=self.headers, timeout=timeout) as session:  # noqa: SIM117
@@ -269,7 +268,7 @@ class JiraLiveClient(_CacheMixin):
                         priority=fields.get("priority", {}).get("name", ""),
                         assignee=fields.get("assignee", {}).get("displayName", ""),
                         issue_type=fields.get("issuetype", {}).get("name", ""),
-                    )
+                    ),
                 )
             self._set_cache(cache_key, results)
             return results

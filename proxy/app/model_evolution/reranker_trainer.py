@@ -151,8 +151,7 @@ class RerankerTrainer(TrainerBase):
         try:
             if config.use_lora and _PEFT_AVAILABLE and _TRANSFORMERS_AVAILABLE and _TORCH_AVAILABLE:
                 return self._train_lora(config, job, job_id)
-            else:
-                return self._train_full(config, job, job_id)
+            return self._train_full(config, job, job_id)
         except Exception as exc:
             logger.exception("Reranker training failed")
             job.status = "failed"
@@ -162,7 +161,7 @@ class RerankerTrainer(TrainerBase):
     def _train_lora(self, config: TrainingConfig, job: TrainingJob, job_id: str) -> TrainingJob:
         if not _TRANSFORMERS_AVAILABLE or not _PEFT_AVAILABLE:
             raise RuntimeError(
-                "transformers and peft are required for LoRA. Install: pip install transformers peft accelerate"
+                "transformers and peft are required for LoRA. Install: pip install transformers peft accelerate",
             )
 
         base_model = config.base_model or "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -211,7 +210,7 @@ class RerankerTrainer(TrainerBase):
     def _train_full(self, config: TrainingConfig, job: TrainingJob, job_id: str) -> TrainingJob:
         if not CROSS_ENCODER_AVAILABLE:
             raise RuntimeError(
-                "sentence-transformers required for full fine-tune. Install: pip install sentence-transformers"
+                "sentence-transformers required for full fine-tune. Install: pip install sentence-transformers",
             )
 
         base_model = config.base_model or "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -238,7 +237,7 @@ class RerankerTrainer(TrainerBase):
         ce.save(str(output_path / "full_model"))
         job.artifact_uri = str(output_path / "full_model")
 
-        eval_metrics = self._evaluate_from_pairs(eval_data if eval_data else all_pairs)
+        eval_metrics = self._evaluate_from_pairs(eval_data or all_pairs)
         job.metrics = eval_metrics
         job.status = "completed"
         job.completed_at = str(uuid.uuid4())

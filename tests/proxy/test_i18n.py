@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/i18n.py — language detection and prompt templates."""
 
 from proxy.app.shared.i18n import (

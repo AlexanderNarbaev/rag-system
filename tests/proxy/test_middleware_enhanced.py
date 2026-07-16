@@ -1,4 +1,3 @@
-# ruff: noqa: E501, E402
 """Tests for proxy/app/shared/middleware.py — middleware coverage."""
 
 from unittest.mock import MagicMock

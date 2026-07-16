@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Automated RAG System Maturity Review.
+"""Automated RAG System Maturity Review.
 
 Scans the project structure, documentation, tests, CI/CD, and security posture
 to produce a comprehensive maturity report aligned with the 5-level RAG
@@ -229,7 +228,7 @@ def check_project_structure() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=desc,
                 remediation=f"Create {dir_name}/ directory with appropriate structure" if not exists else "",
-            )
+            ),
         )
 
     # Optional but valuable directories
@@ -248,7 +247,7 @@ def check_project_structure() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=desc,
                 remediation=f"Consider creating {dir_name}/ for {desc.lower()}" if not exists else "",
-            )
+            ),
         )
 
     # Key config files
@@ -268,7 +267,7 @@ def check_project_structure() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=desc,
                 remediation=f"Create {fname}" if not exists else "",
-            )
+            ),
         )
 
     return dim
@@ -294,7 +293,7 @@ def check_documentation() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=desc,
-            )
+            ),
         )
 
     # ADRs
@@ -309,7 +308,7 @@ def check_documentation() -> DimensionResult:
             detail=f"{adr_count} ADRs found",
             evidence=f"docs/en/adr/ contains {adr_count} files",
             remediation="Create ADRs for key architectural decisions" if adr_count < 5 else "",
-        )
+        ),
     )
 
     # Guides
@@ -324,7 +323,7 @@ def check_documentation() -> DimensionResult:
             detail=f"{guide_count} guides found",
             evidence=f"docs/en/guides/ contains {guide_count} files",
             remediation="Write guides for deployment, operations, troubleshooting" if guide_count < 10 else "",
-        )
+        ),
     )
 
     # i18n docs
@@ -336,7 +335,7 @@ def check_documentation() -> DimensionResult:
             score=1.0 if ru_docs else 0.0,
             detail="Russian translations available" if ru_docs else "No Russian translations",
             remediation="Create docs/ru/ with translated guides" if not ru_docs else "",
-        )
+        ),
     )
 
     # MkDocs config
@@ -348,7 +347,7 @@ def check_documentation() -> DimensionResult:
             score=1.0 if mkdocs else 0.0,
             detail="MkDocs configuration present" if mkdocs else "No MkDocs config",
             remediation="Add mkdocs.yml for documentation site generation" if not mkdocs else "",
-        )
+        ),
     )
 
     # Diagrams
@@ -361,7 +360,7 @@ def check_documentation() -> DimensionResult:
             score=1.0 if has_diagrams else 0.3,
             detail="C4/SVG diagrams available" if has_diagrams else "No architecture diagrams found",
             remediation="Create C4 diagrams in docs/en/diagrams/" if not has_diagrams else "",
-        )
+        ),
     )
 
     return dim
@@ -392,7 +391,7 @@ def check_testing() -> DimensionResult:
                 detail=f"{test_count} test files" if exists else "Missing",
                 evidence=f"{'/'.join(dir_path)}/ contains {test_count} test files" if exists else "",
                 remediation=f"Create test files in {'/'.join(dir_path)}/" if not exists else "",
-            )
+            ),
         )
 
     # Coverage configuration
@@ -408,7 +407,7 @@ def check_testing() -> DimensionResult:
             score=1.0 if has_cov_config else 0.0,
             detail="Coverage config in pyproject.toml" if has_cov_config else "No coverage config",
             remediation="Add [tool.coverage.*] sections to pyproject.toml" if not has_cov_config else "",
-        )
+        ),
     )
 
     # Coverage threshold
@@ -426,7 +425,7 @@ def check_testing() -> DimensionResult:
             score=threshold_score,
             detail=f"fail_under={cov_threshold}%",
             remediation="Set fail_under >= 70 in pyproject.toml" if cov_threshold < 70 else "",
-        )
+        ),
     )
 
     # Test conftest fixtures
@@ -438,7 +437,7 @@ def check_testing() -> DimensionResult:
             score=1.0 if conftest else 0.0,
             detail="conftest.py present" if conftest else "No shared fixtures",
             remediation="Create tests/conftest.py with shared fixtures" if not conftest else "",
-        )
+        ),
     )
 
     # Pytest markers configured
@@ -453,7 +452,7 @@ def check_testing() -> DimensionResult:
             score=1.0 if markers_configured else 0.3,
             detail="Markers for e2e, benchmark, chaos, etc." if markers_configured else "No custom markers",
             remediation="Add markers to [tool.pytest.ini_options]" if not markers_configured else "",
-        )
+        ),
     )
 
     # Total test file count
@@ -466,7 +465,7 @@ def check_testing() -> DimensionResult:
             score=test_score,
             detail=f"{total_tests} test files total",
             remediation="Write more tests to cover all modules" if total_tests < 30 else "",
-        )
+        ),
     )
 
     return dim
@@ -492,7 +491,7 @@ def check_ci_cd() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=desc,
                 remediation=f"Create .github/workflows/{fname}" if not exists else "",
-            )
+            ),
         )
 
     # Dependabot
@@ -504,7 +503,7 @@ def check_ci_cd() -> DimensionResult:
             score=1.0 if dependabot else 0.0,
             detail="Automated dependency updates" if dependabot else "No Dependabot config",
             remediation="Create .github/dependabot.yml" if not dependabot else "",
-        )
+        ),
     )
 
     # Dockerfiles
@@ -521,7 +520,7 @@ def check_ci_cd() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=desc,
                 remediation=f"Create {fname}" if not exists else "",
-            )
+            ),
         )
 
     # Docker Compose
@@ -538,7 +537,7 @@ def check_ci_cd() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=desc,
                 remediation=f"Create {'/'.join(path_parts)}" if not exists else "",
-            )
+            ),
         )
 
     # Makefile targets
@@ -559,7 +558,7 @@ def check_ci_cd() -> DimensionResult:
                     if len(found_targets) < 5
                     else ""
                 ),
-            )
+            ),
         )
     else:
         dim.checks.append(
@@ -568,7 +567,7 @@ def check_ci_cd() -> DimensionResult:
                 passed=False,
                 score=0.0,
                 detail="No Makefile found",
-            )
+            ),
         )
 
     # K8s/Helm
@@ -580,7 +579,7 @@ def check_ci_cd() -> DimensionResult:
             score=1.0 if k8s else 0.0,
             detail="Helm chart present" if k8s else "No Helm chart",
             remediation="Create deploy/k8s/helm/rag-system/ chart" if not k8s else "",
-        )
+        ),
     )
 
     # Nginx/HAProxy
@@ -592,7 +591,7 @@ def check_ci_cd() -> DimensionResult:
             score=1.0 if has_reverse_proxy else 0.0,
             detail="Nginx/HAProxy config present" if has_reverse_proxy else "No reverse proxy config",
             remediation="Add nginx or haproxy config in deploy/" if not has_reverse_proxy else "",
-        )
+        ),
     )
 
     return dim
@@ -620,7 +619,7 @@ def check_security() -> DimensionResult:
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
                 remediation=f"Implement {desc}" if not exists else "",
-            )
+            ),
         )
 
     # Input validation
@@ -634,7 +633,7 @@ def check_security() -> DimensionResult:
             remediation="Create InputValidator class for query/message sanitization"
             if not has_input_validation
             else "",
-        )
+        ),
     )
 
     # Rate limiting
@@ -646,7 +645,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_rate_limiter else 0.0,
             detail="Token bucket rate limiter" if has_rate_limiter else "No rate limiter",
             remediation="Implement token bucket rate limiter middleware" if not has_rate_limiter else "",
-        )
+        ),
     )
 
     # Circuit breaker
@@ -658,7 +657,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_circuit_breaker else 0.0,
             detail="Circuit breaker for downstream calls" if has_circuit_breaker else "No circuit breaker",
             remediation="Implement circuit breaker pattern" if not has_circuit_breaker else "",
-        )
+        ),
     )
 
     # Pre-commit hooks
@@ -670,7 +669,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_precommit else 0.0,
             detail="Ruff lint + format + trailing whitespace" if has_precommit else "No pre-commit config",
             remediation="Create .pre-commit-config.yaml" if not has_precommit else "",
-        )
+        ),
     )
 
     # Security workflow
@@ -682,7 +681,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_security_wf else 0.0,
             detail="pip-audit + safety + SBOM generation" if has_security_wf else "No security workflow",
             remediation="Create .github/workflows/security.yml" if not has_security_wf else "",
-        )
+        ),
     )
 
     # Secret masking
@@ -698,7 +697,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_secret_masking else 0.0,
             detail="PII/secret sanitization in security.py" if has_secret_masking else "No secret masking",
             remediation="Implement sanitize_for_log() to mask PII and secrets" if not has_secret_masking else "",
-        )
+        ),
     )
 
     # CORS configuration
@@ -714,7 +713,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_cors else 0.0,
             detail="CORS middleware configured" if has_cors else "No CORS config",
             remediation="Add CORS middleware with configurable origins" if not has_cors else "",
-        )
+        ),
     )
 
     # Audit logging
@@ -726,7 +725,7 @@ def check_security() -> DimensionResult:
             score=1.0 if has_audit else 0.0,
             detail="Request/feedback audit trail" if has_audit else "No audit logging",
             remediation="Implement audit.py for request tracing" if not has_audit else "",
-        )
+        ),
     )
 
     return dim
@@ -749,7 +748,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Level 2: Advanced RAG
@@ -770,7 +769,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Level 3: GraphRAG
@@ -787,7 +786,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Level 4: Agentic RAG
@@ -804,7 +803,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Level 5: Self-Correcting RAG
@@ -826,7 +825,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Observability
@@ -845,7 +844,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Monitoring stack
@@ -862,7 +861,7 @@ def check_rag_capabilities() -> DimensionResult:
                 passed=exists,
                 score=1.0 if exists else 0.0,
                 detail=f"{'/'.join(path_parts)}",
-            )
+            ),
         )
 
     # Agentic tools
@@ -873,7 +872,7 @@ def check_rag_capabilities() -> DimensionResult:
             passed=has_tools,
             score=1.0 if has_tools else 0.0,
             detail="proxy/app/tools/ directory" if has_tools else "No tools SDK",
-        )
+        ),
     )
 
     # MCP server
@@ -884,7 +883,7 @@ def check_rag_capabilities() -> DimensionResult:
             passed=has_mcp,
             score=1.0 if has_mcp else 0.0,
             detail="mcp_server/server.py" if has_mcp else "No MCP server",
-        )
+        ),
     )
 
     # Model evolution
@@ -895,7 +894,7 @@ def check_rag_capabilities() -> DimensionResult:
             passed=has_model_evo,
             score=1.0 if has_model_evo else 0.0,
             detail="LoRA/QLoRA fine-tuning pipeline" if has_model_evo else "No model evolution",
-        )
+        ),
     )
 
     # Multi-provider LLM
@@ -906,7 +905,7 @@ def check_rag_capabilities() -> DimensionResult:
             passed=has_providers,
             score=1.0 if has_providers else 0.0,
             detail="Pluggable provider adapters" if has_providers else "No provider adapters",
-        )
+        ),
     )
 
     # Backup scripts
@@ -917,7 +916,7 @@ def check_rag_capabilities() -> DimensionResult:
             passed=has_backups,
             score=1.0 if has_backups else 0.0,
             detail="scripts/ops/ with backup_cron.sh, restore_all.sh" if has_backups else "No backup scripts",
-        )
+        ),
     )
 
     return dim
@@ -1105,7 +1104,7 @@ def render_json(report: MaturityReport) -> str:
                     "detail": check.detail,
                     "evidence": check.evidence,
                     "remediation": check.remediation,
-                }
+                },
             )
         data["dimensions"].append(dim_data)
     return json.dumps(data, indent=2)

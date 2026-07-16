@@ -1,6 +1,5 @@
 # etl/graph_builder/entity_extractor.py
-"""
-Извлечение сущностей и отношений из текста для построения графа знаний.
+"""Извлечение сущностей и отношений из текста для построения графа знаний.
 Использует:
 - spaCy (если доступна) для быстрого NER
 - SLM (локальную модель) для извлечения отношений и кастомных сущностей
@@ -53,9 +52,7 @@ class Relation:
 
 
 class EntityRelationExtractor:
-    """
-    Извлекает сущности и отношения из текста, используя комбинацию NLP и SLM.
-    """
+    """Извлекает сущности и отношения из текста, используя комбинацию NLP и SLM."""
 
     def __init__(
         self,
@@ -66,8 +63,7 @@ class EntityRelationExtractor:
         cache_dir: Path | None = None,
         max_text_length: int = 4000,
     ):
-        """
-        :param use_spacy: использовать ли spaCy для базового NER
+        """:param use_spacy: использовать ли spaCy для базового NER
         :param spacy_model: модель spaCy (ru_core_news_sm, en_core_web_sm и т.д.)
         :param use_slm: использовать ли SLM для извлечения отношений
         :param slm_endpoint: URL локального сервера LLM (например, http://localhost:8080/v1/completions)
@@ -85,7 +81,7 @@ class EntityRelationExtractor:
                 logger.info(f"Loaded spaCy model {spacy_model}")
             except OSError:
                 logger.warning(
-                    f"spaCy model {spacy_model} not found. Install with: python -m spacy download {spacy_model}"
+                    f"spaCy model {spacy_model} not found. Install with: python -m spacy download {spacy_model}",
                 )
                 self.use_spacy = False
 
@@ -148,13 +144,12 @@ class EntityRelationExtractor:
                         name=name,
                         type=mapped_type,
                         source_id="",
-                    )
+                    ),
                 )
         return entities
 
     def extract_relations_slm(self, text: str, entities: list[Entity]) -> list[Relation]:
-        """
-        Использует SLM для извлечения отношений между известными сущностями.
+        """Использует SLM для извлечения отношений между известными сущностями.
         Отправляет текст + список сущностей и запрашивает JSON с отношениями.
         """
         if not self.use_slm:
@@ -201,10 +196,8 @@ class EntityRelationExtractor:
                 # Извлечение JSON из ответа
                 output = output.strip()
                 # Убираем возможные маркеры кода
-                if output.startswith("```json"):
-                    output = output[7:]
-                if output.endswith("```"):
-                    output = output[:-3]
+                output = output.removeprefix("```json")
+                output = output.removesuffix("```")
                 relations_data = json.loads(output)
                 relations = []
                 for rel in relations_data:
@@ -221,7 +214,7 @@ class EntityRelationExtractor:
                                 target=target_entity.id,
                                 type=rel_type,
                                 properties={"description": rel.get("description", "")},
-                            )
+                            ),
                         )
                 return relations
         except Exception as e:
@@ -234,9 +227,7 @@ class EntityRelationExtractor:
         source_id: str,
         chunk_metadata: dict[str, Any] | None = None,
     ) -> tuple[list[Entity], list[Relation]]:
-        """
-        Основной метод извлечения сущностей и отношений из одного чанка.
-        """
+        """Основной метод извлечения сущностей и отношений из одного чанка."""
         cache_key = self._get_cache_key(text + source_id)
         cached = self._load_from_cache(cache_key)
         if cached:
@@ -263,8 +254,7 @@ class EntityRelationExtractor:
         return entities, relations
 
     def extract_batch(self, chunks: list[dict], source_id_prefix: str = None) -> tuple[list[Entity], list[Relation]]:
-        """
-        Обрабатывает пакет чанков (список словарей с полем 'text' и опционально 'metadata').
+        """Обрабатывает пакет чанков (список словарей с полем 'text' и опционально 'metadata').
         Возвращает объединённые сущности и отношения с дедупликацией.
         """
         all_entities = []
@@ -296,9 +286,7 @@ class EntityRelationExtractor:
 
 # Функция для подготовки данных в Neo4j (cypher-запросы)
 def entities_to_cypher(entities: list[Entity], relations: list[Relation]) -> list[str]:
-    """
-    Генерирует Cypher-запросы для создания узлов и рёбер в Neo4j.
-    """
+    """Генерирует Cypher-запросы для создания узлов и рёбер в Neo4j."""
     queries = []
     # Создание узлов
     for ent in entities:
@@ -308,7 +296,7 @@ def entities_to_cypher(entities: list[Entity], relations: list[Relation]) -> lis
     for rel in relations:
         queries.append(
             f"MATCH (a {{id: '{rel.source}'}}), (b {{id: '{rel.target}'}}) "
-            f"MERGE (a)-[r:{rel.type.upper()}]->(b) SET r += {json.dumps(rel.properties)}"
+            f"MERGE (a)-[r:{rel.type.upper()}]->(b) SET r += {json.dumps(rel.properties)}",
         )
     return queries
 

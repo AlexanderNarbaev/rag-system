@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402
 """End-to-end tests for the full RAG pipeline.
 
 Tests the complete flow from request to response with real-like data:

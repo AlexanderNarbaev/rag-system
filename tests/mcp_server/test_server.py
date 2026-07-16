@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: E501
 """Tests for MCP server — server.py tool/resource/prompt registration and execution."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,7 +11,7 @@ import pytest
 # We patch httpx.AsyncClient to prevent real HTTP calls during import/tool execution.
 # ---------------------------------------------------------------------------
 pytest.importorskip("fastmcp", reason="fastmcp (and its dependency platformdirs) not installed")
-from mcp_server.server import mcp  # noqa: E402
+from mcp_server.server import mcp
 
 # ===========================================================================
 # Fixtures
@@ -207,7 +207,7 @@ class TestRagSearchTool:
     @pytest.mark.asyncio
     async def test_rag_search_returns_content(self, mock_httpx_client):
         mock_client = mock_httpx_client(
-            response_data={"choices": [{"message": {"content": "Found 3 relevant documents"}}]}
+            response_data={"choices": [{"message": {"content": "Found 3 relevant documents"}}]},
         )
         with patch("mcp_server.server.httpx.AsyncClient", return_value=mock_client):
             result = await mcp.call_tool("rag_search", {"query": "What is RAG?"})
@@ -622,11 +622,11 @@ class TestToolCallRoundTrip:
                     {
                         "message": {
                             "content": "## Search Results\n\n1. **RAG Overview** - RAG combines retrieval with generation ("
-                            "score: 0.95)"
-                        }
-                    }
-                ]
-            }
+                            "score: 0.95)",
+                        },
+                    },
+                ],
+            },
         )
         with patch("mcp_server.server.httpx.AsyncClient", return_value=mock_client):
             result = await mcp.call_tool("rag_search", {"query": "RAG architecture", "limit": 3})
@@ -639,8 +639,8 @@ class TestToolCallRoundTrip:
     async def test_full_chat_roundtrip(self, mock_httpx_client):
         mock_client = mock_httpx_client(
             response_data={
-                "choices": [{"message": {"content": "Kubernetes is an open-source container orchestration platform."}}]
-            }
+                "choices": [{"message": {"content": "Kubernetes is an open-source container orchestration platform."}}],
+            },
         )
         with patch("mcp_server.server.httpx.AsyncClient", return_value=mock_client):
             result = await mcp.call_tool(

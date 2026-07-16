@@ -23,6 +23,7 @@ async def rag_search(query: str, limit: int = 5) -> str:
 
     Returns:
         Search results with document excerpts and relevance scores
+
     """
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -48,6 +49,7 @@ async def rag_chat(message: str, context: str = "") -> str:
 
     Returns:
         AI-generated answer based on corporate knowledge base
+
     """
     messages = [{"role": "user", "content": message}]
     if context:
@@ -78,6 +80,7 @@ async def rag_feedback(query: str, answer: str, rating: str, correction: str = "
 
     Returns:
         Confirmation message
+
     """
     async with httpx.AsyncClient() as client:
         await client.post(

@@ -97,10 +97,10 @@ def tmp_yaml_dir(yaml_http_shell_content, yaml_malformed_tool, yaml_shell_no_whi
                             "type": "http",
                             "description": "A JSON-defined tool",
                             "http": {"method": "GET", "url_template": "https://api.example.com/data"},
-                        }
-                    ]
-                }
-            )
+                        },
+                    ],
+                },
+            ),
         )
         yield str(tmpdir)
 
@@ -309,3 +309,235 @@ class TestDeclarativeToolSchema:
 
         invalid = {"name": "123bad", "type": "http", "description": "Bad name"}
         assert DeclarativeToolSchema.validate_single(invalid) is False
+
+
+class TestDeclarativeToolSchemaEdgeCases:
+    """Edge cases for declarative tool schema validation."""
+
+    def test_validate_missing_description(self):
+        from tools.declarative import DeclarativeToolSchema
+
+        invalid = {"name": "test_tool", "type": "http"}
+        assert DeclarativeToolSchema.validate_single(invalid) is False
+
+    def test_validate_http_missing_method(self):
+        from tools.declarative import DeclarativeToolSchema
+
+        invalid = {
+            "name": "test_api",
+            "type": "http",
+            "description": "A test API",
+            "http": {"url_template": "https://example.com/api"},
+        }
+        assert DeclarativeToolSchema.validate_single(invalid) is False
+
+    def test_validate_http_missing_url(self):
+        from tools.declarative import DeclarativeToolSchema
+
+        invalid = {
+            "name": "test_api",
+            "type": "http",
+            "description": "A test API",
+            "http": {"method": "GET"},
+        }
+        assert DeclarativeToolSchema.validate_single(invalid) is False
+
+    def test_validate_shell_missing_command(self):
+        from tools.declarative import DeclarativeToolSchema
+
+        invalid = {
+            "name": "test_shell",
+            "type": "shell",
+            "description": "A test shell",
+            "shell": {"allowed_commands": ["ls"]},
+        }
+        assert DeclarativeToolSchema.validate_single(invalid) is False
+
+
+class TestShellHandlerEdgeCases:
+    """Edge cases for _make_shell_handler."""
+
+    def test_command_not_in_allowed_list(self):
+        from tools.declarative import _make_shell_handler
+
+        handler = _make_shell_handler(
+            command="ls {{path}}",
+            allowed_commands=["df"],
+        )
+        result = handler(path="/tmp")
+        assert result is not None
+        assert "Blocked" in result
+        assert "command" in result.lower()
+
+    def test_stderr_captured(self):
+        from tools.declarative import _make_shell_handler
+
+        handler = _make_shell_handler(
+            command="echo 'hello'",
+            allowed_commands=["echo"],
+        )
+        result = handler()
+        assert "hello" in result
+
+    def test_no_output_returns_placeholder(self):
+        from tools.declarative import _make_shell_handler
+
+        handler = _make_shell_handler(
+            command="echo -n ''",
+            allowed_commands=["echo"],
+        )
+        result = handler()
+        assert result is not None
+
+    def test_multiple_commands_blocked(self):
+        from tools.declarative import _make_shell_handler
+
+        handler = _make_shell_handler(
+            command="df -h {{path}}",
+            allowed_commands=["df"],
+        )
+        result = handler(path="; ls -la")
+        assert "Blocked" in result
+
+
+class TestHttpHandlerEdgeCases:
+    """Edge cases for _make_http_handler."""
+
+    @pytest.mark.asyncio
+    async def test_allowed_hosts_reject(self):
+        from tools.declarative import _make_http_handler
+
+        handler = _make_http_handler(
+            method="GET",
+            url_template="https://evil.com/data",
+            allowed_hosts=["trusted.com"],
+        )
+        result = await handler()
+        assert "Error" in result
+
+    @pytest.mark.asyncio
+    async def test_response_path_extraction(self):
+        from tools.declarative import _make_http_handler
+
+        handler = _make_http_handler(
+            method="GET",
+            url_template="https://api.example.com/data",
+            response_path="data.results",
+        )
+        assert callable(handler)
+        # Handler is an async function that extracts response_path
+        import inspect
+        assert inspect.iscoroutinefunction(handler)
+
+
+class TestDeclarativeToolLoaderEdgeCases:
+    """Edge cases for DeclarativeToolLoader."""
+
+    def test_read_file_unsupported_format(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write("not a tool file")
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert tools == []
+        finally:
+            os.unlink(path)
+
+    def test_read_file_json_decode_error(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("{invalid json")
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert tools == []
+        finally:
+            os.unlink(path)
+
+    def test_read_file_not_found(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        loader = DeclarativeToolLoader()
+        tools = loader.load_from_file("/nonexistent/path/tools.yaml")
+        assert tools == []
+
+    def test_parse_tools_non_dict_skipped(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write('{"tools": [{"name": "valid", "type": "http", "description": "ok", "http": {"method": "GET", "url_template": "https://api.example.com"}}, "not a dict"]}')
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert len(tools) == 1
+            assert tools[0].name == "valid"
+        finally:
+            os.unlink(path)
+
+    def test_tools_not_a_list_warns(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write('{"tools": "not a list"}')
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert tools == []
+        finally:
+            os.unlink(path)
+
+    def test_unknown_tool_type_rejected(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write('{"tools": [{"name": "unknown_type_tool", "type": "unknown", "description": "test"}]}')
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert len(tools) == 0
+        finally:
+            os.unlink(path)
+
+    def test_bad_visibility_falls_back_to_public(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write('{"tools": [{"name": "test_vis", "type": "shell", "description": "test", "visibility": "invalid_vis", "shell": {"command": "echo hi", "allowed_commands": ["echo"]}}]}')
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert len(tools) == 1
+            assert tools[0].visibility.value == "public"
+        finally:
+            os.unlink(path)
+
+    def test_retry_policy_parsed(self):
+        from tools.declarative import DeclarativeToolLoader
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write('{"tools": [{"name": "test_retry", "type": "shell", "description": "test", "shell": {"command": "echo hi", "allowed_commands": ["echo"]}, "retry_policy": {"max_retries": 5, "backoff": "linear"}}]}')
+            path = f.name
+
+        try:
+            loader = DeclarativeToolLoader()
+            tools = loader.load_from_file(path)
+            assert len(tools) == 1
+            assert tools[0].retry_policy is not None
+            assert tools[0].retry_policy.max_retries == 5
+        finally:
+            os.unlink(path)

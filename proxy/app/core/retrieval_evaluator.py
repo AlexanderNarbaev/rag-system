@@ -1,6 +1,5 @@
 # proxy/app/retrieval_evaluator.py
-"""
-CRAG-style retrieval quality evaluation.
+"""CRAG-style retrieval quality evaluation.
 
 Evaluates the quality of retrieved chunks and triggers corrective actions:
 - USE: good retrieval, proceed
@@ -24,8 +23,7 @@ class RetrievalEvaluator:
     LOW_THRESHOLD = 0.2
 
     def evaluate_quality(self, query: str, retrieved_chunks: list[dict[str, Any]]) -> float:
-        """
-        Return confidence score 0.0-1.0 based on:
+        """Return confidence score 0.0-1.0 based on:
         - Average similarity scores (if present)
         - Score distribution (variance/entropy)
         - Number of results above threshold
@@ -83,8 +81,7 @@ class RetrievalEvaluator:
         return scores
 
     def get_action(self, confidence: float) -> str:
-        """
-        Map confidence to action:
+        """Map confidence to action:
         - confidence >= 0.7: 'USE' — good results, use as-is
         - 0.4 <= confidence < 0.7: 'REWRITE' — reformulate query
         - 0.2 <= confidence < 0.4: 'EXPAND' — graph expansion or broader search
@@ -92,16 +89,14 @@ class RetrievalEvaluator:
         """
         if confidence >= self.HIGH_THRESHOLD:
             return "USE"
-        elif confidence >= self.MEDIUM_THRESHOLD:
+        if confidence >= self.MEDIUM_THRESHOLD:
             return "REWRITE"
-        elif confidence >= self.LOW_THRESHOLD:
+        if confidence >= self.LOW_THRESHOLD:
             return "EXPAND"
-        else:
-            return "FALLBACK"
+        return "FALLBACK"
 
     def decompose_chunks(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """
-        Decompose-then-recompose: filter noise, keep key information.
+        """Decompose-then-recompose: filter noise, keep key information.
         Removes chunks with very low scores and near-duplicate content.
         Returns cleaned list of chunks.
         """
@@ -146,8 +141,7 @@ class RetrievalEvaluator:
         query: str,
         retrieved_chunks: list[dict[str, Any]],
     ) -> tuple[float, str, list[dict[str, Any]]]:
-        """
-        Combined: evaluate quality, get action, and optionally clean chunks.
+        """Combined: evaluate quality, get action, and optionally clean chunks.
         Returns (confidence, action, processed_chunks).
         """
         confidence = self.evaluate_quality(query, retrieved_chunks)
@@ -162,6 +156,6 @@ class RetrievalEvaluator:
 
         logger.debug(
             f"Retrieval eval: confidence={confidence:.3f}, action={action}, "
-            f"chunks={len(retrieved_chunks)}->{len(processed)}"
+            f"chunks={len(retrieved_chunks)}->{len(processed)}",
         )
         return confidence, action, processed

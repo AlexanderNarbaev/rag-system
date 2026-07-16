@@ -54,6 +54,7 @@ def make_scored_points(texts_with_meta):
 
     Returns:
         List of mock ScoredPoint objects.
+
     """
     points = []
     for i, (text, score, meta) in enumerate(texts_with_meta):
@@ -82,7 +83,7 @@ def mock_llm_response(content="Test response"):
                 "index": 0,
                 "message": {"role": "assistant", "content": content},
                 "finish_reason": "stop",
-            }
+            },
         ],
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
     }

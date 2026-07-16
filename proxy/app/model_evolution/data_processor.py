@@ -52,7 +52,7 @@ class DataProcessor:
                         "instruction": query,
                         "input": answer or "",
                         "output": correction,
-                    }
+                    },
                 )
 
             if query and source_chunks:
@@ -62,7 +62,7 @@ class DataProcessor:
                             "query": query,
                             "chunk": chunk.get("text", chunk) if isinstance(chunk, dict) else str(chunk),
                             "relevance": relevance,
-                        }
+                        },
                     )
 
         self._save_jsonl(output / "slm_intent.jsonl", dataset.slm_data)
@@ -98,12 +98,11 @@ class DataProcessor:
                 "messages": [
                     {"role": "user", "content": d.get("instruction", d.get("query", ""))},
                     {"role": "assistant", "content": d.get("output", d.get("correction", ""))},
-                ]
+                ],
             }
             for d in data
         ]
 
     def _save_jsonl(self, path: Path, data: list[dict[str, Any]]) -> None:
         with open(path, "w") as f:
-            for item in data:
-                f.write(json.dumps(item, ensure_ascii=False) + "\n")
+            f.writelines(json.dumps(item, ensure_ascii=False) + "\n" for item in data)

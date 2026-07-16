@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 """Tests for proxy/app/tools/errors.py — Tool error taxonomy."""
 
 from proxy.app.shared.exceptions import RAGError

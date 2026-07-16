@@ -1,6 +1,5 @@
 # proxy/app/db/migration_003_neo4j_schema.py
-"""
-Migration 003: Neo4j graph schema initialization.
+"""Migration 003: Neo4j graph schema initialization.
 
 Sets up Neo4j constraints and indexes for the knowledge graph:
 - Entity nodes with unique constraints

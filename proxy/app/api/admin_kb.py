@@ -1,6 +1,5 @@
 # proxy/app/api/admin_kb.py
-"""
-Knowledge Base Administration API.
+"""Knowledge Base Administration API.
 
 Provides CRUD endpoints for managing multiple knowledge bases,
 ETL task tracking, and statistics. Inspired by RAGFlow's dataset management.

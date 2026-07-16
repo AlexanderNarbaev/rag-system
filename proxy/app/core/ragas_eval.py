@@ -1,5 +1,4 @@
-"""
-RAGAS-style evaluation metrics for RAG system.
+"""RAGAS-style evaluation metrics for RAG system.
 Reference-free evaluation using LLM-as-judge.
 
 Metrics:
@@ -66,7 +65,7 @@ _STOP_WORDS = frozenset(
         "but",
         "not",
         "no",
-    }
+    },
 )
 
 
@@ -77,8 +76,7 @@ def _tokenize(text: str) -> set[str]:
 
 
 def compute_faithfulness(answer: str, context: str, llm_client: Any = None) -> float:
-    """
-    Compute faithfulness score: how well the answer is supported by the context.
+    """Compute faithfulness score: how well the answer is supported by the context.
     Returns 0.0-1.0 where 1.0 = fully faithful.
 
     Uses claim extraction + verification approach.
@@ -108,8 +106,7 @@ def compute_faithfulness(answer: str, context: str, llm_client: Any = None) -> f
 
 
 def compute_answer_relevance(question: str, answer: str) -> float:
-    """
-    Compute answer relevance: how well the answer addresses the question.
+    """Compute answer relevance: how well the answer addresses the question.
     Returns 0.0-1.0 where 1.0 = fully relevant.
     """
     if not question or not answer:
@@ -128,8 +125,7 @@ def compute_answer_relevance(question: str, answer: str) -> float:
 
 
 def compute_context_relevance(question: str, contexts: list[str]) -> float:
-    """
-    Compute context relevance: how relevant the retrieved passages are to the question.
+    """Compute context relevance: how relevant the retrieved passages are to the question.
     Returns 0.0-1.0 where 1.0 = fully relevant.
     """
     if not question or not contexts:
@@ -156,8 +152,7 @@ def evaluate_rag_response(
     answer: str,
     contexts: list[str],
 ) -> dict[str, float]:
-    """
-    Compute all RAGAS metrics for a RAG response.
+    """Compute all RAGAS metrics for a RAG response.
     Returns dict with metric names and scores.
     """
     context_text = " ".join(contexts)

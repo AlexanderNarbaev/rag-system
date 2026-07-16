@@ -150,9 +150,8 @@ async def chat_completions(
 
     raw_request.state.user_context = user
 
-    # Trace: extract incoming context from headers
-    trace_headers = {k.lower(): v for k, v in raw_request.headers.items() if k.lower().startswith("trace")}
-    request_span_name = "rag.chat.completions"
+    # Trace: extract incoming context from headers (available for future instrumentation)
+    _ = {k.lower(): v for k, v in raw_request.headers.items() if k.lower().startswith("trace")}
 
     # Input validation
     validated_model = InputValidator.validate_non_empty(request.model, max_len=256)
@@ -192,7 +191,7 @@ async def chat_completions(
         safe_query = InputValidator.sanitize_for_log(user_query[:100])
         logger.info(
             f"Request {request_id}: user={client_ip}, roles={role_info}, "
-            f"query={safe_query}, version={version}, stream={request.stream}"
+            f"query={safe_query}, version={version}, stream={request.stream}",
         )
 
     _main.request_tracker.start(request_id, metadata={"model": request.model, "client_ip": client_ip})
@@ -216,8 +215,10 @@ async def chat_completions(
             model=request.model,
             choices=[
                 ChatCompletionResponseChoice(
-                    index=0, message=ChatMessage(role="assistant", content=""), finish_reason="stop"
-                )
+                    index=0,
+                    message=ChatMessage(role="assistant", content=""),
+                    finish_reason="stop",
+                ),
             ],
             rag_sources=sources,
         )
@@ -247,7 +248,7 @@ async def chat_completions(
                     "temperature": request.temperature,
                     "max_tokens": request.max_tokens,
                     "stream": request.stream,
-                }
+                },
             )
         except Exception as orch_err:
             logger.error("LangGraph orchestrator failed: %s", orch_err, exc_info=True)
@@ -268,78 +269,79 @@ async def chat_completions(
             ) from orch_err
         if request.stream:
             return StreamingResponse(final_response, media_type="text/event-stream")
-        else:
-            response_text = final_response["answer"]
-            context = final_response.get("context", "")
-            orchestrator_sources: list[dict[str, Any]] = []
-            from proxy.app.core.context import compute_chunk_hash
+        response_text = final_response["answer"]
+        context = final_response.get("context", "")
+        orchestrator_sources: list[dict[str, Any]] = []
+        from proxy.app.core.context import compute_chunk_hash
 
-            for chunk, score in final_response.get("reranked_chunks", []):
-                orchestrator_sources.append(
-                    {
-                        "chunk_id": compute_chunk_hash(chunk),
-                        "source": chunk.get("source_type", "unknown"),
-                        "title": chunk.get("title", "") or chunk.get("doc_title", ""),
-                        "version": chunk.get("version", "unknown"),
-                        "relevance": round(score, 4),
-                        "text_preview": chunk.get("text", "")[:200],
-                    }
-                )
-            from proxy.app.core.confidence import compute_confidence
-            from proxy.app.core.hitl import generate_feedback_id
-
-            feedback_id = generate_feedback_id()
-            confidence = compute_confidence(query=user_query, context=context, answer=response_text)
-            completion = ChatCompletionResponse(
-                id=request_id,
-                created=int(time.time()),
-                model=request.model,
-                choices=[
-                    ChatCompletionResponseChoice(
-                        index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
-                    )
-                ],
-                rag_feedback_id=feedback_id,
-                rag_confidence=confidence.score,
-                rag_sources=orchestrator_sources,
+        for chunk, score in final_response.get("reranked_chunks", []):
+            orchestrator_sources.append(
+                {
+                    "chunk_id": compute_chunk_hash(chunk),
+                    "source": chunk.get("source_type", "unknown"),
+                    "title": chunk.get("title", "") or chunk.get("doc_title", ""),
+                    "version": chunk.get("version", "unknown"),
+                    "relevance": round(score, 4),
+                    "text_preview": chunk.get("text", "")[:200],
+                },
             )
-            duration_ms = (time.time() - start_time) * 1000
-            _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
-            if _main.audit_logger:
-                _main.audit_logger.log_query(
-                    user_id=client_ip,
-                    query=user_query,
-                    response_preview=response_text[:200],
-                    chunks=len(orchestrator_sources),
-                    duration_ms=duration_ms,
-                    tokens=len(response_text) // 4,
-                    client_ip=client_ip,
-                    result_status="success",
-                    metadata={"version": version, "model": request.model, "source": "langgraph"},
-                )
-                _main.audit_logger.log_trace(
-                    request_id=request_id,
-                    user_id=client_ip,
-                    query=user_query,
-                    chunks_count=len(orchestrator_sources),
-                    rerank_scores=[s["relevance"] for s in orchestrator_sources],
-                    duration_ms=duration_ms,
-                    tokens=len(response_text) // 4,
-                    confidence=confidence.score,
-                    feedback_id=feedback_id,
-                    client_ip=client_ip,
-                )
-            if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
-                from proxy.app.core.hitl import log_interaction
+        from proxy.app.core.confidence import compute_confidence
+        from proxy.app.core.hitl import generate_feedback_id
 
-                await log_interaction(
-                    request_id=request_id,
-                    user_query=user_query,
-                    context="[agentic]",
-                    response=response_text,
-                    metadata={"version": version, "model": request.model, "client_ip": client_ip},
-                )
-            return completion
+        feedback_id = generate_feedback_id()
+        confidence = compute_confidence(query=user_query, context=context, answer=response_text)
+        completion = ChatCompletionResponse(
+            id=request_id,
+            created=int(time.time()),
+            model=request.model,
+            choices=[
+                ChatCompletionResponseChoice(
+                    index=0,
+                    message=ChatMessage(role="assistant", content=response_text),
+                    finish_reason="stop",
+                ),
+            ],
+            rag_feedback_id=feedback_id,
+            rag_confidence=confidence.score,
+            rag_sources=orchestrator_sources,
+        )
+        duration_ms = (time.time() - start_time) * 1000
+        _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
+        if _main.audit_logger:
+            _main.audit_logger.log_query(
+                user_id=client_ip,
+                query=user_query,
+                response_preview=response_text[:200],
+                chunks=len(orchestrator_sources),
+                duration_ms=duration_ms,
+                tokens=len(response_text) // 4,
+                client_ip=client_ip,
+                result_status="success",
+                metadata={"version": version, "model": request.model, "source": "langgraph"},
+            )
+            _main.audit_logger.log_trace(
+                request_id=request_id,
+                user_id=client_ip,
+                query=user_query,
+                chunks_count=len(orchestrator_sources),
+                rerank_scores=[s["relevance"] for s in orchestrator_sources],
+                duration_ms=duration_ms,
+                tokens=len(response_text) // 4,
+                confidence=confidence.score,
+                feedback_id=feedback_id,
+                client_ip=client_ip,
+            )
+        if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
+            from proxy.app.core.hitl import log_interaction
+
+            await log_interaction(
+                request_id=request_id,
+                user_query=user_query,
+                context="[agentic]",
+                response=response_text,
+                metadata={"version": version, "model": request.model, "client_ip": client_ip},
+            )
+        return completion
 
     # Standard RAG pipeline
     if request.stream:
@@ -371,21 +373,21 @@ async def chat_completions(
                 # If retrieval failed and we got a refusal (empty messages list), return rag_context directly
                 if not messages_for_llm:
                     add_event("rag.pipeline.refusal", {"reason": "no_messages_for_llm"})
-                    refusal_text = (
-                        rag_context
-                        if rag_context
-                        else ("I don't have enough relevant information to answer this question reliably.")
+                    refusal_text = rag_context or (
+                        "I don't have enough relevant information to answer this question reliably."
                     )
                     yield optimizer.format_chunk(
                         {
                             "choices": [{"delta": {"content": refusal_text}, "index": 0, "finish_reason": "stop"}],
-                        }
+                        },
                     )
                     yield "data: [DONE]\n\n"
                     return
                 assert isinstance(messages_for_llm, list), "messages_for_llm must be a list after RAG query"
                 async for chunk in _main.stream_completion(  # type: ignore[attr-defined]
-                    messages_for_llm, request.temperature or 0.2, request.max_tokens or 4096
+                    messages_for_llm,
+                    request.temperature or 0.2,
+                    request.max_tokens or 4096,
                 ):
                     choices = chunk.get("choices", [])
                     delta_content = choices[0].get("delta", {}).get("content", "") if choices else ""
@@ -427,95 +429,96 @@ async def chat_completions(
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
-    else:
-        # Non-streaming
-        try:
-            _rag_result = await _main.process_rag_query(
-                user_query=user_query,
-                version=version,
-                force_refresh=request.rag_force_refresh or False,
-                temperature=request.temperature or 0.2,
-                max_tokens=request.max_tokens or 4096,
-                stream=False,
-                other_messages=other_messages,
-                user_context=user,
-                top_k_override=request.rag_top_k,
-            )
-        except Exception as rag_err:
-            logger.error("Non-streaming RAG query failed: %s", rag_err, exc_info=True)
-            if _main.audit_logger:
-                _main.audit_logger.log_error(
-                    error_type="RAGQueryError",
-                    error_msg=str(rag_err),
-                    stack_trace=None,
-                    client_ip=client_ip,
-                    endpoint="/v1/chat/completions",
-                )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "error": "rag_unavailable",
-                    "message": "Knowledge system temporarily unavailable. Please try again later.",
-                },
-            ) from rag_err
-        response_text = str(_rag_result[0])
-        rag_ctx: str = str(_rag_result[1])
-        from_cache = _rag_result[2]
-        sources = _rag_result[3]
-        ragas_scores = _rag_result[4]
-        from proxy.app.core.confidence import compute_confidence
-        from proxy.app.core.hitl import generate_feedback_id
-
-        feedback_id = generate_feedback_id()
-        confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text)
-        completion = ChatCompletionResponse(
-            id=request_id,
-            created=int(time.time()),
-            model=request.model,
-            choices=[
-                ChatCompletionResponseChoice(
-                    index=0, message=ChatMessage(role="assistant", content=response_text), finish_reason="stop"
-                )
-            ],
-            rag_feedback_id=feedback_id,
-            rag_confidence=confidence.score,
-            rag_sources=sources,
-            ragas_scores=ragas_scores or None,
+    # Non-streaming
+    try:
+        _rag_result = await _main.process_rag_query(
+            user_query=user_query,
+            version=version,
+            force_refresh=request.rag_force_refresh or False,
+            temperature=request.temperature or 0.2,
+            max_tokens=request.max_tokens or 4096,
+            stream=False,
+            other_messages=other_messages,
+            user_context=user,
+            top_k_override=request.rag_top_k,
         )
-        duration_ms = (time.time() - start_time) * 1000
-        _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
+    except Exception as rag_err:
+        logger.error("Non-streaming RAG query failed: %s", rag_err, exc_info=True)
         if _main.audit_logger:
-            _main.audit_logger.log_query(
-                user_id=client_ip,
-                query=user_query,
-                response_preview=response_text[:200],
-                chunks=len(sources),
-                duration_ms=duration_ms,
-                tokens=len(response_text) // 4,
+            _main.audit_logger.log_error(
+                error_type="RAGQueryError",
+                error_msg=str(rag_err),
+                stack_trace=None,
                 client_ip=client_ip,
-                result_status="success",
-                metadata={"version": version, "model": request.model, "from_cache": from_cache},
+                endpoint="/v1/chat/completions",
             )
-            _main.audit_logger.log_trace(
-                request_id=request_id,
-                user_id=client_ip,
-                query=user_query,
-                chunks_count=len(sources),
-                rerank_scores=[s["relevance"] for s in sources],
-                duration_ms=duration_ms,
-                tokens=len(response_text) // 4,
-                confidence=confidence.score,
-                feedback_id=feedback_id,
-                client_ip=client_ip,
-            )
-        if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
-            from proxy.app.core.hitl import log_interaction
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "rag_unavailable",
+                "message": "Knowledge system temporarily unavailable. Please try again later.",
+            },
+        ) from rag_err
+    response_text = str(_rag_result[0])
+    rag_ctx: str = str(_rag_result[1])
+    from_cache = _rag_result[2]
+    sources = _rag_result[3]
+    ragas_scores = _rag_result[4]
+    from proxy.app.core.confidence import compute_confidence
+    from proxy.app.core.hitl import generate_feedback_id
 
-            await log_interaction(
-                request_id=request_id,
-                user_query=user_query,
-                context="[rag_context_omitted_for_logging]",
-                response=response_text,
-                metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
-            )
-        return completion
+    feedback_id = generate_feedback_id()
+    confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text)
+    completion = ChatCompletionResponse(
+        id=request_id,
+        created=int(time.time()),
+        model=request.model,
+        choices=[
+            ChatCompletionResponseChoice(
+                index=0,
+                message=ChatMessage(role="assistant", content=response_text),
+                finish_reason="stop",
+            ),
+        ],
+        rag_feedback_id=feedback_id,
+        rag_confidence=confidence.score,
+        rag_sources=sources,
+        ragas_scores=ragas_scores or None,
+    )
+    duration_ms = (time.time() - start_time) * 1000
+    _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
+    if _main.audit_logger:
+        _main.audit_logger.log_query(
+            user_id=client_ip,
+            query=user_query,
+            response_preview=response_text[:200],
+            chunks=len(sources),
+            duration_ms=duration_ms,
+            tokens=len(response_text) // 4,
+            client_ip=client_ip,
+            result_status="success",
+            metadata={"version": version, "model": request.model, "from_cache": from_cache},
+        )
+        _main.audit_logger.log_trace(
+            request_id=request_id,
+            user_id=client_ip,
+            query=user_query,
+            chunks_count=len(sources),
+            rerank_scores=[s["relevance"] for s in sources],
+            duration_ms=duration_ms,
+            tokens=len(response_text) // 4,
+            confidence=confidence.score,
+            feedback_id=feedback_id,
+            client_ip=client_ip,
+        )
+    if _main.LOG_REQUESTS:  # type: ignore[attr-defined]
+        from proxy.app.core.hitl import log_interaction
+
+        await log_interaction(
+            request_id=request_id,
+            user_query=user_query,
+            context="[rag_context_omitted_for_logging]",
+            response=response_text,
+            metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
+        )
+    return completion

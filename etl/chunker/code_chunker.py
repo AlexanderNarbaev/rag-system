@@ -59,7 +59,7 @@ def chunk_python(source: str) -> list[CodeChunk]:
                     docstring=docstring,
                     line_start=start + 1,
                     line_end=end if isinstance(end, int) else start + 1,
-                )
+                ),
             )
 
     return chunks
@@ -92,7 +92,7 @@ def chunk_javascript(source: str) -> list[CodeChunk]:
         (
             r"/\*\*(.*?)\*/\s*\n\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{(?:[^{}]|\{[^{}]*\})*\}",
             True,
-        ),  # noqa: E501
+        ),
         (r"(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{(?:[^{}]|\{[^{}]*\})*\}", False),
         (r"(?:export\s+)?class\s+(\w+)\s*(?:extends\s+\w+\s*)?\{(?:[^{}]|\{[^{}]*\})*\}", False),
         (r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{(?:[^{}]|\{[^{}]*\})*\}", False),
@@ -125,7 +125,7 @@ def chunk_javascript(source: str) -> list[CodeChunk]:
                     code=code,
                     language="javascript",
                     docstring=docstring,
-                )
+                ),
             )
 
     return chunks
@@ -141,7 +141,7 @@ def chunk_java(source: str) -> list[CodeChunk]:
     class_pattern = (
         r"(?:/\*\*(.*?)\*/\s*\n\s*)?(?:public\s+)?(?:abstract\s+)?(?:class|interface|enum)\s+(\w+)\s*("
         r"?:extends\s+\w+\s*)?(?:implements\s+[^{]+\s*)?\{(?:[^{}]|\{[^{}]*\})*\}"
-    )  # noqa: E501
+    )
     for match in re.finditer(class_pattern, source, re.MULTILINE | re.DOTALL):
         groups = match.groups()
         docstring = ""
@@ -163,7 +163,7 @@ def chunk_java(source: str) -> list[CodeChunk]:
     method_pattern = (
         r"(?:/\*\*(.*?)\*/\s*\n\s*)?(?:public|private|protected|static|\s)*\s+(\w+(?:<[^>]+>)?)\s+("
         r"\w+)\s*\([^)]*\)\s*(?:\{|throws[^{]*\{)(?:[^{}]|\{[^{}]*\})*\}"
-    )  # noqa: E501
+    )
     for match in re.finditer(method_pattern, source, re.MULTILINE | re.DOTALL):
         javadoc_group = match.group(1)
         _return_type = match.group(2)
@@ -196,10 +196,9 @@ def chunk_code(source: str, language: str) -> list[CodeChunk]:
     lang = language.lower()
     if lang == "python":
         return chunk_python(source)
-    elif lang in ("javascript", "js"):
+    if lang in ("javascript", "js"):
         return chunk_javascript(source)
-    elif lang == "java":
+    if lang == "java":
         return chunk_java(source)
-    else:
-        logger.debug("No chunker for language: %s", lang)
-        return []
+    logger.debug("No chunker for language: %s", lang)
+    return []

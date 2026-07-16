@@ -1,6 +1,5 @@
 # proxy/app/rate_limiter.py
-"""
-Token bucket rate limiter middleware.
+"""Token bucket rate limiter middleware.
 Supports per-IP and per-API-key rate limiting with configurable limits.
 """
 
@@ -77,6 +76,7 @@ class RateLimiter:
 
         Returns:
             Tuple of (allowed, retry_after_seconds).
+
         """
         bucket = await self._get_bucket(key)
         return bucket.consume()
@@ -107,6 +107,7 @@ def init_rate_limiter(rate_per_minute: int = 60, burst: int = 10) -> RateLimiter
 
     Returns:
         The initialized RateLimiter instance.
+
     """
     global _limiter
     _limiter = RateLimiter(rate_per_minute=rate_per_minute, burst=burst)
@@ -160,8 +161,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                             "message": "Rate limit exceeded. Please wait before retrying.",
                             "type": "rate_limit_error",
                             "retry_after_seconds": retry_seconds,
-                        }
-                    }
+                        },
+                    },
                 ),
                 status_code=429,
                 media_type="application/json",
@@ -181,6 +182,7 @@ def add_rate_limit_middleware(app: FastAPI, rate_per_minute: int = 60, burst: in
 
     Returns:
         The initialized RateLimiter instance.
+
     """
     limiter = init_rate_limiter(rate_per_minute=rate_per_minute, burst=burst)
     app.add_middleware(RateLimitMiddleware, limiter=limiter)

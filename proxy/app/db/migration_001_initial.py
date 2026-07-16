@@ -1,6 +1,5 @@
 # proxy/app/db/migration_001_initial.py
-"""
-Migration 001: Initial schema — baseline for existing databases.
+"""Migration 001: Initial schema — baseline for existing databases.
 
 This migration captures the existing schema from user_db.py as the baseline.
 For databases that already exist, this migration will be recorded as applied

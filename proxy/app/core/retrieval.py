@@ -1,6 +1,5 @@
 # proxy/app/retrieval.py
-"""
-Retrieval module for the RAG proxy.
+"""Retrieval module for the RAG proxy.
 
 Implements hybrid search (dense + sparse) with RRF fusion, embedding cache
 via Redis/In-Memory, optional graph expansion via Neo4j, and Qdrant integration
@@ -99,7 +98,7 @@ def _get_dense_vector_name(client: Any) -> str | None:
                             name,
                             COLLECTION_NAME,
                         )
-                        return cast(str, name)
+                        return cast("str", name)
             # Default: anonymous vector — use None (Qdrant uses default when using=None)
             _DENSE_VECTOR_NAME = None
             logger.info(
@@ -135,15 +134,14 @@ if _GRAPH_ENABLED:
 # Circuit breaker for Qdrant service calls (graceful degradation)
 try:
     from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError
-    from proxy.app.shared.circuit_breaker import get_breaker as _get_cb  # noqa: F811
+    from proxy.app.shared.circuit_breaker import get_breaker as _get_cb
 except ImportError:
     _get_cb = None  # type: ignore[assignment]
     CircuitBreakerOpenError = RuntimeError  # type: ignore[assignment,misc]
 
 
 class EmbeddingCache:
-    """
-    Cache for query embeddings to avoid recomputation.
+    """Cache for query embeddings to avoid recomputation.
 
     Two levels:
     1. Exact match: hash(query) -> embedding
@@ -214,16 +212,30 @@ def initialize_retrieval() -> None:
 
     Gracefully handles Qdrant unavailability — sets ``qdrant_client`` to
     ``None`` so subsequent hybrid-search calls degrade to empty results
-    instead of crashing the proxy.
+    instead of crashing the proxy. Retries with exponential backoff on
+    transient connection failures.
     """
     global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
     if not QDRANT_AVAILABLE:
         raise ImportError("qdrant-client is required. Install with: pip install qdrant-client")
 
+    from proxy.app.shared.retry import RetryConfig, sync_retry
+
+    def _connect_qdrant() -> Any:
+        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
+        client.get_collections()
+        return client
+
     try:
-        qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
-        # Quick connectivity probe — if Qdrant is unreachable we degrade gracefully
-        qdrant_client.get_collections()
+        qdrant_client = sync_retry(
+            _connect_qdrant,
+            config=RetryConfig(
+                max_attempts=3,
+                base_delay=2.0,
+                jitter=True,
+                circuit_breaker_name="qdrant",
+            ),
+        )
         logger.info("Qdrant connection established at %s:%s", QDRANT_HOST, QDRANT_PORT)
     except Exception as exc:
         logger.warning("Qdrant unavailable at %s:%s — degraded mode (%s)", QDRANT_HOST, QDRANT_PORT, exc)
@@ -245,8 +257,22 @@ def initialize_retrieval() -> None:
     # Граф Neo4j
     if _GRAPH_ENABLED:
         try:
-            neo4j_driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-            neo4j_driver.verify_connectivity()
+            from proxy.app.shared.retry import RetryConfig, sync_retry
+
+            def _connect_neo4j() -> Any:
+                driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+                driver.verify_connectivity()
+                return driver
+
+            neo4j_driver = sync_retry(
+                _connect_neo4j,
+                config=RetryConfig(
+                    max_attempts=3,
+                    base_delay=2.0,
+                    jitter=True,
+                    circuit_breaker_name="neo4j",
+                ),
+            )
             logger.info("Neo4j driver initialized")
         except Exception as e:
             logger.warning(f"Neo4j connection failed: {e}. Graph expansion disabled.")
@@ -269,11 +295,11 @@ def _compute_dense_embedding(text: str) -> list[float]:
             add_event("rag.embedding.cache_hit", {"cache": "redis"})
             # Cache may return already-parsed list or raw JSON string
             if isinstance(cached, list):
-                return cast(list[float], cached)
+                return cast("list[float]", cached)
             try:
-                return cast(list[float], json.loads(cached))
+                return cast("list[float]", json.loads(cached))
             except (json.JSONDecodeError, TypeError):
-                return cast(list[float], cached)
+                return cast("list[float]", cached)
     add_event("rag.embedding.compute", {"text_length": len(text)})
     assert embedder is not None, "embedder must be initialized"
     vec: list[float] = embedder.encode(text, normalize_embeddings=True).tolist()
@@ -284,8 +310,7 @@ def _compute_dense_embedding(text: str) -> list[float]:
 
 
 def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
-    """
-    Вычисляет sparse вектор через bge-m3 (если поддерживается).
+    """Вычисляет sparse вектор через bge-m3 (если поддерживается).
     Возвращает SparseVector или None.
     """
     if embedder is not None and hasattr(embedder, "encode_sparse"):
@@ -296,8 +321,7 @@ def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
 
 
 def reciprocal_rank_fusion(results_dense: list[Any], results_sparse: list[Any], k: int = 60) -> list[Any]:
-    """
-    RRF слияние двух списков результатов (каждый элемент должен иметь .id и .score).
+    """RRF слияние двух списков результатов (каждый элемент должен иметь .id и .score).
     Возвращает объединённый список, отсортированный по RRF-скорy.
     """
     scores: dict[Any, float] = {}
@@ -314,8 +338,7 @@ def reciprocal_rank_fusion(results_dense: list[Any], results_sparse: list[Any], 
 
 
 def knee_point_pruning(results: list[Any], sensitivity: float = 0.5) -> list[Any]:
-    """
-    Dynamic top-k using knee-point detection on score curve.
+    """Dynamic top-k using knee-point detection on score curve.
 
     Finds the optimal cutoff point where score drops significantly.
     Based on DRAG with KNEE research: https://habr.com/ru/articles/1016438/
@@ -326,6 +349,7 @@ def knee_point_pruning(results: list[Any], sensitivity: float = 0.5) -> list[Any
 
     Returns:
         Pruned results up to the knee point
+
     """
     if len(results) <= 2:
         return results
@@ -377,8 +401,7 @@ def knee_point_pruning(results: list[Any], sensitivity: float = 0.5) -> list[Any
 
 
 def filter_results_by_score(results: list[Any]) -> tuple[list[Any], str]:
-    """
-    Two-level score filtering: strong vs borderline sources.
+    """Two-level score filtering: strong vs borderline sources.
 
     Returns (filtered_results, quality_level) where quality_level is
     'strong', 'borderline', or 'insufficient'.
@@ -393,15 +416,14 @@ def filter_results_by_score(results: list[Any]) -> tuple[list[Any], str]:
     if len(strong) >= MIN_STRONG_SOURCES:
         # Good quality — use strong + some borderline
         return strong + borderline[:2], "strong"
-    elif strong:
+    if strong:
         # Some strong sources but not enough
         return strong + borderline[:1], "borderline"
-    elif borderline:
+    if borderline:
         # Only borderline sources
         return borderline[:3], "borderline"
-    else:
-        # No relevant sources
-        return [], "insufficient"
+    # No relevant sources
+    return [], "insufficient"
 
 
 def hybrid_search(
@@ -411,8 +433,7 @@ def hybrid_search(
     namespace: str | None = None,
     lang: str | None = None,
 ) -> list[Any]:
-    """
-    Гибридный поиск в Qdrant: dense + sparse.
+    """Гибридный поиск в Qdrant: dense + sparse.
     Фильтрация по версии и namespace (для мультитенантности).
     Поддержка кросс-языкового поиска через bge-m3.
     Возвращает список объектов Qdrant ScoredPoint.
@@ -425,6 +446,7 @@ def hybrid_search(
         lang: Optional detected language code (for logging/metrics).
               bge-m3 supports cross-lingual retrieval natively —
               a query in German can find chunks in English.
+
     """
     with tracer.start_as_current_span("rag.retrieval.hybrid_search") as span:
         if span.is_recording():
@@ -500,7 +522,7 @@ def hybrid_search(
                         limit=top_k,
                         query_filter=q_filter,
                         with_payload=True,
-                    )
+                    ),
                 )
                 sparse_results = sparse_response.points
             except CircuitBreakerOpenError:
@@ -543,8 +565,7 @@ def hybrid_search(
 
 
 def graph_expand_query(query: str, max_entities: int = 5) -> str:
-    """
-    Расширяет запрос с помощью графа знаний (Neo4j).
+    """Расширяет запрос с помощью графа знаний (Neo4j).
     Извлекает связанные сущности из графа и возвращает их в виде текста.
     """
     if not _GRAPH_ENABLED or not neo4j_driver:
@@ -582,8 +603,7 @@ def graph_expand_query(query: str, max_entities: int = 5) -> str:
 
 
 class MultiHopGraphExplorer:
-    """
-    Enhanced graph traversal for multi-hop reasoning queries.
+    """Enhanced graph traversal for multi-hop reasoning queries.
 
     Supports:
     - Configurable traversal depth (1-4 hops)
@@ -609,8 +629,7 @@ class MultiHopGraphExplorer:
         start_entities: list[str],
         entity_map: dict[str, list[str]],
     ) -> list[dict[str, Any]]:
-        """
-        Multi-hop traversal from start entities.
+        """Multi-hop traversal from start entities.
 
         Returns list of path dicts with:
         - path: list of entity names
@@ -661,7 +680,7 @@ class MultiHopGraphExplorer:
                         "path": path,
                         "score": self._score_path(path, entity_map),
                         "hops": hops,
-                    }
+                    },
                 )
                 continue
 
@@ -672,7 +691,7 @@ class MultiHopGraphExplorer:
                         "path": path,
                         "score": self._score_path(path, entity_map),
                         "hops": hops,
-                    }
+                    },
                 )
                 continue
 
@@ -722,8 +741,7 @@ _multi_hop_explorer = MultiHopGraphExplorer()
 
 
 class CypherQueryGenerator:
-    """
-    Generate Cypher queries from natural language for Neo4j.
+    """Generate Cypher queries from natural language for Neo4j.
 
     Converts entity-based queries into graph traversals.
 
@@ -760,8 +778,7 @@ class CypherQueryGenerator:
     ]
 
     def generate(self, query: str) -> str | None:
-        """
-        Generate Cypher query from natural language.
+        """Generate Cypher query from natural language.
 
         Returns Cypher query string or None if no pattern matches.
         """
@@ -807,8 +824,7 @@ _cypher_generator = CypherQueryGenerator()
 
 
 class GlobalSearch:
-    """
-    Global search using community summaries for corpus-wide questions.
+    """Global search using community summaries for corpus-wide questions.
 
     Based on: Microsoft GraphRAG (arxiv:2404.16130)
 
@@ -837,8 +853,7 @@ class GlobalSearch:
         query: str,
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
-        """
-        Search across community summaries for global answers.
+        """Search across community summaries for global answers.
 
         Returns list of relevant community summaries.
         """
@@ -872,7 +887,7 @@ class GlobalSearch:
                     "key_entities": community.get("key_entities", []),
                     "score": score,
                     "members": community.get("members", []),
-                }
+                },
             )
 
         scored.sort(key=lambda x: x["score"], reverse=True)
@@ -900,7 +915,7 @@ if cache_manager is None:
     cache_manager = CacheManager(use_redis=False)
 
 
-def _parse_timestamp(value: str | int | float | None) -> float | None:
+def _parse_timestamp(value: str | float | None) -> float | None:
     """Parse a timestamp from a string or numeric value, returning Unix epoch seconds."""
     if value is None:
         return None
@@ -958,8 +973,7 @@ def check_qdrant_health() -> bool:
 
 
 def compute_dynamic_top_k(query: str, default: int = 50) -> int:
-    """
-    Compute the optimal number of chunks to retrieve based on query complexity.
+    """Compute the optimal number of chunks to retrieve based on query complexity.
 
     Uses SLM-based complexity scoring when available, falling back to
     word-count heuristics.
@@ -970,6 +984,7 @@ def compute_dynamic_top_k(query: str, default: int = 50) -> int:
 
     Returns:
         Optimal top_k value (between 5 and 50).
+
     """
     from proxy.app.llm.slm import dynamic_top_k_from_complexity, score_query_complexity
 

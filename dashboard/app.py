@@ -1,6 +1,5 @@
 # dashboard/app.py
-"""
-RAG System — Streamlit Web Dashboard.
+"""RAG System — Streamlit Web Dashboard.
 
 Provides a web-based management interface for monitoring, configuration,
 and administration of the RAG proxy system.

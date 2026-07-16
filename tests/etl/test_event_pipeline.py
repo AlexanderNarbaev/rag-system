@@ -22,7 +22,7 @@ def minimal_config():
             "webhook_enabled": True,
             "batch_size": 10,
             "poll_interval_ms": 1000,
-        }
+        },
     }
 
 

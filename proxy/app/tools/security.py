@@ -74,7 +74,7 @@ class ToolVisibilityFilter:
         role: str | None = None,
     ) -> bool:
         """Return True if ``visibility`` is allowed for the given role."""
-        effective_role = role if role else self.UNAUTHENTICATED
+        effective_role = role or self.UNAUTHENTICATED
         allowed = self.RBAC_MATRIX.get(effective_role, self.RBAC_MATRIX[self.UNAUTHENTICATED])
         return visibility.value in allowed
 

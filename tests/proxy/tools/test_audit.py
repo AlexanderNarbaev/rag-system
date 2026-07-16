@@ -410,3 +410,101 @@ class TestLogFromResult:
         record = json.loads(captured.getvalue().strip())
         assert record["user_id"] is None
         assert record["request_id"] == ""
+
+
+class TestSanitizeParamsEdgeCases:
+    """Edge cases for _sanitize_params."""
+
+    def test_handles_non_serializable_value(self):
+        from tools.audit import _sanitize_params
+
+        class NonSerializable:
+            pass
+
+        result = _sanitize_params({"custom": NonSerializable()})
+        assert result["custom"] == "NonSerializable"
+
+    def test_handles_circular_reference_in_list(self):
+        from tools.audit import _sanitize_params
+
+        circular = []
+        circular.append(circular)
+        result = _sanitize_params({"data": circular})
+        assert result["data"] == "list"
+
+    def test_handles_circular_reference_in_dict(self):
+        from tools.audit import _sanitize_params
+
+        circular: dict = {}
+        circular["self"] = circular
+        result = _sanitize_params({"data": circular})
+        assert result["data"] == "dict"
+
+    def test_masks_secret_field_case_insensitive(self):
+        from tools.audit import _sanitize_params
+
+        result = _sanitize_params({"SECRET": "hidden", "token": "abc", "API_KEY": "key"})
+        assert result["SECRET"] == "***"
+        assert result["token"] == "***"
+        assert result["API_KEY"] == "***"
+
+
+class TestToolAuditLoggerFileErrors:
+    """Tests for error handling in file-based ToolAuditLogger."""
+
+    def test_read_records_file_not_found_graceful(self):
+        from tools.audit import AuditDestination, ToolAuditLogger
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            al = ToolAuditLogger(destination=AuditDestination.FILE, log_dir=tmpdir)
+            if os.path.exists(al._audit_file):
+                os.remove(al._audit_file)
+            assert al.read_records() == []
+
+    def test_read_records_corrupt_json_skipped(self, monkeypatch):
+        from tools.audit import AuditDestination, ToolAuditLogger
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            al = ToolAuditLogger(destination=AuditDestination.FILE, log_dir=tmpdir)
+            with open(al._audit_file, "w") as f:
+                f.write('{"valid": "json"}\n')
+                f.write("not valid json\n")
+                f.write('{"also": "valid"}\n')
+            records = al.read_records(limit=10)
+            assert len(records) == 2
+
+    def test_write_file_error_handled(self, monkeypatch):
+        from tools.audit import AuditDestination, ToolAuditLogger
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            al = ToolAuditLogger(destination=AuditDestination.FILE, log_dir=tmpdir)
+
+            def failing_open(*args, **kwargs):
+                raise OSError("Disk full")
+
+            monkeypatch.setattr("builtins.open", failing_open)
+            al.log_invocation(tool_name="test", tool_call_id="c1")
+
+    def test_write_stdout_error_handled(self, monkeypatch):
+        from tools.audit import AuditDestination, ToolAuditLogger
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            al = ToolAuditLogger(destination=AuditDestination.STDOUT, log_dir=tmpdir)
+
+            original_write = sys.stdout.write
+            try:
+                sys.stdout.write = lambda s: (_ for _ in ()).throw(BrokenPipeError)
+                al.log_invocation(tool_name="test", tool_call_id="c1")
+            finally:
+                sys.stdout.write = original_write
+
+    def test_read_records_file_read_error_handled(self, monkeypatch):
+        from tools.audit import AuditDestination, ToolAuditLogger
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            al = ToolAuditLogger(destination=AuditDestination.FILE, log_dir=tmpdir)
+            al.log_invocation(tool_name="test", tool_call_id="c1")
+
+            monkeypatch.setattr("builtins.open", lambda *a, **kw: (_ for _ in ()).throw(PermissionError))
+            records = al.read_records()
+            assert records == []

@@ -1,6 +1,5 @@
 # proxy/app/user_db.py
-"""
-SQLite-backed user database for the RAG proxy.
+"""SQLite-backed user database for the RAG proxy.
 
 Provides:
 - User CRUD (create, get, update, delete, list)
@@ -146,7 +145,7 @@ class UserDatabase:
             email = user_data.get("email", "")
 
             password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode(
-                "utf-8"
+                "utf-8",
             )
 
             try:
@@ -181,8 +180,10 @@ class UserDatabase:
 
         Returns:
             dict with user_id, username, created_at.
+
         Raises:
             ValueError if username already exists.
+
         """
         await self._ensure_db()
 

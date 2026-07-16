@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
+# ruff: noqa: E501, E402, N817
 """Baseline latency benchmarks for the RAG System.
 
 Micro-benchmarks for every major component in the RAG pipeline:
@@ -157,7 +157,7 @@ def _make_chunks(n: int, avg_words: int = 120) -> list[dict[str, Any]]:
                 "title": f"Section {i}",
                 "version": random.choice(["1.0", "1.1", "2.0"]),
                 "chunk_id": f"chunk_{i}",
-            }
+            },
         )
     return chunks
 
@@ -171,7 +171,7 @@ def _make_scored_chunks(n: int) -> list[tuple[dict[str, Any], float]]:
 class _FakeHit:
     """Minimal stand-in for Qdrant ScoredPoint."""
 
-    __slots__ = ("id", "score", "payload")
+    __slots__ = ("id", "payload", "score")
 
     def __init__(self, hit_id: str, score: float, payload: dict | None = None):
         self.id = hit_id
@@ -296,7 +296,10 @@ class TestRetrievalBenchmarks:
         hits_dense = [_FakeHit(f"doc_{i}", 0.9 - i * 0.04) for i in range(20)]
         hits_sparse = [_FakeHit(f"doc_{i}", 0.85 - i * 0.04) for i in range(20)]
         stats = _run_benchmark(
-            "rrf_fusion_20", reciprocal_rank_fusion, results_dense=hits_dense, results_sparse=hits_sparse
+            "rrf_fusion_20",
+            reciprocal_rank_fusion,
+            results_dense=hits_dense,
+            results_sparse=hits_sparse,
         )
 
         assert stats.p50 < 1.0, f"rrf_fusion_20 p50={stats.p50:.3f}ms too high"
@@ -309,7 +312,10 @@ class TestRetrievalBenchmarks:
         hits_dense = [_FakeHit(f"doc_{i}", 0.9 - i * 0.015) for i in range(50)]
         hits_sparse = [_FakeHit(f"doc_{i}", 0.85 - i * 0.015) for i in range(50)]
         stats = _run_benchmark(
-            "rrf_fusion_50", reciprocal_rank_fusion, results_dense=hits_dense, results_sparse=hits_sparse
+            "rrf_fusion_50",
+            reciprocal_rank_fusion,
+            results_dense=hits_dense,
+            results_sparse=hits_sparse,
         )
 
         assert stats.p50 < 2.0, f"rrf_fusion_50 p50={stats.p50:.3f}ms too high"
@@ -564,7 +570,9 @@ class TestGraphBenchmarks:
         ]
         search = GlobalSearch(community_summaries=summaries)
         stats = _run_benchmark(
-            "global_search_20", search.search, query="What are the main topics in the knowledge base?"
+            "global_search_20",
+            search.search,
+            query="What are the main topics in the knowledge base?",
         )
 
         assert stats.p50 < 5.0, f"global_search p50={stats.p50:.3f}ms too high"
@@ -645,9 +653,9 @@ for mod in _modules_to_mock:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
-from proxy.app.main import app  # noqa: E402
+from proxy.app.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -786,7 +794,8 @@ class TestE2EPipelineBenchmarks:
 # ---------------------------------------------------------------------------
 # 8. Cache & Throughput Benchmarks
 # ---------------------------------------------------------------------------
-import threading  # noqa: E402
+import threading
+
 
 @pytest.mark.benchmark
 class TestCacheEfficiencyBenchmarks:
@@ -903,7 +912,9 @@ class TestCacheEfficiencyBenchmarks:
             cache_effectiveness = 1.0 - (encode_count_after_new_query / (encode_count_after_cold or 1))
             stats = LatencyStats(name="two_stage_cache_effective")
             stats.add(cache_effectiveness * 100)
-            print(f"\n  {stats.name}: cold_encodes={encode_count_after_cold} warm_encodes={encode_count_after_warm} new_query_encodes={encode_count_after_new_query} effectiveness={cache_effectiveness:.1%}")
+            print(
+                f"\n  {stats.name}: cold_encodes={encode_count_after_cold} warm_encodes={encode_count_after_warm} new_query_encodes={encode_count_after_new_query} effectiveness={cache_effectiveness:.1%}",
+            )
 
 
 @pytest.mark.benchmark
@@ -1012,7 +1023,9 @@ class TestConcurrencyBenchmarks:
                 stats.add(s)
 
         throughput = len(latency_samples) / (elapsed / 1000) if elapsed > 0 else 0
-        print(f"\n  {stats.name}: total_ms={elapsed:.1f} threads=5 requests_completed={len(latency_samples)} throughput={throughput:.1f} req/s")
+        print(
+            f"\n  {stats.name}: total_ms={elapsed:.1f} threads=5 requests_completed={len(latency_samples)} throughput={throughput:.1f} req/s",
+        )
         assert len(latency_samples) == 5, f"Expected 5 responses, got {len(latency_samples)}"
 
 
@@ -1046,7 +1059,7 @@ class TestMemoryBenchmarks:
         stats = LatencyStats(name="memory_stable_context")
         stats.add(len(results))
         assert len(results) == iterations, f"Expected {iterations} builds, got {len(results)}"
-        print(f"\n  {stats.name}: iterations={iterations} avg_len={sum(results)//len(results) if results else 0}")
+        print(f"\n  {stats.name}: iterations={iterations} avg_len={sum(results) // len(results) if results else 0}")
 
     def test_embedding_cache_memory_bound(self):
         """Benchmark: embedding cache does not grow unbounded."""
@@ -1096,7 +1109,9 @@ class TestMemoryBenchmarks:
             stats.add(r)
 
         assert stats.p95 < 50, f"Global search p95={stats.p95:.1f}ms too high for 1000 communities"
-        print(f"\n  {stats.name}: index_build={index_build_ms:.1f}ms search_p50={stats.p50:.3f}ms search_p95={stats.p95:.3f}ms (n={len(results)})")
+        print(
+            f"\n  {stats.name}: index_build={index_build_ms:.1f}ms search_p50={stats.p50:.3f}ms search_p95={stats.p95:.3f}ms (n={len(results)})",
+        )
 
 
 # ---------------------------------------------------------------------------

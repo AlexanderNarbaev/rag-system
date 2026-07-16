@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/tools/openapi/converter.py — OpenAPI spec to tool conversion."""
 
 import pytest
@@ -58,6 +57,16 @@ class TestResolveRef:
         assert _resolve_ref(spec, "#/a~0b")["value"] == 1
         assert _resolve_ref(spec, "#/c~1d")["value"] == 2
 
+    def test_ref_to_non_dict_item(self):
+        spec = {"key": ["not a dict"]}
+        with pytest.raises(ValueError, match="resolved to non-dict"):
+            _resolve_ref(spec, "#/key")
+
+    def test_ref_resolving_through_non_dict(self):
+        spec = {"items": ["not a dict"]}
+        with pytest.raises(ValueError, match="Failed to resolve"):
+            _resolve_ref(spec, "#/items/0")
+
 
 class TestTypeFromSchema:
     """Tests for _type_from_schema."""
@@ -94,7 +103,7 @@ class TestExtractParameters:
         operation = {
             "parameters": [
                 {"name": "limit", "in": "query", "schema": {"type": "integer"}, "description": "Max results"},
-            ]
+            ],
         }
         params = _extract_parameters(operation, {})
         assert len(params) == 1
@@ -105,7 +114,7 @@ class TestExtractParameters:
         operation = {
             "parameters": [
                 {"name": "petId", "in": "path", "required": True, "schema": {"type": "string"}},
-            ]
+            ],
         }
         params = _extract_parameters(operation, {})
         assert len(params) == 1
@@ -123,10 +132,10 @@ class TestExtractParameters:
                                 "age": {"type": "integer"},
                             },
                             "required": ["name"],
-                        }
-                    }
-                }
-            }
+                        },
+                    },
+                },
+            },
         }
         params = _extract_parameters(operation, {})
         assert len(params) == 2
@@ -137,8 +146,8 @@ class TestExtractParameters:
     def test_ref_in_parameter(self):
         spec = {
             "components": {
-                "parameters": {"LimitParam": {"name": "limit", "in": "query", "schema": {"type": "integer"}}}
-            }
+                "parameters": {"LimitParam": {"name": "limit", "in": "query", "schema": {"type": "integer"}}},
+            },
         }
         operation = {"parameters": [{"$ref": "#/components/parameters/LimitParam"}]}
         params = _extract_parameters(operation, spec)
@@ -153,12 +162,12 @@ class TestExtractParameters:
                         "type": "object",
                         "properties": {"name": {"type": "string"}},
                         "required": ["name"],
-                    }
-                }
-            }
+                    },
+                },
+            },
         }
         operation = {
-            "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreatePet"}}}}
+            "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreatePet"}}}},
         }
         params = _extract_parameters(operation, spec)
         assert len(params) == 1
@@ -168,7 +177,7 @@ class TestExtractParameters:
         operation = {
             "parameters": [
                 {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["active", "inactive"]}},
-            ]
+            ],
         }
         params = _extract_parameters(operation, {})
         assert params[0].enum == ["active", "inactive"]
@@ -186,13 +195,56 @@ class TestExtractParameters:
                         "schema": {
                             "type": "object",
                             "properties": {"pet_name": {"$ref": "#/components/schemas/Name"}},
-                        }
-                    }
-                }
-            }
+                        },
+                    },
+                },
+            },
         }
         params = _extract_parameters(operation, spec)
         assert len(params) == 1
+
+    def test_ref_in_parameter_invalid(self):
+        spec = {"components": {"parameters": {"LimitParam": ["not", "a", "dict"]}}}
+        operation = {"parameters": [{"$ref": "#/components/parameters/LimitParam"}]}
+        params = _extract_parameters(operation, spec)
+        assert params == []
+
+    def test_ref_in_request_body_invalid(self):
+        spec = {"components": {"schemas": {"BadSchema": "not_a_dict"}}}
+        operation = {"requestBody": {"$ref": "#/components/schemas/BadSchema"}}
+        params = _extract_parameters(operation, spec)
+        assert params == []
+
+    def test_ref_in_body_schema_property_invalid(self):
+        spec = {"components": {"schemas": {"BadProp": "not_a_dict"}}}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {"name": {"$ref": "#/components/schemas/BadProp"}},
+                        },
+                    },
+                },
+            },
+        }
+        params = _extract_parameters(operation, spec)
+        assert len(params) == 1
+
+    def test_ref_in_body_schema_invalid(self):
+        spec = {"components": {"schemas": {"BadSchema": "not_a_dict"}}}
+        operation = {
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/BadSchema"},
+                    },
+                },
+            },
+        }
+        params = _extract_parameters(operation, spec)
+        assert len(params) == 0
 
 
 class TestOpenAPIToolGenerator:
@@ -206,7 +258,11 @@ class TestOpenAPIToolGenerator:
             "parameters": [],
         }
         tool = OpenAPIToolGenerator.from_endpoint(
-            path="/items", method="get", operation=operation, spec={}, base_url="https://api.test.com"
+            path="/items",
+            method="get",
+            operation=operation,
+            spec={},
+            base_url="https://api.test.com",
         )
         assert tool.name == "listItems"
         assert tool.category == "search"
@@ -219,7 +275,11 @@ class TestOpenAPIToolGenerator:
             "tags": ["items"],
         }
         tool = OpenAPIToolGenerator.from_endpoint(
-            path="/items", method="post", operation=operation, spec={}, base_url="https://api.test.com"
+            path="/items",
+            method="post",
+            operation=operation,
+            spec={},
+            base_url="https://api.test.com",
         )
         assert tool.category == "action"
 
@@ -240,7 +300,6 @@ class TestMakeOpenapiHandler:
     @pytest.mark.asyncio
     async def test_handler_substitutes_path_params(self):
         handler = _make_openapi_handler("https://api.test.com", "/pets/{petId}", "get", [])
-        # We can't easily test the actual HTTP call, but verify the handler is callable
         assert callable(handler)
 
     @pytest.mark.asyncio
@@ -250,3 +309,49 @@ class TestMakeOpenapiHandler:
         result = await handler()
         assert isinstance(result, str)
         assert "Error" in result
+
+    @pytest.mark.asyncio
+    async def test_handler_post_with_body(self):
+        """Test handler builds POST body."""
+        from proxy.app.tools.definition import ToolParam
+
+        params = [ToolParam(name="name", type=str)]
+        handler = _make_openapi_handler("https://nonexistent.invalid", "/pets", "post", params)
+
+        assert callable(handler)
+
+    @pytest.mark.asyncio
+    async def test_handler_with_query_params(self):
+        """Test handler builds query params for GET."""
+        handler = _make_openapi_handler("https://nonexistent.invalid", "/search", "get", [])
+        assert callable(handler)
+
+    @pytest.mark.asyncio
+    async def test_handler_with_path_and_query_params(self):
+        """Test handler substitutes path params and adds query params."""
+        from proxy.app.tools.definition import ToolParam
+
+        params = [
+            ToolParam(name="petId", type=int),
+            ToolParam(name="include", type=str),
+        ]
+        handler = _make_openapi_handler("https://api.example.com", "/pets/{petId}", "get", params)
+        assert callable(handler)
+
+    @pytest.mark.asyncio
+    async def test_handler_put_method(self):
+        """Test PUT handler is created correctly."""
+        handler = _make_openapi_handler("https://api.example.com", "/pets/{petId}", "put", [])
+        assert callable(handler)
+
+    @pytest.mark.asyncio
+    async def test_handler_delete_method(self):
+        """Test DELETE handler is created correctly."""
+        handler = _make_openapi_handler("https://api.example.com", "/pets/{petId}", "delete", [])
+        assert callable(handler)
+
+    @pytest.mark.asyncio
+    async def test_handler_patch_method(self):
+        """Test PATCH handler is created correctly."""
+        handler = _make_openapi_handler("https://api.example.com", "/pets/{petId}", "patch", [])
+        assert callable(handler)

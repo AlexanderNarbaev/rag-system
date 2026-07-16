@@ -1,6 +1,5 @@
 # etl/extractors/confluence.py
-"""
-Выгрузка данных из Confluence (Self-Hosted) с поддержкой:
+"""Выгрузка данных из Confluence (Self-Hosted) с поддержкой:
 - Страницы (тело: storage, view, export)
 - Версии (полная история изменений)
 - Вложения (метаданные + бинарные файлы)
@@ -36,8 +35,7 @@ logger = logging.getLogger(__name__)
 
 class ConfluenceExtractor:
     def __init__(self, config: dict[str, Any]):
-        """
-        config: {
+        """config: {
             "url": "https://confluence.internal/",
             "username": "bot",                  # опционально для Basic Auth
             "token": "personal_access_token",   # Bearer токен или пароль
@@ -117,9 +115,8 @@ class ConfluenceExtractor:
             if resp.status_code == 200:
                 logger.info("✅ Подключение успешно")
                 return True
-            else:
-                logger.error(f"❌ Ошибка: {resp.status_code} - {resp.text[:200]}")
-                return False
+            logger.error(f"❌ Ошибка: {resp.status_code} - {resp.text[:200]}")
+            return False
         except Exception as e:
             logger.error(f"❌ Ошибка подключения: {e}")
             return False
@@ -176,8 +173,7 @@ class ConfluenceExtractor:
                     raise
 
     def _get_all_pages(self, space_key: str | None = None, start: int = 0, limit: int = 50) -> list[dict[str, Any]]:
-        """
-        Получает все страницы с пагинацией (только метаданные, без body).
+        """Получает все страницы с пагинацией (только метаданные, без body).
         Body загружается отдельно при обработке каждой страницы.
         """
         pages = []
@@ -236,8 +232,7 @@ class ConfluenceExtractor:
                     safe_name = f"attachment_{attachment_id}.bin"
                 file_path = output_dir / safe_name
                 with open(file_path, "wb") as f:
-                    for chunk in resp.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                    f.writelines(resp.iter_content(chunk_size=8192))
                 return str(file_path)
             except requests.exceptions.ConnectionError as e:
                 logger.warning(f"Attachment download connection error (attempt {attempt + 1}/{max_retries + 1}): {e}")
@@ -304,8 +299,7 @@ class ConfluenceExtractor:
         logger.info(f"Saved page {page_id} to {page_dir}")
 
     def extract_page(self, page: dict) -> dict[str, Any]:
-        """
-        Извлекает полные данные одной страницы:
+        """Извлекает полные данные одной страницы:
         - Метаданные (id, title, space, версии, даты)
         - Тело в форматах storage, view, export (если доступно)
         - Комментарии
@@ -327,7 +321,7 @@ class ConfluenceExtractor:
         # Можно вызвать /rest/api/content/{id}/export?type=pdf – но это асинхронно, не будем усложнять.
 
         # Извлечение ссылок из HTML тела
-        links = self._extract_links_from_html(body_view if body_view else body_storage)
+        links = self._extract_links_from_html(body_view or body_storage)
 
         # Версии (история)
         versions = self._get_page_versions(page_id)
@@ -339,7 +333,7 @@ class ConfluenceExtractor:
                     "when": v.get("when"),
                     "message": v.get("message", ""),
                     "author": v.get("by", {}).get("displayName", ""),
-                }
+                },
             )
 
         # Комментарии
@@ -353,7 +347,7 @@ class ConfluenceExtractor:
                     "author": com.get("version", {}).get("by", {}).get("displayName", ""),
                     "created": com.get("version", {}).get("when", ""),
                     "body_storage": com_body,
-                }
+                },
             )
 
         # Вложения
@@ -397,7 +391,7 @@ class ConfluenceExtractor:
         # RBAC metadata: author from current version, contributors from all versions
         author = page.get("version", {}).get("by", {}).get("displayName", "")
         contributors = list(
-            {v.get("by", {}).get("displayName", "") for v in versions if v.get("by", {}).get("displayName")}
+            {v.get("by", {}).get("displayName", "") for v in versions if v.get("by", {}).get("displayName")},
         )
         space_key = page.get("space", {}).get("key", "")
 
@@ -430,9 +424,9 @@ class ConfluenceExtractor:
 
     def run(self) -> None:
         """Основной цикл выгрузки всех страниц (по указанным пространствам или всем)."""
-        spaces_to_process = self.space_keys if self.space_keys else [None]  # None = все пространства
+        spaces_to_process = self.space_keys or [None]  # None = все пространства
         for space in spaces_to_process:
-            logger.info(f"Processing space: {space if space else 'ALL'}")
+            logger.info(f"Processing space: {space or 'ALL'}")
             pages = self._get_all_pages(space_key=space)
             logger.info(f"Found {len(pages)} pages in space {space}")
             for page in pages:
@@ -450,7 +444,8 @@ class ConfluenceExtractor:
                     self._save_wal()
                 except Exception as e:
                     logger.error(
-                        f"Failed to process page {page_id}: {e}", exc_info=True
+                        f"Failed to process page {page_id}: {e}",
+                        exc_info=True,
                     )  # Продолжаем, не прерываем весь процесс
         logger.info("Extraction finished.")
 

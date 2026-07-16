@@ -1,6 +1,5 @@
 # proxy/app/warmup.py
-"""
-Model warm-up utilities for RAG proxy.
+"""Model warm-up utilities for RAG proxy.
 
 Pre-loads models into GPU/RAM on startup or via admin endpoint
 to avoid cold-start latency on the first real request.

@@ -77,11 +77,11 @@ class ChatExtractor(BaseExtractor):
         try:
             if format_type == self.FORMAT_DEEPSEEK:
                 return self._parse_deepseek(content)
-            elif format_type == self.FORMAT_CHATGPT:
+            if format_type == self.FORMAT_CHATGPT:
                 return self._parse_chatgpt(content)
-            elif format_type == self.FORMAT_CLAUDE:
+            if format_type == self.FORMAT_CLAUDE:
                 return self._parse_claude(content)
-            elif format_type == self.FORMAT_GENERIC:
+            if format_type == self.FORMAT_GENERIC:
                 return self._parse_generic_json(content)
         except json.JSONDecodeError:
             pass
@@ -246,7 +246,7 @@ class ChatExtractor(BaseExtractor):
                         "content": str(content) if content else "",
                         "model": str(model) if model else "",
                         "timestamp": str(timestamp) if timestamp else "",
-                    }
+                    },
                 )
 
         return {
@@ -321,7 +321,7 @@ class ChatExtractor(BaseExtractor):
                         "message_count": len(messages),
                         "file_path": str(file_path),
                     },
-                )
+                ),
             )
 
         return documents

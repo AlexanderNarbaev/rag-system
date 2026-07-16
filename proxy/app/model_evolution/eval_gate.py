@@ -103,6 +103,7 @@ class EvalGate:
 
         Returns:
             GateResult with pass/fail/warn status and details.
+
         """
         failures: list[str] = []
         warnings: list[str] = []
@@ -136,7 +137,7 @@ class EvalGate:
                     if delta < -config.baseline_regression_tolerance:
                         warnings.append(
                             f"{threshold.metric_name} regressed by {abs(delta):.4f} "
-                            f"(tolerance: {config.baseline_regression_tolerance})"
+                            f"(tolerance: {config.baseline_regression_tolerance})",
                         )
         elif config.require_baseline_comparison:
             warnings.append("No baseline metrics provided for comparison")
@@ -179,6 +180,7 @@ class EvalGate:
 
         Returns:
             GateResult with pass/fail/warn status.
+
         """
         result = EvalGate.evaluate(
             metrics,
@@ -198,6 +200,7 @@ class EvalGate:
 
         Returns:
             Multi-line report string.
+
         """
         lines = [
             "=" * 60,
@@ -292,6 +295,7 @@ class EvalGate:
 
         Returns:
             GateResult with pass/fail/warn status including NLI metrics.
+
         """
         from proxy.app.model_evolution.nli_evaluator import evaluate_nli_batch
 

@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 # tests/integration/test_proxy_rag_pipeline.py
 """Integration tests for the RAG proxy query pipeline end-to-end.
 
@@ -277,7 +276,7 @@ class TestChatCompletionsStreaming:
                     self.payload = payload
 
             mock_search.return_value = [
-                FakeScoredPoint(0.95, {"text": "RAG — техника для LLM.", "version": "1.0", "source_id": "123"})
+                FakeScoredPoint(0.95, {"text": "RAG — техника для LLM.", "version": "1.0", "source_id": "123"}),
             ]
 
             payload = {

@@ -1,4 +1,5 @@
 """Tests for cache.py uncovered paths: RedisCache sync wrappers, JSON decode, error handling, close."""
+
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -113,6 +114,7 @@ class TestRedisCacheSyncWrappers:
         mock_redis_module.from_url.return_value = mock_client
         with patch.dict("sys.modules", redis=mock_redis_module):
             import sys
+
             sys.modules["redis"] = mock_redis_module
             result = cache._get_sync_client()
             assert result is mock_client
@@ -125,48 +127,49 @@ class TestRedisCacheSyncWrappers:
         assert result is mock_sync_client
 
     def test__get_sync_client_import_error(self):
-        """Cover ImportError path in _get_sync_client when redis is not installed."""
-        cache = RedisCache("redis://localhost")
+        """When redis package is not installed, ImportError propagates."""
+        import builtins
         import sys
-        stored = sys.modules.get("redis")
 
-        # Simulate ImportError when accessing redis module
-        fake_redis = MagicMock()
-        fake_redis.__spec__ = None
-        sys.modules["redis"] = fake_redis
+        cache = RedisCache("redis://localhost")
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "redis":
+                raise ImportError("No module named 'redis'")
+            return original_import(name, *args, **kwargs)
 
         try:
-            with patch("redis.from_url", side_effect=ImportError("redis not installed")):
-                with pytest.raises(ImportError):
-                    cache._get_sync_client()
+            builtins.__import__ = mock_import
+            with pytest.raises(ImportError):
+                cache._get_sync_client()
         finally:
-            if stored is not None:
-                sys.modules["redis"] = stored
-            else:
-                sys.modules.pop("redis", None)
+            builtins.__import__ = original_import
 
     def test__get_sync_client_connection_error(self):
+        """Connection errors are retried, eventually raising RetryExhaustedError."""
+        from proxy.app.shared.retry import RetryExhaustedError
+
         cache = RedisCache("redis://localhost")
         mock_redis_module = MagicMock()
         mock_redis_module.from_url.side_effect = ConnectionError("refused")
-        with patch.dict("sys.modules", {"redis": mock_redis_module}):
-            with pytest.raises(ConnectionError):
-                cache._get_sync_client()
+        with patch.dict("sys.modules", {"redis": mock_redis_module}), pytest.raises(RetryExhaustedError):
+            cache._get_sync_client()
 
 
 class TestRedisCacheAsyncClient:
     """Cover _get_client connection/error paths."""
-    
+
     def test__get_client_creates_and_pings(self):
-        cache = RedisCache("redis://localhost")
+        _cache = RedisCache("redis://localhost")
         mock_async_redis = MagicMock()
         mock_async_redis.from_url.return_value = MagicMock()
         mock_async_redis.from_url.return_value.ping = AsyncMock()
         with patch.dict("sys.modules", {"redis.asyncio": mock_async_redis}):
             import sys
+
             sys.modules["redis.asyncio"] = mock_async_redis
             # Can't run async in sync test, check sync client path instead
-            pass
 
     def test__get_client_reuses_existing(self):
         cache = RedisCache("redis://localhost")
@@ -179,7 +182,7 @@ class TestRedisCacheAsyncClient:
 
 class TestRedisCacheSetNonString:
     """Cover set with non-string value (JSON serialization)."""
-    
+
     @pytest.mark.asyncio
     async def test_set_serializes_dict(self):
         mock_client = MagicMock()
@@ -190,7 +193,6 @@ class TestRedisCacheSetNonString:
         result = await cache.set("k", data, ttl=60)
         assert result is True
         mock_client.setex.assert_called_once()
-        _, stored_value = mock_client.setex.call_args[0][2], mock_client.setex.call_args[0][2]
         # Value should be JSON string
         assert isinstance(mock_client.setex.call_args[0][2], str)
 
@@ -228,7 +230,7 @@ class TestRedisCacheClose:
     async def test_close_only_async_client(self):
         mock_async_client = MagicMock()
         mock_async_client.close = AsyncMock()
-        
+
         cache = RedisCache("redis://localhost")
         cache._client = mock_async_client
         cache._sync_client = None
@@ -240,7 +242,7 @@ class TestRedisCacheClose:
 
 class TestCacheManagerClose:
     """Cover close() delegation for CacheManager."""
-    
+
     @pytest.mark.asyncio
     async def test_close_with_redis(self):
         mock_redis = MagicMock()
@@ -259,12 +261,12 @@ class TestCacheManagerClose:
 
 class TestCacheManagerSyncMethodsErrorHandling:
     """Cover sync method delegation including error paths."""
-    
+
     def test_delete_sync_inmemory(self):
         cm = CacheManager(use_redis=False)
         cm.set_sync("del_key", "val")
         assert cm.delete_sync("del_key") is True
-    
+
     def test_delete_sync_nonexistent_inmemory(self):
         cm = CacheManager(use_redis=False)
         assert cm.delete_sync("no_such") is False
@@ -272,7 +274,7 @@ class TestCacheManagerSyncMethodsErrorHandling:
     def test_get_sync_returns_none_on_redis_error(self):
         mock_cache = MagicMock()
         mock_cache.get_sync.side_effect = ConnectionError("down")
-        
+
         with patch("proxy.app.shared.cache.RedisCache", return_value=mock_cache):
             cm = CacheManager(redis_url="redis://localhost", use_redis=True)
             with pytest.raises(ConnectionError):

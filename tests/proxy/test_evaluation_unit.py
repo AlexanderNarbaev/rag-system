@@ -1,4 +1,3 @@
-# ruff: noqa: E501, SIM117, E402, N817, SIM105
 """Tests for proxy/app/core/evaluation.py — retrieval evaluation metrics."""
 
 import json

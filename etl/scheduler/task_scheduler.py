@@ -1,6 +1,5 @@
 # etl/scheduler/task_scheduler.py
-"""
-ETL Task Scheduler — integrates KB manager task tracking with the ETL pipeline.
+"""ETL Task Scheduler — integrates KB manager task tracking with the ETL pipeline.
 
 When ETL runs, it updates task status in the SQLite database via the KB manager.
 This module provides the bridge between the ETL orchestrator and the admin UI.

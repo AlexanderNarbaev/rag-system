@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM117, E402, F401, I001, N803, B017
+# ruff: noqa: I001, B017
 """Degradation tests — verify circuit breaker state transitions and graceful degradation.
 
 Tests the circuit breaker pattern directly:
@@ -11,7 +11,7 @@ Also verifies retry logic and fallback behavior at the component level.
 """
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -268,8 +268,6 @@ class TestCircuitBreakerMetrics:
         """State gauge updates when circuit opens."""
         cb = get_breaker("metrics_open", failure_threshold=1)
         cb.failure()
-        # The gauge should be set to 1 (OPEN)
-        # We verify indirectly through the state property
         assert cb.state == State.OPEN
 
     def test_failure_counter_increments(self):
@@ -294,7 +292,6 @@ class TestLLMProviderWithCircuitBreaker:
         """LLM provider raises when circuit breaker is OPEN."""
         from proxy.app.llm.provider import MultiProviderRouter
 
-        # Open the circuit breaker
         cb = get_breaker("llm_backend", failure_threshold=1)
         cb.failure()
         assert cb.state == State.OPEN
@@ -324,7 +321,7 @@ class TestLLMProviderWithCircuitBreaker:
         router.adapter = MagicMock()
         router.adapter.translate_request.return_value = {"model": "test", "messages": []}
         router.adapter.headers = {"Content-Type": "application/json"}
-        router.endpoint = "http://localhost:1"  # unreachable
+        router.endpoint = "http://localhost:1"
         router.api_key = None
         router._adapter_cache = {}
 
@@ -336,7 +333,6 @@ class TestLLMProviderWithCircuitBreaker:
                 retry=0,
             )
 
-        # Failure count should have increased
         assert cb.failure_count > initial_failures
 
 
@@ -352,9 +348,6 @@ class TestRetrievalGracefulDegradation:
         cb = get_breaker("qdrant", failure_threshold=1)
         cb.failure()
         assert cb.state == State.OPEN
-
-        # The retrieval module catches CircuitBreakerOpenError and returns empty  # This is verified by the existing
-        # test_chaos.py tests at the HTTP level
 
     def test_graph_expand_returns_empty_when_disabled(self):
         """graph_expand_query returns empty string when graph is disabled."""
@@ -390,3 +383,292 @@ class TestCacheGracefulDegradation:
         time.sleep(0.01)
         result = await cache.get("expire_key")
         assert result is None
+
+
+# ── Retry Logic ───────────────────────────────────────────────────────────────
+
+
+class TestRetryLogic:
+    """Verify retry logic in critical connection paths."""
+
+    def test_sync_retry_succeeds_after_failures(self):
+        """sync_retry retries on transient failures and succeeds."""
+        from proxy.app.shared.retry import RetryConfig, sync_retry
+
+        call_count = [0]
+
+        def flaky():
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise ConnectionError("transient")
+            return "recovered"
+
+        result = sync_retry(flaky, config=RetryConfig(max_attempts=5, base_delay=0.001))
+        assert result == "recovered"
+        assert call_count[0] == 3
+
+    def test_sync_retry_exhausted(self):
+        """sync_retry raises RetryExhaustedError after max attempts."""
+        from proxy.app.shared.retry import RetryConfig, RetryExhaustedError, sync_retry
+
+        call_count = [0]
+
+        def always_fail():
+            call_count[0] += 1
+            raise RuntimeError("permanent")
+
+        with pytest.raises(RetryExhaustedError) as exc_info:
+            sync_retry(always_fail, config=RetryConfig(max_attempts=3, base_delay=0.001))
+
+        assert exc_info.value.attempts == 3
+        assert call_count[0] == 3
+
+    def test_sync_retry_non_retryable(self):
+        """sync_retry does not retry non-retryable exceptions."""
+        from proxy.app.shared.retry import RetryConfig, sync_retry
+
+        call_count = [0]
+
+        def raises_value_error():
+            call_count[0] += 1
+            raise ValueError("bad input")
+
+        config = RetryConfig(
+            max_attempts=3,
+            retryable_exceptions=(ConnectionError, TimeoutError),
+        )
+
+        with pytest.raises(ValueError):
+            sync_retry(raises_value_error, config=config)
+
+        assert call_count[0] == 1
+
+    @pytest.mark.asyncio
+    async def test_async_retry_succeeds_after_failures(self):
+        """async_retry retries on transient failures and succeeds."""
+        from proxy.app.shared.retry import RetryConfig, async_retry
+
+        call_count = [0]
+
+        async def flaky():
+            call_count[0] += 1
+            if call_count[0] < 2:
+                raise ConnectionError("transient")
+            return "ok"
+
+        result = await async_retry(flaky, config=RetryConfig(max_attempts=3, base_delay=0.001))
+        assert result == "ok"
+        assert call_count[0] == 2
+
+    @pytest.mark.asyncio
+    async def test_async_retry_exhausted(self):
+        """async_retry raises RetryExhaustedError after max attempts."""
+        from proxy.app.shared.retry import RetryConfig, RetryExhaustedError, async_retry
+
+        async def always_fail():
+            raise RuntimeError("permanent")
+
+        with pytest.raises(RetryExhaustedError):
+            await async_retry(always_fail, config=RetryConfig(max_attempts=2, base_delay=0.001))
+
+
+# ── Qdrant Connection Retry ───────────────────────────────────────────────────
+
+
+class TestQdrantConnectionRetry:
+    """Verify Qdrant initialization retries on transient failures."""
+
+    def test_initialize_retrieval_retries_qdrant(self):
+        """initialize_retrieval retries Qdrant connection before degrading."""
+        from unittest.mock import MagicMock
+
+        from proxy.app.shared.circuit_breaker import reset_all_breakers
+
+        reset_all_breakers()
+
+        call_count = [0]
+
+        def mock_qdrant_client(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] < 2:
+                raise OSError("Connection refused")
+            mock = MagicMock()
+            mock.get_collections.return_value = MagicMock(collections=[])
+            return mock
+
+        with (
+            patch("proxy.app.core.retrieval.QdrantClient", side_effect=mock_qdrant_client),
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.llm.remote_services.create_embedder", return_value=MagicMock()),
+        ):
+            from proxy.app.core.retrieval import initialize_retrieval
+
+            initialize_retrieval()
+            assert call_count[0] == 2
+
+    def test_qdrant_degradation_sets_client_none(self):
+        """initialize_retrieval sets qdrant_client=None on persistent failure."""
+        from unittest.mock import MagicMock
+
+        import proxy.app.core.retrieval as ret_mod
+
+        ret_mod.qdrant_client = "not_none"
+
+        def mock_connect(*args, **kwargs):
+            raise OSError("Host unreachable")
+
+        with (
+            patch("proxy.app.core.retrieval.QdrantClient", side_effect=mock_connect),
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.llm.remote_services.create_embedder", return_value=MagicMock()),
+        ):
+            from proxy.app.core.retrieval import initialize_retrieval
+
+            initialize_retrieval()
+            assert ret_mod.qdrant_client is None
+
+
+# ── Neo4j Connection Retry ────────────────────────────────────────────────────
+
+
+class TestNeo4jConnectionRetry:
+    """Verify Neo4j initialization retries and degrades gracefully."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_if_no_neo4j(self):
+        try:
+            import neo4j  # noqa: F401
+        except ImportError:
+            pytest.skip("neo4j not installed")
+
+    def test_neo4j_retries_then_succeeds(self):
+        """initialize_retrieval retries Neo4j, succeeds on retry."""
+        from unittest.mock import MagicMock
+
+        import proxy.app.core.retrieval as ret_mod
+
+        ret_mod._GRAPH_ENABLED = True
+
+        call_count = [0]
+
+        def mock_driver(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] < 2:
+                raise OSError("Neo4j unreachable")
+            mock = MagicMock()
+            mock.verify_connectivity.return_value = None
+            return mock
+
+        mock_qdrant = MagicMock(get_collections=MagicMock(return_value=MagicMock(collections=[])))
+
+        with (
+            patch("neo4j.GraphDatabase.driver", side_effect=mock_driver),
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.core.retrieval.QdrantClient", return_value=mock_qdrant),
+            patch("proxy.app.llm.remote_services.create_embedder", return_value=MagicMock()),
+        ):
+            from proxy.app.core.retrieval import initialize_retrieval
+
+            initialize_retrieval()
+            assert call_count[0] == 2
+
+    def test_neo4j_disables_on_persistent_failure(self):
+        """Neo4j disables graph expansion on persistent connection failure."""
+        from unittest.mock import MagicMock
+
+        import proxy.app.core.retrieval as ret_mod
+
+        ret_mod._GRAPH_ENABLED = True
+
+        def mock_driver(*args, **kwargs):
+            raise OSError("Neo4j permanently down")
+
+        mock_qdrant = MagicMock(get_collections=MagicMock(return_value=MagicMock(collections=[])))
+
+        with (
+            patch("neo4j.GraphDatabase.driver", side_effect=mock_driver),
+            patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
+            patch("proxy.app.core.retrieval.QdrantClient", return_value=mock_qdrant),
+            patch("proxy.app.llm.remote_services.create_embedder", return_value=MagicMock()),
+        ):
+            from proxy.app.core.retrieval import initialize_retrieval
+
+            initialize_retrieval()
+            assert ret_mod._GRAPH_ENABLED is False
+
+
+# ── Reranker Degradation ──────────────────────────────────────────────────────
+
+
+class TestRerankerDegradation:
+    """Verify reranker degrades gracefully when circuit breaker is open."""
+
+    def test_reranker_returns_neutral_scores_on_circuit_open(self):
+        """_call_reranker_safe returns neutral 0.5 scores when CB is open."""
+        from unittest.mock import MagicMock
+
+        import proxy.app.core.rerank as rerank_mod
+        from proxy.app.shared.circuit_breaker import get_breaker, reset_all_breakers
+
+        reset_all_breakers()
+
+        mock_reranker = MagicMock()
+        mock_reranker.predict.return_value = [0.9, 0.8, 0.3]
+        rerank_mod.reranker = mock_reranker
+
+        cb = get_breaker("reranker", failure_threshold=1)
+        cb.failure()
+        assert cb.state == State.OPEN
+
+        pairs = [("q", "doc1"), ("q", "doc2"), ("q", "doc3")]
+        result = rerank_mod._call_reranker_safe(pairs)
+
+        assert result == [0.5, 0.5, 0.5]
+
+    def test_reranker_returns_neutral_when_not_initialized(self):
+        """_call_reranker_safe returns neutral scores when reranker is None."""
+        import proxy.app.core.rerank as rerank_mod
+
+        rerank_mod.reranker = None
+        result = rerank_mod._call_reranker_safe([("q", "d1"), ("q", "d2")])
+        assert result == [0.5, 0.5]
+
+
+# ── LLM Provider Resource Cleanup ─────────────────────────────────────────────
+
+
+class TestLLMProviderCleanup:
+    """Verify LLM provider properly cleans up sessions on retry."""
+
+    @pytest.mark.asyncio
+    async def test_session_closed_on_timeout_retry(self):
+        """Aiohttp session is closed after timeout in retry loop."""
+        from unittest.mock import MagicMock
+
+        from proxy.app.llm.provider import MultiProviderRouter
+
+        router = MultiProviderRouter.__new__(MultiProviderRouter)
+        router.provider_type = ProviderType.OPENAI
+        router.adapter = MagicMock()
+        router.adapter.translate_request.return_value = {"model": "test", "messages": []}
+        router.adapter.headers = {"Content-Type": "application/json"}
+        router.endpoint = "http://localhost:9999"
+        router.api_key = None
+        router._adapter_cache = {}
+
+        mock_session = AsyncMock()
+        mock_session.post.side_effect = TimeoutError("connection timed out")
+
+        mock_config = {"MAX_RETRIES": 0, "REQUEST_TIMEOUT": 5, "RETRY_DELAY": 0.05}
+
+        with (
+            patch("aiohttp.ClientSession", return_value=mock_session),
+            patch(
+                "proxy.app.llm.provider.base._get_config",
+                side_effect=lambda attr, default: mock_config.get(attr, default),
+            ),
+        ):
+            with pytest.raises(Exception):
+                await router._send_request([{"role": "user", "content": "test"}], retry=0)
+
+            mock_session.close.assert_called()

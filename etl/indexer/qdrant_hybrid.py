@@ -1,6 +1,5 @@
 # etl/indexer/qdrant_hybrid.py
-"""
-Hybrid indexing in Qdrant (dense + sparse + ColBERT multi-vector) for RAG.
+"""Hybrid indexing in Qdrant (dense + sparse + ColBERT multi-vector) for RAG.
 Uses BAAI/bge-m3 for dense, sparse, and ColBERT vectors.
 Supports:
 - Collection creation with dense, sparse, and multi-vector config
@@ -42,9 +41,7 @@ COLBERT_ENABLED = True
 
 
 class QdrantHybridIndexer:
-    """
-    Индексатор для Qdrant с гибридным поиском (dense + sparse).
-    """
+    """Индексатор для Qdrant с гибридным поиском (dense + sparse)."""
 
     def __init__(
         self,
@@ -62,8 +59,7 @@ class QdrantHybridIndexer:
         sparse_index_on_disk: bool = True,
         batch_size: int = 100,
     ):
-        """
-        :param host: Qdrant host
+        """:param host: Qdrant host
         :param port: Qdrant port (HTTP)
         :param grpc_port: gRPC port (если нужен)
         :param prefer_grpc: использовать gRPC
@@ -83,7 +79,12 @@ class QdrantHybridIndexer:
 
         # Подключение к Qdrant
         self.client = QdrantClient(
-            host=host, port=port, grpc_port=grpc_port, prefer_grpc=prefer_grpc, https=https, api_key=api_key
+            host=host,
+            port=port,
+            grpc_port=grpc_port,
+            prefer_grpc=prefer_grpc,
+            https=https,
+            api_key=api_key,
         )
         self.collection_name = collection_name
         self.embedder_model_name = embedder_model_name
@@ -102,8 +103,7 @@ class QdrantHybridIndexer:
             logger.warning("Embedder does not support native sparse vectors. Sparse indexing will use TF-IDF fallback.")
 
     def create_collection(self, recreate: bool = False) -> bool:
-        """
-        Создаёт коллекцию с поддержкой dense и sparse векторов.
+        """Создаёт коллекцию с поддержкой dense и sparse векторов.
         :param recreate: если True, удаляет существующую коллекцию
         :return: True если создана, False если уже существовала
         """
@@ -127,9 +127,8 @@ class QdrantHybridIndexer:
             )
             logger.info(f"Created collection {self.collection_name} with dense and sparse vectors")
             return True
-        else:
-            logger.info(f"Collection {self.collection_name} already exists")
-            return False
+        logger.info(f"Collection {self.collection_name} already exists")
+        return False
 
     def get_collection_info(self) -> CollectionInfo:
         """Возвращает информацию о коллекции."""
@@ -141,8 +140,7 @@ class QdrantHybridIndexer:
         return vec.tolist()
 
     def _compute_sparse_vector(self, text: str) -> models.SparseVector | None:
-        """
-        Вычисляет sparse вектор.
+        """Вычисляет sparse вектор.
         Для bge-m3: model.encode(text, return_sparse=True) возвращает словарь с индексами и значениями.
         Для моделей без поддержки возвращает None.
         """
@@ -152,7 +150,7 @@ class QdrantHybridIndexer:
             # Ожидается структура с индексами и значениями
             if isinstance(sparse, dict) and "indices" in sparse and "values" in sparse:
                 return models.SparseVector(indices=sparse["indices"], values=sparse["values"])
-            elif hasattr(sparse, "indices") and hasattr(sparse, "values"):
+            if hasattr(sparse, "indices") and hasattr(sparse, "values"):
                 return models.SparseVector(indices=sparse.indices.tolist(), values=sparse.values.tolist())
         # Альтернативный способ: используем encode с параметром return_sparse
         try:
@@ -167,8 +165,7 @@ class QdrantHybridIndexer:
         return None
 
     def _chunk_to_point(self, chunk: dict[str, Any]) -> PointStruct | None:
-        """
-        Преобразует чанк (словарь) в PointStruct для Qdrant.
+        """Преобразует чанк (словарь) в PointStruct для Qdrant.
         Ожидаемые поля: hash (id), text, title, source_type, source_id, version, doc_title, keywords, entities, summary.
         """
         point_id = chunk.get("hash")
@@ -211,8 +208,7 @@ class QdrantHybridIndexer:
         return PointStruct(id=point_id, vector=vectors, payload=payload)
 
     def index_chunks(self, chunks: list[dict[str, Any]]) -> int:
-        """
-        Индексирует список чанков в Qdrant (пакетно).
+        """Индексирует список чанков в Qdrant (пакетно).
         Возвращает количество успешно индексированных чанков.
         """
         total = 0
@@ -241,14 +237,13 @@ class QdrantHybridIndexer:
         return total
 
     def delete_chunks(self, chunk_ids: list[str]) -> int:
-        """
-        Удаляет чанки по списку ID (хешей).
-        """
+        """Удаляет чанки по списку ID (хешей)."""
         if not chunk_ids:
             return 0
         try:
             self.client.delete(
-                collection_name=self.collection_name, points_selector=models.PointIdsList(points=chunk_ids)
+                collection_name=self.collection_name,
+                points_selector=models.PointIdsList(points=chunk_ids),
             )
             logger.info(f"Deleted {len(chunk_ids)} chunks")
             return len(chunk_ids)
@@ -324,7 +319,7 @@ class QdrantHybridIndexer:
                         id=chunk_id,
                         vector={"colbert": colbert_vectors},
                         payload={"text": chunk_text},
-                    )
+                    ),
                 ],
             )
             logger.debug("ColBERT indexed chunk %s", chunk_id[:12])
@@ -402,8 +397,7 @@ class QdrantHybridIndexer:
 
 
 def batch_index_from_json_files(indexer: QdrantHybridIndexer, chunks_dir: Path, pattern: str = "*.json"):
-    """
-    Утилита для индексации чанков из JSON-файлов в директории.
+    """Утилита для индексации чанков из JSON-файлов в директории.
     Каждый JSON должен содержать список чанков (как в формате save_chunks_to_json).
     """
     json_files = list(chunks_dir.glob(pattern))
@@ -443,7 +437,7 @@ if __name__ == "__main__":
             "keywords": ["RAG", "LLM", "retrieval"],
             "entities": [],
             "summary": "RAG enhances LLMs with external knowledge.",
-        }
+        },
     ]
     indexer.index_chunks(sample_chunks)
     print(f"Total chunks in collection: {indexer.get_chunk_count()}")

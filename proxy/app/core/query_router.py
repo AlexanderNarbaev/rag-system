@@ -1,5 +1,4 @@
-"""
-Adaptive Query Routing
+"""Adaptive Query Routing
 
 Classifies queries by complexity and routes to appropriate retrieval strategy:
 - Simple: no retrieval needed (FAQ, greetings)
@@ -19,8 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class QueryComplexityRouter:
-    """
-    Route queries based on complexity level.
+    """Route queries based on complexity level.
 
     Classification:
     - direct: Simple queries that don't need retrieval (greetings, FAQ)
@@ -97,13 +95,13 @@ class QueryComplexityRouter:
     ]
 
     def classify(self, query: str) -> Literal["direct", "single", "multi"]:
-        """
-        Classify query complexity.
+        """Classify query complexity.
 
         Returns:
             "direct" - no retrieval needed
             "single" - single-step RAG
             "multi" - multi-step iterative RAG
+
         """
         query_lower = query.lower().strip()
 
@@ -148,8 +146,7 @@ class QueryComplexityRouter:
         self,
         complexity: Literal["direct", "single", "multi"],
     ) -> dict[str, Any]:
-        """
-        Get retrieval parameters for the complexity level.
+        """Get retrieval parameters for the complexity level.
 
         Returns dict with:
         - retrieve: whether to retrieve
@@ -164,20 +161,20 @@ class QueryComplexityRouter:
                 "rerank": False,
                 "max_iterations": 0,
             }
-        elif complexity == "single":
+        if complexity == "single":
             return {
                 "retrieve": True,
                 "top_k": 10,
                 "rerank": True,
                 "max_iterations": 1,
             }
-        else:  # multi
-            return {
-                "retrieve": True,
-                "top_k": 15,
-                "rerank": True,
-                "max_iterations": 3,
-            }
+        # multi
+        return {
+            "retrieve": True,
+            "top_k": 15,
+            "rerank": True,
+            "max_iterations": 3,
+        }
 
 
 # Global router instance

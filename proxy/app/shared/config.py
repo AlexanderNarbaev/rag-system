@@ -1,6 +1,5 @@
 # proxy/app/config.py
-"""
-RAG proxy configuration.
+"""RAG proxy configuration.
 
 All parameters are loaded from environment variables or have default values.
 Supports .env file loading for local development.
@@ -108,6 +107,7 @@ USE_GRAPH_EXPANSION = os.getenv("USE_GRAPH_EXPANSION", "false").lower() == "true
 
 if GRAPH_ENABLED and not NEO4J_PASSWORD:
     import warnings
+
     warnings.warn(
         "GRAPH_ENABLED is true but NEO4J_PASSWORD is empty. Set NEO4J_PASSWORD in your environment.",
         stacklevel=2,
@@ -300,6 +300,7 @@ MINIO_DOCS_BUCKET = os.getenv("MINIO_DOCS_BUCKET", "rag-documents")
 
 if MODEL_EVOLUTION_ENABLED and (not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY):
     import warnings
+
     warnings.warn(
         "MODEL_EVOLUTION_ENABLED is true but MINIO_ACCESS_KEY or MINIO_SECRET_KEY is empty. "
         "MinIO S3 storage will fail. Set MINIO_ACCESS_KEY and MINIO_SECRET_KEY in your environment.",

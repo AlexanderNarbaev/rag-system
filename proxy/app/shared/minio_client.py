@@ -1,6 +1,5 @@
 # proxy/app/shared/minio_client.py
-"""
-MinIO client for S3-compatible object storage.
+"""MinIO client for S3-compatible object storage.
 
 Provides file upload, download, listing, deletion, and presigned URL generation
 for the RAG system's document storage needs.
@@ -116,6 +115,7 @@ class MinioClient:
 
         Raises:
             StorageError: If upload fails.
+
         """
         self._ensure_bucket()
         client = self._get_client()
@@ -143,6 +143,7 @@ class MinioClient:
 
         Raises:
             StorageError: If download fails.
+
         """
         client = self._get_client()
         try:
@@ -173,6 +174,7 @@ class MinioClient:
 
         Raises:
             StorageError: If listing fails.
+
         """
         client = self._get_client()
         try:
@@ -186,7 +188,7 @@ class MinioClient:
                             "size": obj["Size"],
                             "last_modified": obj["LastModified"].isoformat(),
                             "etag": obj.get("ETag", "").strip('"'),
-                        }
+                        },
                     )
             return results
         except ClientError as exc:
@@ -203,6 +205,7 @@ class MinioClient:
 
         Raises:
             StorageError: If deletion fails.
+
         """
         client = self._get_client()
         try:
@@ -225,6 +228,7 @@ class MinioClient:
 
         Raises:
             StorageError: If the file does not exist or request fails.
+
         """
         client = self._get_client()
         try:
@@ -265,6 +269,7 @@ class MinioClient:
 
         Raises:
             StorageError: If URL generation fails.
+
         """
         client = self._get_client()
         try:
@@ -288,6 +293,7 @@ class MinioClient:
 
         Raises:
             StorageError: If MinIO is unreachable.
+
         """
         client = self._get_client()
         try:
