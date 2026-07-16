@@ -112,8 +112,17 @@ class TestHealthEndpoint:
     """Tests for /v1/health endpoint."""
 
     def test_health_mocked_components(self, client):
-        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant, patch("requests.get") as mock_get:
-            mock_qdrant.get_collections.return_value = {}
+        with (
+            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("requests.get") as mock_get,
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
+            # _check_qdrant() calls qdrant_client.get_collections().collections
+            # so the mock must return an object with a .collections attribute
+            mock_collections_resp = MagicMock()
+            mock_collections_resp.collections = []
+            mock_qdrant.get_collections.return_value = mock_collections_resp
             mock_get.return_value.status_code = 200
             mock_get.return_value.json.return_value = {}
             response = client.get("/v1/health")
@@ -331,15 +340,22 @@ class TestChatCompletionsStreaming:
         assert "[DONE]" in body
 
     def test_streaming_error_handling(self, client, mock_rag_pipeline):
+        """Search failure is handled gracefully — returns refusal, not an error.
+
+        The RAG pipeline catches hybrid_search exceptions in degraded mode,
+        then should_generate_answer returns a refusal.  The streaming endpoint
+        emits the refusal as a normal content delta (not an error event).
+        """
         mock_rag_pipeline["hybrid_search"].side_effect = Exception("Search failed")
 
         response = client.post(
             "/v1/chat/completions",
             json={"model": "test-model", "messages": [{"role": "user", "content": "query"}], "stream": True},
         )
-        # Streaming errors return the error in the stream body
         body = response.text
-        assert "error" in body
+        # Graceful refusal is emitted as content, not as an error event
+        assert "don't have enough" in body.lower() or "no relevant" in body.lower()
+        assert "[DONE]" in body
 
     def test_streaming_empty_choices_no_index_error(self, client, mock_rag_pipeline):
         """Streaming chunk with empty choices[] must not raise IndexError (regression fix).
@@ -355,11 +371,12 @@ class TestChatCompletionsStreaming:
 
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
         mock_rag_pipeline["hybrid_search"].return_value = []
-
-        response = client.post(
-            "/v1/chat/completions",
-            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
-        )
+        # Allow the pipeline past the negative-evidence gate so stream_completion is reached
+        with patch("proxy.app.main.should_generate_answer", return_value=(True, "ok")):
+            response = client.post(
+                "/v1/chat/completions",
+                json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+            )
         assert response.status_code == 200
         body = response.text
         assert "[DONE]" in body
@@ -377,11 +394,12 @@ class TestChatCompletionsStreaming:
 
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
         mock_rag_pipeline["hybrid_search"].return_value = []
-
-        response = client.post(
-            "/v1/chat/completions",
-            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
-        )
+        # Allow the pipeline past the negative-evidence gate so stream_completion is reached
+        with patch("proxy.app.main.should_generate_answer", return_value=(True, "ok")):
+            response = client.post(
+                "/v1/chat/completions",
+                json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+            )
         assert response.status_code == 200
         body = response.text
         assert "[DONE]" in body
@@ -398,11 +416,12 @@ class TestChatCompletionsStreaming:
 
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
         mock_rag_pipeline["hybrid_search"].return_value = []
-
-        response = client.post(
-            "/v1/chat/completions",
-            json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
-        )
+        # Allow the pipeline past the negative-evidence gate so stream_completion is reached
+        with patch("proxy.app.main.should_generate_answer", return_value=(True, "ok")):
+            response = client.post(
+                "/v1/chat/completions",
+                json={"model": "test-model", "messages": [{"role": "user", "content": "Hi"}], "stream": True},
+            )
         assert response.status_code == 200
         body = response.text
         assert "[DONE]" in body

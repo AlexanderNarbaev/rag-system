@@ -9,7 +9,9 @@
         docker-build docker-up docker-down docker-logs run docs all \
         etl etl-confluence etl-jira etl-gitlab \
         backup restore dashboard tui mcp-server \
-        deploy deploy-prod verify-backups
+        deploy deploy-prod verify-backups \
+        maturity-review maturity-review-json maturity-review-save \
+        export-openapi
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -140,6 +142,9 @@ docs: ## Show documentation locations
 	@echo "  AGENTS.md:    project structure and conventions"
 	@echo "  README.md:    project overview"
 
+export-openapi: ## Export OpenAPI spec + generate API docs
+	@cd $(ROOT) && python scripts/export_openapi.py
+
 # ── UI ────────────────────────────────────────────────────────────────────────
 dashboard: ## Start Streamlit dashboard
 	streamlit run dashboard/app.py --server.port 8501
@@ -153,6 +158,17 @@ mcp-server: ## Start MCP server
 
 # ── CI pipeline ───────────────────────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests
+
+# ── Maturity Review ───────────────────────────────────────────────────────────
+maturity-review: ## Run automated RAG maturity assessment
+	@python $(ROOT)/scripts/maturity_review.py
+
+maturity-review-json: ## Run maturity assessment (JSON output)
+	@python $(ROOT)/scripts/maturity_review.py --json
+
+maturity-review-save: ## Run maturity assessment and save report
+	@python $(ROOT)/scripts/maturity_review.py --output $(ROOT)/docs/en/guides/maturity-report.md
+	@echo "Report saved to docs/en/guides/maturity-report.md"
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help: ## Show this help

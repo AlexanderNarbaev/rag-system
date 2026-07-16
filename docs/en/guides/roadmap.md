@@ -13,7 +13,7 @@ self-correcting, agentic, and federated architectures.
 
 ## Implementation Status (2026-07-16)
 
-**Sprint S4-2026:** Wave 1 ✅ COMPLETE, Wave 2 🔄 IN PROGRESS
+**Sprint S4-2026:** Wave 1 ✅ COMPLETE, Wave 2 ✅ COMPLETE, Wave 3 🔄 IN PROGRESS
 
 ### Phase 1 — Foundation ✅ COMPLETE
 
@@ -215,14 +215,15 @@ self-correcting, agentic, and federated architectures.
 
 ### Features
 
-| # | Feature                      | Description                                                                    | Success Criteria                                      |
-|---|------------------------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
-| 1 | **Webhook-driven ingestion** | Confluence/GitLab webhooks trigger incremental indexing via Redis Streams      | New document searchable within 30 seconds of publish  |
-| 2 | **Streaming ETL pipeline**   | Redis Streams consumer groups replace batch scheduler for real-time processing | Pipeline processes events within 5 seconds of arrival |
-| 3 | **Live Qdrant upserts**      | Atomic chunk-level updates without full reindexing                             | Zero downtime during document updates                 |
-| 4 | **Streaming LLM generation** | SSE streaming optimized: connection pooling, chunked transfer encoding         | TTFT < 1s for cached contexts                         |
-| 5 | **Model warm-up endpoint**   | `POST /v1/admin/warmup` pre-loads embedder, reranker, and SLM                  | First request latency equals subsequent requests      |
-| 6 | **Response compression**     | gzip/brotli middleware via Starlette `GZipMiddleware`                          | 60%+ reduction in response body size                  |
+| # | Feature                      | Description                                                                    | Status    | File                                   |
+|---|------------------------------|--------------------------------------------------------------------------------|-----------|----------------------------------------|
+| 1 | **Webhook-driven ingestion** | Confluence/GitLab webhooks trigger incremental indexing via Redis Streams      | ✅        | etl/scheduler/webhook_server.py        |
+| 2 | **Streaming ETL pipeline**   | Redis Streams consumer groups replace batch scheduler for real-time processing | ✅        | etl/scheduler/stream_consumer.py       |
+| 3 | **Event pipeline orchestrator** | Unified webhook → Redis Streams → consumer coordinator with start/stop lifecycle | ✅ Stub | etl/scheduler/event_pipeline.py        |
+| 4 | **Live Qdrant upserts**      | Atomic chunk-level updates without full reindexing                             | ✅        | etl/indexer/live_vector_lake.py        |
+| 5 | **Streaming LLM generation** | SSE streaming optimized: connection pooling, chunked transfer encoding         | ✅        | proxy/app/llm/router.py                |
+| 6 | **Model warm-up endpoint**   | `POST /v1/admin/warmup` pre-loads embedder, reranker, and SLM                  | ✅        | proxy/app/shared/warmup.py             |
+| 7 | **Response compression**     | gzip/brotli middleware via Starlette `GZipMiddleware`                          | ✅        | proxy/app/shared/middleware.py          |
 
 ---
 
@@ -287,17 +288,18 @@ These items were originally in Future Horizons and have been completed:
 
 ## In Progress
 
-**Sprint:** [S4-2026](sprint-plan-2026-s4.md) — Wave 2 active
+**Sprint:** [S4-2026](sprint-plan-2026-s4.md) — Wave 3 active
 
-| Item                           | Description                                                              | Status           | Sprint |
-|--------------------------------|--------------------------------------------------------------------------|------------------|--------|
-| **Documentation improvements** | Updating guides, ADRs, and operational docs to reflect v2.0 capabilities | 🔄 In Progress    | S4 P1-4 |
-| **Code quality improvements**  | Linting cleanup, type annotation coverage, dead code removal             | ✅ S4 Wave 1 done | S4 P0-5 |
-| **Test coverage improvements** | Expanding unit test coverage for edge cases and error paths              | 🔄 In Progress    | S4 P1-3 |
-| **mypy strict compliance**     | Full strict mode across all 139 source files                             | ✅ S4 Wave 1 done | S4 P0-1 |
-| **Dependency updates**         | Dependabot PR triage and merge                                           | ✅ S4 Wave 1 done | S4 P0-3 |
-| **Retrieval eval expansion**   | 20 → 200+ labeled query–document pairs                                  | ⏳ Planned         | S4 P1-1 |
-| **Security audit**             | Dependency CVE scanning and remediation                                  | ⏳ Planned         | S4 P1-5 |
+| Item                                    | Description                                                              | Status           | Sprint  |
+|-----------------------------------------|--------------------------------------------------------------------------|------------------|---------|
+| **Documentation improvements**          | Updating guides, ADRs, and operational docs to reflect v2.0 capabilities | 🔄 In Progress    | S4 P1-4 |
+| **Code quality improvements**           | Linting cleanup, type annotation coverage, dead code removal             | ✅ S4 Wave 1 done | S4 P0-5 |
+| **Test coverage improvements**          | Expanding unit test coverage for edge cases and error paths              | 🔄 In Progress    | S4 P1-3 |
+| **mypy strict compliance**              | Full strict mode across all 139 source files                             | ✅ S4 Wave 1 done | S4 P0-1 |
+| **Dependency updates**                  | Dependabot PR triage and merge                                           | ✅ S4 Wave 1 done | S4 P0-3 |
+| **Retrieval eval expansion**            | 20 → 200+ labeled query–document pairs                                  | ⏳ Planned         | S4 P1-1 |
+| **Security audit**                      | Dependency CVE scanning and remediation                                  | ⏳ Planned         | S4 P1-5 |
+| **Event-driven streaming pipeline**     | Unified webhook → Redis Streams → consumer orchestrator stub             | ✅ S4 Wave 3 done | S4 P2-6 |
 
 ---
 
