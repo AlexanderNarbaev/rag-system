@@ -1,6 +1,6 @@
 # Sprint Plan — S4-2026
 
-**Status:** IN PROGRESS (Wave 2 active)  
+**Status:** IN PROGRESS (Wave 3 complete)  
 **Date:** 2026-07-16  
 **Previous sprint:** [S3-2026](sprint-plan-2026-s3-updated.md) — ✅ Complete  
 
@@ -41,50 +41,55 @@
 
 ---
 
-## S4 Wave 2 — Quality Push (Jul 19–Aug 2) 🔄 IN PROGRESS
+## S4 Wave 2 — Quality Push (Jul 19–Aug 2) ✅ COMPLETE
 
 ### P1-1 (EVAL-01): Expand retrieval eval dataset
-- **Target:** 20 → 200+ labeled pairs
+- **Status:** ✅ COMPLETE — 20 → 452 pairs (+2160%)
+- **Commit:** `9094b8d`
 - **Effort:** HIGH (24h)
 - **Role:** Data Analyst + ML Engineer
-- **DoD:** MRR regression gate (≥0.75) in CI
+- **DoD:** MRR regression gate (≥0.75) in CI ✅
 
 ### P1-2 (QUAL-01): Full mypy strict compliance
-- **Target:** 0 errors across entire codebase
+- **Status:** ✅ COMPLETE — Done in Wave 1 (P0-1)
+- **Commit:** `3019bed`
 - **Effort:** HIGH (20h)
 - **Role:** Backend Developer
-- **DoD:** `strict = true` in CI, all modules passing
+- **DoD:** `strict = true` in CI, all modules passing ✅
 
 ### P1-3 (COV-01): Raise coverage to 80%
-- **Current:** 75.70% (threshold 74%)
-- **Target:** 80% with `fail_under = 80`
+- **Status:** ✅ COMPLETE — 74.73% → 80.02%
+- **Commit:** `9094b8d`
 - **Effort:** HIGH (24h)
 - **Role:** QA Engineer + Backend Developer
 
 ### P1-4 (DOC-04): Sprint documentation
-- **Status:** 🟡 IN PROGRESS — S4 plan updated, Wave 1 marked COMPLETE, current_wave.md created
+- **Status:** ✅ COMPLETE — All docs updated
+- **Commit:** `9094b8d`
 - **Effort:** S (3h)
 - **Role:** PM + Tech Writer
-- **DoD:** S3 archived, S4 plan published, ADR indices updated
+- **DoD:** S3 archived, S4 plan published, ADR indices updated ✅
 
 ### P1-5 (SEC-06): Dependency security audit
+- **Status:** ✅ COMPLETE — 6 packages fixed, 0 HIGH/CRITICAL CVEs
+- **Commit:** `9094b8d`
 - **Effort:** S (3h)
 - **Role:** Security Engineer
-- **DoD:** No HIGH/CRITICAL CVEs remaining
+- **DoD:** No HIGH/CRITICAL CVEs remaining ✅
 
 ---
 
-## S4 Wave 3 — Infrastructure (Aug 3–16)
+## S4 Wave 3 — Infrastructure (Aug 3–16) ✅ COMPLETE (5/7)
 
-| ID | Description | Effort | Role |
-|----|-------------|--------|------|
-| P2-1 | HTTPS/TLS automation | M (12h) | DevOps |
-| P2-2 | Secrets rotation automation | M (16h) | DevOps + Backend |
-| P2-3 | DB migration framework | M (16h) | Backend |
-| P2-4 | ADR-008 Java/Quarkus decision | M (8h) | Architect |
-| P2-5 | Validate K8s Helm chart | M (12h) | DevOps |
-| P2-6 | Streaming pipeline stubs | M (8h) | Backend |
-| P2-7 | Baseline latency benchmarks | M (8h) | Backend + DevOps |
+| ID | Description | Status | Commit | Effort | Role |
+|----|-------------|--------|--------|--------|------|
+| P2-1 | HTTPS/TLS automation | ✅ COMPLETE | `7638c8c` | M (12h) | DevOps |
+| P2-2 | Secrets rotation automation | ✅ COMPLETE | `7638c8c` | M (16h) | DevOps + Backend |
+| P2-3 | DB migration framework | ✅ COMPLETE | `7638c8c` | M (16h) | Backend |
+| P2-4 | ADR-008 Java/Quarkus decision | ⏳ DEFERRED | — | M (8h) | Architect |
+| P2-5 | Validate K8s Helm chart | ✅ COMPLETE | `7638c8c` | M (12h) | DevOps |
+| P2-6 | Streaming pipeline stubs | ⏳ DEFERRED | — | M (8h) | Backend |
+| P2-7 | Baseline latency benchmarks | ✅ COMPLETE | `7638c8c` | M (8h) | Backend + DevOps |
 
 ---
 
@@ -125,7 +130,7 @@
 | Wave | Items | Hours | Status |
 |------|-------|-------|--------|
 | Wave 1 (P0) | 5 | ~13h | ✅ COMPLETE |
-| Wave 2 (P1) | 5 | ~74h | 🔄 IN PROGRESS |
-| Wave 3 (P2) | 7 | ~80h | ⏳ Planned |
+| Wave 2 (P1) | 5 | ~74h | ✅ COMPLETE |
+| Wave 3 (P2) | 7 (5 done) | ~80h | ✅ COMPLETE (5/7) |
 | Wave 4 (P3, stretch) | 5 | ~130h | ⏳ Planned |
-| **Total** | **22** | **~297h** | |
+| **Total** | **22** | **~297h** | **Waves 1-3 COMPLETE** |
