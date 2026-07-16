@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError
@@ -123,10 +120,12 @@ class TestDLQ:
 
     def test_dlq_importable(self):
         from proxy.app.shared.dlq import DeadLetterQueue
+
         assert DeadLetterQueue is not None
 
     def test_dlq_add_and_get(self, tmp_path):
         from proxy.app.shared.dlq import DeadLetterQueue
+
         dlq = DeadLetterQueue(str(tmp_path / "test.db"))
         msg_id = dlq.add({"data": "test"}, "test error")
         assert msg_id is not None
@@ -136,6 +135,7 @@ class TestDLQ:
 
     def test_dlq_stats(self, tmp_path):
         from proxy.app.shared.dlq import DeadLetterQueue
+
         dlq = DeadLetterQueue(str(tmp_path / "test.db"))
         dlq.add({"data": "test"}, "test error")
         stats = dlq.stats()

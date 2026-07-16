@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -68,14 +68,17 @@ class TestTracingImports:
 
     def test_traced_decorator_importable(self):
         from proxy.app.shared.tracing import traced
+
         assert callable(traced)
 
     def test_span_context_from_headers_importable(self):
         from proxy.app.shared.tracing import span_context_from_headers
+
         assert callable(span_context_from_headers)
 
     def test_setup_tracing_importable(self):
         from proxy.app.shared.tracing import setup_tracing
+
         assert callable(setup_tracing)
 
 
@@ -103,6 +106,7 @@ class TestTracingNoOp:
 
     def test_span_context_returns_none_without_otel(self):
         from proxy.app.shared.tracing import span_context_from_headers
+
         result = span_context_from_headers({})
         assert result is None
 
@@ -112,10 +116,12 @@ class TestMiddlewareIntegration:
 
     def test_trace_context_middleware_exists(self):
         from proxy.app.shared.middleware import TraceContextMiddleware
+
         assert TraceContextMiddleware is not None
 
     def test_middleware_is_asgi_app(self):
         from proxy.app.shared.middleware import TraceContextMiddleware
+
         app = MagicMock()
         middleware = TraceContextMiddleware(app)
         assert callable(middleware)

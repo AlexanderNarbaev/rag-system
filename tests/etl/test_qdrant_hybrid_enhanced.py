@@ -408,9 +408,7 @@ class TestQdrantHybridIndexerColbert:
 
         mock_client_cls.return_value = mock_qdrant_client
         mock_embedder = MagicMock()
-        mock_embedder.encode.return_value = MagicMock(
-            tolist=lambda: [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
-        )
+        mock_embedder.encode.return_value = MagicMock(tolist=lambda: [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
         mock_st.return_value = mock_embedder
 
         indexer = QdrantHybridIndexer(

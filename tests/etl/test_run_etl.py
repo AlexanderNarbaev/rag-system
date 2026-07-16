@@ -209,7 +209,6 @@ class TestRunIndexingShutdown:
             run_etl_mod._shutdown_requested = False
 
 
-
 class TestLoadConfig:
     def test_load_yaml_config(self, tmp_path):
         config_file = tmp_path / "config.yaml"
