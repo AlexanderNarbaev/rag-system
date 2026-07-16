@@ -298,7 +298,7 @@ class TestErrorHandling:
     """Tests for error handling in the proxy pipeline."""
 
     def test_chat_completion_handles_rerank_exception(self, app_client):
-        """Pipeline raises exception during reranking phase — verifies error propagation."""
+        """Pipeline raises exception during reranking phase — returns503 error."""
         mock_hit = MagicMock()
         mock_hit.payload = {"text": "Some document text", "version": "1.0"}
         mock_hit.score = 0.95
@@ -311,5 +311,7 @@ class TestErrorHandling:
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Test"}],
             }
-            with pytest.raises(RuntimeError, match="Rerank failed"):
-                app_client.post("/v1/chat/completions", json=payload)
+            response = app_client.post("/v1/chat/completions", json=payload)
+            assert response.status_code == 503
+            data = response.json()
+            assert data["detail"]["error"] == "rag_unavailable"

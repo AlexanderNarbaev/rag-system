@@ -132,6 +132,15 @@ class TestConversationMemory:
         assert "q5" in ctx
         assert "q0" not in ctx
 
+    def test_get_context_truncates_long_result(self):
+        mem = ConversationMemory()
+        # Add turns with long content to exceed max_tokens * 4 chars
+        long_content = "x" * 5000
+        mem.add_turn("user", long_content)
+        ctx = mem.get_context(max_tokens=100)  # 100 * 4 = 400 chars limit
+        assert len(ctx) <= 403  # 400 + "..."
+        assert ctx.endswith("...")
+
 
 class TestQueryCache:
     """Tests for QueryCache - semantic similarity matching."""

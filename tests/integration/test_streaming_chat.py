@@ -141,7 +141,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_chunks_are_valid_json(self, app_client):
         """Each SSE data chunk (except [DONE]) is valid JSON."""
-        search_results = [_make_scored_point("Context.")]
+        search_results = [_make_scored_point("Context."), _make_scored_point("More context.")]
 
         async def mock_stream(*args, **kwargs):
             yield {
@@ -162,7 +162,7 @@ class TestStreamingChatCompletion:
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
-            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1]),
             patch("proxy.app.main.stream_completion", side_effect=mock_stream),
         ):
             payload = {
@@ -246,7 +246,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_includes_feedback_id(self, app_client):
         """Streaming response includes rag_feedback_id before [DONE]."""
-        search_results = [_make_scored_point("Context.")]
+        search_results = [_make_scored_point("Context."), _make_scored_point("More context.")]
 
         async def mock_stream(*args, **kwargs):
             yield {
@@ -257,7 +257,7 @@ class TestStreamingChatCompletion:
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
-            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1]),
             patch("proxy.app.main.stream_completion", side_effect=mock_stream),
         ):
             payload = {
@@ -276,7 +276,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_feedback_before_done(self, app_client):
         """The rag_feedback_id event appears before the [DONE] sentinel."""
-        search_results = [_make_scored_point("Context.")]
+        search_results = [_make_scored_point("Context."), _make_scored_point("More context.")]
 
         async def mock_stream(*args, **kwargs):
             yield {
@@ -287,7 +287,7 @@ class TestStreamingChatCompletion:
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
-            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1]),
             patch("proxy.app.main.stream_completion", side_effect=mock_stream),
         ):
             payload = {
@@ -331,7 +331,7 @@ class TestStreamingChatCompletion:
 
     def test_streaming_error_yields_error_event(self, app_client):
         """When stream_completion raises, an error SSE event is emitted."""
-        search_results = [_make_scored_point("Context.")]
+        search_results = [_make_scored_point("Context."), _make_scored_point("More context.")]
 
         async def mock_stream(*args, **kwargs):
             yield {
@@ -343,7 +343,7 @@ class TestStreamingChatCompletion:
 
         with (
             patch("proxy.app.main.hybrid_search", return_value=search_results),
-            patch("proxy.app.main.rerank_chunks", return_value=[0]),
+            patch("proxy.app.main.rerank_chunks", return_value=[0, 1]),
             patch("proxy.app.main.stream_completion", side_effect=mock_stream),
         ):
             payload = {

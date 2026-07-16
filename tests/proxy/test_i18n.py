@@ -143,3 +143,49 @@ class TestGetFallbackMessage:
 
     def test_chinese_fallback_contains_chinese(self):
         assert any(ord(c) > 0x4E00 for c in FALLBACK_MESSAGES["zh"])
+
+    def test_detect_language_non_string_returns_default(self):
+        assert detect_language(123) == "en"
+
+    def test_detect_language_low_german_special_ratio(self):
+        """Text with few German special chars relative to total should fall through."""
+        # A long English text with just one umlaut shouldn't be classified as German
+        text = "This is a very long sentence in English with many words " * 10 + "ü"
+        # The ü is only ~1/500+ of alpha chars, well below 3% threshold
+        result = detect_language(text)
+        assert result == "en"
+
+    def test_detect_german_by_special_ratio(self):
+        """High ratio of German special chars to alpha should detect German."""
+        # Text with many umlauts relative to total alpha chars
+        text = "ü ü ü ü ü ü hello"
+        result = detect_language(text)
+        # The ü chars should push de_special / alpha >= 0.03
+        assert result == "de"
+
+    def test_detect_french_by_special_ratio(self):
+        """High ratio of French special chars to alpha should detect French."""
+        # Need: fr_score < 2 (no French words), but fr_special > 0 and >= 3% of alpha
+        text = "abcde fghij ç klmno"
+        result = detect_language(text)
+        assert result == "fr"
+
+    def test_detect_language_low_french_special_ratio(self):
+        """Text with few French special chars relative to total should fall through."""
+        text = "This is a very long sentence in English with many words " * 10 + "ç"
+        result = detect_language(text)
+        assert result == "en"
+
+    def test_get_system_prompt_i18n_disabled(self, monkeypatch):
+        import proxy.app.shared.i18n as i18n_mod
+
+        monkeypatch.setattr(i18n_mod, "I18N_ENABLED", False)
+        prompt = get_system_prompt("ru")
+        assert prompt == SYSTEM_PROMPTS["en"]
+
+    def test_get_fallback_message_i18n_disabled(self, monkeypatch):
+        import proxy.app.shared.i18n as i18n_mod
+
+        monkeypatch.setattr(i18n_mod, "I18N_ENABLED", False)
+        msg = get_fallback_message("ru")
+        assert msg == FALLBACK_MESSAGES["en"]

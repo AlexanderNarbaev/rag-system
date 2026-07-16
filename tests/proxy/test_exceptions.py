@@ -5,13 +5,17 @@ from proxy.app.shared.exceptions import (
     CacheError,
     ConfigError,
     ContextBuildError,
+    ContextError,
     EmbeddingError,
     GraphError,
     LLMError,
     RAGError,
     RateLimitError,
+    RerankerError,
     RerankError,
     RetrievalError,
+    SecurityError,
+    StorageError,
     ValidationError,
 )
 
@@ -121,3 +125,27 @@ class TestRAGError:
         for cls in subclasses:
             instance = cls("msg")
             assert instance.component != "", f"{cls.__name__} has empty component"
+
+    def test_context_error(self):
+        err = ContextError("grounding failed")
+        assert isinstance(err, RAGError)
+        assert err.component == "context"
+        assert err.recoverable is True
+
+    def test_reranker_error(self):
+        err = RerankerError("model load failed")
+        assert isinstance(err, RAGError)
+        assert err.component == "reranker"
+        assert err.recoverable is True
+
+    def test_security_error(self):
+        err = SecurityError("injection attempt")
+        assert isinstance(err, RAGError)
+        assert err.component == "security"
+        assert err.recoverable is False
+
+    def test_storage_error(self):
+        err = StorageError("upload failed")
+        assert isinstance(err, RAGError)
+        assert err.component == "storage"
+        assert err.recoverable is True

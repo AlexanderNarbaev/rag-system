@@ -203,12 +203,12 @@ async def health_ready() -> JSONResponse:
     status: dict[str, Any] = {"status": "ready", "timestamp": datetime.now(UTC).isoformat(), "components": {}}
 
     qdrant_status, _ = _check_qdrant()
-    status["components"]["qdrant"] = qdrant_status
+    status["components"]["qdrant"] = "ok" if qdrant_status == "ok" else "unavailable"
     if qdrant_status != "ok":
         status["status"] = "not_ready"
 
     llm_status, _ = _check_llm()
-    status["components"]["llm"] = llm_status
+    status["components"]["llm"] = "ok" if llm_status == "ok" else "unavailable"
     if llm_status != "ok":
         status["status"] = "not_ready"
 

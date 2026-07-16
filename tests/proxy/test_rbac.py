@@ -165,3 +165,14 @@ class TestRoleHierarchy:
 
     def test_user_above_read_only(self):
         assert self.RANK[Role.USER] > self.RANK[Role.READ_ONLY]
+
+
+class TestRBACDisabled:
+    """Test behavior when RBAC is disabled."""
+
+    def test_has_permission_always_true_when_disabled(self):
+        with patch("proxy.app.auth.rbac.RBAC_ENABLED", False):
+            ctx = UserContext(user_id="test", username="test", roles=["read_only"])
+            assert has_permission(ctx, "chat") is True
+            assert has_permission(ctx, "admin:config") is True
+            assert has_permission(ctx, "feedback") is True

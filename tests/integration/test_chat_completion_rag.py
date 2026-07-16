@@ -371,7 +371,7 @@ class TestChatCompletionRAGPipeline:
             assert "RAG is a powerful technique" in system_msg["content"]
 
     def test_rerank_exception_propagates(self, app_client):
-        """Exception during reranking propagates to the caller."""
+        """Exception during reranking returns503 to the caller."""
         search_results = _make_scored_points(
             [
                 {"text": "Some text.", "source_type": "confluence"},
@@ -386,5 +386,7 @@ class TestChatCompletionRAGPipeline:
                 "model": "test-model",
                 "messages": [{"role": "user", "content": "Test"}],
             }
-            with pytest.raises(RuntimeError, match="Reranker OOM"):
-                app_client.post("/v1/chat/completions", json=payload)
+            response = app_client.post("/v1/chat/completions", json=payload)
+            assert response.status_code == 503
+            data = response.json()
+            assert data["detail"]["error"] == "rag_unavailable"
