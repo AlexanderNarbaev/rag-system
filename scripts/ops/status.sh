@@ -56,11 +56,13 @@ STATUS_DATA=()
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 http_code() {
-    curl -s --max-time 5 -o /dev/null -w "%{http_code}" "$1" 2>/dev/null || echo "000"
+    local code
+    code=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" "$1" 2>/dev/null) || true
+    echo "${code:-000}"
 }
 
 http_body() {
-    curl -s --max-time 5 "$1" 2>/dev/null || echo ""
+    curl -s --max-time 5 "$1" 2>/dev/null || true
 }
 
 redis_cmd() {

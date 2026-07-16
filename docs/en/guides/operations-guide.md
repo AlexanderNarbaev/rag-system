@@ -982,9 +982,10 @@ All backup and restore operations use scripts in `scripts/ops/`:
 | `backup_neo4j.sh` | Neo4j dump → S3, supports `neo4j-admin` and `cypher-shell` fallback |
 | `backup_redis.sh` | Redis BGSAVE → RDB copy → S3 |
 | `restore_all.sh` | Downloads latest backups from S3 and restores all services |
-| `verify_restore.sh` | Verifies backup file integrity |
+| `verify_restore.sh` | Verifies backup integrity (local files + S3/MinIO) |
 | `health_check.sh` | Comprehensive health check for all components |
 | `status.sh` | Real-time service status table with json/k8s/docker/watch modes |
+| `deploy.sh` | Operational-grade deployment automation with canary and rollback |
 | `rotate-secrets.sh` | Automated JWT and API key rotation with rollback |
 
 ```bash
@@ -998,6 +999,17 @@ make verify-backups   # Verify backup integrity
 ./scripts/ops/restore_all.sh
 ./scripts/ops/health_check.sh
 ./scripts/ops/status.sh --watch
+
+# Deployment
+./scripts/ops/deploy.sh                        # dev deployment
+DEPLOY_ENV=prod ./scripts/ops/deploy.sh        # production deployment
+./scripts/ops/deploy.sh --canary               # canary deployment
+./scripts/ops/deploy.sh --rollback             # rollback to previous
+DRY_RUN=true ./scripts/ops/deploy.sh           # preview deployment
+
+# Backup verification (local + S3)
+./scripts/ops/verify_restore.sh                # local mode
+./scripts/ops/verify_restore.sh --s3           # S3/MinIO mode
 ```
 
 ### 5.8 Automated Cleanup CronJob

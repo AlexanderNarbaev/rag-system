@@ -5,7 +5,10 @@ import hashlib
 import os
 import re
 import secrets
+import time
 from typing import Any
+
+import bcrypt
 
 
 class InputValidator:
@@ -311,6 +314,279 @@ class SQLInjectionDetector:
         return bool(cls.detect_sqli(text)) or bool(cls.detect_xss(text))
 
 
+class RequestSigner:
+    """HMAC-based request signing for webhook verification.
+
+    Provides generation and verification of HMAC-SHA256 signatures
+    for webhook payloads from external systems (Confluence, Jira, GitLab).
+    Uses constant-time comparison to prevent timing attacks.
+    """
+
+    SIGNATURE_HEADER = "X-Webhook-Signature"
+    TIMESTAMP_HEADER = "X-Webhook-Timestamp"
+    MAX_AGE_SECONDS = 300
+
+    @staticmethod
+    def sign(payload: str, secret: str, timestamp: str | None = None) -> str:
+        """Generate HMAC-SHA256 signature for a webhook payload.
+
+        Args:
+            payload: The request body to sign.
+            secret: Shared secret key.
+            timestamp: Optional Unix timestamp (generated if not provided).
+
+        Returns:
+            Hex-encoded HMAC-SHA256 signature.
+        """
+        import hmac
+
+        ts = timestamp or str(int(time.time()))
+        message = f"{ts}.{payload}"
+        mac = hmac.new(secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256)
+        return mac.hexdigest()
+
+    @staticmethod
+    def verify(payload: str, signature: str, secret: str, timestamp: str) -> bool:
+        """Verify an HMAC-SHA256 webhook signature.
+
+        Args:
+            payload: The raw request body.
+            signature: The hex-encoded signature from the webhook header.
+            secret: Shared secret key.
+            timestamp: Unix timestamp from the webhook header.
+
+        Returns:
+            True if the signature is valid and not expired.
+        """
+
+        if not signature or not timestamp:
+            return False
+
+        try:
+            ts_int = int(timestamp)
+        except (ValueError, TypeError):
+            return False
+
+        if abs(int(time.time()) - ts_int) > RequestSigner.MAX_AGE_SECONDS:
+            return False
+
+        expected = RequestSigner.sign(payload, secret, timestamp)
+        return secrets.compare_digest(expected, signature)
+
+    @staticmethod
+    def generate_secret(length: int = 32) -> str:
+        """Generate a cryptographically secure webhook secret."""
+        return secrets.token_hex(length)
+
+    @staticmethod
+    def extract_from_request(headers: dict[str, str], body: str) -> tuple[str, str]:
+        """Extract signature and timestamp from request headers.
+
+        Returns:
+            Tuple of (signature, timestamp) or ("", "") if missing.
+        """
+        sig = headers.get(RequestSigner.SIGNATURE_HEADER, "")
+        ts = headers.get(RequestSigner.TIMESTAMP_HEADER, "")
+        return sig, ts
+
+
+class IPAllowlist:
+    """IP-based access control for admin and sensitive endpoints.
+
+    Supports IPv4/IPv6 addresses, CIDR notation, and both
+    allowlist and denylist modes.
+    """
+
+    def __init__(
+        self,
+        allowlist: list[str] | None = None,
+        denylist: list[str] | None = None,
+    ):
+        import ipaddress
+
+        self._allowlist: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        self._denylist: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        self._single_allow_ips: set[str] = set()
+        self._single_deny_ips: set[str] = set()
+
+        for entry in allowlist or []:
+            entry = entry.strip()
+            if not entry:
+                continue
+            try:
+                if "/" in entry:
+                    self._allowlist.append(ipaddress.ip_network(entry, strict=False))
+                else:
+                    self._single_allow_ips.add(entry)
+            except ValueError:
+                continue
+
+        for entry in denylist or []:
+            entry = entry.strip()
+            if not entry:
+                continue
+            try:
+                if "/" in entry:
+                    self._denylist.append(ipaddress.ip_network(entry, strict=False))
+                else:
+                    self._single_deny_ips.add(entry)
+            except ValueError:
+                continue
+
+    def is_allowed(self, ip: str) -> bool:
+        """Check if an IP address is allowed.
+
+        Returns True if:
+        - No allowlist is configured (allow all), or
+        - The IP matches an allowlist entry and is not denied.
+        """
+        import ipaddress
+
+        if self._single_deny_ips and ip in self._single_deny_ips:
+            return False
+
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+
+        for network in self._denylist:
+            if addr in network:
+                return False
+
+        if not self._allowlist and not self._single_allow_ips:
+            return True
+
+        if ip in self._single_allow_ips:
+            return True
+
+        return any(addr in network for network in self._allowlist)
+
+    def is_denied(self, ip: str) -> bool:
+        """Check if an IP address is explicitly denied."""
+        import ipaddress
+
+        if ip in self._single_deny_ips:
+            return True
+
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return True
+
+        return any(addr in network for network in self._denylist)
+
+    def add_to_allowlist(self, entry: str) -> bool:
+        """Add an IP or CIDR range to the allowlist. Returns True on success."""
+        import ipaddress
+
+        entry = entry.strip()
+        if not entry:
+            return False
+        try:
+            if "/" in entry:
+                self._allowlist.append(ipaddress.ip_network(entry, strict=False))
+            else:
+                self._single_allow_ips.add(entry)
+            return True
+        except ValueError:
+            return False
+
+    def add_to_denylist(self, entry: str) -> bool:
+        """Add an IP or CIDR range to the denylist. Returns True on success."""
+        import ipaddress
+
+        entry = entry.strip()
+        if not entry:
+            return False
+        try:
+            if "/" in entry:
+                self._denylist.append(ipaddress.ip_network(entry, strict=False))
+            else:
+                self._single_deny_ips.add(entry)
+            return True
+        except ValueError:
+            return False
+
+    def remove_from_allowlist(self, entry: str) -> bool:
+        """Remove an entry from the allowlist. Returns True if removed."""
+        import ipaddress
+
+        entry = entry.strip()
+        if entry in self._single_allow_ips:
+            self._single_allow_ips.discard(entry)
+            return True
+        try:
+            network = ipaddress.ip_network(entry, strict=False)
+            if network in self._allowlist:
+                self._allowlist.remove(network)
+                return True
+        except ValueError:
+            pass
+        return False
+
+    @property
+    def allowlist_entries(self) -> list[str]:
+        """Return current allowlist entries as strings."""
+        entries = list(self._single_allow_ips)
+        entries.extend(str(n) for n in self._allowlist)
+        return entries
+
+    @property
+    def denylist_entries(self) -> list[str]:
+        """Return current denylist entries as strings."""
+        entries = list(self._single_deny_ips)
+        entries.extend(str(n) for n in self._denylist)
+        return entries
+
+
+class PasswordHistoryManager:
+    """Tracks password history to prevent reuse.
+
+    Maintains a configurable number of previous password hashes
+    and rejects passwords that match any in the history window.
+    """
+
+    DEFAULT_MAX_HISTORY = 5
+
+    def __init__(self, max_history: int = DEFAULT_MAX_HISTORY):
+        self._max_history = max(max_history, 1)
+
+    def is_previously_used(self, new_password: str, history_hashes: list[str]) -> bool:
+        """Check if a new password matches any in the history.
+
+        Args:
+            new_password: The new password to check.
+            history_hashes: List of bcrypt hashes of previous passwords.
+
+        Returns:
+            True if the password has been used before within the history window.
+        """
+        for old_hash in history_hashes[-self._max_history :]:
+            if bcrypt.checkpw(new_password.encode("utf-8"), old_hash.encode("utf-8")):
+                return True
+        return False
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Bcrypt-hash a password for history storage."""
+        return bcrypt.hashpw(
+            password.encode("utf-8"),
+            bcrypt.gensalt(rounds=12),
+        ).decode("utf-8")
+
+    @staticmethod
+    def trim_history(history: list[str], max_entries: int) -> list[str]:
+        """Keep only the most recent entries in password history."""
+        if len(history) <= max_entries:
+            return history
+        return history[-max_entries:]
+
+    @property
+    def max_history(self) -> int:
+        return self._max_history
+
+
 class DependencyScanner:
     """Simple dependency vulnerability scanner using known CVEs data."""
 
@@ -385,8 +661,11 @@ class DependencyScanner:
 __all__ = [
     "CSRFProtection",
     "DependencyScanner",
+    "IPAllowlist",
     "InputValidator",
+    "PasswordHistoryManager",
     "PasswordStrengthValidator",
+    "RequestSigner",
     "SecretsManager",
     "SecurityHeaders",
     "SQLInjectionDetector",

@@ -135,16 +135,25 @@ class DeadLetterQueue:
     def _get_conn(self) -> sqlite3.Connection:
         """Get a thread-local connection."""
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=5000")
-            self._local.conn = conn
+            if hasattr(self, "_shared_conn_for_memory") and self._shared_conn_for_memory is not None:
+                self._local.conn = self._shared_conn_for_memory
+            else:
+                conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=5000")
+                self._local.conn = conn
         _conn: sqlite3.Connection = self._local.conn
         return _conn
 
     def _init_db(self) -> None:
-        conn = sqlite3.connect(str(self.db_path))
+        self._shared_conn_for_memory: sqlite3.Connection | None = None
+        if str(self.db_path) == ":memory:":
+            conn = sqlite3.connect(":memory:", check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self._shared_conn_for_memory = conn
+        else:
+            conn = sqlite3.connect(str(self.db_path))
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
             """
@@ -170,7 +179,8 @@ class DeadLetterQueue:
             "CREATE INDEX IF NOT EXISTS idx_dlq_next_retry ON dlq_messages(next_retry_at)",
         )
         conn.commit()
-        conn.close()
+        if self._shared_conn_for_memory is None:
+            conn.close()
 
     def add(
         self,

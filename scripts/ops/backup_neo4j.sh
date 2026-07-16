@@ -110,7 +110,7 @@ create_dump() {
         local cypher_cmd="CALL apoc.export.cypher.all('${DUMP_FILE}', {format: 'plain', useOptimizations: {type: 'UNWIND_BATCH', unwindBatchSize: 20}})"
         echo "$cypher_cmd" | cypher-shell -a "$uri" -u "${NEO4J_USER}" -p "${NEO4J_PASSWORD}" 2>&1 | tee -a "$LOG_FILE"
 
-        if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        if [ "${PIPESTATUS[1]}" -ne 0 ]; then
             log "WARNING: cypher-shell export may have failed. Attempting fallback..."
 
             local apoc_json="${BACKUP_DIR}/${BACKUP_NAME}.json"

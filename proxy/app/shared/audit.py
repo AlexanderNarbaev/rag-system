@@ -42,8 +42,18 @@ class AuditLogger:
 
     def __init__(self, log_dir: str = "/var/log/rag-system"):
         self.log_dir = log_dir
-        os.makedirs(log_dir, exist_ok=True)
-        self._audit_file = os.path.join(log_dir, "audit.jsonl")
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+        except (OSError, PermissionError):
+            import tempfile
+
+            self.log_dir = tempfile.gettempdir()
+            logger.warning(
+                "Cannot write to %s — falling back to %s",
+                log_dir,
+                self.log_dir,
+            )
+        self._audit_file = os.path.join(self.log_dir, "audit.jsonl")
 
     def _write_event(self, event: AuditEvent) -> None:
         """Write an audit event to the JSONL file."""

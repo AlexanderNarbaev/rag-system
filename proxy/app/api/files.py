@@ -17,6 +17,7 @@ from proxy.app.auth import UserContext
 from proxy.app.auth.rbac import Role, require_role
 from proxy.app.shared.config import MINIO_BUCKET
 from proxy.app.shared.exceptions import StorageError
+from proxy.app.shared.tracing import set_span_error, tracer
 
 try:
     from proxy.app.shared.minio_client import MinioClient
@@ -109,60 +110,72 @@ async def upload_file(
     The file is stored with a UUID-based key under the ``uploads/`` prefix.
     Original filename and content type are preserved as metadata.
     """
-    # Validate content type
-    content_type = file.content_type or "application/octet-stream"
-    if content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Content type '{content_type}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}",
+    with tracer.start_as_current_span("file.upload") as span:
+        from proxy.app.shared.metrics import record_file_upload
+
+        if span.is_recording():
+            span.set_attribute("file.filename", file.filename or "unnamed")
+            span.set_attribute("file.content_type", file.content_type or "unknown")
+
+        content_type = file.content_type or "application/octet-stream"
+        if content_type not in ALLOWED_CONTENT_TYPES:
+            record_file_upload("rejected_content_type")
+            allowed = ", ".join(sorted(ALLOWED_CONTENT_TYPES))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Content type '{content_type}' is not allowed. Allowed: {allowed}",
+            )
+
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_SIZE:
+            record_file_upload("size_exceeded")
+            raise HTTPException(
+                status_code=413,
+                detail=f"File size ({len(content)} bytes) exceeds maximum ({MAX_UPLOAD_SIZE} bytes)",
+            )
+
+        file_id = f"uploads/{uuid.uuid4().hex}/{file.filename or 'unnamed'}"
+        now = datetime.now(UTC).isoformat()
+
+        metadata = {
+            "original_filename": file.filename or "unnamed",
+            "uploaded_by": user.username or "anonymous",
+            "uploaded_at": now,
+        }
+
+        try:
+            import io
+
+            minio.upload_file(
+                file_obj=io.BytesIO(content),
+                object_name=file_id,
+                content_type=content_type,
+                metadata=metadata,
+            )
+        except StorageError as exc:
+            logger.error("File upload failed: %s", exc)
+            record_file_upload("storage_error")
+            set_span_error(exc)
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        record_file_upload("success", len(content))
+        span.set_attribute("file.id", file_id)
+        span.set_attribute("file.size_bytes", len(content))
+        logger.info(
+            "File uploaded: %s (%d bytes, user=%s)",
+            file_id,
+            len(content),
+            user.username,
         )
 
-    # Read and validate size
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File size ({len(content)} bytes) exceeds maximum ({MAX_UPLOAD_SIZE} bytes)",
-        )
-
-    # Generate unique object key
-    file_id = f"uploads/{uuid.uuid4().hex}/{file.filename or 'unnamed'}"
-    now = datetime.now(UTC).isoformat()
-
-    metadata = {
-        "original_filename": file.filename or "unnamed",
-        "uploaded_by": user.username or "anonymous",
-        "uploaded_at": now,
-    }
-
-    try:
-        import io
-
-        minio.upload_file(
-            file_obj=io.BytesIO(content),
-            object_name=file_id,
+        return FileUploadResponse(
+            id=file_id,
+            filename=file.filename or "unnamed",
+            size=len(content),
             content_type=content_type,
-            metadata=metadata,
+            bucket=MINIO_BUCKET,
+            uploaded_at=now,
         )
-    except StorageError as exc:
-        logger.error("File upload failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    logger.info(
-        "File uploaded: %s (%d bytes, user=%s)",
-        file_id,
-        len(content),
-        user.username,
-    )
-
-    return FileUploadResponse(
-        id=file_id,
-        filename=file.filename or "unnamed",
-        size=len(content),
-        content_type=content_type,
-        bucket=MINIO_BUCKET,
-        uploaded_at=now,
-    )
 
 
 @router.get("/v1/files", response_model=FileListResponse)
@@ -177,24 +190,29 @@ async def list_files(
         prefix: Optional key prefix to filter results (e.g. ``uploads/``).
 
     """
-    try:
-        raw_files = minio.list_files(prefix=prefix)
-    except StorageError as exc:
-        logger.error("File listing failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    with tracer.start_as_current_span("file.list") as span:
+        if span.is_recording() and prefix:
+            span.set_attribute("file.prefix", prefix)
+        from proxy.app.shared.metrics import record_file_list
 
-    files = [
-        FileMetadata(
-            id=f["key"],
-            size=f["size"],
-            last_modified=f["last_modified"],
-            content_type="",
-            metadata={},
-        )
-        for f in raw_files
-    ]
+        try:
+            raw_files = minio.list_files(prefix=prefix)
+        except StorageError as exc:
+            logger.error("File listing failed: %s", exc)
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return FileListResponse(files=files, total=len(files))
+        files = [
+            FileMetadata(
+                id=f["key"],
+                size=f["size"],
+                last_modified=f["last_modified"],
+                content_type="",
+                metadata={},
+            )
+            for f in raw_files
+        ]
+        record_file_list()
+        return FileListResponse(files=files, total=len(files))
 
 
 @router.get("/v1/files/{file_id:path}/download")
@@ -207,30 +225,38 @@ async def download_file(
 
     Returns the file content as a streaming response.
     """
-    try:
-        meta = minio.get_file_metadata(file_id)
-    except StorageError as exc:
-        if "not found" in str(exc).lower():
-            raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    with tracer.start_as_current_span("file.download") as span:
+        if span.is_recording():
+            span.set_attribute("file.id", file_id)
+        from proxy.app.shared.metrics import record_file_download
 
-    try:
-        content = minio.download_file(file_id)
-    except StorageError as exc:
-        logger.error("File download failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        try:
+            meta = minio.get_file_metadata(file_id)
+        except StorageError as exc:
+            if "not found" in str(exc).lower():
+                record_file_download("not_found")
+                raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    filename = meta.get("metadata", {}).get("original_filename", file_id.rsplit("/", maxsplit=1)[-1])
-    content_type = meta.get("content_type", "application/octet-stream")
+        try:
+            content = minio.download_file(file_id)
+        except StorageError as exc:
+            logger.error("File download failed: %s", exc)
+            record_file_download("error")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return StreamingResponse(
-        iter([content]),
-        media_type=content_type,
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(content)),
-        },
-    )
+        record_file_download("success")
+        filename = meta.get("metadata", {}).get("original_filename", file_id.rsplit("/", maxsplit=1)[-1])
+        content_type = meta.get("content_type", "application/octet-stream")
+
+        return StreamingResponse(
+            iter([content]),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(content)),
+            },
+        )
 
 
 @router.get("/v1/files/{file_id:path}/presigned", response_model=PresignedUrlResponse)
@@ -247,27 +273,35 @@ async def get_presigned_url(
         expiration: URL expiration in seconds (default: 3600, max: 604800).
 
     """
-    if expiration < 60 or expiration > 604800:
-        raise HTTPException(
-            status_code=400,
-            detail="Expiration must be between 60 and 604800 seconds",
-        )
+    with tracer.start_as_current_span("file.presigned") as span:
+        if span.is_recording():
+            span.set_attribute("file.id", file_id)
+            span.set_attribute("file.expiration", expiration)
+        from proxy.app.shared.metrics import record_file_presigned
 
-    # Verify file exists
-    try:
-        minio.get_file_metadata(file_id)
-    except StorageError as exc:
-        if "not found" in str(exc).lower():
-            raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        if expiration < 60 or expiration > 604800:
+            raise HTTPException(
+                status_code=400,
+                detail="Expiration must be between 60 and 604800 seconds",
+            )
 
-    try:
-        url = minio.generate_presigned_url(file_id, expiration=expiration)
-    except StorageError as exc:
-        logger.error("Presigned URL generation failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        try:
+            minio.get_file_metadata(file_id)
+        except StorageError as exc:
+            if "not found" in str(exc).lower():
+                record_file_presigned("not_found")
+                raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return PresignedUrlResponse(url=url, expires_in=expiration)
+        try:
+            url = minio.generate_presigned_url(file_id, expiration=expiration)
+        except StorageError as exc:
+            logger.error("Presigned URL generation failed: %s", exc)
+            record_file_presigned("error")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        record_file_presigned("success")
+        return PresignedUrlResponse(url=url, expires_in=expiration)
 
 
 @router.get("/v1/files/{file_id:path}", response_model=FileMetadata)
@@ -277,21 +311,24 @@ async def get_file_metadata(
     minio: MinioClient = Depends(_get_minio_client),  # noqa: B008
 ) -> FileMetadata:
     """Get metadata for a specific file."""
-    try:
-        meta = minio.get_file_metadata(file_id)
-    except StorageError as exc:
-        if "not found" in str(exc).lower():
-            raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
-        logger.error("Failed to get file metadata: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    with tracer.start_as_current_span("file.metadata") as span:
+        if span.is_recording():
+            span.set_attribute("file.id", file_id)
+        try:
+            meta = minio.get_file_metadata(file_id)
+        except StorageError as exc:
+            if "not found" in str(exc).lower():
+                raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
+            logger.error("Failed to get file metadata: %s", exc)
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return FileMetadata(
-        id=meta["key"],
-        size=meta["size"],
-        last_modified=meta["last_modified"],
-        content_type=meta["content_type"],
-        metadata=meta["metadata"],
-    )
+        return FileMetadata(
+            id=meta["key"],
+            size=meta["size"],
+            last_modified=meta["last_modified"],
+            content_type=meta["content_type"],
+            metadata=meta["metadata"],
+        )
 
 
 @router.delete("/v1/files/{file_id:path}", response_model=FileDeleteResponse)
@@ -304,24 +341,31 @@ async def delete_file(
 
     Requires EXPERT role or above.
     """
-    # Verify file exists first
-    try:
-        minio.get_file_metadata(file_id)
-    except StorageError as exc:
-        if "not found" in str(exc).lower():
-            raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    with tracer.start_as_current_span("file.delete") as span:
+        if span.is_recording():
+            span.set_attribute("file.id", file_id)
+        from proxy.app.shared.metrics import record_file_delete
 
-    try:
-        minio.delete_file(file_id)
-    except StorageError as exc:
-        logger.error("File deletion failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        try:
+            minio.get_file_metadata(file_id)
+        except StorageError as exc:
+            if "not found" in str(exc).lower():
+                record_file_delete("not_found")
+                raise HTTPException(status_code=404, detail=f"File not found: {file_id}") from exc
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    logger.info("File deleted: %s (user=%s)", file_id, user.username)
+        try:
+            minio.delete_file(file_id)
+        except StorageError as exc:
+            logger.error("File deletion failed: %s", exc)
+            record_file_delete("error")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return FileDeleteResponse(
-        status="ok",
-        message=f"File '{file_id}' deleted successfully",
-        id=file_id,
-    )
+        record_file_delete("success")
+        logger.info("File deleted: %s (user=%s)", file_id, user.username)
+
+        return FileDeleteResponse(
+            status="ok",
+            message=f"File '{file_id}' deleted successfully",
+            id=file_id,
+        )

@@ -168,6 +168,119 @@ RAG_NEGATIVE_REJECTION: Any = _reuse_metric("rag_negative_rejection_total", Coun
     "Negative rejection events (refused to answer)",
 )
 
+# ── Auth metrics ──
+
+RAG_AUTH_LOGIN_TOTAL: Any = _reuse_metric("rag_auth_login_total", Counter) or Counter(
+    "rag_auth_login_total",
+    "Total login attempts",
+    ["status", "method"],
+)
+
+RAG_AUTH_REGISTER_TOTAL: Any = _reuse_metric("rag_auth_register_total", Counter) or Counter(
+    "rag_auth_register_total",
+    "Total registration attempts",
+    ["status"],
+)
+
+RAG_AUTH_REFRESH_TOTAL: Any = _reuse_metric("rag_auth_refresh_total", Counter) or Counter(
+    "rag_auth_refresh_total",
+    "Total token refresh attempts",
+    ["status"],
+)
+
+RAG_AUTH_LOGOUT_TOTAL: Any = _reuse_metric("rag_auth_logout_total", Counter) or Counter(
+    "rag_auth_logout_total",
+    "Total logout operations",
+)
+
+RAG_AUTH_RATE_LIMIT_TOTAL: Any = _reuse_metric("rag_auth_rate_limit_total", Counter) or Counter(
+    "rag_auth_rate_limit_total",
+    "Rate limit hits for auth operations",
+    ["endpoint"],
+)
+
+# ── Feedback metrics ──
+
+RAG_FEEDBACK_TOTAL: Any = _reuse_metric("rag_feedback_total", Counter) or Counter(
+    "rag_feedback_total",
+    "Total feedback submissions",
+    ["rating"],
+)
+
+RAG_FEEDBACK_PROCESSING_SECONDS: Any = _reuse_metric("rag_feedback_processing_seconds", Histogram) or Histogram(
+    "rag_feedback_processing_seconds",
+    "Feedback processing duration",
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+)
+
+RAG_ENRICHMENT_TOTAL: Any = _reuse_metric("rag_enrichment_total", Counter) or Counter(
+    "rag_enrichment_total",
+    "Self-enrichment operations triggered",
+    ["status"],
+)
+
+# ── File operation metrics ──
+
+RAG_FILE_UPLOAD_TOTAL: Any = _reuse_metric("rag_file_upload_total", Counter) or Counter(
+    "rag_file_upload_total",
+    "Total file uploads",
+    ["status"],
+)
+
+RAG_FILE_UPLOAD_BYTES: Any = _reuse_metric("rag_file_upload_bytes", Histogram) or Histogram(
+    "rag_file_upload_bytes",
+    "File upload size distribution (bytes)",
+    buckets=(1024, 10240, 102400, 1048576, 10485760, 52428800, 104857600),
+)
+
+RAG_FILE_DOWNLOAD_TOTAL: Any = _reuse_metric("rag_file_download_total", Counter) or Counter(
+    "rag_file_download_total",
+    "Total file downloads",
+    ["status"],
+)
+
+RAG_FILE_DELETE_TOTAL: Any = _reuse_metric("rag_file_delete_total", Counter) or Counter(
+    "rag_file_delete_total",
+    "Total file deletions",
+    ["status"],
+)
+
+RAG_FILE_LIST_TOTAL: Any = _reuse_metric("rag_file_list_total", Counter) or Counter(
+    "rag_file_list_total",
+    "Total file list requests",
+)
+
+RAG_FILE_PRESIGNED_TOTAL: Any = _reuse_metric("rag_file_presigned_total", Counter) or Counter(
+    "rag_file_presigned_total",
+    "Total presigned URL generations",
+    ["status"],
+)
+
+# ── Admin operation metrics ──
+
+RAG_ADMIN_OPERATIONS_TOTAL: Any = _reuse_metric("rag_admin_operations_total", Counter) or Counter(
+    "rag_admin_operations_total",
+    "Total admin operations",
+    ["operation", "status"],
+)
+
+RAG_TRAINING_JOBS_TOTAL: Any = _reuse_metric("rag_training_jobs_total", Counter) or Counter(
+    "rag_training_jobs_total",
+    "Total training jobs",
+    ["trainer_type", "status"],
+)
+
+RAG_CANARY_SPLIT_GAUGE: Any = _reuse_metric("rag_canary_split_ratio", Gauge) or Gauge(
+    "rag_canary_split_ratio",
+    "Current canary traffic split ratio",
+    ["model_name"],
+)
+
+RAG_WARMUP_STATUS: Any = _reuse_metric("rag_warmup_status", Gauge) or Gauge(
+    "rag_warmup_status",
+    "Warm-up status (1=completed, 0=not started, -1=failed)",
+)
+
 
 # ── Helper functions ──
 
@@ -218,6 +331,102 @@ def record_hallucination() -> None:
 def record_negative_rejection() -> None:
     """Record negative rejection."""
     RAG_NEGATIVE_REJECTION.inc()
+
+
+# ── Auth helper functions ──
+
+
+def record_auth_login(status: str, method: str = "local") -> None:
+    """Record login attempt."""
+    RAG_AUTH_LOGIN_TOTAL.labels(status=status, method=method).inc()
+
+
+def record_auth_register(status: str) -> None:
+    """Record registration attempt."""
+    RAG_AUTH_REGISTER_TOTAL.labels(status=status).inc()
+
+
+def record_auth_refresh(status: str) -> None:
+    """Record token refresh attempt."""
+    RAG_AUTH_REFRESH_TOTAL.labels(status=status).inc()
+
+
+def record_auth_logout() -> None:
+    """Record logout operation."""
+    RAG_AUTH_LOGOUT_TOTAL.inc()
+
+
+def record_auth_rate_limit(endpoint: str) -> None:
+    """Record auth rate limit hit."""
+    RAG_AUTH_RATE_LIMIT_TOTAL.labels(endpoint=endpoint).inc()
+
+
+# ── Feedback helper functions ──
+
+
+def record_feedback(rating: str, duration: float | None = None) -> None:
+    """Record feedback submission."""
+    RAG_FEEDBACK_TOTAL.labels(rating=rating).inc()
+    if duration is not None:
+        RAG_FEEDBACK_PROCESSING_SECONDS.observe(duration)
+
+
+def record_enrichment(status: str) -> None:
+    """Record self-enrichment operation."""
+    RAG_ENRICHMENT_TOTAL.labels(status=status).inc()
+
+
+# ── File operation helper functions ──
+
+
+def record_file_upload(status: str, size_bytes: int = 0) -> None:
+    """Record file upload."""
+    RAG_FILE_UPLOAD_TOTAL.labels(status=status).inc()
+    if size_bytes > 0:
+        RAG_FILE_UPLOAD_BYTES.observe(size_bytes)
+
+
+def record_file_download(status: str) -> None:
+    """Record file download."""
+    RAG_FILE_DOWNLOAD_TOTAL.labels(status=status).inc()
+
+
+def record_file_delete(status: str) -> None:
+    """Record file deletion."""
+    RAG_FILE_DELETE_TOTAL.labels(status=status).inc()
+
+
+def record_file_list() -> None:
+    """Record file list request."""
+    RAG_FILE_LIST_TOTAL.inc()
+
+
+def record_file_presigned(status: str) -> None:
+    """Record presigned URL generation."""
+    RAG_FILE_PRESIGNED_TOTAL.labels(status=status).inc()
+
+
+# ── Admin helper functions ──
+
+
+def record_admin_operation(operation: str, status: str) -> None:
+    """Record admin operation."""
+    RAG_ADMIN_OPERATIONS_TOTAL.labels(operation=operation, status=status).inc()
+
+
+def record_training_job(trainer_type: str, status: str) -> None:
+    """Record training job."""
+    RAG_TRAINING_JOBS_TOTAL.labels(trainer_type=trainer_type, status=status).inc()
+
+
+def set_canary_split(model_name: str, ratio: float) -> None:
+    """Set canary split gauge for a model."""
+    RAG_CANARY_SPLIT_GAUGE.labels(model_name=model_name).set(ratio)
+
+
+def set_warmup_status(status_value: int) -> None:
+    """Set warm-up status gauge (1=completed, 0=not started, -1=failed)."""
+    RAG_WARMUP_STATUS.set(status_value)
 
 
 def init_metrics() -> None:

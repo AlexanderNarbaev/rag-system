@@ -69,6 +69,16 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
 );
 
 CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON token_blacklist(expires_at);
+
+CREATE TABLE IF NOT EXISTS password_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_history_user ON password_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_history_created ON password_history(created_at);
 """
 
 
@@ -382,6 +392,64 @@ class UserDatabase:
             )
 
         await self._conn.commit()
+
+    # ── Password History ─────────────────────────────────────────────────────
+
+    async def add_password_to_history(self, user_id: str, password_hash: str) -> None:
+        """Record a password hash in the user's password history."""
+        await self._ensure_db()
+        now = datetime.now(UTC).isoformat()
+        await self._conn.execute(
+            "INSERT INTO password_history (user_id, password_hash, created_at) VALUES (?, ?, ?)",
+            (user_id, password_hash, now),
+        )
+        await self._conn.commit()
+
+    async def get_password_history(self, user_id: str, limit: int = 10) -> list[str]:
+        """Get the most recent password hashes for a user.
+
+        Returns list of password_hash strings, most recent first.
+        """
+        await self._ensure_db()
+        cursor = await self._conn.execute(
+            "SELECT password_hash FROM password_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        )
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
+    async def is_password_reused(self, user_id: str, new_password: str, max_history: int = 5) -> bool:
+        """Check if a password has been used before within the history window.
+
+        Returns True if the password matches any in the user's history.
+        """
+        history = await self.get_password_history(user_id, limit=max_history)
+        return any(bcrypt.checkpw(new_password.encode("utf-8"), old_hash.encode("utf-8")) for old_hash in history)
+
+    async def clear_password_history(self, user_id: str) -> int:
+        """Delete all password history for a user. Returns count of deleted entries."""
+        await self._ensure_db()
+        cursor = await self._conn.execute(
+            "DELETE FROM password_history WHERE user_id = ?",
+            (user_id,),
+        )
+        await self._conn.commit()
+        return cursor.rowcount
+
+    async def cleanup_old_password_history(self, max_entries_per_user: int = 20) -> int:
+        """Keep only the most recent entries per user. Returns total deleted."""
+        await self._ensure_db()
+        cursor = await self._conn.execute(
+            """DELETE FROM password_history WHERE id NOT IN (
+                SELECT id FROM password_history ph2
+                WHERE ph2.user_id = password_history.user_id
+                ORDER BY ph2.created_at DESC
+                LIMIT ?
+            )""",
+            (max_entries_per_user,),
+        )
+        await self._conn.commit()
+        return cursor.rowcount
 
     # ── Cleanup ──────────────────────────────────────────────────────────────
 

@@ -11,9 +11,10 @@ Backup and restore scripts for RAG System infrastructure components.
 | `backup_redis.sh`   | Trigger Redis BGSAVE and upload RDB to S3/MinIO                |
 | `backup_cron.sh`    | Cron wrapper that runs all backup scripts in sequence          |
 | `restore_all.sh`    | Download latest backups from S3/MinIO and restore all services |
-| `verify_restore.sh` | Verify backup file integrity (archive, size, presence)         |
+| `verify_restore.sh` | Verify backup integrity (local files + S3/MinIO)               |
 | `health_check.sh`   | Comprehensive health check for all infrastructure components   |
 | `status.sh`         | Show real-time status of all services (table/json/watch modes) |
+| `deploy.sh`         | Operational-grade deployment automation with rollback support  |
 | `rotate-secrets.sh` | Automated JWT key and API key rotation with rollback support   |
 
 ## Prerequisites
@@ -131,6 +132,28 @@ Logs are written to `${LOG_DIR}/` (default: `/var/log/rag-system/`):
 - `backup_redis_YYYY-MM-DD.log`
 - `backup_cron_YYYY-MM-DD.log`
 - `restore_YYYY-MM-DD_HHMMSS.log`
+
+## Deploy
+
+```bash
+# Dev deployment
+./scripts/ops/deploy.sh
+
+# Production deployment
+DEPLOY_ENV=prod ./scripts/ops/deploy.sh
+
+# Canary deployment (1 replica first)
+./scripts/ops/deploy.sh --canary
+
+# Dry run (preview only)
+DRY_RUN=true ./scripts/ops/deploy.sh
+
+# Force deployment (skip confirmation)
+FORCE=true ./scripts/ops/deploy.sh
+
+# Rollback to previous version
+./scripts/ops/deploy.sh --rollback
+```
 
 ## Health Check
 

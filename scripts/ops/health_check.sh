@@ -89,13 +89,15 @@ record() {
 http_get() {
     local url="$1"
     local timeout="${2:-5}"
-    curl -s --max-time "$timeout" -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000"
+    local code
+    code=$(curl -s --max-time "$timeout" -o /dev/null -w "%{http_code}" "$url" 2>/dev/null) || true
+    echo "${code:-000}"
 }
 
 http_get_body() {
     local url="$1"
     local timeout="${2:-5}"
-    curl -s --max-time "$timeout" "$url" 2>/dev/null || echo ""
+    curl -s --max-time "$timeout" "$url" 2>/dev/null || true
 }
 
 # ── Parse arguments ─────────────────────────────────────────────────────────

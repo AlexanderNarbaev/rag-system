@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from proxy.app.auth import UserContext
 from proxy.app.auth.rbac import Role, require_role
+from proxy.app.shared.tracing import add_event, tracer
 
 logger = logging.getLogger("rag-proxy")
 
@@ -207,16 +208,26 @@ async def admin_warmup(
     """
     from proxy.app.shared.config import WARMUP_ENABLED
 
-    if not WARMUP_ENABLED:
-        return JSONResponse(status_code=200, content={"status": "disabled", "message": "Warm-up is disabled"})
-    try:
-        from proxy.app.shared.warmup import warmup_all
+    with tracer.start_as_current_span("admin.warmup") as span:
+        from proxy.app.shared.metrics import record_admin_operation, set_warmup_status
 
-        result = await warmup_all()
-        return JSONResponse(status_code=200, content={"status": "ok", "results": result})
-    except Exception as e:
-        logger.error(f"Warm-up failed: {e}")
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+        if not WARMUP_ENABLED:
+            record_admin_operation("warmup", "disabled")
+            return JSONResponse(status_code=200, content={"status": "disabled", "message": "Warm-up is disabled"})
+        try:
+            from proxy.app.shared.warmup import warmup_all
+
+            result = await warmup_all()
+            record_admin_operation("warmup", "success")
+            set_warmup_status(1)
+            span.set_attribute("admin.warmup_components", len(result))
+            return JSONResponse(status_code=200, content={"status": "ok", "results": result})
+        except Exception as e:
+            logger.error(f"Warm-up failed: {e}")
+            record_admin_operation("warmup", "failed")
+            set_warmup_status(-1)
+            add_event("admin.warmup.failed", {"error": str(e)})
+            return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
 
 @router.post("/v1/admin/models/train", response_model=TrainResponse)
@@ -233,108 +244,117 @@ async def admin_models_train(
     from proxy.app.model_evolution.trainer import TrainerType as ME_TrainerType
     from proxy.app.model_evolution.trainer import TrainingConfig
 
-    profile = EnvProfile.DEV
-    try:  # noqa: SIM105
-        profile = EnvProfile(request.profile)
-    except ValueError:
-        pass
+    with tracer.start_as_current_span("admin.train") as span:
+        if span.is_recording():
+            span.set_attribute("admin.trainer_type", request.trainer_type.value)
+            span.set_attribute("admin.profile", request.profile)
 
-    job_id = _training_jobs.create(
-        trainer_type=request.trainer_type.value,
-        config={
-            "base_model": request.base_model,
-            "profile": profile.value,
-            "data_dir": request.data_dir,
-            "epochs": request.epochs,
-            "batch_size": request.batch_size,
-            "learning_rate": request.learning_rate,
-            "use_lora": request.use_lora,
-        },
-    )
+        from proxy.app.shared.metrics import record_admin_operation, record_training_job
 
-    _training_jobs.update(job_id, status="running")
+        profile = EnvProfile.DEV
+        try:  # noqa: SIM105
+            profile = EnvProfile(request.profile)
+        except ValueError:
+            pass
 
-    # Run training in background task
-    async def _run_training() -> None:
-        try:
-            trainer_type = ME_TrainerType(request.trainer_type.value)
-            preset = get_preset(profile)
-            config = TrainingConfig(
-                trainer_type=trainer_type,
-                env_profile=profile,
-                base_model=request.base_model or "",
-                epochs=request.epochs or preset.get("epochs", 1),
-                batch_size=request.batch_size or preset.get("batch_size", 2),
-                learning_rate=request.learning_rate,
-                use_lora=request.use_lora,
-                lora_r=preset.get("lora_r", 4),
-                lora_alpha=preset.get("lora_alpha", 8),
-                max_seq_length=preset.get("max_seq_length", 256),
-            )
-            if trainer_type == ME_TrainerType.SLM:
-                from proxy.app.model_evolution.slm_trainer import SLMTrainer
+        job_id = _training_jobs.create(
+            trainer_type=request.trainer_type.value,
+            config={
+                "base_model": request.base_model,
+                "profile": profile.value,
+                "data_dir": request.data_dir,
+                "epochs": request.epochs,
+                "batch_size": request.batch_size,
+                "learning_rate": request.learning_rate,
+                "use_lora": request.use_lora,
+            },
+        )
+        span.set_attribute("admin.training_job_id", job_id)
 
-                trainer = SLMTrainer()
-                result = trainer.train(config)
-            elif trainer_type == ME_TrainerType.RERANKER:
-                from proxy.app.model_evolution.trainer import TrainingJob as ME_TrainingJob
+        _training_jobs.update(job_id, status="running")
 
-                result = ME_TrainingJob(
-                    job_id=job_id,
-                    trainer_type=ME_TrainerType.RERANKER,
-                    config=config,
-                    status="completed",
-                    metrics={"mrr": 0.85, "recall_at_10": 0.78},
-                    artifact_uri="./models/reranker_v1",
-                    completed_at=datetime.now(UTC).isoformat(),
+        async def _run_training() -> None:
+            try:
+                trainer_type = ME_TrainerType(request.trainer_type.value)
+                preset = get_preset(profile)
+                config = TrainingConfig(
+                    trainer_type=trainer_type,
+                    env_profile=profile,
+                    base_model=request.base_model or "",
+                    epochs=request.epochs or preset.get("epochs", 1),
+                    batch_size=request.batch_size or preset.get("batch_size", 2),
+                    learning_rate=request.learning_rate,
+                    use_lora=request.use_lora,
+                    lora_r=preset.get("lora_r", 4),
+                    lora_alpha=preset.get("lora_alpha", 8),
+                    max_seq_length=preset.get("max_seq_length", 256),
                 )
-            else:
-                from proxy.app.model_evolution.trainer import TrainingJob as ME_TrainingJob
+                if trainer_type == ME_TrainerType.SLM:
+                    from proxy.app.model_evolution.slm_trainer import SLMTrainer
 
-                result = ME_TrainingJob(
-                    job_id=job_id,
-                    trainer_type=ME_TrainerType.LLM,
-                    config=config,
-                    status="completed",
-                    metrics={"eval_loss": 0.52, "rouge_l_f1": 0.38},
-                    artifact_uri="./models/llm_v1",
-                    completed_at=datetime.now(UTC).isoformat(),
-                )
-            _training_jobs.update(
-                job_id,
-                status=result.status if hasattr(result, "status") else "completed",
-                metrics=result.metrics if hasattr(result, "metrics") else {},
-                artifact_uri=result.artifact_uri if hasattr(result, "artifact_uri") else None,
-                completed_at=datetime.now(UTC).isoformat(),
-            )
-            # Auto-register in model registry on success
-            if hasattr(result, "status") and result.status == "completed":
-                registry = _get_model_registry_from_main()
-                try:
-                    registry.register(
-                        name=request.trainer_type.value,
-                        artifact_path=result.artifact_uri or f"./models/{request.trainer_type.value}_{job_id}",
-                        metrics=result.metrics if hasattr(result, "metrics") else {},
+                    trainer = SLMTrainer()
+                    result = trainer.train(config)
+                elif trainer_type == ME_TrainerType.RERANKER:
+                    from proxy.app.model_evolution.trainer import TrainingJob as ME_TrainingJob
+
+                    result = ME_TrainingJob(
+                        job_id=job_id,
+                        trainer_type=ME_TrainerType.RERANKER,
+                        config=config,
+                        status="completed",
+                        metrics={"mrr": 0.85, "recall_at_10": 0.78},
+                        artifact_uri="./models/reranker_v1",
+                        completed_at=datetime.now(UTC).isoformat(),
                     )
-                except Exception as reg_err:
-                    logger.warning("Auto-register failed for job %s: %s", job_id, reg_err)
-        except Exception as e:
-            logger.exception("Training job %s failed: %s", job_id, e)
-            _training_jobs.update(
-                job_id,
-                status="failed",
-                error_message=str(e),
-                completed_at=datetime.now(UTC).isoformat(),
-            )
+                else:
+                    from proxy.app.model_evolution.trainer import TrainingJob as ME_TrainingJob
 
-    asyncio.create_task(_run_training())
+                    result = ME_TrainingJob(
+                        job_id=job_id,
+                        trainer_type=ME_TrainerType.LLM,
+                        config=config,
+                        status="completed",
+                        metrics={"eval_loss": 0.52, "rouge_l_f1": 0.38},
+                        artifact_uri="./models/llm_v1",
+                        completed_at=datetime.now(UTC).isoformat(),
+                    )
+                _training_jobs.update(
+                    job_id,
+                    status=result.status if hasattr(result, "status") else "completed",
+                    metrics=result.metrics if hasattr(result, "metrics") else {},
+                    artifact_uri=result.artifact_uri if hasattr(result, "artifact_uri") else None,
+                    completed_at=datetime.now(UTC).isoformat(),
+                )
+                record_training_job(request.trainer_type.value, "completed")
+                if hasattr(result, "status") and result.status == "completed":
+                    registry = _get_model_registry_from_main()
+                    try:
+                        registry.register(
+                            name=request.trainer_type.value,
+                            artifact_path=result.artifact_uri or f"./models/{request.trainer_type.value}_{job_id}",
+                            metrics=result.metrics if hasattr(result, "metrics") else {},
+                        )
+                    except Exception as reg_err:
+                        logger.warning("Auto-register failed for job %s: %s", job_id, reg_err)
+            except Exception as e:
+                logger.exception("Training job %s failed: %s", job_id, e)
+                record_training_job(request.trainer_type.value, "failed")
+                _training_jobs.update(
+                    job_id,
+                    status="failed",
+                    error_message=str(e),
+                    completed_at=datetime.now(UTC).isoformat(),
+                )
 
-    return TrainResponse(
-        job_id=job_id,
-        trainer_type=request.trainer_type.value,
-        status="running",
-        message=f"Training job {job_id} started",
-    )
+        asyncio.create_task(_run_training())
+        record_admin_operation("train", "running")
+
+        return TrainResponse(
+            job_id=job_id,
+            trainer_type=request.trainer_type.value,
+            status="running",
+            message=f"Training job {job_id} started",
+        )
 
 
 @router.get("/v1/admin/models/status/{job_id}")
@@ -343,10 +363,13 @@ async def admin_models_status(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> JSONResponse:
     """Check training job status (admin only)."""
-    job = _training_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Training job '{job_id}' not found")
-    return JSONResponse(status_code=200, content=job)
+    with tracer.start_as_current_span("admin.status") as span:
+        if span.is_recording():
+            span.set_attribute("admin.job_id", job_id)
+        job = _training_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail=f"Training job '{job_id}' not found")
+        return JSONResponse(status_code=200, content=job)
 
 
 @router.get("/v1/admin/models")
@@ -354,25 +377,29 @@ async def admin_models_list(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> JSONResponse:
     """List all registered models with versions and stages (admin only)."""
-    registry = _get_model_registry_from_main()
-    models_data = {}
-    for model_name in registry.list_models():
-        versions = registry.list_versions(model_name)
-        production = registry.get_latest_production(model_name)
-        models_data[model_name] = {
-            "versions": [
-                {
-                    "version": v.version,
-                    "status": v.status,
-                    "artifact_path": v.artifact_path,
-                    "metrics": v.metrics,
-                    "created_at": v.created_at,
-                }
-                for v in versions
-            ],
-            "production_version": production.version if production else None,
-        }
-    return JSONResponse(status_code=200, content={"models": models_data})
+    with tracer.start_as_current_span("admin.models_list"):
+        from proxy.app.shared.metrics import record_admin_operation
+
+        registry = _get_model_registry_from_main()
+        models_data = {}
+        for model_name in registry.list_models():
+            versions = registry.list_versions(model_name)
+            production = registry.get_latest_production(model_name)
+            models_data[model_name] = {
+                "versions": [
+                    {
+                        "version": v.version,
+                        "status": v.status,
+                        "artifact_path": v.artifact_path,
+                        "metrics": v.metrics,
+                        "created_at": v.created_at,
+                    }
+                    for v in versions
+                ],
+                "production_version": production.version if production else None,
+            }
+        record_admin_operation("models_list", "success")
+        return JSONResponse(status_code=200, content={"models": models_data})
 
 
 @router.post("/v1/admin/models/promote", response_model=PromoteResponse)
@@ -381,22 +408,30 @@ async def admin_models_promote(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> PromoteResponse:
     """Promote a model version through staging -> canary -> production (admin only)."""
-    registry = _get_model_registry_from_main()
-    try:
-        mv = registry.get(request.model_name, request.version)
-    except KeyError:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Model '{request.model_name}' version '{request.version}' not found",
-        ) from None
-    previous_status = mv.status
-    mv = registry.promote(request.model_name, request.version)
-    return PromoteResponse(
-        model_name=request.model_name,
-        version=request.version,
-        previous_status=previous_status,
-        new_status=mv.status,
-    )
+    with tracer.start_as_current_span("admin.promote") as span:
+        if span.is_recording():
+            span.set_attribute("admin.model_name", request.model_name)
+            span.set_attribute("admin.version", request.version)
+        from proxy.app.shared.metrics import record_admin_operation
+
+        registry = _get_model_registry_from_main()
+        try:
+            mv = registry.get(request.model_name, request.version)
+        except KeyError:
+            record_admin_operation("promote", "not_found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Model '{request.model_name}' version '{request.version}' not found",
+            ) from None
+        previous_status = mv.status
+        mv = registry.promote(request.model_name, request.version)
+        record_admin_operation("promote", "success")
+        return PromoteResponse(
+            model_name=request.model_name,
+            version=request.version,
+            previous_status=previous_status,
+            new_status=mv.status,
+        )
 
 
 @router.post("/v1/admin/models/rollback", response_model=RollbackResponse)
@@ -405,29 +440,38 @@ async def admin_models_rollback(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> RollbackResponse:
     """Rollback to previous production version (admin only)."""
-    registry = _get_model_registry_from_main()
-    try:
-        current = registry.get_latest_production(request.model_name)
-    except KeyError:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Model '{request.model_name}' not found",
-        ) from None
-    if current is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No production version for model '{request.model_name}'",
+    with tracer.start_as_current_span("admin.rollback") as span:
+        if span.is_recording():
+            span.set_attribute("admin.model_name", request.model_name)
+        from proxy.app.shared.metrics import record_admin_operation
+
+        registry = _get_model_registry_from_main()
+        try:
+            current = registry.get_latest_production(request.model_name)
+        except KeyError:
+            record_admin_operation("rollback", "not_found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Model '{request.model_name}' not found",
+            ) from None
+        if current is None:
+            record_admin_operation("rollback", "no_production")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No production version for model '{request.model_name}'",
+            )
+        try:
+            previous = registry.rollback(request.model_name)
+        except ValueError as e:
+            record_admin_operation("rollback", "failed")
+            raise HTTPException(status_code=400, detail=str(e)) from None
+        record_admin_operation("rollback", "success")
+        return RollbackResponse(
+            model_name=request.model_name,
+            version=previous.version,
+            previous_version=current.version,
+            status=previous.status,
         )
-    try:
-        previous = registry.rollback(request.model_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from None
-    return RollbackResponse(
-        model_name=request.model_name,
-        version=previous.version,
-        previous_version=current.version,
-        status=previous.status,
-    )
 
 
 @router.post("/v1/admin/models/evaluate", response_model=EvaluateResponse)
@@ -439,54 +483,60 @@ async def admin_models_evaluate(
 
     Default thresholds: accuracy >= 0.90, weighted_f1 >= 0.85, mrr >= 0.70.
     """
-    from proxy.app.model_evolution.eval_gate import EvalGate, EvalGateConfig, MetricThreshold
+    with tracer.start_as_current_span("admin.evaluate") as span:
+        if span.is_recording():
+            span.set_attribute("admin.model_name", request.model_name)
+            span.set_attribute("admin.version", request.version)
+        from proxy.app.model_evolution.eval_gate import EvalGate, EvalGateConfig, MetricThreshold
+        from proxy.app.shared.metrics import record_admin_operation
 
-    thresholds = [
-        MetricThreshold("accuracy", 0.90, "gte"),
-        MetricThreshold("weighted_f1", 0.85, "gte"),
-        MetricThreshold("mrr", 0.70, "gte"),
-        MetricThreshold("recall_at_10", 0.65, "gte"),
-        MetricThreshold("rouge_l_f1", 0.35, "gte"),
-        MetricThreshold("eval_loss", 1.0, "lte", severity="warn"),
-    ]
-    config = EvalGateConfig(
-        model_name=request.model_name,
-        thresholds=thresholds,
-        require_baseline_comparison=False,
-    )
+        thresholds = [
+            MetricThreshold("accuracy", 0.90, "gte"),
+            MetricThreshold("weighted_f1", 0.85, "gte"),
+            MetricThreshold("mrr", 0.70, "gte"),
+            MetricThreshold("recall_at_10", 0.65, "gte"),
+            MetricThreshold("rouge_l_f1", 0.35, "gte"),
+            MetricThreshold("eval_loss", 1.0, "lte", severity="warn"),
+        ]
+        config = EvalGateConfig(
+            model_name=request.model_name,
+            thresholds=thresholds,
+            require_baseline_comparison=False,
+        )
 
-    # Try to get baseline metrics from current production version
-    baseline_metrics = None
-    try:
-        registry = _get_model_registry_from_main()
-        production = registry.get_latest_production(request.model_name)
-        if production:
-            baseline_metrics = production.metrics
-    except Exception:
-        pass
+        baseline_metrics = None
+        try:
+            registry = _get_model_registry_from_main()
+            production = registry.get_latest_production(request.model_name)
+            if production:
+                baseline_metrics = production.metrics
+        except Exception:
+            pass
 
-    result = EvalGate.evaluate(
-        metrics=request.metrics,
-        config=config,
-        baseline_metrics=baseline_metrics,
-        version=request.version,
-    )
+        result = EvalGate.evaluate(
+            metrics=request.metrics,
+            config=config,
+            baseline_metrics=baseline_metrics,
+            version=request.version,
+        )
 
-    # Update metrics in registry if the model exists there
-    try:
-        registry = _get_model_registry_from_main()
-        registry.update_metrics(request.model_name, request.version, request.metrics)
-    except KeyError:
-        pass
+        try:
+            registry = _get_model_registry_from_main()
+            registry.update_metrics(request.model_name, request.version, request.metrics)
+        except KeyError:
+            pass
 
-    return EvaluateResponse(
-        model_name=request.model_name,
-        version=request.version,
-        status=result.status.value.upper(),
-        failures=result.failures,
-        warnings=result.warnings,
-        metrics=result.metrics,
-    )
+        record_admin_operation("evaluate", result.status.value)
+        span.set_attribute("admin.eval_status", result.status.value)
+
+        return EvaluateResponse(
+            model_name=request.model_name,
+            version=request.version,
+            status=result.status.value.upper(),
+            failures=result.failures,
+            warnings=result.warnings,
+            metrics=result.metrics,
+        )
 
 
 @router.post("/v1/admin/models/canary/split", response_model=CanarySplitResponse)
@@ -499,12 +549,20 @@ async def admin_models_canary_split(
     Sets the fraction of traffic routed to the canary version.
     0.0 = all traffic to stable, 1.0 = all traffic to canary.
     """
-    state = _canary_state.set_split(request.model_name, request.traffic_split)
-    return CanarySplitResponse(
-        model_name=request.model_name,
-        traffic_split=state["traffic_split"],
-        status=state["phase"],
-    )
+    with tracer.start_as_current_span("admin.canary_split") as span:
+        if span.is_recording():
+            span.set_attribute("admin.model_name", request.model_name)
+            span.set_attribute("admin.traffic_split", request.traffic_split)
+        from proxy.app.shared.metrics import record_admin_operation, set_canary_split
+
+        state = _canary_state.set_split(request.model_name, request.traffic_split)
+        record_admin_operation("canary_split", "success")
+        set_canary_split(request.model_name, request.traffic_split)
+        return CanarySplitResponse(
+            model_name=request.model_name,
+            traffic_split=state["traffic_split"],
+            status=state["phase"],
+        )
 
 
 @router.get("/v1/admin/models/canary/status")
@@ -512,5 +570,6 @@ async def admin_models_canary_status(
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> JSONResponse:
     """Get current canary deployment status and metrics (admin only)."""
-    status = _canary_state.get_status()
-    return JSONResponse(status_code=200, content=status)
+    with tracer.start_as_current_span("admin.canary_status"):
+        status = _canary_state.get_status()
+        return JSONResponse(status_code=200, content=status)

@@ -59,7 +59,7 @@
 - **DoD:** `strict = true` in CI, all modules passing ✅
 
 ### P1-3 (COV-01): Raise coverage to 80%
-- **Status:** ✅ COMPLETE — 74.73% → 80.02%
+- **Status:** ✅ COMPLETE — coverage raised to 81% (meets 80% threshold)
 - **Commit:** `9094b8d`
 - **Effort:** HIGH (24h)
 - **Role:** QA Engineer + Backend Developer
@@ -120,8 +120,9 @@
 
 | Metric | Target | Actual | Status |
 |--------|--------|--------|--------|
-| Tests passing | 3000+ | **4,169** | ✅ Exceeded |
-| Coverage | ≥80% | **80%+** | ✅ Met |
+| Tests collected | 3000+ | **4,340** | ✅ Exceeded |
+| Coverage | ≥80% | **81%** | ✅ Met |
+| Test files | — | **166** | — |
 | Lint (ruff) | 0 errors | **Clean** | ✅ Met |
 | Format (ruff) | 0 issues | **Clean** | ✅ Met |
 | Typecheck (mypy) | 0 errors | **Clean** | ✅ Met |
