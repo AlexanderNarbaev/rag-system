@@ -3,13 +3,14 @@
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 try:
   from bs4 import BeautifulSoup as _BS4  # noqa: F401, N814
 
   BS4_AVAILABLE = True
 except ImportError:
-  _BS4 = None  # type: ignore
+  _BS4 = None
   BS4_AVAILABLE = False
 
 logger = logging.getLogger (__name__)
@@ -107,7 +108,7 @@ def table_to_markdown (table: TableData) -> str:
   return "\n".join (lines)
 
 
-def table_to_json (table: TableData) -> dict:
+def table_to_json (table: TableData) -> dict [str, Any]:
   """Convert TableData to a structured dict representation.
 
   Includes headers, rows, caption, row_count, and records (dict format).

@@ -59,7 +59,7 @@ class EntityRelationExtractor:
 
   def __init__ (
       self, use_spacy: bool = True, spacy_model: str = "ru_core_news_sm", use_slm: bool = False,
-      slm_endpoint: str = None, cache_dir: Path | None = None, max_text_length: int = 4000, ):
+      slm_endpoint: str | None = None, cache_dir: Path | None = None, max_text_length: int = 4000, ):
     """
     :param use_spacy: использовать ли spaCy для базового NER
     :param spacy_model: модель spaCy (ru_core_news_sm, en_core_web_sm и т.д.)
@@ -200,7 +200,7 @@ class EntityRelationExtractor:
     return []
 
   def extract_from_chunk (
-      self, text: str, source_id: str, chunk_metadata: dict = None, ) -> tuple [list [Entity], list [Relation]]:
+      self, text: str, source_id: str, chunk_metadata: dict[str, Any] | None = None, ) -> tuple [list [Entity], list [Relation]]:
     """
     Основной метод извлечения сущностей и отношений из одного чанка.
     """

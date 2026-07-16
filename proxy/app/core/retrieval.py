@@ -96,7 +96,7 @@ def _get_dense_vector_name(client: Any) -> str | None:
                                 "Detected dense vector name '%s' from collection %s",
                                 name, COLLECTION_NAME,
                             )
-                            return name
+                            return cast(str, name)
             # Default: anonymous vector — use None (Qdrant uses default when using=None)
             _DENSE_VECTOR_NAME = None
             logger.info(

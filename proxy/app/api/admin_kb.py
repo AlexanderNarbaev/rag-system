@@ -99,7 +99,7 @@ class TaskListResponse (BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _get_kb_manager ():
+def _get_kb_manager () -> Any:
   """Get the KB manager from the main app state."""
   from proxy.app.main import kb_manager
 
@@ -114,7 +114,7 @@ def _get_kb_manager ():
 
 
 @router.post ("/", response_model = KBResponse, status_code = 201)
-async def create_knowledge_base (req: KBCreateRequest):
+async def create_knowledge_base (req: KBCreateRequest) -> KBResponse:
   """Create a new knowledge base with its own Qdrant collection."""
   mgr = _get_kb_manager ()
   try:
@@ -133,7 +133,7 @@ async def create_knowledge_base (req: KBCreateRequest):
 
 
 @router.get ("/", response_model = KBListResponse)
-async def list_knowledge_bases (include_deleted: bool = False):
+async def list_knowledge_bases (include_deleted: bool = False) -> KBListResponse:
   """List all knowledge bases."""
   mgr = _get_kb_manager ()
   kbs = mgr.list_kbs (include_deleted = include_deleted)
@@ -152,7 +152,7 @@ async def list_knowledge_bases (include_deleted: bool = False):
 
 
 @router.get ("/{kb_id}", response_model = KBResponse)
-async def get_knowledge_base (kb_id: str):
+async def get_knowledge_base (kb_id: str) -> KBResponse:
   """Get a knowledge base by ID."""
   mgr = _get_kb_manager ()
   kb = mgr.get_kb (kb_id)
@@ -167,7 +167,7 @@ async def get_knowledge_base (kb_id: str):
 
 
 @router.put ("/{kb_id}", response_model = KBResponse)
-async def update_knowledge_base (kb_id: str, req: KBUpdateRequest):
+async def update_knowledge_base (kb_id: str, req: KBUpdateRequest) -> KBResponse:
   """Update a knowledge base."""
   mgr = _get_kb_manager ()
   try:
@@ -184,7 +184,7 @@ async def update_knowledge_base (kb_id: str, req: KBUpdateRequest):
 
 
 @router.delete ("/{kb_id}")
-async def delete_knowledge_base (kb_id: str, hard: bool = False):
+async def delete_knowledge_base (kb_id: str, hard: bool = False) -> dict [str, Any]:
   """Delete a knowledge base (soft delete by default)."""
   mgr = _get_kb_manager ()
   success = mgr.delete_kb (kb_id, hard = hard)
@@ -199,7 +199,7 @@ async def delete_knowledge_base (kb_id: str, hard: bool = False):
 
 
 @router.post ("/{kb_id}/tasks", response_model = TaskResponse, status_code = 201)
-async def create_etl_task (kb_id: str, req: TaskCreateRequest):
+async def create_etl_task (kb_id: str, req: TaskCreateRequest) -> TaskResponse:
   """Create an ETL task for a knowledge base."""
   mgr = _get_kb_manager ()
   kb = mgr.get_kb (kb_id)
@@ -214,7 +214,7 @@ async def create_etl_task (kb_id: str, req: TaskCreateRequest):
 
 
 @router.get ("/{kb_id}/tasks", response_model = TaskListResponse)
-async def list_etl_tasks (kb_id: str, status: str | None = None):
+async def list_etl_tasks (kb_id: str, status: str | None = None) -> TaskListResponse:
   """List ETL tasks for a knowledge base."""
   mgr = _get_kb_manager ()
   tasks = mgr.list_tasks (kb_id = kb_id, status = status)
@@ -232,7 +232,7 @@ async def list_etl_tasks (kb_id: str, status: str | None = None):
 
 
 @router.get ("/{kb_id}/tasks/{task_id}", response_model = TaskResponse)
-async def get_etl_task (kb_id: str, task_id: str):
+async def get_etl_task (kb_id: str, task_id: str) -> TaskResponse:
   """Get an ETL task by ID."""
   mgr = _get_kb_manager ()
   task = mgr.get_task (task_id)

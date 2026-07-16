@@ -129,7 +129,7 @@ def _run_extractor_safe (name: str, extract_fn, config: dict, wal: WALManager) -
     return (name, None, str (e))
 
 
-def collect_all_documents (extract_dirs: list [Path]) -> list [dict]:
+def collect_all_documents (extract_dirs: list [Path]) -> list [dict[str, Any]]:
   """
   Собирает все извлечённые документы из директорий extractors.
   Обрабатывает отсутствующие директории gracefully (Extractor мог не запуститься).
@@ -191,7 +191,7 @@ def collect_all_documents (extract_dirs: list [Path]) -> list [dict]:
         if not gitlab_dir.is_dir ():
           continue
         # Load project-level RBAC metadata if available
-        project_info: dict = {}
+        project_info: dict[str, Any] = {}
         project_file = gitlab_dir / "project.json"
         if project_file.exists ():
           with open (project_file, encoding = "utf-8") as f:

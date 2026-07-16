@@ -29,7 +29,7 @@ logger = logging.getLogger ("WebhookServer")
 DEFAULT_STREAM_KEY = "etl:events"
 
 
-def _load_config (config_path: Path) -> dict:
+def _load_config (config_path: Path) -> dict[str, Any]:
   with open (config_path, encoding = "utf-8") as f:
     return yaml.safe_load (f)
 

@@ -281,7 +281,8 @@ async def chat_completions (
           })
           yield "data: [DONE]\n\n"
           return
-        async for chunk in _main.stream_completion (  # type: ignore[attr-defined,arg-type]
+        assert isinstance (messages_for_llm, list), "messages_for_llm must be a list after RAG query"
+        async for chunk in _main.stream_completion (  # type: ignore[attr-defined]
             messages_for_llm, request.temperature or 0.2, request.max_tokens or 4096):
           choices = chunk.get ("choices", [])
           delta_content = choices [0].get ("delta", {}).get ("content", "") if choices else ""

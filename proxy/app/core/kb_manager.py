@@ -37,7 +37,7 @@ class KnowledgeBase:
   collection_name: str = ""
   embedding_model: str = "BAAI/bge-m3"
   dense_vector_size: int = 1024
-  parser_config: dict = field (default_factory = dict)
+  parser_config: dict [str, Any] = field (default_factory = dict)
   doc_count: int = 0
   chunk_count: int = 0
   token_count: int = 0
@@ -128,7 +128,7 @@ class KnowledgeBaseManager:
 
   def create_kb (
       self, name: str, description: str = "", embedding_model: str = "BAAI/bge-m3",
-      dense_vector_size: int = 1024, parser_config: dict | None = None,
+      dense_vector_size: int = 1024, parser_config: dict [str, Any] | None = None,
   ) -> KnowledgeBase:
     """Create a new knowledge base and its Qdrant collection."""
     kb_id = str (uuid.uuid4 ())
@@ -375,7 +375,7 @@ class KnowledgeBaseManager:
     """Convert a database row to a KnowledgeBase."""
     import ast
 
-    parser_config = {}
+    parser_config: dict [str, Any] = {}
     try:
       parser_config = ast.literal_eval (row ["parser_config"]) if row ["parser_config"] else {}
     except (ValueError, SyntaxError):

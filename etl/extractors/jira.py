@@ -102,7 +102,7 @@ class JiraExtractor:
     self.wal_path.parent.mkdir (parents = True, exist_ok = True)
     self.wal_data = self._load_wal ()
 
-  def _load_wal (self) -> dict:
+  def _load_wal (self) -> dict[str, Any]:
     if self.wal_path.exists ():
       try:
         with open (self.wal_path) as f:
@@ -112,11 +112,11 @@ class JiraExtractor:
         return {"last_run": None, "last_issue_id": None, "processed_issues": []}
     return {"last_run": None, "last_issue_id": None, "processed_issues": []}
 
-  def _save_wal (self):
+  def _save_wal (self) -> None:
     with open (self.wal_path, "w") as f:
       json.dump (self.wal_data, f, indent = 2)
 
-  def _request (self, endpoint: str, params: dict = None) -> dict:
+  def _request (self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Выполняет GET запрос к Jira API с retry логикой и экспоненциальной задержкой."""
     url = urljoin (self.url, endpoint)
     max_retries = self.config.get ("max_retries", 5)
@@ -149,7 +149,7 @@ class JiraExtractor:
         else:
           raise
 
-  def _paginated_issues (self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator [dict]:
+  def _paginated_issues (self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[dict[str, Any]]:
     """Генератор для пагинированного получения задач."""
     while True:
       params = {
@@ -162,13 +162,13 @@ class JiraExtractor:
         break
       start_at += max_results
 
-  def _get_issue_transitions (self, issue_key: str) -> list [dict]:
+  def _get_issue_transitions (self, issue_key: str) -> list [dict[str, Any]]:
     """Возвращает доступные переходы (не все хранятся в changelog, но полезно)."""
     endpoint = f"/rest/api/2/issue/{issue_key}/transitions"
     data = self._request (endpoint)
     return data.get ("transitions", [])
 
-  def _get_sprints_for_issue (self, issue_key: str) -> list [dict]:
+  def _get_sprints_for_issue (self, issue_key: str) -> list [dict[str, Any]]:
     """
     Получает спринты, связанные с задачей (через agile API).
     Требует установленного дополнения Jira Agile (Greenhopper).
@@ -235,7 +235,7 @@ class JiraExtractor:
     issue_keys = re.findall (issue_key_pattern, text) if text else []
     return {"external_urls": list (set (urls)), "mentioned_issues": list (set (issue_keys))}
 
-  def _process_issue (self, issue: dict) -> dict:
+  def _process_issue (self, issue: dict) -> dict[str, Any]:
     """Преобразует сырой JSON задачи в структурированный формат с нужными данными."""
     key = issue ["key"]
     fields = issue.get ("fields", {})
@@ -348,7 +348,7 @@ class JiraExtractor:
         jql = f"({jql}) AND {updated_condition}" if jql.strip () else updated_condition
     return jql
 
-  def run (self):
+  def run (self) -> None:
     """Основной процесс выгрузки задач."""
     jql = self._build_jql ()
     logger.info (f"Executing JQL: {jql}")

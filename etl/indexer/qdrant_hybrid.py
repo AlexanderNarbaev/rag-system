@@ -344,7 +344,7 @@ class QdrantHybridIndexer:
       logger.error ("Live delete failed for chunk %s: %s", chunk_id, e)
       return False
 
-  def search_colbert (self, query: str, limit: int = 10) -> list [dict]:
+  def search_colbert (self, query: str, limit: int = 10) -> list [dict[str, Any]]:
     """Search using ColBERT late interaction scoring.
 
     Tokens from query and documents are compared via MaxSim.

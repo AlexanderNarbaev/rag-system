@@ -233,8 +233,8 @@ class LLMTrainer (TrainerBase):
 
   # ── Evaluation ─────────────────────────────────────────────────────────
 
-  def evaluate (self, eval_data: list [dict [str, Any]], model: Any = None) -> dict [
-    str, float]:  # type: ignore[override]
+  def evaluate (self, eval_data: list [dict [str, Any]], model: Any = None) -> dict [  # type: ignore[override]
+    str, float]:
     """Compute evaluation metrics on held-out data.
 
     In CPU/mock mode, returns placeholder metrics.

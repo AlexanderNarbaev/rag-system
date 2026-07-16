@@ -81,7 +81,7 @@ class SemanticChunker:
     """Грубая оценка токенов (4 символа ~ 1 токен для рус/англ). Для точности использовать tiktoken."""
     return len (text) // 4
 
-  def _split_by_headings (self, html: str) -> list [dict]:
+  def _split_by_headings (self, html: str) -> list [dict[str, Any]]:
     """
     Разбивает HTML на секции по заголовкам h1, h2, h3.
     Возвращает список {heading: str, content: str}
@@ -450,7 +450,7 @@ class AdaptiveChunker:
     self.target_chunk_size = target_chunk_size
     self.overlap_ratio = overlap_ratio
 
-  def _detect_structure (self, text: str) -> list [dict]:
+  def _detect_structure (self, text: str) -> list [dict[str, Any]]:
     """
     Detect document structure: headers, code blocks, tables, paragraphs.
     Returns list of structural elements.
@@ -510,7 +510,7 @@ class AdaptiveChunker:
 
     return elements
 
-  def _merge_small_elements (self, elements: list [dict]) -> list [dict]:
+  def _merge_small_elements (self, elements: list [dict]) -> list [dict[str, Any]]:
     """Merge small adjacent elements to reach target chunk size."""
     if not elements:
       return []
@@ -548,7 +548,7 @@ class AdaptiveChunker:
 
     return merged
 
-  def _split_large_chunks (self, elements: list [dict]) -> list [dict]:
+  def _split_large_chunks (self, elements: list [dict]) -> list [dict[str, Any]]:
     """Split chunks that exceed max_chunk_size at sentence boundaries."""
     result = []
     for elem in elements:
@@ -579,7 +579,7 @@ class AdaptiveChunker:
 
     return result
 
-  def _apply_overlap (self, chunks: list [dict]) -> list [dict]:
+  def _apply_overlap (self, chunks: list [dict]) -> list [dict[str, Any]]:
     """Apply overlap between consecutive chunks for context continuity."""
     if self.overlap_ratio <= 0 or len (chunks) <= 1:
       return chunks
@@ -594,7 +594,7 @@ class AdaptiveChunker:
 
     return overlapped
 
-  def chunk (self, text: str) -> list [dict]:
+  def chunk (self, text: str) -> list [dict[str, Any]]:
     """
     Adaptive chunking: detect structure, merge small, split large.
 

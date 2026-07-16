@@ -129,7 +129,7 @@ def hyde_search (
 
     # Dense search with hypothetical embedding
     assert qdrant_client is not None, "qdrant_client must be initialized"
-    from proxy.app.core.retrieval import _get_dense_vector_name  # type: ignore[attr-defined]
+    from proxy.app.core.retrieval import _get_dense_vector_name
 
     _dense_vector_name = _get_dense_vector_name (qdrant_client)
     _dense_kwargs: dict [str, Any] = {

@@ -120,7 +120,7 @@ class ConfluenceExtractor:
       logger.error (f"❌ Ошибка подключения: {e}")
       return False
 
-  def _load_wal (self) -> dict:
+  def _load_wal (self) -> dict[str, Any]:
     """Загружает WAL (последние успешные метки времени и хеши страниц)."""
     if self.wal_path.exists ():
       try:
@@ -131,11 +131,11 @@ class ConfluenceExtractor:
         return {"last_run": None, "pages_hash": {}}
     return {"last_run": None, "pages_hash": {}}
 
-  def _save_wal (self):
+  def _save_wal (self) -> None:
     with open (self.wal_path, "w") as f:
       json.dump (self.wal_data, f, indent = 2)
 
-  def _request (self, endpoint: str, params: dict = None) -> dict:
+  def _request (self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     """Выполняет GET запрос к Confluence API с retry логикой и экспоненциальной задержкой."""
     url = urljoin (self.url, endpoint)
     max_retries = self.config.get ("max_retries", 5)
@@ -171,7 +171,7 @@ class ConfluenceExtractor:
           logger.error (f"Server not responding after {max_retries} attempts. Increase timeout in config")
           raise
 
-  def _get_all_pages (self, space_key: str = None, start: int = 0, limit: int = 50) -> list [dict]:
+  def _get_all_pages (self, space_key: str | None = None, start: int = 0, limit: int = 50) -> list [dict[str, Any]]:
     """
     Получает все страницы с пагинацией (только метаданные, без body).
     Body загружается отдельно при обработке каждой страницы.
@@ -195,7 +195,7 @@ class ConfluenceExtractor:
 
     return pages
 
-  def _get_page_versions (self, page_id: str) -> list [dict]:
+  def _get_page_versions (self, page_id: str) -> list [dict[str, Any]]:
     """Возвращает историю версий страницы."""
     endpoint = f"/rest/api/content/{page_id}/version"
     data = self._request (endpoint)
@@ -204,13 +204,13 @@ class ConfluenceExtractor:
       versions = versions [-self.max_versions:]
     return versions
 
-  def _get_comments (self, page_id: str) -> list [dict]:
+  def _get_comments (self, page_id: str) -> list [dict[str, Any]]:
     """Возвращает комментарии к странице."""
     endpoint = f"/rest/api/content/{page_id}/child/comment"
     data = self._request (endpoint, params = {"expand": "body.storage,version"})
     return data.get ("results", [])
 
-  def _get_attachments_metadata (self, page_id: str) -> list [dict]:
+  def _get_attachments_metadata (self, page_id: str) -> list [dict[str, Any]]:
     """Возвращает метаданные вложений (без содержимого)."""
     endpoint = f"/rest/api/content/{page_id}/child/attachment"
     data = self._request (endpoint, params = {"expand": "version"})
@@ -297,7 +297,7 @@ class ConfluenceExtractor:
         f.write (page_data ["body_storage_raw"])
     logger.info (f"Saved page {page_id} to {page_dir}")
 
-  def extract_page (self, page: dict) -> dict:
+  def extract_page (self, page: dict) -> dict[str, Any]:
     """
     Извлекает полные данные одной страницы:
     - Метаданные (id, title, space, версии, даты)
@@ -396,7 +396,7 @@ class ConfluenceExtractor:
     }
     return page_data
 
-  def run (self):
+  def run (self) -> None:
     """Основной цикл выгрузки всех страниц (по указанным пространствам или всем)."""
     spaces_to_process = self.space_keys if self.space_keys else [None]  # None = все пространства
     for space in spaces_to_process:

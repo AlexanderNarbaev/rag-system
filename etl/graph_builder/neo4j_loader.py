@@ -86,7 +86,7 @@ class Neo4jLoader:
   def __exit__ (self, exc_type, exc_val, exc_tb):
     self.close ()
 
-  def _execute_with_retry (self, query: str, parameters: dict = None) -> bool:
+  def _execute_with_retry (self, query: str, parameters: dict[str, Any] | None = None) -> bool:
     """Выполняет запрос с повторными попытками при временных ошибках (с экспоненциальной задержкой)."""
     if not self.driver:
       raise RuntimeError ("Not connected to Neo4j")

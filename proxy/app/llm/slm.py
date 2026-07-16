@@ -108,7 +108,7 @@ class LocalSLMClient:
     """Check whether the local llama-server is accepting requests."""
     try:
       resp = requests.get (f"http://127.0.0.1:{self._port}/health", timeout = 2, )
-      return resp.status_code == 200
+      return bool (resp.status_code == 200)
     except requests.RequestException:
       return False
 

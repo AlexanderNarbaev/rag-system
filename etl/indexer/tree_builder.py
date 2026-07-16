@@ -46,8 +46,8 @@ class RaptorTreeBuilder:
   """
 
   def __init__ (
-      self, max_cluster_size: int = 5, max_levels: int = 3, summary_fn: Callable | None = None,
-      embed_fn: Callable | None = None, ):
+      self, max_cluster_size: int = 5, max_levels: int = 3, summary_fn: Callable [..., Any] | None = None,
+      embed_fn: Callable [..., Any] | None = None, ):
     self.max_cluster_size = max_cluster_size
     self.max_levels = max_levels
     self.summary_fn = summary_fn or self._default_summary

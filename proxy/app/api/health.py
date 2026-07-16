@@ -15,7 +15,7 @@ logger = logging.getLogger ("rag-proxy")
 router = APIRouter (tags = ["health"])
 
 
-def _check_qdrant () -> tuple [str, dict]:
+def _check_qdrant () -> tuple [str, dict [str, Any]]:
   """Check Qdrant connectivity and collection count."""
   try:
     from proxy.app.core.retrieval import qdrant_client
@@ -28,7 +28,7 @@ def _check_qdrant () -> tuple [str, dict]:
     return f"error: {e}", {}
 
 
-def _check_llm () -> tuple [str, dict]:
+def _check_llm () -> tuple [str, dict [str, Any]]:
   """Check LLM endpoint connectivity."""
   try:
     import requests
@@ -41,7 +41,7 @@ def _check_llm () -> tuple [str, dict]:
     return f"error: {e}", {}
 
 
-def _check_kb_manager () -> tuple [str, dict]:
+def _check_kb_manager () -> tuple [str, dict [str, Any]]:
   """Check Knowledge Base Manager status."""
   try:
     from proxy.app.main import kb_manager

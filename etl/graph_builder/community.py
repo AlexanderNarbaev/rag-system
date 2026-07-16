@@ -107,7 +107,7 @@ class CommunityDetector:
     return communities
 
   def generate_summaries (
-      self, communities: list [Community], entities: list [dict [str, Any]], summary_fn: Callable | None = None, ) -> \
+      self, communities: list [Community], entities: list [dict [str, Any]], summary_fn: Callable [..., Any] | None = None, ) -> \
   list [Community]:
     """
     Generate summaries for each community.

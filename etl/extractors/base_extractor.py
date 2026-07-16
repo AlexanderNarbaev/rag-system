@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
@@ -26,13 +27,13 @@ class ExtractedDocument:
   title: str
   content: str
   content_type: str  # html, markdown, text
-  metadata: dict = field (default_factory = dict)
+  metadata: dict [str, Any] = field (default_factory = dict)
   access_level: str = "internal"
   version: str = ""
   extracted_at: str = ""
-  links: list [dict] = field (default_factory = list)
+  links: list [dict [str, Any]] = field (default_factory = list)
 
-  def __post_init__ (self):
+  def __post_init__ (self) -> None:
     if not self.extracted_at:
       self.extracted_at = datetime.now (UTC).isoformat ()
 

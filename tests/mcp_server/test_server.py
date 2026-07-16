@@ -7,8 +7,10 @@ import pytest
 
 # ---------------------------------------------------------------------------
 # Module-level import of the MCP server object.
+# fastmcp depends on platformdirs; skip the entire module if unavailable.
 # We patch httpx.AsyncClient to prevent real HTTP calls during import/tool execution.
 # ---------------------------------------------------------------------------
+pytest.importorskip("fastmcp", reason="fastmcp (and its dependency platformdirs) not installed")
 from mcp_server.server import mcp  # noqa: E402
 
 # ===========================================================================

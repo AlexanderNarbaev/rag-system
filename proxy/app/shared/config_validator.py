@@ -10,6 +10,7 @@ proxy starts accepting requests.
 import logging
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger (__name__)
 
@@ -21,7 +22,7 @@ class ValidationResult:
   component: str
   status: str  # ok, warning, error
   message: str
-  details: dict = field (default_factory = dict)
+  details: dict [str, Any] = field (default_factory = dict)
 
 
 def validate_config () -> list [ValidationResult]:

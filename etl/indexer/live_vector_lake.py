@@ -204,7 +204,7 @@ class LiveVectorLake:
     logger.info (f"Rolled back document {doc_id} to {to_timestamp}, restored {added} chunks")
     return added
 
-  def get_all_current_chunks (self) -> list [dict]:
+  def get_all_current_chunks (self) -> list [dict[str, Any]]:
     """Возвращает все актуальные чанки из версионного хранилища (для полной выгрузки)."""
     return self.version_store.get_all_current_chunks ()
 

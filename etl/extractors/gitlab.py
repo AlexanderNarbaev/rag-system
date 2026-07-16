@@ -105,7 +105,7 @@ class GitLabExtractor:
     self.wal_path.parent.mkdir (parents = True, exist_ok = True)
     self.wal_data = self._load_wal ()
 
-  def _load_wal (self) -> dict:
+  def _load_wal (self) -> dict[str, Any]:
     if self.wal_path.exists ():
       try:
         with open (self.wal_path) as f:
@@ -115,11 +115,11 @@ class GitLabExtractor:
         return {"last_run": None, "projects": {}}
     return {"last_run": None, "projects": {}}
 
-  def _save_wal (self):
+  def _save_wal (self) -> None:
     with open (self.wal_path, "w") as f:
       json.dump (self.wal_data, f, indent = 2)
 
-  def _request (self, endpoint: str, params: dict = None, method: str = "GET") -> dict:
+  def _request (self, endpoint: str, params: dict[str, Any] | None = None, method: str = "GET") -> dict[str, Any]:
     """Выполняет запрос к GitLab API с retry логикой и экспоненциальной задержкой."""
     url = urljoin (self.url, endpoint)
     max_retries = self.config.get ("max_retries", 3)
@@ -152,7 +152,7 @@ class GitLabExtractor:
         else:
           raise
 
-  def _paginated_get (self, endpoint: str, params: dict = None, per_page: int = 100) -> Iterator [dict]:
+  def _paginated_get (self, endpoint: str, params: dict[str, Any] | None = None, per_page: int = 100) -> Iterator [dict[str, Any]]:
     """Пагинированный сбор всех элементов (постранично)."""
     page = 1
     while True:
@@ -165,7 +165,7 @@ class GitLabExtractor:
       yield from data
       page += 1
 
-  def get_projects (self) -> list [dict]:
+  def get_projects (self) -> list [dict[str, Any]]:
     """Список проектов (репозиториев)."""
     if self.project_ids:
       projects = []
@@ -179,7 +179,7 @@ class GitLabExtractor:
       logger.info (f"Fetched {len (projects)} project(s) from GitLab API")
       return projects
 
-  def get_commits (self, project_id: int, since: str = None) -> list [dict]:
+  def get_commits (self, project_id: int, since: str | None = None) -> list [dict[str, Any]]:
     """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
     params = {"with_stats": True}
     if since:
@@ -201,7 +201,7 @@ class GitLabExtractor:
         commit ["diff"] = []
     return commits
 
-  def get_branches (self, project_id: int) -> list [dict]:
+  def get_branches (self, project_id: int) -> list [dict[str, Any]]:
     """Список веток репозитория."""
     return list (self._paginated_get (f"/api/v4/projects/{project_id}/repository/branches"))
 
@@ -217,7 +217,7 @@ class GitLabExtractor:
       logger.warning (f"Failed to fetch file {file_path} in project {project_id}: {e}")
       return None
 
-  def get_merge_requests (self, project_id: int, state: str = "all") -> list [dict]:
+  def get_merge_requests (self, project_id: int, state: str = "all") -> list [dict[str, Any]]:
     """MR с пагинацией. Добавляет обсуждения и комментарии."""
     params = {"state": state}
     if self.since_date:
@@ -234,7 +234,7 @@ class GitLabExtractor:
       mrs.append (mr)
     return mrs
 
-  def get_mr_discussions (self, project_id: int, mr_iid: int) -> list [dict]:
+  def get_mr_discussions (self, project_id: int, mr_iid: int) -> list [dict[str, Any]]:
     """Возвращает все дискуссии (нити комментариев) в MR."""
     discussions = list (self._paginated_get (f"/api/v4/projects/{project_id}/merge_requests/{mr_iid}/discussions"))
     # Преобразуем в удобный формат: каждая дискуссия содержит массив заметок (notes)
@@ -265,7 +265,7 @@ class GitLabExtractor:
     # Иначе если коммит новее – обрабатываем
     return True
 
-  def _update_wal_commit (self, project_id: int, last_commit_sha: str, last_commit_date: str):
+  def _update_wal_commit (self, project_id: int, last_commit_sha: str, last_commit_date: str) -> None:
     if "projects" not in self.wal_data:
       self.wal_data ["projects"] = {}
     if str (project_id) not in self.wal_data ["projects"]:
@@ -315,7 +315,7 @@ class GitLabExtractor:
       with open (proj_dir / "files_manifest.json", "w", encoding = "utf-8") as f:
         json.dump (files_data, f, ensure_ascii = False, indent = 2)
 
-  def run (self):
+  def run (self) -> None:
     """Основной процесс выгрузки по всем проектам."""
     projects = self.get_projects ()
 

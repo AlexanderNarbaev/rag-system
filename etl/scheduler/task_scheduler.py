@@ -40,7 +40,7 @@ class TaskScheduler:
       task_key = f"{kb_id}:{source_type}:{source_id}"
       self._active_tasks [task_key] = task.id
       logger.info ("Started ETL task %s for %s/%s", task.id, source_type, source_id)
-      return task.id
+      return str (task.id)
     except Exception as e:
       logger.warning ("Failed to create ETL task: %s", e)
       return None
@@ -78,13 +78,13 @@ class TaskScheduler:
     except Exception as e:
       logger.warning ("Failed to mark task as failed: %s", e)
 
-  def get_pending_tasks (self, kb_id: str | None = None) -> list:
+  def get_pending_tasks (self, kb_id: str | None = None) -> list [Any]:
     """Get all pending tasks, optionally filtered by KB."""
     if self.kb_manager is None:
       return []
     return self.kb_manager.list_tasks (kb_id = kb_id, status = "pending")
 
-  def get_running_tasks (self, kb_id: str | None = None) -> list:
+  def get_running_tasks (self, kb_id: str | None = None) -> list [Any]:
     """Get all running tasks, optionally filtered by KB."""
     if self.kb_manager is None:
       return []

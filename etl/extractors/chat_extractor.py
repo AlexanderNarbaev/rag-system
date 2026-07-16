@@ -68,7 +68,7 @@ class ChatExtractor (BaseExtractor):
       except Exception as e:
         logger.error (f"Failed to extract chat file {file_path}: {e}", exc_info = True)
 
-  async def _parse_file (self, file_path: Path, format_type: str) -> list [dict [str, Any]]:
+  async def _parse_file (self, file_path: Path, format_type: str) -> list [dict[str, Any]]:
     """Parse a chat export file based on detected format."""
     with open (file_path, encoding = "utf-8") as f:
       content = f.read ()
@@ -89,7 +89,7 @@ class ChatExtractor (BaseExtractor):
       return self._parse_jsonl (content)
     return self._parse_generic_text (content)
 
-  def _parse_deepseek (self, content: str) -> list [dict [str, Any]]:
+  def _parse_deepseek (self, content: str) -> list [dict[str, Any]]:
     """Parse DeepSeek chat JSON export."""
     data = json.loads (content)
     conversations = []
@@ -112,7 +112,7 @@ class ChatExtractor (BaseExtractor):
           conversations.append (conv)
     return conversations
 
-  def _parse_chatgpt (self, content: str) -> list [dict [str, Any]]:
+  def _parse_chatgpt (self, content: str) -> list [dict[str, Any]]:
     """Parse ChatGPT export (typically JSON with conversations array)."""
     data = json.loads (content)
     conversations = []
@@ -127,7 +127,7 @@ class ChatExtractor (BaseExtractor):
         conversations.append (conv)
     return conversations
 
-  def _parse_claude (self, content: str) -> list [dict [str, Any]]:
+  def _parse_claude (self, content: str) -> list [dict[str, Any]]:
     """Parse Claude conversation export."""
     data = json.loads (content)
     conversations = []
@@ -142,14 +142,14 @@ class ChatExtractor (BaseExtractor):
         conversations.append (normalized)
     return conversations
 
-  def _parse_generic_json (self, content: str) -> list [dict [str, Any]]:
+  def _parse_generic_json (self, content: str) -> list [dict[str, Any]]:
     """Parse a generic JSON chat export (best effort)."""
     data = json.loads (content)
     if isinstance (data, list):
       return [self._normalize_conversation (item, self.FORMAT_GENERIC) for item in data if item]
     return [self._normalize_conversation (data, self.FORMAT_GENERIC)]
 
-  def _parse_jsonl (self, content: str) -> list [dict [str, Any]]:
+  def _parse_jsonl (self, content: str) -> list [dict[str, Any]]:
     """Parse JSONL format (one JSON object per line)."""
     conversations = []
     for line in content.splitlines ():
@@ -165,7 +165,7 @@ class ChatExtractor (BaseExtractor):
         continue
     return conversations
 
-  def _parse_generic_text (self, content: str) -> list [dict [str, Any]]:
+  def _parse_generic_text (self, content: str) -> list [dict[str, Any]]:
     """Parse plain text chat logs (fallback)."""
     qa_pattern = re.compile (r"^(?:Q|Question|User|Human|Человек)[:]\s*(.+?)\s*"
                              r"(?:A|Answer|Assistant|AI|Bot|Ассистент)[:]\s*(.+)",
@@ -249,7 +249,7 @@ class ChatExtractor (BaseExtractor):
         "updated_at": conv.get ("update_time", conv.get ("updated_at", "")),
     }
 
-  def _extract_from_mapping (self, mapping: dict [str, Any]) -> list [dict [str, Any]]:
+  def _extract_from_mapping (self, mapping: dict [str, Any]) -> list [dict[str, Any]]:
     """Extract messages from ChatGPT conversation mapping format."""
     messages = []
     for _node_id, node in mapping.items ():
