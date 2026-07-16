@@ -233,7 +233,7 @@ class TestSecretsManager:
         # Key format: prefix_random_part (prefix is "rag")
         # The random part is after the first "_"
         prefix_end = key.index("_")
-        random_part = key[prefix_end + 1:]
+        random_part = key[prefix_end + 1 :]
         assert len(random_part) >= 20
 
     def test_hash_secret_deterministic(self):
