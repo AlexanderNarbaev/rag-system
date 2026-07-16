@@ -1,30 +1,32 @@
 # Sprint Plan — S4-2026
 
-**Status:** IN PROGRESS (Wave 1 active)  
-**Date:** 2026-07-15  
+**Status:** IN PROGRESS (Wave 2 active)  
+**Date:** 2026-07-16  
 **Previous sprint:** [S3-2026](sprint-plan-2026-s3-updated.md) — ✅ Complete  
 
 ---
 
-## S4 Wave 1 — Foundation Fixes (Jul 15–18)
+## S4 Wave 1 — Foundation Fixes (Jul 15–18) ✅ COMPLETE
 
-### P0-1: Fix mypy strict mode ✅/🟡
-- **Status:** 🟡 PARTIAL — numpy stub `Type statement is only supported in Python 3.12` error
+### P0-1: Fix mypy strict mode
+- **Status:** ✅ COMPLETE — 313→0 errors across 139 source files
+- **Commit:** `3019bed`
 - **Effort:** XS (1h)
 - **Role:** Backend Developer
-- **DoD:** `make typecheck` returns 0 errors
+- **DoD:** `make typecheck` returns 0 errors ✅
 
 ### P0-2: Fix test collection error  
-- **Status:** 🔴 NOT STARTED — `tests/mcp_server/test_server.py` fails to collect
+- **Status:** ✅ COMPLETE — `tests/mcp_server/test_server.py` uses `pytest.importorskip`, collects cleanly
 - **Effort:** S (2h)
 - **Role:** QA Engineer
-- **DoD:** Full suite collects cleanly (0 errors)
+- **DoD:** Full suite collects cleanly (0 errors) ✅
 
 ### P0-3: Triage Dependabot PRs
-- **Status:** 🔴 NOT STARTED — 11 open PRs
+- **Status:** ✅ COMPLETE — 7 PRs merged, rest triaged
+- **Commits:** `72f776a` (#31), `33f16c5` (#32), `58d66bc` (#33), `089c661` (#35), `2c8b900` (#37), `7461804` (#47), `2c704b0` (#49)
 - **Effort:** M (4h)
 - **Role:** DevOps Engineer
-- **DoD:** Non-breaking PRs merged, breaking ones triaged with issues
+- **DoD:** Non-breaking PRs merged, breaking ones triaged with issues ✅
 
 ### P0-4: Production bugfixes (Qdrant + LLM)
 - **Status:** ✅ COMPLETE — 3 critical bugs fixed
@@ -34,12 +36,12 @@
 
 ### P0-5: Code quality cleanup
 - **Status:** ✅ COMPLETE — ruff auto-fix: 8,137 issues → 23
-- **Commit:** `170f04e`, `ab1159f`
+- **Commits:** `170f04e`, `ab1159f`
 - **Role:** Backend Developer
 
 ---
 
-## S4 Wave 2 — Quality Push (Jul 19–Aug 2)
+## S4 Wave 2 — Quality Push (Jul 19–Aug 2) 🔄 IN PROGRESS
 
 ### P1-1 (EVAL-01): Expand retrieval eval dataset
 - **Target:** 20 → 200+ labeled pairs
@@ -60,7 +62,7 @@
 - **Role:** QA Engineer + Backend Developer
 
 ### P1-4 (DOC-04): Sprint documentation
-- **Status:** 🟡 IN PROGRESS — `current_wave.md` created, S4 plan drafted
+- **Status:** 🟡 IN PROGRESS — S4 plan updated, Wave 1 marked COMPLETE, current_wave.md created
 - **Effort:** S (3h)
 - **Role:** PM + Tech Writer
 - **DoD:** S3 archived, S4 plan published, ADR indices updated
@@ -120,10 +122,10 @@
 
 ## Effort Summary
 
-| Wave | Items | Hours |
-|------|-------|-------|
-| Wave 1 (P0) | 3 | ~7h |
-| Wave 2 (P1) | 5 | ~74h |
-| Wave 3 (P2) | 7 | ~80h |
-| Wave 4 (P3, stretch) | 5 | ~130h |
-| **Total** | **20** | **~291h** |
+| Wave | Items | Hours | Status |
+|------|-------|-------|--------|
+| Wave 1 (P0) | 5 | ~13h | ✅ COMPLETE |
+| Wave 2 (P1) | 5 | ~74h | 🔄 IN PROGRESS |
+| Wave 3 (P2) | 7 | ~80h | ⏳ Planned |
+| Wave 4 (P3, stretch) | 5 | ~130h | ⏳ Planned |
+| **Total** | **22** | **~297h** | |

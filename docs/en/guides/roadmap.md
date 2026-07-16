@@ -1,6 +1,6 @@
 # Development Roadmap
 
-**Last Updated:** 2026-07-13
+**Last Updated:** 2026-07-16
 
 ---
 
@@ -11,7 +11,9 @@ self-correcting, agentic, and federated architectures.
 
 ---
 
-## Implementation Status (2026-07-13)
+## Implementation Status (2026-07-16)
+
+**Sprint S4-2026:** Wave 1 ✅ COMPLETE, Wave 2 🔄 IN PROGRESS
 
 ### Phase 1 — Foundation ✅ COMPLETE
 
@@ -73,6 +75,7 @@ self-correcting, agentic, and federated architectures.
 
 - Total tests: 2,688 passed
 - Coverage: 75.00%
+- mypy strict: 0 errors (139 source files) ✅
 - CI/CD: All green (CI, Security, Docs)
 - Security: bandit + trivy + dependabot
 
@@ -284,13 +287,17 @@ These items were originally in Future Horizons and have been completed:
 
 ## In Progress
 
-These items are actively being worked on:
+**Sprint:** [S4-2026](sprint-plan-2026-s4.md) — Wave 2 active
 
-| Item                           | Description                                                              | Status         |
-|--------------------------------|--------------------------------------------------------------------------|----------------|
-| **Documentation improvements** | Updating guides, ADRs, and operational docs to reflect v2.0 capabilities | 🔄 In Progress |
-| **Code quality improvements**  | Linting cleanup, type annotation coverage, dead code removal             | 🔄 In Progress |
-| **Test coverage improvements** | Expanding unit test coverage for edge cases and error paths              | 🔄 In Progress |
+| Item                           | Description                                                              | Status           | Sprint |
+|--------------------------------|--------------------------------------------------------------------------|------------------|--------|
+| **Documentation improvements** | Updating guides, ADRs, and operational docs to reflect v2.0 capabilities | 🔄 In Progress    | S4 P1-4 |
+| **Code quality improvements**  | Linting cleanup, type annotation coverage, dead code removal             | ✅ S4 Wave 1 done | S4 P0-5 |
+| **Test coverage improvements** | Expanding unit test coverage for edge cases and error paths              | 🔄 In Progress    | S4 P1-3 |
+| **mypy strict compliance**     | Full strict mode across all 139 source files                             | ✅ S4 Wave 1 done | S4 P0-1 |
+| **Dependency updates**         | Dependabot PR triage and merge                                           | ✅ S4 Wave 1 done | S4 P0-3 |
+| **Retrieval eval expansion**   | 20 → 200+ labeled query–document pairs                                  | ⏳ Planned         | S4 P1-1 |
+| **Security audit**             | Dependency CVE scanning and remediation                                  | ⏳ Planned         | S4 P1-5 |
 
 ---
 

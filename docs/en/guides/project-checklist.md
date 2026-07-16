@@ -1,6 +1,6 @@
 # RAG System — Comprehensive Project Checklist
 
-**Last Updated:** 2026-07-13
+**Last Updated:** 2026-07-16
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
 **Production Readiness:** 67.5/80 (84.4%)
@@ -39,7 +39,7 @@ architecture, testing, documentation, deployment, and operational status into on
 | **Python**                    | ≥ 3.11                                                                                              |
 | **Architecture**              | 3-layer (ETL + Proxy + HITL) + MCP Server + Model Evolution + Agentic Tools                         |
 | **Git Remotes**               | GitHub: `AlexanderNarbaev/rag-system`, GitVerse: `AlexandrNarbaev/rag-system`                       |
-| **Latest Commit**             | `41f7741` — fix: resolve 2 ruff lint errors (F821 forward ref, E501 line length) and update roadmap |
+| **Latest Commit**             | `3019bed` — fix(typecheck): mypy strict mode — 313→0 errors across 139 source files |
 | **Total Python Files**        | ~200+                                                                                               |
 | **Total Test Files**          | 106                                                                                                 |
 | **Total Documentation Files** | 118 (EN + RU)                                                                                       |
@@ -264,7 +264,7 @@ architecture, testing, documentation, deployment, and operational status into on
 
 | #         | Dimension     | Score       | %         | Trend | Key Gaps                                                                |
 |-----------|---------------|-------------|-----------|-------|-------------------------------------------------------------------------|
-| 1         | Code Quality  | 8.5/10      | 85%       | ↑     | Type hints partial, mypy partial                                        |
+| 1         | Code Quality  | 9.0/10      | 90%       | ↑     | mypy strict passing, ruff clean                                  |
 | 2         | Testing       | 8.5/10      | 85%       | ↑     | model_evolution excluded from coverage tracking                         |
 | 3         | Security      | 8.0/10      | 80%       | ↑     | AUTH_ENABLED was false by default (fixed), Docker ports exposed (fixed) |
 | 4         | Observability | 8.5/10      | 85%       | ↑     | Distributed tracing partial                                             |
@@ -272,7 +272,7 @@ architecture, testing, documentation, deployment, and operational status into on
 | 6         | Performance   | 9.5/10      | 95%       | →     | —                                                                       |
 | 7         | Operations    | 7.0/10      | 70%       | ↑     | K8s unvalidated, stream_consumer stubs, backup mismatches               |
 | 8         | Documentation | 9.0/10      | 90%       | ↑     | CHANGELOG created, all guides in nav, GPUStack section added            |
-| **Total** |               | **67.5/80** | **84.4%** |       |                                                                         |
+| **Total** |               | **68.0/80** | **85.0%** |       |                                                                         |
 
 ---
 
@@ -444,7 +444,7 @@ architecture, testing, documentation, deployment, and operational status into on
 | #  | Gap                                               | Impact                          | Effort | Status                                                |
 |----|---------------------------------------------------|---------------------------------|--------|-------------------------------------------------------|
 | 4  | Retrieval evaluation dataset (200+ labeled pairs) | No automated quality regression | High   | 🟡 Partial (20 pairs + eval script)                   |
-| 5  | Mypy strict mode not passing                      | Type safety gaps                | Medium | 🟡 Open                                               |
+| 5  | Mypy strict mode not passing                      | Type safety gaps                | Medium | ✅ Fixed (3019bed — 0 errors across 139 files) |
 | 6  | HTTPS/TLS not fully automated                     | Manual cert setup               | Medium | 🟡 Open                                               |
 | 7  | Secrets rotation automation                       | Manual rotation only            | Medium | 🟡 Open                                               |
 | 8  | Database migration framework                      | Ad-hoc migrations               | Medium | 🟡 Open                                               |
@@ -469,7 +469,7 @@ architecture, testing, documentation, deployment, and operational status into on
 |---------------------|--------------|-------|-----------|
 | CRITICAL bugs       | 11           | 11    | 0         |
 | HIGH severity       | 28           | 28    | 0         |
-| MEDIUM severity     | 41           | 35    | 6         |
+| MEDIUM severity     | 41           | 36    | 5         |
 | LOW severity        | 21           | 15    | 6         |
 | Fake tests          | 7            | 7     | 0         |
 | Dead code modules   | 4            | 4     | 0         |
@@ -565,9 +565,38 @@ make deploy-prod          # Deploy production
 
 ---
 
-## 14. Wave Implementation Progress (2026-07-13)
+## 14. Wave Implementation Progress (2026-07-16)
 
-### Sprint S3-2026 Status
+### Sprint S4-2026 Status
+
+| Wave                          | Status           | Details                                                              |
+|-------------------------------|------------------|----------------------------------------------------------------------|
+| Wave 1 — Foundation Fixes     | ✅ COMPLETE       | 5/5 P0 tasks done: mypy strict, test collection, Dependabot, bugs, ruff |
+| Wave 2 — Quality Push         | 🔄 IN PROGRESS   | P1-4 (DOC-04) active; P1-1, P1-2, P1-3, P1-5 pending              |
+| Wave 3 — Infrastructure       | ⏳ Planned        | 7 P2 tasks (Aug 3–16)                                               |
+| Wave 4 — Polish (stretch)     | ⏳ Planned        | 5 P3 tasks (Aug 17–24)                                              |
+
+### S4 Wave 1 Details (Foundation Fixes)
+
+| ID    | Task                    | Status      | Commit(s)                                  |
+|-------|-------------------------|-------------|--------------------------------------------|
+| P0-1  | Fix mypy strict mode    | ✅ COMPLETE | `3019bed` (313→0 errors across 139 files)  |
+| P0-2  | Fix test collection     | ✅ COMPLETE | `pytest.importorskip` guard                 |
+| P0-3  | Triage Dependabot PRs   | ✅ COMPLETE | 7 PRs merged (#31,#32,#33,#35,#37,#47,#49) |
+| P0-4  | Production bugfixes     | ✅ COMPLETE | `4a1f2a4`, `9a418fe`, `39a6dcc`            |
+| P0-5  | Code quality cleanup    | ✅ COMPLETE | `170f04e`, `ab1159f` (8,137 → 23 ruff issues) |
+
+### S4 Wave 2 Details (Quality Push)
+
+| ID    | Task                           | Status         |
+|-------|--------------------------------|----------------|
+| P1-1  | Expand retrieval eval dataset  | ⏳ Not started |
+| P1-2  | Full mypy strict compliance   | ⏳ Not started |
+| P1-3  | Raise coverage to 80%         | ⏳ Not started |
+| P1-4  | Sprint documentation           | 🔄 IN PROGRESS |
+| P1-5  | Dependency security audit      | ⏳ Not started |
+
+### Previous Sprint: S3-2026
 
 | Wave                       | Status     | Items | Details                                                                             |
 |----------------------------|------------|-------|-------------------------------------------------------------------------------------|
@@ -632,6 +661,7 @@ make deploy-prod          # Deploy production
 
 - **Total tests:** 2,688 passed
 - **Coverage:** 75.19%
+- **mypy strict:** 0 errors (139 source files)
 - **CI/CD:** All green
 - **Security:** bandit + trivy + dependabot
 
