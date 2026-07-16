@@ -12,6 +12,8 @@ Tables:
 - token_blacklist: Revoked JWT tokens
 """
 
+from typing import Any
+
 from proxy.app.db.migrations import MigrationInfo, register_migration
 
 # ─── Up Migration ────────────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ DROP TABLE IF EXISTS users;
 # ─── Async Migration (for existing DB detection) ─────────────────────────────
 
 
-async def check_existing_schema(conn) -> None:
+async def check_existing_schema(conn: Any) -> None:
     """Check if tables already exist and skip creation if so.
 
     This makes the migration idempotent for existing databases.

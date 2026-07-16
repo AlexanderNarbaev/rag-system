@@ -196,7 +196,7 @@ class MigrationManager:
                 import importlib.util
                 neo4j_spec = importlib.util.find_spec("neo4j")
                 if neo4j_spec is not None:
-                    from neo4j import AsyncGraphDatabase  # type: ignore[import-untyped]
+                    from neo4j import AsyncGraphDatabase
 
                     self._neo4j_driver = AsyncGraphDatabase.driver(
                         self._neo4j_uri,

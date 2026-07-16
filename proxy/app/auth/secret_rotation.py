@@ -438,6 +438,7 @@ class SecretRotationManager:
       from cryptography.hazmat.primitives import serialization
       from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
+      private_key: Any
       if algorithm.upper ().startswith ("ES"):
         # EC P-256
         private_key = ec.generate_private_key (ec.SECP256R1 ())

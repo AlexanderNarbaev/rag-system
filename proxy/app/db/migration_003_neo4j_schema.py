@@ -8,6 +8,8 @@ Sets up Neo4j constraints and indexes for the knowledge graph:
 - Full-text search indexes
 """
 
+from typing import Any
+
 from proxy.app.db.migrations import MigrationInfo, register_migration
 
 # ─── Neo4j Schema Setup ──────────────────────────────────────────────────────
@@ -38,7 +40,7 @@ NEO4J_INDEXES = [
 ]
 
 
-async def setup_neo4j_schema(session) -> None:
+async def setup_neo4j_schema(session: Any) -> None:
     """Apply Neo4j constraints and indexes."""
     for constraint in NEO4J_CONSTRAINTS:
         try:
@@ -57,7 +59,7 @@ async def setup_neo4j_schema(session) -> None:
                 raise
 
 
-async def teardown_neo4j_schema(session) -> None:
+async def teardown_neo4j_schema(session: Any) -> None:
     """Remove Neo4j constraints and indexes."""
     constraints_to_drop = [
         "DROP CONSTRAINT entity_id IF EXISTS",
