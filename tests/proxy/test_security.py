@@ -802,21 +802,26 @@ class TestConfigSecurity:
 
     def test_auth_disabled_by_default(self):
         from proxy.app.shared.config import AUTH_ENABLED, RBAC_ENABLED
+
         assert AUTH_ENABLED is False
         assert RBAC_ENABLED is False
 
     def test_rate_limit_disabled_by_default(self):
         from proxy.app.shared.config import RATE_LIMIT_ENABLED
+
         assert RATE_LIMIT_ENABLED is False
 
     def test_sanitize_input_enabled_by_default(self):
         from proxy.app.shared.config import SANITIZE_INPUT
+
         assert SANITIZE_INPUT is True
 
     def test_user_db_path_is_local(self):
         from proxy.app.shared.config import USER_DB_PATH
+
         assert USER_DB_PATH == "./data/users.db"
 
     def test_bcrypt_rounds_are_acceptable(self):
         from proxy.app.shared.config import BCRYPT_ROUNDS
+
         assert BCRYPT_ROUNDS >= 10
