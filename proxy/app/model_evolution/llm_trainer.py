@@ -278,9 +278,7 @@ class LLMTrainer(TrainerBase):
 
     def evaluate(  # type: ignore[override]
         self, eval_data: list[dict[str, Any]], model: Any = None
-    ) -> dict[
-        str, float
-    ]:
+    ) -> dict[str, float]:
         """Compute evaluation metrics on held-out data.
 
         In CPU/mock mode, returns placeholder metrics.
