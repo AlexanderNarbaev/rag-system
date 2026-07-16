@@ -4,13 +4,17 @@ Backup and restore scripts for RAG System infrastructure components.
 
 ## Scripts
 
-| Script             | Purpose                                                        |
-|--------------------|----------------------------------------------------------------|
-| `backup_qdrant.sh` | Create Qdrant snapshot and upload to S3/MinIO                  |
-| `backup_neo4j.sh`  | Create Neo4j database dump and upload to S3/MinIO              |
-| `backup_redis.sh`  | Trigger Redis BGSAVE and upload RDB to S3/MinIO                |
-| `backup_cron.sh`   | Cron wrapper that runs all backup scripts in sequence          |
-| `restore_all.sh`   | Download latest backups from S3/MinIO and restore all services |
+| Script              | Purpose                                                        |
+|---------------------|----------------------------------------------------------------|
+| `backup_qdrant.sh`  | Create Qdrant snapshot and upload to S3/MinIO                  |
+| `backup_neo4j.sh`   | Create Neo4j database dump and upload to S3/MinIO              |
+| `backup_redis.sh`   | Trigger Redis BGSAVE and upload RDB to S3/MinIO                |
+| `backup_cron.sh`    | Cron wrapper that runs all backup scripts in sequence          |
+| `restore_all.sh`    | Download latest backups from S3/MinIO and restore all services |
+| `verify_restore.sh` | Verify backup file integrity (archive, size, presence)         |
+| `health_check.sh`   | Comprehensive health check for all infrastructure components   |
+| `status.sh`         | Show real-time status of all services (table/json/watch modes) |
+| `rotate-secrets.sh` | Automated JWT key and API key rotation with rollback support   |
 
 ## Prerequisites
 
@@ -127,6 +131,54 @@ Logs are written to `${LOG_DIR}/` (default: `/var/log/rag-system/`):
 - `backup_redis_YYYY-MM-DD.log`
 - `backup_cron_YYYY-MM-DD.log`
 - `restore_YYYY-MM-DD_HHMMSS.log`
+
+## Health Check
+
+```bash
+# Run comprehensive health check
+./scripts/ops/health_check.sh
+
+# JSON output for automation
+./scripts/ops/health_check.sh --json
+
+# Silent mode (only exit code)
+./scripts/ops/health_check.sh --quiet || echo "Health check failed"
+```
+
+Exit codes: `0` = all healthy, `1` = warnings (degraded), `2` = critical failures.
+
+## Service Status
+
+```bash
+# Show status table
+./scripts/ops/status.sh
+
+# Watch mode (refresh every 5s)
+./scripts/ops/status.sh --watch
+
+# JSON output
+./scripts/ops/status.sh --json
+
+# Environment-specific modes
+./scripts/ops/status.sh --docker
+./scripts/ops/status.sh --k8s
+```
+
+## Secrets Rotation
+
+```bash
+# Interactive rotation
+./scripts/ops/rotate-secrets.sh
+
+# Dry-run (preview without changes)
+./scripts/ops/rotate-secrets.sh --dry-run
+
+# Automated JWT-only rotation
+./scripts/ops/rotate-secrets.sh --jwt-only --force
+
+# Rollback to previous .env
+./scripts/ops/rotate-secrets.sh --rollback
+```
 
 ## Error Handling
 

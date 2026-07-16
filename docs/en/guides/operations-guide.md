@@ -1,6 +1,6 @@
 # Operations Guide
 
-**Version:** v2.0.0 | **Last Updated:** 2026-07-06
+**Version:** v2.0.0 | **Last Updated:** 2026-07-16
 
 Definitive operations reference for the RAG Knowledge Assistant. Covers monitoring, health checks, performance tuning,
 scaling, backup/restore, maintenance, upgrades, disaster recovery, day-to-day commands, and SLI/SLO management.
@@ -971,7 +971,36 @@ spec:
           restartPolicy: OnFailure
 ```
 
-### 5.6 Automated Cleanup CronJob
+### 5.7 Operational Scripts
+
+All backup and restore operations use scripts in `scripts/ops/`:
+
+| Script | Purpose |
+|--------|---------|
+| `backup_cron.sh` | Orchestrates all backups with lock-based concurrency control |
+| `backup_qdrant.sh` | Qdrant snapshot → S3, with retention cleanup |
+| `backup_neo4j.sh` | Neo4j dump → S3, supports `neo4j-admin` and `cypher-shell` fallback |
+| `backup_redis.sh` | Redis BGSAVE → RDB copy → S3 |
+| `restore_all.sh` | Downloads latest backups from S3 and restores all services |
+| `verify_restore.sh` | Verifies backup file integrity |
+| `health_check.sh` | Comprehensive health check for all components |
+| `status.sh` | Real-time service status table with json/k8s/docker/watch modes |
+| `rotate-secrets.sh` | Automated JWT and API key rotation with rollback |
+
+```bash
+# Quick commands via Makefile
+make backup           # Run all backups
+make restore          # Restore from latest backups
+make verify-backups   # Verify backup integrity
+
+# Or directly
+./scripts/ops/backup_cron.sh
+./scripts/ops/restore_all.sh
+./scripts/ops/health_check.sh
+./scripts/ops/status.sh --watch
+```
+
+### 5.8 Automated Cleanup CronJob
 
 ```yaml
 apiVersion: batch/v1
@@ -1578,12 +1607,29 @@ kubectl edit pvc qdrant-data-rag-proxy-0 -n rag-system
 ### 9.1 Quick Status Checks
 
 ```bash
+# ── Operational scripts (preferred) ──────────────────────
+# Show service status table (auto-detects env)
+./scripts/ops/status.sh
+
+# Watch mode (refresh every 5s)
+./scripts/ops/status.sh --watch
+
+# Comprehensive health check
+./scripts/ops/health_check.sh
+
+# JSON output for automation
+./scripts/ops/status.sh --json
+./scripts/ops/health_check.sh --json
+
 # ── Kubernetes ───────────────────────────────────────────
 # Overall system health
 kubectl get pods,svc,hpa,ing,pvc -n rag-system
 
 # Proxy health
 kubectl exec -it deploy/rag-proxy -n rag-system -- curl -s localhost:8080/v1/health | jq
+
+# K8s-specific status
+./scripts/ops/status.sh --k8s
 
 # Resource usage
 kubectl top pods -n rag-system
@@ -1598,6 +1644,9 @@ kubectl logs -l app=rag-proxy -n rag-system --tail=100 --prefix
 # ── Docker Compose ───────────────────────────────────────
 # Service status
 docker compose -f docker-compose.yml ps
+
+# Docker-specific status
+./scripts/ops/status.sh --docker
 
 # Health
 curl http://localhost:8080/v1/health | jq

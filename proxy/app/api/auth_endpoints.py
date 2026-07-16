@@ -49,8 +49,8 @@ class RefreshResponse(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=2, max_length=64)
-    password: str = Field(..., min_length=8, max_length=128)
+    username: str = Field(..., min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$")
+    password: str = Field(..., min_length=10, max_length=128)
     email: str | None = None
 
 
@@ -134,6 +134,12 @@ async def auth_register(request: RegisterRequest, raw_request: Request) -> Regis
     if not AUTH_ENABLED:
         raise HTTPException(status_code=400, detail="Registration is not enabled. Set AUTH_ENABLED=true.")
 
+    from proxy.app.shared.security import PasswordStrengthValidator
+
+    valid, error = PasswordStrengthValidator.validate(request.password)
+    if not valid:
+        raise HTTPException(status_code=422, detail=error)
+
     db = get_user_db()
     try:
         user = await db.create_user(
@@ -208,7 +214,7 @@ async def auth_login(request: LoginRequest, raw_request: Request) -> LoginRespon
 
 
 @router.post("/v1/auth/refresh", response_model=RefreshResponse)
-async def auth_refresh(request: RefreshRequest) -> RefreshResponse:
+async def auth_refresh(request: RefreshRequest, raw_request: Request) -> RefreshResponse:
     """Exchange a refresh token (or valid access token) for a new token pair.
 
     Backward-compatible: tries refresh token first. Falls back to validating
@@ -217,6 +223,9 @@ async def auth_refresh(request: RefreshRequest) -> RefreshResponse:
     """
     from proxy.app.auth.jwt import create_token_pair, verify_refresh_token, verify_token
     from proxy.app.shared.config import AUTH_ENABLED
+
+    client_ip = raw_request.client.host if raw_request.client else "unknown"
+    _check_login_rate_limit(f"refresh:{client_ip}")
 
     if not AUTH_ENABLED:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")

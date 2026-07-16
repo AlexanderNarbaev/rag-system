@@ -103,8 +103,15 @@ MAX_RETRIEVAL_LOOPS = int(os.getenv("MAX_RETRIEVAL_LOOPS", "3"))
 GRAPH_ENABLED = os.getenv("GRAPH_ENABLED", "false").lower() == "true"
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 USE_GRAPH_EXPANSION = os.getenv("USE_GRAPH_EXPANSION", "false").lower() == "true"
+
+if GRAPH_ENABLED and not NEO4J_PASSWORD:
+    import warnings
+    warnings.warn(
+        "GRAPH_ENABLED is true but NEO4J_PASSWORD is empty. Set NEO4J_PASSWORD in your environment.",
+        stacklevel=2,
+    )
 
 # ============ Логирование и HITL ============
 LOG_REQUESTS = os.getenv("LOG_REQUESTS", "true").lower() == "true"
@@ -285,11 +292,19 @@ MLFLOW_ARTIFACT_ROOT = os.getenv("MLFLOW_ARTIFACT_ROOT", "s3://rag-artifacts")
 
 # MinIO
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "")
 MINIO_BUCKET = os.getenv("MINIO_BUCKET", "rag-artifacts")
 MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
 MINIO_DOCS_BUCKET = os.getenv("MINIO_DOCS_BUCKET", "rag-documents")
+
+if MODEL_EVOLUTION_ENABLED and (not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY):
+    import warnings
+    warnings.warn(
+        "MODEL_EVOLUTION_ENABLED is true but MINIO_ACCESS_KEY or MINIO_SECRET_KEY is empty. "
+        "MinIO S3 storage will fail. Set MINIO_ACCESS_KEY and MINIO_SECRET_KEY in your environment.",
+        stacklevel=2,
+    )
 
 # SSL / TLS
 SSL_VERIFY = os.getenv("SSL_VERIFY", "true").lower() == "true"

@@ -1,11 +1,11 @@
 # RAG System — Latency Benchmark Report
 
-**Generated:** 2026-07-16T06:23:24.656613+00:00
+**Generated:** 2026-07-16T07:51:08.826953+00:00
 **Host:** alexandr-narbaev-JIAOLONG-Series
 **Platform:** Linux 7.0.0-27-generic
 **Python:** 3.14.6
 **CPUs:** 32
-**Duration:** 2.71s
+**Duration:** 2.99s
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Benchmarks | 32 |
-| Passed | 32 |
+| Total Benchmarks | 33 |
+| Passed | 33 |
 | Failed | 0 |
 | Pass Rate | 100.0% |
 
@@ -26,7 +26,7 @@
 | e2e | 4 | 0 | 4 |
 | embedding | 6 | 0 | 6 |
 | graph | 3 | 0 | 3 |
-| reranking | 4 | 0 | 4 |
+| reranking | 5 | 0 | 5 |
 | retrieval | 5 | 0 | 5 |
 | scoring | 2 | 0 | 2 |
 
@@ -39,61 +39,62 @@
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
 | build context 20 | 0.011 | 0.011 | 0.015 | 20.0 | OK PASS |
-| build context 5 | 0.003 | 0.004 | 0.008 | 5.0 | OK PASS |
+| build context 5 | 0.003 | 0.004 | 0.004 | 5.0 | OK PASS |
 | chunk hash | 0.001 | 0.001 | 0.001 | 0.5 | OK PASS |
-| dedup 10 | 0.009 | 0.010 | 0.013 | 1.0 | OK PASS |
-| dedup 200 | 0.179 | 0.228 | 0.234 | 20.0 | OK PASS |
-| dedup 50 | 0.044 | 0.046 | 0.047 | 5.0 | OK PASS |
-| prepare context 15 | 0.032 | 0.033 | 0.035 | 30.0 | OK PASS |
+| dedup 10 | 0.009 | 0.012 | 0.014 | 1.0 | OK PASS |
+| dedup 200 | 0.174 | 0.177 | 0.178 | 20.0 | OK PASS |
+| dedup 50 | 0.043 | 0.050 | 0.053 | 5.0 | OK PASS |
+| prepare context 15 | 0.031 | 0.032 | 0.033 | 30.0 | OK PASS |
 | reorder 10 | 0.001 | 0.001 | 0.001 | 1.0 | OK PASS |
 ### E2E
 
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
-| chat completion non stream | 2.200 | 3.100 | 4.900 | 5000.0 | OK PASS |
-| chat completion stream | 1.300 | 1.900 | 2.100 | 5000.0 | OK PASS |
-| health live | 0.600 | 0.900 | 1.000 | 200.0 | OK PASS |
-| models list | 0.700 | 1.000 | 1.100 | 500.0 | OK PASS |
+| chat completion non stream | 2.200 | 2.800 | 3.800 | 5000.0 | OK PASS |
+| chat completion stream | 1.400 | 1.700 | 2.000 | 5000.0 | OK PASS |
+| health live | 0.700 | 0.900 | 1.600 | 200.0 | OK PASS |
+| models list | 0.600 | 1.000 | 1.700 | 500.0 | OK PASS |
 ### Embedding
 
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
-| cosine similarity 1024d | 0.046 | 0.048 | 0.049 | 0.5 | OK PASS |
-| embedding cache hit | 0.001 | 0.001 | 0.001 | 0.1 | OK PASS |
-| embedding cache miss | 0.106 | 0.159 | 0.160 | 1.0 | OK PASS |
+| cosine similarity 1024d | 0.048 | 0.053 | 0.075 | 0.5 | OK PASS |
+| embedding cache hit | 0.001 | 0.001 | 0.005 | 0.1 | OK PASS |
+| embedding cache miss | 0.106 | 0.164 | 0.171 | 1.0 | OK PASS |
 | sha256 hash | 0.002 | 0.002 | 0.002 | 0.5 | OK PASS |
-| token estimation long | 0.018 | 0.022 | 0.088 | 5.0 | OK PASS |
-| token estimation short | 0.017 | 0.020 | 0.079 | 1.0 | OK PASS |
+| token estimation long | 0.012 | 0.032 | 0.079 | 5.0 | OK PASS |
+| token estimation short | 0.012 | 0.022 | 2.525 | 1.0 | OK PASS |
 ### Graph
 
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
 | cypher generation | 0.001 | 0.002 | 0.002 | 0.5 | OK PASS |
-| global search 20 | 0.070 | 0.089 | 0.102 | 5.0 | OK PASS |
+| global search 20 | 0.001 | 0.001 | 0.001 | 5.0 | OK PASS |
 | multi hop bfs 2hops | 0.005 | 0.005 | 0.005 | 10.0 | OK PASS |
 ### Reranking
 
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
-| colbert score 20x50 | 6.343 | 7.304 | 7.625 | 50.0 | OK PASS |
-| colbert score 5x10 | 0.174 | 0.177 | 0.188 | 5.0 | OK PASS |
-| rerank cache key | 0.002 | 0.002 | 0.002 | 0.5 | OK PASS |
+| colbert score 20x50 | 6.601 | 7.241 | 7.839 | 50.0 | OK PASS |
+| colbert score 5x10 | 0.172 | 0.200 | 0.209 | 5.0 | OK PASS |
+| rerank cache key | 0.002 | 0.002 | 0.074 | 0.5 | OK PASS |
+| rerank cache key | 0.001 | 0.001 | 0.003 | 0.5 | OK PASS |
 | text truncation | 0.000 | 0.000 | 0.000 | 0.5 | OK PASS |
 ### Retrieval
 
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
 | in memory cache get | 0.000 | 0.000 | 0.001 | 0.5 | OK PASS |
-| knee point pruning 20 | 0.054 | 0.057 | 0.058 | 2.0 | OK PASS |
+| knee point pruning 20 | 0.053 | 0.054 | 0.056 | 2.0 | OK PASS |
 | rrf fusion 20 | 0.004 | 0.004 | 0.004 | 1.0 | OK PASS |
-| rrf fusion 50 | 0.010 | 0.010 | 0.010 | 2.0 | OK PASS |
+| rrf fusion 50 | 0.010 | 0.010 | 0.013 | 2.0 | OK PASS |
 | score filtering 20 | 0.001 | 0.001 | 0.001 | 1.0 | OK PASS |
 ### Scoring
 
 | Benchmark | p50 (ms) | p95 (ms) | p99 (ms) | Threshold (ms) | Status |
 |-----------|----------|----------|----------|----------------|--------|
-| dynamic top k | 0.011 | 0.014 | 0.017 | 10.0 | OK PASS |
-| time decay 20 | 0.011 | 0.015 | 0.018 | 5.0 | OK PASS |
+| dynamic top k | 0.008 | 0.009 | 0.011 | 10.0 | OK PASS |
+| time decay 20 | 0.011 | 0.016 | 0.020 | 5.0 | OK PASS |
 
 ---
 

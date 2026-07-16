@@ -154,6 +154,22 @@ CATEGORY_TESTS: dict[str, list[str]] = {
         "health_live",
         "models_list",
     ],
+    "cache": [
+        "test_embedding_cache_hit_ratio",
+        "test_rerank_cache_key_generation",
+        "test_in_memory_cache_concurrent_access",
+        "test_two_stage_reranker_cache",
+    ],
+    "concurrency": [
+        "test_concurrent_context_build",
+        "test_concurrent_rrf_fusion",
+        "test_concurrent_synthetic_requests",
+    ],
+    "memory": [
+        "test_context_build_memory_stability",
+        "test_embedding_cache_memory_bound",
+        "test_global_search_memory_with_large_graph",
+    ],
 }
 
 # Thresholds (ms) per test — p95 must be below these for pass
@@ -223,6 +239,30 @@ THRESHOLDS: dict[str, float] = {
     "chat_completion_stream": 5000.0,
     "health_live": 200.0,
     "models_list": 500.0,
+    # Cache benchmarks
+    "rerank_cache_key": 0.5,
+    "embedding_cache_hit_ratio": 0.0,  # ratio-based, not ms
+    "concurrent_cache_access": 0.0,
+    "two_stage_cache_effective": 0.0,
+    # Concurrency benchmarks
+    "concurrent_context_build": 50.0,
+    "concurrent_rrf_fusion": 50.0,
+    "concurrent_requests": 500.0,
+    # Memory benchmarks
+    "memory_stable_context": 0.0,
+    "cache_memory_bound": 0.0,
+    "global_search_1000": 50.0,
+    # New test function names
+    "test_embedding_cache_hit_ratio": 0.0,
+    "test_rerank_cache_key_generation": 0.5,
+    "test_in_memory_cache_concurrent_access": 0.0,
+    "test_two_stage_reranker_cache": 0.0,
+    "test_concurrent_context_build": 50.0,
+    "test_concurrent_rrf_fusion": 50.0,
+    "test_concurrent_synthetic_requests": 500.0,
+    "test_context_build_memory_stability": 0.0,
+    "test_embedding_cache_memory_bound": 0.0,
+    "test_global_search_memory_with_large_graph": 50.0,
 }
 
 

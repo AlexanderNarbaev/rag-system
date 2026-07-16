@@ -10,6 +10,7 @@
         etl etl-confluence etl-jira etl-gitlab \
         backup restore dashboard tui mcp-server \
         deploy deploy-prod verify-backups \
+        health-check status \
         maturity-review maturity-review-json maturity-review-save \
         export-openapi
 
@@ -127,6 +128,12 @@ restore: ## Run restore from latest backups
 
 verify-backups: ## Verify backup integrity
 	@bash $(ROOT)/scripts/ops/verify_restore.sh
+
+health-check: ## Run comprehensive health check on all services
+	@bash $(ROOT)/scripts/ops/health_check.sh
+
+status: ## Show real-time status of all services
+	@bash $(ROOT)/scripts/ops/status.sh
 
 # ── Deployment ───────────────────────────────────────────────────────────────
 deploy: ## Deploy services (dev)

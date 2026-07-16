@@ -784,7 +784,323 @@ class TestE2EPipelineBenchmarks:
 
 
 # ---------------------------------------------------------------------------
-# 8. Report Collection Fixture
+# 8. Cache & Throughput Benchmarks
+# ---------------------------------------------------------------------------
+import threading  # noqa: E402
+
+@pytest.mark.benchmark
+class TestCacheEfficiencyBenchmarks:
+    """Benchmark cache hit/miss ratios and shared access patterns."""
+
+    def test_embedding_cache_hit_ratio(self):
+        """Benchmark: embedding cache hit ratio under repeated queries."""
+        from proxy.app.core.retrieval import EmbeddingCache
+
+        cache = EmbeddingCache(max_size=500)
+        vec = _make_embedding(1024)
+
+        for i in range(500):
+            cache.set(f"query_{i}", vec)
+
+        hits, misses = 0, 0
+        for _ in range(1000):
+            key = f"query_{random.randint(0, 999)}"
+            if cache.get(key) is not None:
+                hits += 1
+            else:
+                misses += 1
+
+        hit_ratio = hits / (hits + misses) if (hits + misses) > 0 else 0
+        stats = LatencyStats(name="embedding_cache_hit_ratio")
+        stats.add(hit_ratio * 100)
+        assert hit_ratio >= 0.3, f"Cache hit ratio {hit_ratio:.1%} below 30% minimum"
+        print(f"\n  {stats.name}: hit_ratio={hit_ratio:.1%} hits={hits} misses={misses}")
+
+    def test_rerank_cache_key_generation(self):
+        """Benchmark: reranker cache key generation throughput."""
+        from proxy.app.core.rerank import _get_cache_key
+
+        query = _make_text(20)
+        chunks = [_make_text(80) for _ in range(200)]
+
+        stats = LatencyStats(name="rerank_cache_key")
+        for _ in range(WARMUP_ROUNDS):
+            _get_cache_key(query, chunks[0])
+        for _ in range(200):
+            start = time.perf_counter()
+            _get_cache_key(query, random.choice(chunks))
+            ms = (time.perf_counter() - start) * 1000
+            stats.add(ms)
+
+        assert stats.p95 < 0.5, f"rerank_cache_key p95={stats.p95:.3f}ms too high"
+        print(f"\n  {stats.name}: p50={stats.p50:.3f}ms p95={stats.p95:.3f}ms p99={stats.p99:.3f}ms (n={stats.count})")
+
+    def test_in_memory_cache_concurrent_access(self):
+        """Benchmark: concurrent cache access without data corruption."""
+        from proxy.app.core.retrieval import EmbeddingCache
+
+        cache = EmbeddingCache(max_size=1000)
+        vec = _make_embedding(1024)
+        for i in range(500):
+            cache.set(f"key_{i}", vec)
+
+        errors = []
+        results: dict[str, int] = {}
+
+        def worker(worker_id: int):
+            try:
+                for i in range(50):
+                    key = f"key_{(worker_id * 50 + i) % 500}"
+                    cache.get(key)
+                    results[key] = worker_id
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0, f"Concurrent cache access errors: {errors}"
+        stats = LatencyStats(name="concurrent_cache_access")
+        stats.add(len(results))
+        print(f"\n  {stats.name}: concurrent_threads=10 unique_keys={len(results)} errors={len(errors)}")
+
+    def test_two_stage_reranker_cache(self):
+        """Benchmark: TwoStageReranker query embedding cache effectiveness."""
+        from unittest.mock import MagicMock, patch
+
+        mock_encoder = MagicMock()
+        fake_emb = np.array([1.0] * 384, dtype=np.float32)
+        fake_emb /= np.linalg.norm(fake_emb)
+        mock_encoder.encode.return_value = fake_emb
+
+        from proxy.app.core.rerank import TwoStageReranker
+
+        with patch.object(TwoStageReranker, "_get_fast_encoder", return_value=mock_encoder):
+            reranker = TwoStageReranker(fast_model="test-model", fast_top_k=10, final_top_k=5)
+
+            query = _make_text(15)
+            docs = [_make_text(30) for _ in range(50)]
+
+            _ = reranker.fast_score(query, docs)
+            encode_count_after_cold = mock_encoder.encode.call_count
+
+            mock_encoder.encode.reset_mock()
+            scores2 = reranker.fast_score(query, docs)
+            encode_count_after_warm = mock_encoder.encode.call_count
+
+            query2 = _make_text(15)
+            mock_encoder.encode.reset_mock()
+            scores3 = reranker.fast_score(query2, docs)
+            encode_count_after_new_query = mock_encoder.encode.call_count
+
+            assert encode_count_after_warm == 0, f"Expected 0 encodes on cache hit, got {encode_count_after_warm}"
+            assert len(scores2) == len(docs)
+            assert len(scores3) == len(docs)
+
+            cache_effectiveness = 1.0 - (encode_count_after_new_query / (encode_count_after_cold or 1))
+            stats = LatencyStats(name="two_stage_cache_effective")
+            stats.add(cache_effectiveness * 100)
+            print(f"\n  {stats.name}: cold_encodes={encode_count_after_cold} warm_encodes={encode_count_after_warm} new_query_encodes={encode_count_after_new_query} effectiveness={cache_effectiveness:.1%}")
+
+
+@pytest.mark.benchmark
+class TestConcurrencyBenchmarks:
+    """Benchmark concurrent request handling and throughput."""
+
+    def test_concurrent_context_build(self):
+        """Benchmark: concurrent context building without data corruption."""
+        from proxy.app.core.context.builder import build_context
+
+        chunks = _make_scored_chunks(20)
+
+        errors = []
+        results = []
+
+        def worker():
+            try:
+                ctx = build_context(chunks.copy(), max_tokens=4000)
+                results.append(len(ctx))
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=worker) for _ in range(5)]
+        start = time.perf_counter()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        elapsed = (time.perf_counter() - start) * 1000
+
+        assert len(errors) == 0, f"Concurrent context build errors: {errors}"
+        stats = LatencyStats(name="concurrent_context_build")
+        stats.add(elapsed)
+        print(f"\n  {stats.name}: total_ms={elapsed:.1f} threads=5 contexts={len(results)} errors={len(errors)}")
+
+    def test_concurrent_rrf_fusion(self):
+        """Benchmark: concurrent RRF fusion operations."""
+        from proxy.app.core.retrieval import reciprocal_rank_fusion
+
+        def make_fake_hits(n: int, prefix: str) -> list[Any]:
+            return [_FakeHit(f"{prefix}_{i}", random.uniform(0.1, 0.9)) for i in range(n)]
+
+        errors = []
+
+        def worker():
+            try:
+                dense = make_fake_hits(50, "d")
+                sparse = make_fake_hits(50, "s")
+                _ = reciprocal_rank_fusion(dense, sparse)
+            except Exception as e:
+                errors.append(str(e))
+
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        start = time.perf_counter()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        elapsed = (time.perf_counter() - start) * 1000
+
+        assert len(errors) == 0, f"Concurrent RRF errors: {errors}"
+        stats = LatencyStats(name="concurrent_rrf_fusion")
+        stats.add(elapsed)
+        print(f"\n  {stats.name}: total_ms={elapsed:.1f} threads=20 errors={len(errors)}")
+
+    def test_concurrent_synthetic_requests(self):
+        """Benchmark: simulate concurrent requests through the E2E pipeline."""
+        payload = {
+            "model": "rag-proxy",
+            "messages": [{"role": "user", "content": "Test concurrent request."}],
+            "stream": False,
+        }
+
+        latency_samples: list[float] = []
+        lock = threading.Lock()
+
+        def worker(client: TestClient):
+            start = time.perf_counter()
+            try:
+                resp = client.post("/v1/chat/completions", json=payload)
+                ms = (time.perf_counter() - start) * 1000
+                with lock:
+                    latency_samples.append(ms)
+                assert resp.status_code == 200
+            except Exception:
+                pass
+
+        from fastapi.testclient import TestClient as TC
+
+        clients = [TC(app) for _ in range(5)]
+        threads = [threading.Thread(target=worker, args=(c,)) for c in clients]
+
+        overall_start = time.perf_counter()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        elapsed = (time.perf_counter() - overall_start) * 1000
+
+        for c in clients:
+            c.close()
+
+        stats = LatencyStats(name="concurrent_requests")
+        if latency_samples:
+            for s in latency_samples:
+                stats.add(s)
+
+        throughput = len(latency_samples) / (elapsed / 1000) if elapsed > 0 else 0
+        print(f"\n  {stats.name}: total_ms={elapsed:.1f} threads=5 requests_completed={len(latency_samples)} throughput={throughput:.1f} req/s")
+        assert len(latency_samples) == 5, f"Expected 5 responses, got {len(latency_samples)}"
+
+
+@pytest.mark.benchmark
+class TestMemoryBenchmarks:
+    """Benchmark memory usage patterns under sustained load."""
+
+    def test_context_build_memory_stability(self):
+        """Benchmark: memory stability during repeated context builds."""
+        import gc
+
+        from proxy.app.core.context.builder import build_context
+
+        gc.collect()
+
+        chunks = _make_scored_chunks(50)
+        iterations = 100
+
+        for _ in range(10):
+            _ = build_context(chunks.copy(), max_tokens=8000)
+
+        gc.collect()
+
+        results = []
+        for _ in range(iterations):
+            ctx = build_context(chunks.copy(), max_tokens=8000)
+            results.append(len(ctx))
+
+        gc.collect()
+
+        stats = LatencyStats(name="memory_stable_context")
+        stats.add(len(results))
+        assert len(results) == iterations, f"Expected {iterations} builds, got {len(results)}"
+        print(f"\n  {stats.name}: iterations={iterations} avg_len={sum(results)//len(results) if results else 0}")
+
+    def test_embedding_cache_memory_bound(self):
+        """Benchmark: embedding cache does not grow unbounded."""
+        from proxy.app.core.retrieval import EmbeddingCache
+
+        cache = EmbeddingCache(max_size=200)
+        vec = _make_embedding(1024)
+
+        for i in range(1000):
+            cache.set(f"overflow_key_{i}", vec)
+            if i % 100 == 0:
+                assert len(cache) <= 200, f"Cache exceeded max_size: {len(cache)}"
+
+        stats = LatencyStats(name="cache_memory_bound")
+        stats.add(len(cache))
+        assert len(cache) <= 200, f"Cache grew to {len(cache)} beyond max_size=200"
+        print(f"\n  {stats.name}: cache_size={len(cache)} after 1000 inserts (max=200)")
+
+    def test_global_search_memory_with_large_graph(self):
+        """Benchmark: global search memory usage with 1000 communities."""
+        from proxy.app.core.retrieval import GlobalSearch
+
+        summaries = [
+            {
+                "id": f"com_{i}",
+                "summary": _make_text(random.randint(20, 80)),
+                "key_entities": [f"entity_{i}_{j}" for j in range(5)],
+                "members": [f"member_{i}_{j}" for j in range(3)],
+            }
+            for i in range(1000)
+        ]
+
+        start = time.perf_counter()
+        searcher = GlobalSearch(summaries)
+        index_build_ms = (time.perf_counter() - start) * 1000
+
+        query = _make_text(15)
+        results = []
+        for _ in range(20):
+            start = time.perf_counter()
+            r = searcher.search(query, top_k=5)
+            search_ms = (time.perf_counter() - start) * 1000
+            results.append(search_ms)
+
+        stats = LatencyStats(name="global_search_1000")
+        for r in results:
+            stats.add(r)
+
+        assert stats.p95 < 50, f"Global search p95={stats.p95:.1f}ms too high for 1000 communities"
+        print(f"\n  {stats.name}: index_build={index_build_ms:.1f}ms search_p50={stats.p50:.3f}ms search_p95={stats.p95:.3f}ms (n={len(results)})")
+
+
+# ---------------------------------------------------------------------------
+# 9. Report Collection Fixture
 # ---------------------------------------------------------------------------
 
 

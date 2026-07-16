@@ -150,24 +150,28 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
         # Подготовка пар (запрос, чанк)
         pairs = [(query, chunk) for chunk in truncated_chunks]
 
-        # Получение скоров с кэшированием
-        scores: list[float] = []
+        # Получение скоров с кэшированием — incremental cache
+        scores: list[float] = [0.0] * len(pairs)
         if use_cache and cache_manager:
-            all_cached = True
-            for _i, (q, c) in enumerate(pairs):
+            cached_count = 0
+            uncached_indices: list[int] = []
+            for i, (q, c) in enumerate(pairs):
                 cache_key = _get_cache_key(q, c)
                 cached = cache_manager.get_sync(cache_key)
                 if cached is not None:
-                    scores.append(float(cached))
+                    scores[i] = float(cached)
+                    cached_count += 1
                 else:
-                    all_cached = False
-                    break
-            if not all_cached:
-                scores = _call_reranker_safe(pairs)
-                add_event("rag.rerank.computed", {"num_pairs": len(pairs)})
-                for i, (q, c) in enumerate(pairs):
-                    cache_key = _get_cache_key(q, c)
-                    cache_manager.set_sync(cache_key, str(scores[i]), ttl=3600)
+                    uncached_indices.append(i)
+
+            if uncached_indices:
+                uncached_pairs = [pairs[j] for j in uncached_indices]
+                computed = _call_reranker_safe(uncached_pairs)
+                add_event("rag.rerank.computed", {"num_pairs": len(uncached_pairs), "cache_hits": cached_count})
+                for idx, j in enumerate(uncached_indices):
+                    scores[j] = computed[idx]
+                    cache_key = _get_cache_key(*pairs[j])
+                    cache_manager.set_sync(cache_key, str(computed[idx]), ttl=3600)
             else:
                 add_event("rag.rerank.cache_hit", {"num_pairs": len(pairs)})
         else:
@@ -319,6 +323,8 @@ class TwoStageReranker:
         self.final_top_k = final_top_k
         self._fast_encoder: Any = None
         self._cross_encoder: Any = None
+        self._query_embed_cache: dict[str, Any] = {}
+        self._doc_embed_cache: dict[str, Any] = {}
 
     def _get_fast_encoder(self) -> Any:
         """Lazy-load fast embedding model."""
@@ -336,19 +342,42 @@ class TwoStageReranker:
         """
         Stage 1: Fast embedding-based scoring.
         Uses cosine similarity between query and document embeddings.
+        Caches query and document embeddings to avoid re-encoding.
         """
         encoder = self._get_fast_encoder()
         if encoder is None:
-            # Fallback: return uniform scores
             return [0.5] * len(documents)
 
         try:
-            query_emb = encoder.encode(query, normalize_embeddings=True)
-            doc_embs = encoder.encode(documents, normalize_embeddings=True)
+            if query in self._query_embed_cache:
+                query_emb = self._query_embed_cache[query]
+            else:
+                query_emb = encoder.encode(query, normalize_embeddings=True)
+                self._query_embed_cache[query] = query_emb
+                if len(self._query_embed_cache) > 256:
+                    self._query_embed_cache.pop(next(iter(self._query_embed_cache)))
 
-            # Cosine similarity
+            doc_embs_list = []
+            uncached_indices: list[int] = []
+            uncached_docs: list[str] = []
+            for i, doc in enumerate(documents):
+                if doc in self._doc_embed_cache:
+                    doc_embs_list.append(self._doc_embed_cache[doc])
+                else:
+                    doc_embs_list.append(None)
+                    uncached_indices.append(i)
+                    uncached_docs.append(doc)
+
+            if uncached_docs:
+                new_embs = encoder.encode(uncached_docs, normalize_embeddings=True)
+                for j, idx in enumerate(uncached_indices):
+                    doc_embs_list[idx] = new_embs[j]
+                    if len(self._doc_embed_cache) < 1024:
+                        self._doc_embed_cache[uncached_docs[j]] = new_embs[j]
+
             import numpy as np
 
+            doc_embs = np.stack(doc_embs_list)
             scores: list[float] = np.dot(doc_embs, query_emb).tolist()
             return scores
         except Exception as e:

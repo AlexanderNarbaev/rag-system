@@ -149,7 +149,14 @@ class SecurityHeaders:
         "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block",
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-        "Content-Security-Policy": "default-src 'self'",
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "connect-src 'self' ws: wss:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'"
+        ),
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
         "Cache-Control": "no-store, no-cache, must-revalidate",
@@ -169,6 +176,36 @@ class SecurityHeaders:
         if extra:
             headers.update(extra)
         return headers
+
+
+class PasswordStrengthValidator:
+    """Validates password strength against corporate security policy."""
+
+    MIN_LENGTH = 10
+    MAX_LENGTH = 128
+    _UPPER_RE = re.compile(r"[A-Z]")
+    _LOWER_RE = re.compile(r"[a-z]")
+    _DIGIT_RE = re.compile(r"\d")
+    _SPECIAL_RE = re.compile(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]")
+
+    @classmethod
+    def validate(cls, password: str) -> tuple[bool, str | None]:
+        """Validate password strength. Returns (valid, error_message)."""
+        if not isinstance(password, str):
+            return False, "Password must be a string"
+        if len(password) < cls.MIN_LENGTH:
+            return False, f"Password must be at least {cls.MIN_LENGTH} characters"
+        if len(password) > cls.MAX_LENGTH:
+            return False, f"Password must be at most {cls.MAX_LENGTH} characters"
+        if not cls._UPPER_RE.search(password):
+            return False, "Password must contain at least one uppercase letter"
+        if not cls._LOWER_RE.search(password):
+            return False, "Password must contain at least one lowercase letter"
+        if not cls._DIGIT_RE.search(password):
+            return False, "Password must contain at least one digit"
+        if not cls._SPECIAL_RE.search(password):
+            return False, "Password must contain at least one special character"
+        return True, None
 
 
 class DependencyScanner:
@@ -241,4 +278,4 @@ class DependencyScanner:
         return findings
 
 
-__all__ = ["InputValidator", "SecretsManager", "SecurityHeaders", "DependencyScanner"]
+__all__ = ["InputValidator", "SecretsManager", "SecurityHeaders", "DependencyScanner", "PasswordStrengthValidator"]

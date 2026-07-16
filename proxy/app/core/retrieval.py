@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from math import exp
 from typing import Any, cast
@@ -199,6 +200,9 @@ class EmbeddingCache:
 
             # Trim semantic cache
             self._query_embeddings = self._query_embeddings[-self.max_size :]
+
+    def __len__(self) -> int:
+        return len(self._exact_cache)
 
 
 # Global embedding cache instance
@@ -453,8 +457,13 @@ def hybrid_search(
 
     q_filter = models.Filter(must=list(filter_conditions)) if filter_conditions else None
 
-    # Dense поиск
-    dense_vec = _compute_dense_embedding(query)
+    # Dense + Sparse embeddings computed in parallel
+    sparse_vec = None
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        dense_future = executor.submit(_compute_dense_embedding, query)
+        sparse_future = executor.submit(_compute_sparse_embedding, query)
+        dense_vec = dense_future.result()
+        sparse_vec = sparse_future.result()
     assert qdrant_client is not None, "qdrant_client must be initialized"
     _qc = qdrant_client
     _dense_vector_name = _get_dense_vector_name(_qc)
@@ -479,8 +488,7 @@ def hybrid_search(
         dense_results = dense_response.points
 
     # Sparse поиск (если поддерживается)
-    sparse_vec = _compute_sparse_embedding(query)
-    sparse_results = []
+    sparse_results: list[Any] = []
     if sparse_vec is not None:
         if _get_cb is not None:
             try:
@@ -814,6 +822,15 @@ class GlobalSearch:
 
     def __init__(self, community_summaries: list[dict[str, Any]] | None = None):
         self.community_summaries = community_summaries or []
+        self._word_index: dict[str, set[int]] = {}
+        self._build_index()
+
+    def _build_index(self) -> None:
+        """Pre-compute word → community index for fast overlap scoring."""
+        for i, community in enumerate(self.community_summaries):
+            summary = community.get("summary", "")
+            for word in summary.lower().split():
+                self._word_index.setdefault(word, set()).add(i)
 
     def search(
         self,
@@ -828,29 +845,36 @@ class GlobalSearch:
         if not self.community_summaries:
             return []
 
-        # Score communities by keyword overlap
         query_words = set(query.lower().split())
+
+        # Score communities using pre-computed word index
+        community_hits: dict[int, int] = {}
+        for word in query_words:
+            if word in self._word_index:
+                for idx in self._word_index[word]:
+                    community_hits[idx] = community_hits.get(idx, 0) + 1
+
+        if not community_hits:
+            return []
+
+        # Sort by overlap count, take top_k * 2 candidates for detailed scoring
+        num_query_words = max(len(query_words), 1)
+        candidates = sorted(community_hits, key=lambda x: community_hits[x], reverse=True)[: top_k * 2]
+
         scored = []
+        for idx in candidates:
+            community = self.community_summaries[idx]
+            score = community_hits[idx] / num_query_words
+            scored.append(
+                {
+                    "community_id": community.get("id", ""),
+                    "summary": community.get("summary", ""),
+                    "key_entities": community.get("key_entities", []),
+                    "score": score,
+                    "members": community.get("members", []),
+                }
+            )
 
-        for community in self.community_summaries:
-            summary = community.get("summary", "")
-            summary_words = set(summary.lower().split())
-
-            # Calculate overlap
-            overlap = len(query_words & summary_words)
-            if overlap > 0:
-                score = overlap / max(len(query_words), 1)
-                scored.append(
-                    {
-                        "community_id": community.get("id", ""),
-                        "summary": summary,
-                        "key_entities": community.get("key_entities", []),
-                        "score": score,
-                        "members": community.get("members", []),
-                    }
-                )
-
-        # Sort by score
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
 

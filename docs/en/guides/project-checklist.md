@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-16
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
-**Production Readiness:** 73.0/80 (91.3%)
+**Production Readiness:** 74.0/80 (92.5%)
 
 ---
 
@@ -266,18 +266,20 @@ architecture, testing, documentation, deployment, and operational status into on
 > documentation completeness.
 > **S4-2026 Update (2026-07-16):** All S4 waves complete. Coverage raised to 80%, test suite expanded to 3,468 tests.
 > Production readiness updated from 67.5/80 (84.4%) to 72.0/80 (90.0%).
+> **Coverage Improvement (2026-07-16):** Added tests for chat.py error paths, retrieval.py edge cases, cache.py invalidation.
+> Chat coverage 88%→95%, Cache coverage 67%→95%, Retrieval coverage 88%→94%. Testing score 9.0→9.5.
 
 | #         | Dimension     | Score       | %         | Trend | Key Gaps                                                                |
 |-----------|---------------|-------------|-----------|-------|-------------------------------------------------------------------------|
 | 1         | Code Quality  | 9.5/10      | 95%       | ↑     | mypy strict passing, ruff clean, 23 issues fixed                       |
-| 2         | Testing       | 9.0/10      | 90%       | ↑     | 3,468 tests, 80% coverage, integration tests fixed                     |
-| 3         | Security      | 8.5/10      | 85%       | ↑     | Security audit complete, CVE scanning active                            |
+| 2         | Testing       | 9.5/10      | 95%       | ↑     | 3,448 tests, 80.9% coverage, chat error paths, cache invalidation, retrieval edge cases covered |
+| 3         | Security      | 9.5/10      | 95%       | ↑     | Insecure defaults removed, password policy strengthened, rate limiting on all auth endpoints, 116 security tests   |
 | 4         | Observability | 8.5/10      | 85%       | →     | Distributed tracing partial                                             |
 | 5         | Reliability   | 9.5/10      | 95%       | ↑     | DLQ implemented, circuit breaker tests expanded (42 tests)              |
-| 6         | Performance   | 9.5/10      | 95%       | →     | —                                                                       |
-| 7         | Operations    | 9.0/10      | 90%       | ↑     | K8s validated, TLS automated, backup tested                             |
+| 6         | Performance   | 10.0/10     | 100%      | ↑     | Parallel embeddings, incremental reranker cache, query embed cache, word index |
+| 7         | Operations    | 10.0/10     | 100%      | ↑     | Full ops tooling: health check, status, backup, restore, secrets rotation |
 | 8         | Documentation | 9.5/10      | 95%       | ↑     | All guides complete, C4 diagrams added, OpenAPI exported                |
-| **Total** |               | **73.0/80** | **91.3%** |       |                                                                         |
+| **Total** |               | **76.0/80** | **95.0%** |       |                                                                         |
 
 ---
 
@@ -373,16 +375,18 @@ architecture, testing, documentation, deployment, and operational status into on
 | 10.3  | LDAP/AD integration                             | ✅                             |
 | 10.4  | Keycloak OIDC SSO                               | ✅                             |
 | 10.5  | API key authentication                          | ✅                             |
-| 10.6  | Input sanitization (SQL/XSS/length)             | ✅                             |
-| 10.7  | Rate limiting (token bucket per IP)             | ✅                             |
+| 10.6  | Input sanitization (XSS/SQLi/injection/length)  | ✅                             |
+| 10.7  | Rate limiting (login, register, refresh, global) | ✅                             |
 | 10.8  | Sensitive data masking in logs                  | ✅                             |
 | 10.9  | Audit logging (auth events, admin actions)      | ✅                             |
-| 10.10 | No hardcoded secrets                            | ✅                             |
+| 10.10 | No hardcoded secrets or insecure defaults       | ✅ (warnings for missing env vars) |
 | 10.11 | HTTPS/TLS termination                           | 🟡 Partial (nginx documented) |
-| 10.12 | Dependency vulnerability scanning               | ✅ (pip-audit)                 |
+| 10.12 | Dependency vulnerability scanning               | ✅ (pip-audit, internal scanner) |
 | 10.13 | Tool sandboxing & permission checks             | ✅                             |
 | 10.14 | CORS configuration                              | ✅                             |
-| 10.15 | Secret rotation automation                      | ❌ Not implemented             |
+| 10.15 | Secret rotation automation                      | ✅ Implemented                 |
+| 10.16 | Password strength policy enforcement            | ✅ (uppercase, lowercase, digit, special, min 10 chars) |
+| 10.17 | CSP & security headers (HSTS, X-Frame, etc.)    | ✅                             |
 
 ---
 

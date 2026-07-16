@@ -18,8 +18,8 @@ class TestModelEvolutionConfigDefaults:
 
     def test_minio_vars_default(self):
         assert config_module.MINIO_ENDPOINT == "localhost:9000"
-        assert config_module.MINIO_ACCESS_KEY == "minioadmin"
-        assert config_module.MINIO_SECRET_KEY == "minioadmin"
+        assert config_module.MINIO_ACCESS_KEY == ""
+        assert config_module.MINIO_SECRET_KEY == ""
         assert config_module.MINIO_BUCKET == "rag-artifacts"
         assert config_module.MINIO_SECURE is False
 
