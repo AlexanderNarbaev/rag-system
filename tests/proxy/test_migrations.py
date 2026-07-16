@@ -1,14 +1,14 @@
 # ruff: noqa: E501, SIM117, E402, N817
 """Tests for proxy/app/db/migrations.py — Database migration framework."""
 
-import asyncio
-import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
 
+# We need access to the global registry to clean it up
+import proxy.app.db.migrations as migrations_mod
 from proxy.app.db.migrations import (
     MigrationInfo,
     MigrationManager,
@@ -19,9 +19,6 @@ from proxy.app.db.migrations import (
     get_registered_migrations,
     register_migration,
 )
-
-# We need access to the global registry to clean it up
-import proxy.app.db.migrations as migrations_mod
 
 
 class _AsyncContextManager:

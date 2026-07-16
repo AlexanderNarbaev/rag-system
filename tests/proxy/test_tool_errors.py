@@ -1,8 +1,6 @@
 # ruff: noqa: E501
 """Tests for proxy/app/tools/errors.py — Tool error taxonomy."""
 
-import pytest
-
 from proxy.app.shared.exceptions import RAGError
 from proxy.app.tools.errors import (
     ToolDependencyError,

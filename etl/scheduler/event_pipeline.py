@@ -32,8 +32,9 @@ import asyncio
 import logging
 import signal
 import sys
+from contextlib import suppress
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +47,7 @@ logging.basicConfig(
 logger = logging.getLogger("EventPipeline")
 
 
-class PipelineState(str, Enum):
+class PipelineState(StrEnum):
     """Lifecycle states for the event pipeline."""
 
     IDLE = "idle"
@@ -326,10 +327,8 @@ class EventPipeline:
         # Cancel consumer task
         if self._consumer_task and not self._consumer_task.done():
             self._consumer_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._consumer_task
-            except asyncio.CancelledError:
-                pass
 
         # Stop webhook server
         if self._webhook_server:

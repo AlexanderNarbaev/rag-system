@@ -13,8 +13,6 @@ import pytest_asyncio
 from proxy.app.auth.secret_rotation import (
     DEFAULT_API_KEY_OVERLAP_SECONDS,
     DEFAULT_JWT_GRACE_SECONDS,
-    ROTATION_SIGNAL_FILE,
-    ROTATION_STATE_DIR,
     EC_CURVE,
     RSA_KEY_SIZE,
     JWTKeyPair,
@@ -24,7 +22,6 @@ from proxy.app.auth.secret_rotation import (
     SecretType,
     get_rotation_manager,
 )
-
 
 # ── Data Model Tests ──────────────────────────────────────────────────────────
 
@@ -286,7 +283,15 @@ class TestEnsureInitialized:
 class TestGenerateJWTKeyPair:
     def test_generates_hs256_fallback(self):
         """When cryptography is not available, should fall back to HS256."""
-        with patch.dict("sys.modules", {"cryptography": None, "cryptography.hazmat": None, "cryptography.hazmat.primitives": None, "cryptography.hazmat.primitives.asymmetric": None}):
+        with patch.dict(
+            "sys.modules",
+            {
+                "cryptography": None,
+                "cryptography.hazmat": None,
+                "cryptography.hazmat.primitives": None,
+                "cryptography.hazmat.primitives.asymmetric": None,
+            },
+        ):
             kp = SecretRotationManager._generate_jwt_key_pair("RS256")
             assert kp.algorithm == "HS256"
             assert kp.key_id.startswith("key_")

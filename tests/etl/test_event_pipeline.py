@@ -1,7 +1,6 @@
 # tests/etl/test_event_pipeline.py
 """Tests for EventPipeline — event-driven streaming pipeline orchestrator."""
 
-import asyncio
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -361,10 +360,10 @@ class TestComponentCreation:
         pipeline = EventPipeline(minimal_config)
         pipeline._redis_client = MagicMock()
 
-        with patch("etl.scheduler.stream_consumer.StreamConsumer") as MockConsumer:
-            MockConsumer.return_value = MagicMock()
+        with patch("etl.scheduler.stream_consumer.StreamConsumer") as mock_consumer:
+            mock_consumer.return_value = MagicMock()
             consumer = pipeline._create_consumer()
-            MockConsumer.assert_called_once()
+            mock_consumer.assert_called_once()
             assert consumer is not None
 
     def test_create_producer_imports_stream_producer(self, minimal_config):
@@ -373,10 +372,10 @@ class TestComponentCreation:
         pipeline = EventPipeline(minimal_config)
         pipeline._redis_client = MagicMock()
 
-        with patch("etl.scheduler.stream_producer.StreamProducer") as MockProducer:
-            MockProducer.return_value = MagicMock()
+        with patch("etl.scheduler.stream_producer.StreamProducer") as mock_producer:
+            mock_producer.return_value = MagicMock()
             producer = pipeline._create_producer()
-            MockProducer.assert_called_once()
+            mock_producer.assert_called_once()
             assert producer is not None
 
     def test_create_webhook_app_imports_webhook_server(self, minimal_config):

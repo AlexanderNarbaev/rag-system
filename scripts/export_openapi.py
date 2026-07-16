@@ -479,13 +479,7 @@ def main() -> int:
 
     info = spec.get("info", {})
     paths = spec.get("paths", {})
-    total_ops = sum(
-        1
-        for p in paths.values()
-        if isinstance(p, dict)
-        for m in OPERATION_METHODS
-        if p.get(m) is not None
-    )
+    total_ops = sum(1 for p in paths.values() if isinstance(p, dict) for m in OPERATION_METHODS if p.get(m) is not None)
     print(f"  → OpenAPI {spec.get('openapi')}")
     print(f"  → {info.get('title')} v{info.get('version')}")
     print(f"  → {len(paths)} paths, {total_ops} operations")
