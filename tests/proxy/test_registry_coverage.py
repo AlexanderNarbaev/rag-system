@@ -1,29 +1,37 @@
 """Targeted coverage tests for registry.py uncovered paths."""
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy" / "app"))
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from tools.definition import ToolDefinition, ToolParam, ToolVisibility
 from tools.registry import EnhancedToolRegistry, SDKProvider
 
 
-def _make_tool(name, description="Test tool", handler=None, async_handler=None,
-               parameters=None, visibility=ToolVisibility.PUBLIC):
+def _make_tool(
+    name, description="Test tool", handler=None, async_handler=None, parameters=None, visibility=ToolVisibility.PUBLIC
+):
     if parameters is None:
         parameters = [ToolParam(name="query", type=str, description="Query")]
     if handler is None:
+
         def handler(**kw):
             return f"Result: {kw}"
+
     return ToolDefinition(
-        name=name, description=description, parameters=parameters,
-        handler=handler, async_handler=async_handler,
-        category="general", tags=[], visibility=visibility, provider="sdk",
+        name=name,
+        description=description,
+        parameters=parameters,
+        handler=handler,
+        async_handler=async_handler,
+        category="general",
+        tags=[],
+        visibility=visibility,
+        provider="sdk",
     )
 
 
@@ -38,11 +46,13 @@ class TestDiscoverAll:
         mock_sdk.provider_name = "sdk"
         mock_sdk.discover = AsyncMock(return_value=[])
 
-        with patch("tools.registry.SDKProvider", return_value=mock_sdk):
-            with patch("proxy.app.shared.config.TOOLS_DECLARATIVE_DIR", "/nonexistent"):
-                with patch("proxy.app.shared.config.TOOLS_OPENAPI_SPECS", []):
-                    with patch("os.path.isdir", return_value=False):
-                        result = await registry.discover_all()
+        with (
+            patch("tools.registry.SDKProvider", return_value=mock_sdk),
+            patch("proxy.app.shared.config.TOOLS_DECLARATIVE_DIR", "/nonexistent"),
+            patch("proxy.app.shared.config.TOOLS_OPENAPI_SPECS", []),
+            patch("os.path.isdir", return_value=False),
+        ):
+            result = await registry.discover_all()
 
         assert "sdk" in result
 
@@ -54,11 +64,13 @@ class TestDiscoverAll:
         mock_sdk.provider_name = "sdk"
         mock_sdk.discover = AsyncMock(side_effect=RuntimeError("fail"))
 
-        with patch("tools.registry.SDKProvider", return_value=mock_sdk):
-            with patch("proxy.app.shared.config.TOOLS_DECLARATIVE_DIR", "/nonexistent"):
-                with patch("proxy.app.shared.config.TOOLS_OPENAPI_SPECS", []):
-                    with patch("os.path.isdir", return_value=False):
-                        result = await registry.discover_all()
+        with (
+            patch("tools.registry.SDKProvider", return_value=mock_sdk),
+            patch("proxy.app.shared.config.TOOLS_DECLARATIVE_DIR", "/nonexistent"),
+            patch("proxy.app.shared.config.TOOLS_OPENAPI_SPECS", []),
+            patch("os.path.isdir", return_value=False),
+        ):
+            result = await registry.discover_all()
 
         assert result["sdk"] == []
 
@@ -133,8 +145,10 @@ class TestExecuteEdgeCases:
             return 99
 
         tool = _make_tool(
-            name="async_int", handler=lambda **kw: "sync",
-            async_handler=handler, parameters=[],
+            name="async_int",
+            handler=lambda **kw: "sync",
+            async_handler=handler,
+            parameters=[],
         )
         registry.register(tool)
         result = await registry.execute_async("async_int", {})
@@ -153,7 +167,8 @@ class TestValidateToolEdge:
     def test_validate_duplicate_params(self):
         registry = EnhancedToolRegistry()
         tool = _make_tool(
-            name="dup", description="has dups",
+            name="dup",
+            description="has dups",
             parameters=[ToolParam(name="q", type=str), ToolParam(name="q", type=int)],
         )
         issues = registry.validate_tool(tool)
@@ -167,7 +182,8 @@ class TestDependencyGraph:
         registry = EnhancedToolRegistry()
         t1 = _make_tool(name="tool1")
         t2 = ToolDefinition(
-            name="tool2", description="dep tool",
+            name="tool2",
+            description="dep tool",
             parameters=[ToolParam(name="q", type=str)],
             handler=lambda **kw: "ok",
             depends_on=["tool1"],

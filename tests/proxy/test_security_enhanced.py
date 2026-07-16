@@ -106,10 +106,12 @@ class TestSecurityHeadersCompleteness:
         assert len(headers) >= 14
 
     def test_extra_headers_override(self):
-        headers = SecurityHeaders.get_headers(extra={
-            "X-Frame-Options": "SAMEORIGIN",
-            "Cache-Control": "public, max-age=60",
-        })
+        headers = SecurityHeaders.get_headers(
+            extra={
+                "X-Frame-Options": "SAMEORIGIN",
+                "Cache-Control": "public, max-age=60",
+            }
+        )
         assert headers["X-Frame-Options"] == "SAMEORIGIN"
         assert headers["Cache-Control"] == "public, max-age=60"
 
@@ -929,6 +931,7 @@ class TestSecurityHeadersMiddleware:
         @app.get("/test")
         async def test_endpoint():
             from fastapi.responses import PlainTextResponse
+
             return PlainTextResponse("ok")
 
         client = TestClient(app)
@@ -955,6 +958,7 @@ class TestSecurityHeadersMiddleware:
         @app.get("/custom")
         async def custom_endpoint():
             from fastapi.responses import Response
+
             return Response("ok", headers={"X-Frame-Options": "SAMEORIGIN"})
 
         client = TestClient(app)
@@ -979,6 +983,7 @@ class TestInputSanitizationMiddleware:
         @app.get("/search")
         async def search(q: str = ""):
             from fastapi.responses import PlainTextResponse
+
             return PlainTextResponse(q)
 
         client = TestClient(app)

@@ -129,7 +129,6 @@ class TestRedisCacheSyncWrappers:
     def test__get_sync_client_import_error(self):
         """When redis package is not installed, ImportError propagates."""
         import builtins
-        import sys
 
         cache = RedisCache("redis://localhost")
         original_import = builtins.__import__

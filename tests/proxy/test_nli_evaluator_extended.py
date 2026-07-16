@@ -1,13 +1,10 @@
 """Extended tests for proxy/app/model_evolution/nli_evaluator.py — remaining paths."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from proxy.app.model_evolution.nli_evaluator import (
     NLIEvaluationResult,
     _check_claim_nli,
-    _load_nli_model,
     evaluate_nli,
     evaluate_nli_batch,
     get_nli_load_error,
@@ -138,27 +135,35 @@ class TestNLIResultAsMetrics:
 
 class TestIsNLIModelAvailable:
     def test_model_not_loaded_returns_false(self):
-        with patch("proxy.app.model_evolution.nli_evaluator._NLI_MODEL", None), \
-             patch("proxy.app.model_evolution.nli_evaluator._NLI_TOKENIZER", None), \
-             patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"):
+        with (
+            patch("proxy.app.model_evolution.nli_evaluator._NLI_MODEL", None),
+            patch("proxy.app.model_evolution.nli_evaluator._NLI_TOKENIZER", None),
+            patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"),
+        ):
             assert is_nli_model_available() is False
 
     def test_model_loaded_returns_true(self):
-        with patch("proxy.app.model_evolution.nli_evaluator._NLI_MODEL", "mock_model"), \
-             patch("proxy.app.model_evolution.nli_evaluator._NLI_TOKENIZER", "mock_tokenizer"), \
-             patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"):
+        with (
+            patch("proxy.app.model_evolution.nli_evaluator._NLI_MODEL", "mock_model"),
+            patch("proxy.app.model_evolution.nli_evaluator._NLI_TOKENIZER", "mock_tokenizer"),
+            patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"),
+        ):
             assert is_nli_model_available() is True
 
 
 class TestGetNLILoadError:
     def test_load_error_string(self):
-        with patch("proxy.app.model_evolution.nli_evaluator._NLI_LOAD_ERROR", "torch not installed"), \
-             patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"):
+        with (
+            patch("proxy.app.model_evolution.nli_evaluator._NLI_LOAD_ERROR", "torch not installed"),
+            patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"),
+        ):
             assert get_nli_load_error() == "torch not installed"
 
     def test_load_error_none(self):
-        with patch("proxy.app.model_evolution.nli_evaluator._NLI_LOAD_ERROR", None), \
-             patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"):
+        with (
+            patch("proxy.app.model_evolution.nli_evaluator._NLI_LOAD_ERROR", None),
+            patch("proxy.app.model_evolution.nli_evaluator._load_nli_model"),
+        ):
             assert get_nli_load_error() is None
 
 

@@ -1,8 +1,7 @@
 """Tests for proxy/app/tools/openapi/ — enhanced coverage for discovery and converter."""
 
 import json
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -83,7 +82,9 @@ class TestOpenAPIDiscoveryEnhanced:
         spec_file = tmp_path / "openapi.yaml"
         spec_file.write_text("openapi: '3.0.0'\ninfo:\n  title: Test\n  version: '1.0'\npaths: {}\n")
 
-        with patch("yaml.safe_load", return_value={"openapi": "3.0.0", "info": {"title": "T", "version": "1.0"}, "paths": {}}):
+        with patch(
+            "yaml.safe_load", return_value={"openapi": "3.0.0", "info": {"title": "T", "version": "1.0"}, "paths": {}}
+        ):
             discovery = OpenAPIDiscovery()
             tools = discovery.discover_from_file(str(spec_file), mode=DiscoveryMode.AUTO)
             assert isinstance(tools, list)
@@ -94,7 +95,9 @@ class TestOpenAPIDiscoveryEnhanced:
         spec_file = tmp_path / "openapi.yml"
         spec_file.write_text("openapi: '3.0.0'\ninfo:\n  title: Test\n  version: '1.0'\npaths: {}\n")
 
-        with patch("yaml.safe_load", return_value={"openapi": "3.0.0", "info": {"title": "T", "version": "1.0"}, "paths": {}}):
+        with patch(
+            "yaml.safe_load", return_value={"openapi": "3.0.0", "info": {"title": "T", "version": "1.0"}, "paths": {}}
+        ):
             discovery = OpenAPIDiscovery()
             tools = discovery.discover_from_file(str(spec_file), mode=DiscoveryMode.AUTO)
             assert tools == []

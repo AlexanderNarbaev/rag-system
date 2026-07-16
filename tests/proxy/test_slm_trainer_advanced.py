@@ -8,9 +8,6 @@ import pytest
 
 from proxy.app.model_evolution.env_profile import EnvProfile
 from proxy.app.model_evolution.slm_trainer import (
-    ID_TO_INTENT,
-    INTENT_LABELS,
-    INTENT_TO_ID,
     SLMTrainer,
 )
 from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig

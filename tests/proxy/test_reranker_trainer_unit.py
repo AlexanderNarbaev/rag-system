@@ -7,13 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from proxy.app.model_evolution.env_profile import EnvProfile
-from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
 from proxy.app.model_evolution.reranker_trainer import (
-    RERANKER_LORA_ALPHA,
-    RERANKER_LORA_DROPOUT,
-    RERANKER_LORA_R,
     RerankerTrainer,
 )
+from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
 
 @pytest.fixture
 def trainer():

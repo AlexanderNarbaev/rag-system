@@ -427,6 +427,7 @@ class TestHttpHandlerEdgeCases:
         assert callable(handler)
         # Handler is an async function that extracts response_path
         import inspect
+
         assert inspect.iscoroutinefunction(handler)
 
 
@@ -472,7 +473,10 @@ class TestDeclarativeToolLoaderEdgeCases:
         from tools.declarative import DeclarativeToolLoader
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write('{"tools": [{"name": "valid", "type": "http", "description": "ok", "http": {"method": "GET", "url_template": "https://api.example.com"}}, "not a dict"]}')
+            f.write(
+                '{"tools": [{"name": "valid", "type": "http", "description": "ok", '
+                '"http": {"method": "GET", "url_template": "https://api.example.com"}}, "not a dict"]}'
+            )
             path = f.name
 
         try:
@@ -515,7 +519,10 @@ class TestDeclarativeToolLoaderEdgeCases:
         from tools.declarative import DeclarativeToolLoader
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write('{"tools": [{"name": "test_vis", "type": "shell", "description": "test", "visibility": "invalid_vis", "shell": {"command": "echo hi", "allowed_commands": ["echo"]}}]}')
+            f.write(
+                '{"tools": [{"name": "test_vis", "type": "shell", "description": "test", '
+                '"visibility": "invalid_vis", "shell": {"command": "echo hi", "allowed_commands": ["echo"]}}]}'
+            )
             path = f.name
 
         try:
@@ -530,7 +537,11 @@ class TestDeclarativeToolLoaderEdgeCases:
         from tools.declarative import DeclarativeToolLoader
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write('{"tools": [{"name": "test_retry", "type": "shell", "description": "test", "shell": {"command": "echo hi", "allowed_commands": ["echo"]}, "retry_policy": {"max_retries": 5, "backoff": "linear"}}]}')
+            f.write(
+                '{"tools": [{"name": "test_retry", "type": "shell", "description": "test", '
+                '"shell": {"command": "echo hi", "allowed_commands": ["echo"]}, '
+                '"retry_policy": {"max_retries": 5, "backoff": "linear"}}]}'
+            )
             path = f.name
 
         try:

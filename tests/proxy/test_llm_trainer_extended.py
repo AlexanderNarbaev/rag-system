@@ -9,7 +9,7 @@ import pytest
 from proxy.app.model_evolution.env_profile import EnvProfile
 from proxy.app.model_evolution.exceptions import TrainingError
 from proxy.app.model_evolution.llm_trainer import LLMTrainer
-from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+from proxy.app.model_evolution.trainer import TrainerType
 
 
 @pytest.fixture
@@ -24,9 +24,11 @@ class TestLLMTrainerAdditional:
     def test_train_fails_with_exception(self, trainer):
         trainer.config.env_profile = EnvProfile.DEV
         trainer.prepare_data = MagicMock(return_value=[{"messages": [{"role": "user", "content": "hi"}]}])
-        with patch("proxy.app.model_evolution.llm_trainer.LLMTrainer._train_mock", side_effect=RuntimeError("boom")):
-            with pytest.raises(TrainingError, match="LLM training failed"):
-                trainer.train([{"messages": []}])
+        with (
+            patch("proxy.app.model_evolution.llm_trainer.LLMTrainer._train_mock", side_effect=RuntimeError("boom")),
+            pytest.raises(TrainingError, match="LLM training failed"),
+        ):
+            trainer.train([{"messages": []}])
 
     def test_train_mock_produces_metrics(self, trainer):
         trainer.config.env_profile = EnvProfile.DEV

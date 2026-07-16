@@ -477,8 +477,7 @@ class TestBuildAccessFilterShouldEdgeCases:
         assert result is not None
         should = result["should"]
         has_confidential = any(
-            any(m.get("match", {}).get("value") == "confidential" for m in c.get("must", []))
-            for c in should
+            any(m.get("match", {}).get("value") == "confidential" for m in c.get("must", [])) for c in should
         )
         assert not has_confidential
 
@@ -504,7 +503,6 @@ class TestBuildAccessFilterShouldEdgeCases:
         assert result is not None
         should = result["should"]
         has_confidential = any(
-            any(m.get("match", {}).get("value") == "confidential" for m in c.get("must", []))
-            for c in should
+            any(m.get("match", {}).get("value") == "confidential" for m in c.get("must", [])) for c in should
         )
         assert has_confidential

@@ -1,16 +1,11 @@
 """Tests for proxy/app/shared/logging.py — structured logging configuration."""
 
 import logging
-import os
-from unittest.mock import patch
-
-import pytest
 
 from proxy.app.shared.logging import (
     ColoredConsoleFormatter,
     JsonFormatter,
     RequestIdFilter,
-    get_log_format,
     get_log_level,
     mask_sensitive_data,
     set_log_level,
@@ -87,6 +82,7 @@ class TestJsonFormatter:
             raise ValueError("test error")
         except ValueError:
             import sys
+
             record.exc_info = sys.exc_info()
             result = fmt.format(record)
             assert "ValueError" in result
@@ -199,7 +195,7 @@ class TestSetupLogging:
 
     def test_setup_logging_with_custom_level(self, monkeypatch):
         monkeypatch.setenv("LOG_FORMAT", "text")
-        handler = setup_logging(level=logging.DEBUG)
+        setup_logging(level=logging.DEBUG)
         assert logging.getLogger().level == logging.DEBUG
 
     def test_setup_logging_removes_existing_handlers(self, monkeypatch):

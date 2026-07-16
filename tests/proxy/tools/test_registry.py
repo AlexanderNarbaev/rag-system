@@ -8,7 +8,6 @@ import asyncio
 import sys
 from abc import ABC
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -651,42 +650,6 @@ class TestProviderStubs:
         assert tools == []
 
 
-class TestGetToolsForLLM:
-    """Tests for get_tools_for_llm method."""
-
-    def test_anthropic_format(self):
-        from tools.registry import EnhancedToolRegistry
-
-        registry = EnhancedToolRegistry()
-        tool = _make_tool(name="search", description="Search tool")
-        registry.register(tool)
-        tools = registry.get_tools_for_llm(provider_type="anthropic")
-        assert len(tools) == 1
-
-    def test_unknown_provider_defaults_to_openai(self):
-        from tools.registry import EnhancedToolRegistry
-
-        registry = EnhancedToolRegistry()
-        tool = _make_tool(name="search", description="Search tool")
-        registry.register(tool)
-        tools = registry.get_tools_for_llm(provider_type="unknown")
-        assert len(tools) == 1
-
-    def test_respects_role_visibility(self):
-        from tools.definition import ToolVisibility
-        from tools.registry import EnhancedToolRegistry
-
-        registry = EnhancedToolRegistry()
-        public_tool = _make_tool(name="public_search", visibility=ToolVisibility.PUBLIC)
-        admin_tool = _make_tool(name="admin_tool", visibility=ToolVisibility.ADMIN)
-        registry.register(public_tool)
-        registry.register(admin_tool)
-        tools = registry.get_tools_for_llm(user_role="admin")
-        assert len(tools) == 2
-        tools_user = registry.get_tools_for_llm(user_role="user")
-        assert len(tools_user) == 1
-
-
 class TestExecuteNonString:
     """Tests for execute methods when handler returns non-string."""
 
@@ -725,34 +688,6 @@ class TestExecuteNonString:
         registry.register(tool)
         result = await registry.execute_async("async_int_tool", {})
         assert result.content == "42"
-
-
-class TestValidateTool:
-    """Tests for validate_tool method."""
-
-    def test_validate_tool_with_issues(self):
-        from tools.registry import EnhancedToolRegistry
-
-        registry = EnhancedToolRegistry()
-        tool = _make_tool(name="", description="", handler=None, async_handler=None)
-        issues = registry.validate_tool(tool)
-        assert len(issues) >= 2
-
-    def test_validate_tool_duplicate_params(self):
-        from tools.definition import ToolParam
-        from tools.registry import EnhancedToolRegistry
-
-        registry = EnhancedToolRegistry()
-        tool = _make_tool(
-            name="dup_params",
-            description="Has duplicate params",
-            parameters=[
-                ToolParam(name="q", type=str),
-                ToolParam(name="q", type=int),
-            ],
-        )
-        issues = registry.validate_tool(tool)
-        assert "Duplicate" in " ".join(issues)
 
 
 class TestDiscoverSync:

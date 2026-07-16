@@ -133,6 +133,6 @@ class TestConfigValidatorEdgeCases:
     def test_check_startup_with_warnings_only(self):
         can_start, results = check_startup_health()
         errors = [r for r in results if r.status == "error"]
-        warnings = [r for r in results if r.status == "warning"]
+        [r for r in results if r.status == "warning"]
         assert can_start is False
         assert len(errors) > 0

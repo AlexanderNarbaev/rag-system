@@ -5,6 +5,7 @@ import logging
 import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class ApiKeyManager:
             logger.info("Cleaned up %d expired API keys", len(expired_to_remove))
         return len(expired_to_remove)
 
-    def get_key_health(self) -> dict:
+    def get_key_health(self) -> dict[str, Any]:
         """Return a summary of API key health for monitoring."""
         total = len(self._keys)
         active = sum(1 for k in self._keys.values() if k.is_active)

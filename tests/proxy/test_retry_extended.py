@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from proxy.app.shared.circuit_breaker import CircuitBreakerOpenError
 from proxy.app.shared.retry import (
     BackoffStrategy,
     RetryConfig,
@@ -98,12 +99,14 @@ class TestSyncRetryCircuitBreaker:
         mock_breaker.state.name = "OPEN"
 
         config = RetryConfig(max_attempts=1, circuit_breaker_name="test-cb")
-        with patch(
-            "proxy.app.shared.circuit_breaker.get_breaker",
-            return_value=mock_breaker,
+        with (
+            patch(
+                "proxy.app.shared.circuit_breaker.get_breaker",
+                return_value=mock_breaker,
+            ),
+            pytest.raises(CircuitBreakerOpenError),
         ):
-            with pytest.raises(Exception):
-                sync_retry(lambda: 42, config=config)
+            sync_retry(lambda: 42, config=config)
 
     def test_circuit_breaker_import_error_skipped(self):
         config = RetryConfig(max_attempts=1, circuit_breaker_name="test-cb")
@@ -131,12 +134,14 @@ class TestSyncRetryCircuitBreaker:
         mock_breaker.state.name = "CLOSED"
 
         config = RetryConfig(max_attempts=1, base_delay=0.001, circuit_breaker_name="test-cb")
-        with patch(
-            "proxy.app.shared.circuit_breaker.get_breaker",
-            return_value=mock_breaker,
+        with (
+            patch(
+                "proxy.app.shared.circuit_breaker.get_breaker",
+                return_value=mock_breaker,
+            ),
+            pytest.raises(RetryExhaustedError),
         ):
-            with pytest.raises(RetryExhaustedError):
-                sync_retry(lambda: (_ for _ in ()).throw(RuntimeError("fail")), config=config)
+            sync_retry(lambda: (_ for _ in ()).throw(RuntimeError("fail")), config=config)
 
 
 class TestAsyncRetryCircuitBreaker:
@@ -149,12 +154,14 @@ class TestAsyncRetryCircuitBreaker:
             return 42
 
         config = RetryConfig(max_attempts=1, circuit_breaker_name="async-cb")
-        with patch(
-            "proxy.app.shared.circuit_breaker.get_breaker",
-            return_value=mock_breaker,
+        with (
+            patch(
+                "proxy.app.shared.circuit_breaker.get_breaker",
+                return_value=mock_breaker,
+            ),
+            pytest.raises(CircuitBreakerOpenError),
         ):
-            with pytest.raises(Exception):
-                await async_retry(ok, config=config)
+            await async_retry(ok, config=config)
 
     @pytest.mark.asyncio
     async def test_async_circuit_breaker_import_error_skipped(self):
@@ -194,12 +201,14 @@ class TestAsyncRetryCircuitBreaker:
             raise RuntimeError("permanent failure")
 
         config = RetryConfig(max_attempts=1, base_delay=0.001, circuit_breaker_name="async-cb")
-        with patch(
-            "proxy.app.shared.circuit_breaker.get_breaker",
-            return_value=mock_breaker,
+        with (
+            patch(
+                "proxy.app.shared.circuit_breaker.get_breaker",
+                return_value=mock_breaker,
+            ),
+            pytest.raises(RetryExhaustedError),
         ):
-            with pytest.raises(RetryExhaustedError):
-                await async_retry(always_fails, config=config)
+            await async_retry(always_fails, config=config)
 
 
 class TestSyncRetryDefaultConfig:
