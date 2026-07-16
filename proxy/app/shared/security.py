@@ -159,6 +159,12 @@ class SecurityHeaders:
         ),
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "credentialless",
+        "X-Permitted-Cross-Domain-Policies": "none",
+        "X-Download-Options": "noopen",
+        "X-DNS-Prefetch-Control": "off",
         "Cache-Control": "no-store, no-cache, must-revalidate",
     }
 
@@ -207,6 +213,102 @@ class PasswordStrengthValidator:
         if not cls._SPECIAL_RE.search(password):
             return False, "Password must contain at least one special character"
         return True, None
+
+
+class CSRFProtection:
+    """CSRF protection for cookie-authenticated endpoints.
+
+    Generates and validates CSRF tokens for state-changing operations.
+    Uses the double-submit cookie pattern: a random token is set as a cookie
+    and must be submitted in a custom header for state-changing requests.
+    """
+
+    HEADER_NAME = "X-CSRF-Token"
+    COOKIE_NAME = "csrf_token"
+    TOKEN_BYTES = 32
+
+    @staticmethod
+    def generate_token() -> str:
+        """Generate a cryptographically secure CSRF token."""
+        return secrets.token_urlsafe(CSRFProtection.TOKEN_BYTES)
+
+    @staticmethod
+    def validate_request(request_headers: dict[str, str], request_cookies: dict[str, str]) -> bool:
+        """Validate CSRF token using double-submit cookie pattern.
+
+        The token in the X-CSRF-Token header must match the token in the csrf_token cookie.
+        Both must be present for state-changing requests (POST, PUT, PATCH, DELETE).
+        """
+        header_token = request_headers.get(CSRFProtection.HEADER_NAME, "")
+        cookie_token = request_cookies.get(CSRFProtection.COOKIE_NAME, "")
+
+        if not header_token or not cookie_token:
+            return False
+
+        return secrets.compare_digest(header_token, cookie_token)
+
+    @staticmethod
+    def is_state_changing(method: str) -> bool:
+        """Check if the HTTP method requires CSRF protection."""
+        return method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
+
+
+class SQLInjectionDetector:
+    """Detects common SQL injection patterns in user input."""
+
+    _SQLI_PATTERNS = [
+        re.compile(r"(?i)(\bUNION\b.*\bSELECT\b)"),
+        re.compile(r"(?i)(\bSELECT\b.*\bFROM\b)"),
+        re.compile(r"(?i)(\bINSERT\b\s+\bINTO\b)"),
+        re.compile(r"(?i)(\bUPDATE\b\s+\w+\s+\bSET\b)"),
+        re.compile(r"(?i)(\bDELETE\b\s+\bFROM\b)"),
+        re.compile(r"(?i)(\bDROP\b\s+\bTABLE\b)"),
+        re.compile(r"(?i)(\bALTER\b\s+\bTABLE\b)"),
+        re.compile(r"(?i)(\bEXEC\b\s*[\(x])"),
+        re.compile(r"(?i)(\bOR\b\s+['\"]?\d?['\"]?\s*=\s*['\"]?\d?['\"]?)"),
+        re.compile(r"(?i)(\bAND\b\s+['\"]?\d?['\"]?\s*=\s*['\"]?\d?['\"]?)"),
+        re.compile(r"(?i)(\bSLEEP\b\s*\()"),
+        re.compile(r"(?i)(\bBENCHMARK\b\s*\()"),
+        re.compile(r"(?i)(\bWAITFOR\b\s+\bDELAY\b)"),
+        re.compile(r"(?i)(\/\*.*\*\/)"),
+        re.compile(r"(--\s*[^\n]*$)"),
+        re.compile(r"(;\s*\bDROP\b|\bSELECT\b|\bUPDATE\b|\bDELETE\b)"),
+    ]
+
+    _XSS_PATTERNS = [
+        re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL),
+        re.compile(r"javascript\s*:", re.IGNORECASE),
+        re.compile(r"on\w+\s*=\s*[\"'][^\"']*[\"']", re.IGNORECASE),
+        re.compile(r"<iframe[^>]*>", re.IGNORECASE),
+        re.compile(r"<embed[^>]*>", re.IGNORECASE),
+        re.compile(r"<object[^>]*>", re.IGNORECASE),
+        re.compile(r"data\s*:\s*text/html", re.IGNORECASE),
+        re.compile(r"vbscript\s*:", re.IGNORECASE),
+        re.compile(r"expression\s*\(", re.IGNORECASE),
+    ]
+
+    @classmethod
+    def detect_sqli(cls, text: str) -> list[str]:
+        """Detect SQL injection patterns. Returns list of matched pattern descriptions."""
+        findings = []
+        for i, pattern in enumerate(cls._SQLI_PATTERNS):
+            if pattern.search(text):
+                findings.append(f"sqli_pattern_{i}")
+        return findings
+
+    @classmethod
+    def detect_xss(cls, text: str) -> list[str]:
+        """Detect XSS patterns in text. Returns list of matched pattern descriptions."""
+        findings = []
+        for i, pattern in enumerate(cls._XSS_PATTERNS):
+            if pattern.search(text):
+                findings.append(f"xss_pattern_{i}")
+        return findings
+
+    @classmethod
+    def is_suspicious(cls, text: str) -> bool:
+        """Quick check: does the text contain any SQLi or XSS patterns?"""
+        return bool(cls.detect_sqli(text)) or bool(cls.detect_xss(text))
 
 
 class DependencyScanner:
@@ -280,4 +382,12 @@ class DependencyScanner:
         return findings
 
 
-__all__ = ["DependencyScanner", "InputValidator", "PasswordStrengthValidator", "SecretsManager", "SecurityHeaders"]
+__all__ = [
+    "CSRFProtection",
+    "DependencyScanner",
+    "InputValidator",
+    "PasswordStrengthValidator",
+    "SecretsManager",
+    "SecurityHeaders",
+    "SQLInjectionDetector",
+]

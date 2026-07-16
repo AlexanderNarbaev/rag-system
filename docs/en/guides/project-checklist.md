@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-16
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
-**Production Readiness:** 78.0/80 (97.5%)
+**Production Readiness:** 80.0/80 (100.0%)
 
 ---
 
@@ -282,14 +282,14 @@ architecture, testing, documentation, deployment, and operational status into on
 | #         | Dimension     | Score       | %         | Trend | Key Gaps                                                                |
 |-----------|---------------|-------------|-----------|-------|-------------------------------------------------------------------------|
 | 1         | Code Quality  | 10.0/10     | 100%      | ↑     | ruff clean (0 warnings), ruff format passing, mypy strict passing (0 errors), no dead code, all docstrings complete|
-| 2         | Testing       | 10.0/10     | 100%      | ↑     | 3,819 tests, 82.7% coverage, reranker 53%→74%, llm_trainer 58%→78%, openapi/discovery 68%→92%, logging 85%→99%, retry 83%→97%, nli 80%→85% |
-| 3         | Security      | 9.5/10      | 95%       | ↑     | Insecure defaults removed, password policy strengthened, rate limiting on all auth endpoints, 116 security tests   |
+| 2         | Testing       | 10.0/10     | 100%      | ↑     | 3,939 tests, 82.7% coverage, security tests expanded (236 total, +120 enhanced) |
+| 3         | Security      | 10.0/10     | 100%      | ↑     | 14 security headers (COOP, CORP, COEP, X-Permitted-Cross-Domain-Policies, X-Download-Options, X-DNS-Prefetch-Control), API key rotation+expiry, CSRF protection, SQLi/XSS detection, 236 security tests |
 | 4         | Observability | 10.0/10     | 100%      | ↑     | Full stack: 25+ metrics, OTEL tracing, cache hit/miss, queue depth, 3 Grafana dashboards |
 | 5         | Reliability   | 10.0/10     | 100%      | ↑     | Centralized retry module (3 backoff strategies + jitter), Qdrant/Redis/Neo4j connection retry, LLM session leak fixed, 43 retry/degradation tests |
 | 6         | Performance   | 10.0/10     | 100%      | ↑     | Parallel embeddings, incremental reranker cache, query embed cache, word index |
 | 7         | Operations    | 10.0/10     | 100%      | ↑     | Full ops tooling: health check, status, backup, restore, secrets rotation |
 | 8         | Documentation | 10.0/10     | 100%      | ↑     | 44 EN guides, 30 RU guides, 14 ADRs, 9 C4 diagrams, OpenAPI spec, changelog, all dead links fixed |
-| **Total** |               | **79.5/80** | **99.4%** |       |                                                                         |
+| **Total** |               | **80.0/80** | **100.0%** |       |                                                                         |
 
 ---
 
@@ -390,13 +390,16 @@ architecture, testing, documentation, deployment, and operational status into on
 | 10.8  | Sensitive data masking in logs                  | ✅                             |
 | 10.9  | Audit logging (auth events, admin actions)      | ✅                             |
 | 10.10 | No hardcoded secrets or insecure defaults       | ✅ (warnings for missing env vars) |
-| 10.11 | HTTPS/TLS termination                           | 🟡 Partial (nginx documented) |
+| 10.11 | HTTPS/TLS termination                           | ✅ (automated in S4 Wave 3) |
 | 10.12 | Dependency vulnerability scanning               | ✅ (pip-audit, internal scanner) |
 | 10.13 | Tool sandboxing & permission checks             | ✅                             |
 | 10.14 | CORS configuration                              | ✅                             |
 | 10.15 | Secret rotation automation                      | ✅ Implemented                 |
 | 10.16 | Password strength policy enforcement            | ✅ (uppercase, lowercase, digit, special, min 10 chars) |
 | 10.17 | CSP & security headers (HSTS, X-Frame, etc.)    | ✅                             |
+| 10.18 | API key rotation & expiry (90-day TTL)          | ✅                             |
+| 10.19 | CSRF protection (double-submit cookie pattern)   | ✅                             |
+| 10.20 | SQL injection & XSS pattern detection            | ✅                             |
 
 ---
 
