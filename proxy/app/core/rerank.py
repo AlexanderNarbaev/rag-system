@@ -38,6 +38,7 @@ except ImportError:
 
 from proxy.app.shared.cache import CacheManager
 from proxy.app.shared.config import REDIS_URL, RERANKER_MAX_LENGTH, RERANKER_MODEL, USE_REDIS
+from proxy.app.shared.tracing import add_event, tracer
 
 logger = logging.getLogger(__name__)
 
@@ -137,42 +138,54 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
     if not chunks:
         return []
 
-    # Обрезаем тексты до максимальной длины модели
-    truncated_chunks = [_truncate_text(chunk) for chunk in chunks]
+    with tracer.start_as_current_span("rag.rerank") as span:
+        if span.is_recording():
+            span.set_attribute("rag.query", query[:200])
+            span.set_attribute("rag.num_chunks", len(chunks))
+            span.set_attribute("rag.top_k", top_k)
 
-    # Подготовка пар (запрос, чанк)
-    pairs = [(query, chunk) for chunk in truncated_chunks]
+        # Обрезаем тексты до максимальной длины модели
+        truncated_chunks = [_truncate_text(chunk) for chunk in chunks]
 
-    # Получение скоров с кэшированием
-    scores: list[float] = []
-    if use_cache and cache_manager:
-        all_cached = True
-        for _i, (q, c) in enumerate(pairs):
-            cache_key = _get_cache_key(q, c)
-            cached = cache_manager.get_sync(cache_key)
-            if cached is not None:
-                scores.append(float(cached))
-            else:
-                # Если нет в кэше, будем вычислять пачкой
-                all_cached = False
-                break
-        if not all_cached:
-            # Вычисляем скоры для всех пар, где нет кэша
-            # Для простоты вычисляем все заново, но можно вычислить только отсутствующие
-            scores = _call_reranker_safe(pairs)
-            # Сохраняем в кэш
-            for i, (q, c) in enumerate(pairs):
+        # Подготовка пар (запрос, чанк)
+        pairs = [(query, chunk) for chunk in truncated_chunks]
+
+        # Получение скоров с кэшированием
+        scores: list[float] = []
+        if use_cache and cache_manager:
+            all_cached = True
+            for _i, (q, c) in enumerate(pairs):
                 cache_key = _get_cache_key(q, c)
-                cache_manager.set_sync(cache_key, str(scores[i]), ttl=3600)
-    else:
-        scores = _call_reranker_safe(pairs)
+                cached = cache_manager.get_sync(cache_key)
+                if cached is not None:
+                    scores.append(float(cached))
+                else:
+                    all_cached = False
+                    break
+            if not all_cached:
+                scores = _call_reranker_safe(pairs)
+                add_event("rag.rerank.computed", {"num_pairs": len(pairs)})
+                for i, (q, c) in enumerate(pairs):
+                    cache_key = _get_cache_key(q, c)
+                    cache_manager.set_sync(cache_key, str(scores[i]), ttl=3600)
+            else:
+                add_event("rag.rerank.cache_hit", {"num_pairs": len(pairs)})
+        else:
+            scores = _call_reranker_safe(pairs)
+            add_event("rag.rerank.computed", {"num_pairs": len(pairs)})
 
-    # Сортировка индексов по убыванию скора
-    indexed_scores = list(enumerate(scores))
-    indexed_scores.sort(key=lambda x: x[1], reverse=True)
+        # Сортировка индексов по убыванию скора
+        indexed_scores = list(enumerate(scores))
+        indexed_scores.sort(key=lambda x: x[1], reverse=True)
 
-    # Возвращаем индексы top_k
-    return [idx for idx, _ in indexed_scores[:top_k]]
+        result = [idx for idx, _ in indexed_scores[:top_k]]
+
+        if span.is_recording():
+            if result:
+                span.set_attribute("rag.rerank.top_score", indexed_scores[0][1])
+            span.set_attribute("rag.rerank.num_returned", len(result))
+
+        return result
 
 
 def rerank_chunks_with_scores(

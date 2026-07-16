@@ -45,6 +45,7 @@ from proxy.app.shared.config import (
     REDIS_URL,
     USE_REDIS,
 )
+from proxy.app.shared.tracing import add_event, tracer
 
 logger = logging.getLogger(__name__)
 
@@ -254,12 +255,14 @@ def _compute_dense_embedding(text: str) -> list[float]:
     # Check embedding cache first
     cached_embedding = _embedding_cache.get(text)
     if cached_embedding is not None:
+        add_event("rag.embedding.cache_hit", {"cache": "local"})
         return cached_embedding
 
     # Check Redis/in-memory cache
     if cache_manager:
         cached = cache_manager.get_sync(cache_key)
         if cached is not None:
+            add_event("rag.embedding.cache_hit", {"cache": "redis"})
             # Cache may return already-parsed list or raw JSON string
             if isinstance(cached, list):
                 return cast(list[float], cached)
@@ -267,6 +270,7 @@ def _compute_dense_embedding(text: str) -> list[float]:
                 return cast(list[float], json.loads(cached))
             except (json.JSONDecodeError, TypeError):
                 return cast(list[float], cached)
+    add_event("rag.embedding.compute", {"text_length": len(text)})
     assert embedder is not None, "embedder must be initialized"
     vec: list[float] = embedder.encode(text, normalize_embeddings=True).tolist()
     if cache_manager:
@@ -418,16 +422,27 @@ def hybrid_search(
               bge-m3 supports cross-lingual retrieval natively —
               a query in German can find chunks in English.
     """
-    if not qdrant_client or not embedder:
-        initialize_retrieval()
+    with tracer.start_as_current_span("rag.retrieval.hybrid_search") as span:
+        if span.is_recording():
+            span.set_attribute("rag.query", query[:200])
+            span.set_attribute("rag.top_k", top_k)
+            span.set_attribute("rag.version", version or "latest")
+            if lang:
+                span.set_attribute("rag.lang", lang)
 
-    # If Qdrant is still unavailable after initialization, return empty results
-    if qdrant_client is None:
-        logger.warning("Qdrant unavailable — returning empty search results")
-        return []
+        if not qdrant_client or not embedder:
+            initialize_retrieval()
 
-    if lang:
-        logger.debug(f"Cross-lingual search: query language = {lang}")
+        # If Qdrant is still unavailable after initialization, return empty results
+        if qdrant_client is None:
+            logger.warning("Qdrant unavailable — returning empty search results")
+            add_event("rag.retrieval.qdrant_unavailable")
+            if span.is_recording():
+                span.set_attribute("rag.error", "qdrant_unavailable")
+            return []
+
+        if lang:
+            logger.debug(f"Cross-lingual search: query language = {lang}")
 
     # Build filter conditions
     filter_conditions = []
@@ -499,15 +514,22 @@ def hybrid_search(
     else:
         combined_results = dense_results
 
+    add_event("rag.retrieval.combined", {"dense_count": len(dense_results), "sparse_count": len(sparse_results)})
+
     # Apply two-level score filtering
     filtered_results, quality = filter_results_by_score(combined_results)
     if quality == "insufficient":
         logger.warning(f"No relevant sources found for query: {query[:50]}...")
+        add_event("rag.retrieval.insufficient_quality")
 
     # Apply knee-point pruning if enabled
     if USE_KNEE_POINT_PRUNING and len(filtered_results) > 5:
         filtered_results = knee_point_pruning(filtered_results, sensitivity=KNEE_SENSITIVITY)
         logger.debug(f"Knee-point pruning: kept {len(filtered_results)} results")
+
+    if span.is_recording():
+        span.set_attribute("rag.num_results", len(filtered_results))
+        span.set_attribute("rag.quality", quality)
 
     return filtered_results
 

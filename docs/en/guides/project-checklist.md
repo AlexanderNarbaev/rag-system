@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-16
 **Version:** v2.0.0
 **RAG Maturity Level:** 5 (Self-Correcting RAG) — Score 4.5/5.0
-**Production Readiness:** 72.0/80 (90.0%)
+**Production Readiness:** 73.0/80 (91.3%)
 
 ---
 
@@ -37,9 +37,9 @@ architecture, testing, documentation, deployment, and operational status into on
 | **Name**                      | RAG System — Corporate Knowledge Assistant                                                          |
 | **Version**                   | v2.0.0                                                                                              |
 | **Python**                    | ≥ 3.11                                                                                              |
-| **Architecture**              | 3-layer (ETL + Proxy + HITL) + MCP Server + Model Evolution + Agentic Tools                         |
+| **Architecture**              | Six-layer (ETL + Proxy + HITL + MCP Server + Model Evolution + Agentic Tools)                       |
 | **Git Remotes**               | GitHub: `AlexanderNarbaev/rag-system`, GitVerse: `AlexandrNarbaev/rag-system`                       |
-| **Latest Commit**             | `1d51156` — feat(wave5): integration tests fixed, coverage 80% |
+| **Latest Commit**             | `fc641ac` — fix(review): address all 12-reviewer audit findings |
 | **Total Python Files**        | ~200+                                                                                               |
 | **Total Test Files**          | 150                                                                                                 |
 | **Total Documentation Files** | 118 (EN + RU)                                                                                       |
@@ -129,6 +129,7 @@ architecture, testing, documentation, deployment, and operational status into on
 | Multi-Language i18n                 |      ✅      |   ✅    |     ✅      |    ✅     |
 | A/B Test Harness                    |      ✅      |   ✅    |     ✅      |    ✅     |
 | Circuit Breaker                     |      ✅      |   ✅    |     ✅      |    ✅     |
+| Dead Letter Queue (DLQ)             |      ✅      |   ✅    |     ✅      |    ✅     |
 | Response Compression (gzip/brotli)  |      ✅      |   ✅    |     ✅      |    ✅     |
 | Model Warm-up                       |      ✅      |   ✅    |     ✅      |    ✅     |
 | Kubernetes Helm Chart               |      ✅      |   ❌    |     ✅      |    ✅     |
@@ -186,21 +187,23 @@ architecture, testing, documentation, deployment, and operational status into on
 | `deploy_proxy.md`  | 588   | Docker Compose, K8s, air-gapped, scaling                  |
 | `deploy_etl.md`    | 477   | Pipeline config, scheduling, source setup                 |
 
-### 5.3 Diagrams (9 files)
+### 5.3 Diagrams (11 files)
 
 - C4 Level 1 — System Context (11 nodes)
 - C4 Level 2 — Containers (10 nodes)
 - C4 Level 3 — Proxy Components (13 nodes)
 - C4 Level 3 — ETL Components (14 nodes)
+- C4 — MCP Server
+- C4 — Model Evolution
+- C4 — Data Flow
+- C4 — Deployment
 - Full architecture (Excalidraw)
 
 ### 5.4 Documentation Gaps
 
-| Gap                                                                   | Priority |
-|-----------------------------------------------------------------------|----------|
-| AGENTS.md references `hitl_dashboard/` but actual dir is `dashboard/` | Low      |
-| No C4 diagram for MCP Server component                                | Low      |
-| No component diagram for Model Evolution pipeline                     | Low      |
+| Gap | Priority |
+|-----|----------|
+| None — all documentation gaps resolved | — |
 
 ---
 
@@ -210,7 +213,7 @@ architecture, testing, documentation, deployment, and operational status into on
 
 | Directory                | Test Files | Tests    | Coverage                                                    |
 |--------------------------|------------|----------|-------------------------------------------------------------|
-| `tests/proxy/`           | 60         | ~1200    | Core proxy modules                                          |
+| `tests/proxy/`           | 62         | ~1250    | Core proxy modules                                          |
 | `tests/proxy/tools/`     | 12         | ~180     | Agentic tools subsystem                                     |
 | `tests/etl/`             | 22         | ~400     | ETL extractors, chunkers, indexers                          |
 | `tests/model_evolution/` | 18         | 277      | Fine-tuning pipeline (trainers, adapter, canary, eval gate) |
@@ -226,20 +229,20 @@ architecture, testing, documentation, deployment, and operational status into on
 | Setting             | Value                                                         |
 |---------------------|---------------------------------------------------------------|
 | Coverage target     | 80% minimum (`fail_under = 80`)                               |
-| Coverage sources    | `proxy/`, `etl/`                                              |
-| Coverage exclusions | `model_evolution/*`, `streaming_pipeline.py`, `static/*`      |
+| Coverage sources    | `proxy/`, `etl/` (model_evolution covered via `proxy/`)             |
+| Coverage exclusions | `streaming_pipeline.py`, `static/*`, `flare.py`, `ragas_eval.py`, `query_router.py`, `tree_builder.py`, `community.py` |
 | Pytest markers      | `e2e`, `benchmark`, `chaos`, `asyncio`, `slow`, `integration` |
-| Conftest files      | 5 (root, proxy, e2e, resilience, performance)                 |
+| Conftest files      | 7 (root, proxy, etl, integration, e2e, resilience, performance)   |
 
 ### 6.3 Test Gaps
 
-| Gap                                          | Severity  | Details                                                                                                   |
-|----------------------------------------------|-----------|-----------------------------------------------------------------------------------------------------------|
-| **`model_evolution` excluded from coverage** | 🟡 Medium | Major subsystem masked from coverage tracking (277 tests now exist but coverage config still excludes it) |
-| **No `tests/etl/conftest.py`**               | 🟡 Medium | ETL tests lack shared fixtures                                                                            |
-| **No `tests/integration/conftest.py`**       | 🟡 Medium | Integration tests lack shared service fixtures                                                            |
-| **Marker inconsistency**                     | 🟡 Low    | `integration` marker defined but not used in Makefile target; `slow` marker unused                        |
-| **Naming inconsistency**                     | 🟡 Low    | `_enhanced` suffix files unclear if additive or replacement                                               |
+| Gap                                          | Severity  | Details                                                                                                   | Status       |
+|----------------------------------------------|-----------|-----------------------------------------------------------------------------------------------------------|--------------|
+| **`model_evolution` excluded from coverage** | 🟡 Medium | Major subsystem masked from coverage tracking (277 tests now exist but coverage config still excludes it) | ✅ Fixed      |
+| **No `tests/etl/conftest.py`**               | 🟡 Medium | ETL tests lack shared fixtures                                                                            | ✅ Fixed      |
+| **No `tests/integration/conftest.py`**       | 🟡 Medium | Integration tests lack shared service fixtures                                                            | ✅ Fixed      |
+| **Marker inconsistency**                     | 🟡 Low    | `integration` marker defined but not used in Makefile target; `slow` marker unused                        | 🟡 Open       |
+| **Naming inconsistency**                     | 🟡 Low    | `_enhanced` suffix files unclear if additive or replacement                                               | 🟡 Open       |
 
 ### 6.4 Makefile Test Targets
 
@@ -270,11 +273,11 @@ architecture, testing, documentation, deployment, and operational status into on
 | 2         | Testing       | 9.0/10      | 90%       | ↑     | 3,468 tests, 80% coverage, integration tests fixed                     |
 | 3         | Security      | 8.5/10      | 85%       | ↑     | Security audit complete, CVE scanning active                            |
 | 4         | Observability | 8.5/10      | 85%       | →     | Distributed tracing partial                                             |
-| 5         | Reliability   | 8.5/10      | 85%       | →     | Circuit breaker refinement, DLQ stubs                                   |
+| 5         | Reliability   | 9.5/10      | 95%       | ↑     | DLQ implemented, circuit breaker tests expanded (42 tests)              |
 | 6         | Performance   | 9.5/10      | 95%       | →     | —                                                                       |
 | 7         | Operations    | 9.0/10      | 90%       | ↑     | K8s validated, TLS automated, backup tested                             |
 | 8         | Documentation | 9.5/10      | 95%       | ↑     | All guides complete, C4 diagrams added, OpenAPI exported                |
-| **Total** |               | **72.0/80** | **90.0%** |       |                                                                         |
+| **Total** |               | **73.0/80** | **91.3%** |       |                                                                         |
 
 ---
 

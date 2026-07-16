@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from proxy.app.auth import UserContext, get_auth_context
 from proxy.app.shared.security import InputValidator
+from proxy.app.shared.tracing import add_event, get_current_span, tracer
 
 logger = logging.getLogger("rag-proxy")
 
@@ -149,6 +150,10 @@ async def chat_completions(
 
     raw_request.state.user_context = user
 
+    # Trace: extract incoming context from headers
+    trace_headers = {k.lower(): v for k, v in raw_request.headers.items() if k.lower().startswith("trace")}
+    request_span_name = "rag.chat.completions"
+
     # Input validation
     validated_model = InputValidator.validate_non_empty(request.model, max_len=256)
     if not validated_model:
@@ -168,6 +173,14 @@ async def chat_completions(
 
     if not user_query:
         raise HTTPException(status_code=400, detail="No user message found")
+
+    # Trace: set attributes on any parent span (middleware-created)
+    parent_span = get_current_span()
+    if parent_span.is_recording():
+        parent_span.set_attribute("rag.request_id", request_id)
+        parent_span.set_attribute("rag.model", request.model)
+        parent_span.set_attribute("rag.stream", bool(request.stream))
+        parent_span.set_attribute("rag.query_length", len(user_query))
 
     # Extract version from query
     version = request.rag_version or _main.extract_version_from_query(user_query)  # type: ignore[attr-defined]
@@ -338,19 +351,26 @@ async def chat_completions(
                 initial = optimizer.initial_chunk()
                 if initial:
                     yield initial
-                rag_context, messages_for_llm, _, _, _ = await _main.process_rag_query(
-                    user_query=user_query,
-                    version=version,
-                    force_refresh=request.rag_force_refresh or False,
-                    temperature=request.temperature or 0.2,
-                    max_tokens=request.max_tokens or 4096,
-                    stream=True,
-                    other_messages=other_messages,
-                    user_context=user,
-                    top_k_override=request.rag_top_k,
-                )
+                add_event("rag.pipeline.stream.start", {"query": user_query[:100], "version": version or "latest"})
+                with tracer.start_as_current_span("rag.pipeline.process") as pipeline_span:
+                    if pipeline_span.is_recording():
+                        pipeline_span.set_attribute("rag.query", user_query[:200])
+                        pipeline_span.set_attribute("rag.version", version or "latest")
+                        pipeline_span.set_attribute("rag.stream", True)
+                    rag_context, messages_for_llm, _, _, _ = await _main.process_rag_query(
+                        user_query=user_query,
+                        version=version,
+                        force_refresh=request.rag_force_refresh or False,
+                        temperature=request.temperature or 0.2,
+                        max_tokens=request.max_tokens or 4096,
+                        stream=True,
+                        other_messages=other_messages,
+                        user_context=user,
+                        top_k_override=request.rag_top_k,
+                    )
                 # If retrieval failed and we got a refusal (empty messages list), return rag_context directly
                 if not messages_for_llm:
+                    add_event("rag.pipeline.refusal", {"reason": "no_messages_for_llm"})
                     refusal_text = (
                         rag_context
                         if rag_context

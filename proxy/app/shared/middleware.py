@@ -24,6 +24,7 @@ from starlette.responses import Response
 
 from proxy.app.shared.logging import RequestIdFilter
 from proxy.app.shared.security import InputValidator, SecurityHeaders
+from proxy.app.shared.tracing import span_context_from_headers, tracer
 
 logger = logging.getLogger("rag-proxy.middleware")
 
@@ -134,6 +135,37 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class TraceContextMiddleware(BaseHTTPMiddleware):
+    """Extracts W3C traceparent from incoming requests and creates a server span.
+
+    Creates a root span ``rag.http.request`` for each incoming HTTP request.
+    Propagates trace context from the ``traceparent`` header if present.
+    Sets span attributes for HTTP method, path, and status code.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
+        # Extract W3C traceparent from incoming headers
+        trace_headers = {k: v for k, v in request.headers.items() if k.lower().startswith("trace")}
+        ctx = span_context_from_headers(trace_headers) if trace_headers else None
+
+        with tracer.start_as_current_span(
+            "rag.http.request",
+            context=ctx,
+            attributes={
+                "http.method": request.method,
+                "http.url": str(request.url),
+                "http.route": request.url.path,
+            },
+        ) as span:
+            response: Response = await call_next(request)
+            if span.is_recording():
+                span.set_attribute("http.status_code", response.status_code)
+                if response.status_code >= 400:
+                    span.set_attribute("error", True)
+                    span.set_attribute("error.type", f"http_{response.status_code}")
+            return response
+
+
 def add_cors_middleware(app: FastAPI, origins: str = "*") -> None:
     """Add CORS middleware with configurable origins."""
     allowed_origins = [o.strip() for o in origins.split(",")] if origins != "*" else ["*"]
@@ -149,6 +181,7 @@ def add_cors_middleware(app: FastAPI, origins: str = "*") -> None:
 
 def setup_all_middleware(app: FastAPI, audit_logger: Any = None) -> None:
     """Apply all standard middleware in correct order."""
+    app.add_middleware(TraceContextMiddleware)
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(RequestLoggingMiddleware)

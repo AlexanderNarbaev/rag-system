@@ -528,3 +528,344 @@ class TestCircuitBreakerOpenError:
             raise CircuitBreakerOpenError("test")
         except CircuitBreakerOpenError as e:
             assert e.name == "test"
+
+
+# ── Rapid State Toggles ──────────────────────────────────────────────────────
+
+
+class TestCircuitBreakerRapidToggles:
+    """Test rapid open/close cycles and resilience to repeated state changes."""
+
+    def test_multiple_open_close_cycles(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
+
+        cb = CircuitBreaker("cycles", failure_threshold=2, cooldown_seconds=0.01)
+        for _ in range(5):
+            cb.failure()
+            cb.failure()
+            assert cb.state == State.OPEN
+            time.sleep(0.02)
+            assert cb.state == State.HALF_OPEN
+            cb.call_sync(lambda: "recover")
+            assert cb.state == State.CLOSED
+            assert cb.failure_count == 0
+
+    def test_rapid_failure_recovery_toggle(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
+
+        cb = CircuitBreaker("rapid", failure_threshold=1, cooldown_seconds=0.0)
+        for _ in range(3):
+            cb.failure()
+            # With cooldown=0, accessing .state immediately transitions OPEN→HALF_OPEN
+            assert cb.state == State.HALF_OPEN
+            cb.call_sync(lambda: "ok")
+            assert cb.state == State.CLOSED
+
+    def test_success_after_open_without_half_open_call(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
+
+        cb = CircuitBreaker("direct_success", failure_threshold=1, cooldown_seconds=0.01)
+        cb.failure()
+        assert cb.state == State.OPEN
+        # success() directly when OPEN should close the circuit
+        cb.success()
+        assert cb.state == State.CLOSED
+        assert cb.failure_count == 0
+
+
+# ── call/call_sync with args/kwargs ──────────────────────────────────────────
+
+
+class TestCircuitBreakerArgsKwargs:
+    """Test call() and call_sync() with complex arguments."""
+
+    def test_call_sync_with_kwargs(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("kwargs")
+        result = cb.call_sync(lambda prefix="", suffix="": f"{prefix}hello{suffix}", prefix="<<", suffix=">>")
+        assert result == "<<hello>>"
+
+    def test_call_sync_with_mixed_args_kwargs(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("mixed")
+        result = cb.call_sync(lambda a, b, mul=1: (a + b) * mul, 3, 4, mul=2)
+        assert result == 14
+
+    @pytest.mark.asyncio
+    async def test_call_async_with_kwargs(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("async_kwargs")
+
+        async def build_msg(name: str, count: int) -> str:
+            return f"{name}: {count}"
+
+        result = await cb.call(build_msg, name="items", count=42)
+        assert result == "items: 42"
+
+    def test_call_sync_preserves_none_return(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("none_test")
+
+        result = cb.call_sync(lambda: None)
+        assert result is None
+
+
+# ── Half-Open Concurrency Simulation ─────────────────────────────────────────
+
+
+class TestHalfOpenConcurrency:
+    """Simulate concurrent entries into HALF_OPEN state."""
+
+    def test_half_open_limit_with_multiple_fast_successes(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
+
+        cb = CircuitBreaker("fast", failure_threshold=1, cooldown_seconds=0.01, half_open_max=2)
+        cb.failure()
+        time.sleep(0.02)
+        assert cb.state == State.HALF_OPEN
+
+        # First success closes circuit — subsequent calls go through
+        cb.call_sync(lambda: "s1")
+        assert cb.state == State.CLOSED
+        cb.call_sync(lambda: "s2")
+        assert cb.state == State.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_async_concurrent_half_open_entries(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, State
+
+        cb = CircuitBreaker("async_half", failure_threshold=1, cooldown_seconds=0.01, half_open_max=2)
+        cb.failure()
+        await asyncio.sleep(0.02)
+        assert cb.state == State.HALF_OPEN
+
+        executed = []
+
+        async def worker(name: str):
+            try:
+                result = await cb.call(lambda: executed.append(name))
+                return result
+            except CircuitBreakerOpenError:
+                return None
+
+        # Launch tasks concurrently
+        _results = await asyncio.gather(*(worker(f"w{i}") for i in range(4)))
+        assert cb.state == State.CLOSED
+
+    def test_half_open_max_zero_allows_no_calls(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, State
+
+        cb = CircuitBreaker("zero_max", failure_threshold=1, cooldown_seconds=0.01, half_open_max=0)
+        cb.failure()
+        time.sleep(0.02)
+        assert cb.state == State.HALF_OPEN
+
+        with pytest.raises(CircuitBreakerOpenError):
+            cb.call_sync(lambda: "rejected")
+
+
+# ── State Enum Behavior ──────────────────────────────────────────────────────
+
+
+class TestStateEnum:
+    """Test State enum properties and behavior."""
+
+    def test_state_string_values(self):
+        from proxy.app.shared.circuit_breaker import State
+
+        assert str(State.CLOSED) == "closed"
+        assert State.CLOSED.value == "closed"
+        assert State.OPEN.value == "open"
+        assert State.HALF_OPEN.value == "half_open"
+
+    def test_state_metric_values(self):
+        from proxy.app.shared.circuit_breaker import State
+
+        assert State.CLOSED.metric_value == 0
+        assert State.OPEN.metric_value == 1
+        assert State.HALF_OPEN.metric_value == 2
+
+    def test_state_comparison(self):
+        from proxy.app.shared.circuit_breaker import State
+
+        assert State("closed") == State.CLOSED
+        assert State("open") == State.OPEN
+        assert State("half_open") == State.HALF_OPEN
+
+
+# ── Failure Counting Boundaries ──────────────────────────────────────────────
+
+
+class TestFailureCounting:
+    """Test edge cases in failure counting and threshold behavior."""
+
+    def test_failure_count_does_not_reset_on_state_change(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("count", failure_threshold=2)
+        cb.failure()
+        cb.failure()
+        assert cb.failure_count == 2
+
+    def test_failure_threshold_one_opens_on_single_failure(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
+
+        cb = CircuitBreaker("single", failure_threshold=1)
+        cb.failure()
+        assert cb.state == State.OPEN
+
+    def test_call_sync_does_not_increment_on_open_rejection(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
+
+        cb = CircuitBreaker("reject", failure_threshold=1)
+        cb.failure()
+        count_before = cb.failure_count
+
+        with pytest.raises(CircuitBreakerOpenError):
+            cb.call_sync(lambda: "nope")
+        assert cb.failure_count == count_before
+
+    @pytest.mark.asyncio
+    async def test_call_does_not_increment_on_open_rejection(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
+
+        cb = CircuitBreaker("reject_async", failure_threshold=1)
+        cb.failure()
+        count_before = cb.failure_count
+
+        with pytest.raises(CircuitBreakerOpenError):
+            await cb.call(lambda: "nope")
+        assert cb.failure_count == count_before
+
+
+# ── Registry Advanced ────────────────────────────────────────────────────────
+
+
+class TestRegistryAdvanced:
+    """Advanced registry tests."""
+
+    def test_reset_all_preserves_breaker_identity(self):
+        from proxy.app.shared.circuit_breaker import State, get_breaker, reset_all_breakers
+
+        cb = get_breaker("identity_test")
+        cb.failure()
+        cb.failure()
+        cb.failure()
+        cb.failure()
+        cb.failure()
+
+        reset_all_breakers()
+        assert cb.state == State.CLOSED
+        assert cb.failure_count == 0
+
+        # Same instance should still be in the registry
+        cb2 = get_breaker("identity_test")
+        assert cb is cb2
+
+    def test_get_all_breakers_returns_copy(self):
+        from proxy.app.shared.circuit_breaker import get_all_breakers, get_breaker
+
+        get_breaker("copy_test")
+        all_breakers = get_all_breakers()
+        all_breakers["new_fake"] = None  # type: ignore[assignment]
+        # Original registry should be unaffected
+        second_copy = get_all_breakers()
+        assert "new_fake" not in second_copy
+
+    def test_multiple_registry_names_with_same_params(self):
+        from proxy.app.shared.circuit_breaker import get_breaker
+
+        cb_a = get_breaker("svc_a", failure_threshold=10, cooldown_seconds=10)
+        cb_b = get_breaker("svc_b", failure_threshold=10, cooldown_seconds=10)
+        assert cb_a is not cb_b
+        assert cb_a.name != cb_b.name
+
+
+# ── DLQ Integration Pattern ──────────────────────────────────────────────────
+
+
+class TestCircuitBreakerDLQIntegration:
+    """Test circuit breaker + DLQ integration patterns."""
+
+    def test_circuit_breaker_failure_triggers_dlq_add(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("dlq_pattern", failure_threshold=5)
+
+        failed_payloads = []
+
+        def failing_call(payload):
+            raise ConnectionError("service down")
+
+        for i in range(3):
+            with pytest.raises(ConnectionError):
+                cb.call_sync(failing_call, {"query": f"q{i}"})
+            failed_payloads.append({"query": f"q{i}", "error": "service down"})
+
+        assert cb.failure_count == 3
+        assert len(failed_payloads) == 3
+
+    def test_circuit_breaker_open_can_trigger_dlq_direct_add(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
+
+        cb = CircuitBreaker("dlq_open", failure_threshold=1)
+        cb.failure()
+
+        dlq_entries = []
+        try:
+            cb.call_sync(lambda: "should not run")
+        except CircuitBreakerOpenError:
+            dlq_entries.append({"action": "deferred", "reason": "circuit_open"})
+
+        assert len(dlq_entries) == 1
+
+    def test_circuit_breaker_recovery_enables_dlq_retry(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker, State
+
+        cb = CircuitBreaker("dlq_recovery", failure_threshold=1, cooldown_seconds=0.01)
+        cb.failure()
+        time.sleep(0.02)
+
+        recovered = []
+
+        def retry_handler():
+            recovered.append("processed")
+            return "ok"
+
+        cb.call_sync(retry_handler)
+        assert len(recovered) == 1
+        assert cb.state == State.CLOSED
+
+
+# ── Metrics Registration Robustness ──────────────────────────────────────────
+
+
+class TestMetricsRegistration:
+    """Test that Prometheus metrics handle duplicate registration gracefully."""
+
+    def test_metrics_reimport_does_not_raise(self):
+        """Re-importing the module should not raise DuplicateMetricError."""
+        import importlib
+
+        import proxy.app.shared.circuit_breaker as cb_module
+
+        importlib.reload(cb_module)
+
+    def test_breaker_creation_does_not_raise_metric_error(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        for i in range(5):
+            cb = CircuitBreaker(f"metric_test_{i}")
+            assert cb.state.metric_value == 0
+
+    def test_custom_failure_threshold_and_cooldown(self):
+        from proxy.app.shared.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker("custom_params", failure_threshold=7, cooldown_seconds=60.0, half_open_max=3)
+        assert cb.failure_threshold == 7
+        assert cb.cooldown_seconds == 60.0
+        assert cb.half_open_max == 3

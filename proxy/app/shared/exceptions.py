@@ -119,3 +119,10 @@ class StorageError(RAGError):
 
     def __init__(self, message: str = "", component: str = "storage"):
         super().__init__(message, component=component, recoverable=True)
+
+
+class DLQError(RAGError):
+    """Dead Letter Queue errors (persistence, message corruption, processing failure)."""
+
+    def __init__(self, message: str = "", component: str = "dlq"):
+        super().__init__(message, component=component, recoverable=True)

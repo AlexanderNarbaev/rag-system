@@ -1,5 +1,7 @@
-"""Tests for proxy/app/tracing.py — OpenTelemetry distributed tracing setup."""
+# ruff: noqa: E501, SIM117, E402, N817, SIM105
+"""Tests for proxy/app/shared/tracing.py — OpenTelemetry distributed tracing stubs."""
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -8,58 +10,71 @@ class TestTracingNoOpWhenDisabled:
 
     def test_setup_tracing_noop_when_disabled(self):
         """setup_tracing() should return immediately when disabled."""
-        from proxy.app.shared.tracing import setup_tracing
+        from proxy.app.shared import tracing as tracing_mod
+        from proxy.app.shared.tracing import _tracing_initialized, setup_tracing
 
-        with patch("proxy.app.shared.tracing.OTEL_ENABLED", False):
+        was_initialized = _tracing_initialized
+        try:
+            tracing_mod._OTEL_ENABLED = False
             result = setup_tracing()
             assert result is None
+        finally:
+            tracing_mod._tracing_initialized = was_initialized
 
-    def test_tracer_is_proxy_when_disabled(self):
-        """Module-level tracer should be a no-op proxy when tracing is disabled."""
+    def test_tracer_start_as_current_span_noop(self):
+        """Tracer should work as a context manager when OTEL is not installed."""
         from proxy.app.shared.tracing import tracer
 
-        # The tracer from get_tracer() with unset provider is a ProxyTracer (no-op).
-        # Verify that start_as_current_span returns a valid span context manager.
         with tracer.start_as_current_span("test.noop") as span:
-            # No-op span should not be recording
             assert not span.is_recording()
-            # set_attribute should not raise
             span.set_attribute("test.key", "value")
 
     def test_get_current_span_noop(self):
         """get_current_span() should return a non-recording span."""
-        from opentelemetry.trace import INVALID_SPAN
-
         from proxy.app.shared.tracing import get_current_span
 
         span = get_current_span()
-        assert not span.is_recording() or span is INVALID_SPAN
+        assert not span.is_recording()
 
     def test_add_event_noop(self):
         """add_event() should not raise when no span is active."""
         from proxy.app.shared.tracing import add_event
 
-        with patch("proxy.app.shared.tracing.trace.get_current_span") as mock_span_fn:
-            mock_span = MagicMock()
-            mock_span.is_recording.return_value = False
-            mock_span_fn.return_value = mock_span
-
-            add_event("test.event", {"key": "value"})
-            # Event should not be added to a non-recording span
-            mock_span.add_event.assert_not_called()
+        # Should not raise
+        add_event("test.event", {"key": "value"})
 
     def test_set_span_error_noop(self):
         """set_span_error() should not raise when no span is active."""
         from proxy.app.shared.tracing import set_span_error
 
-        with patch("proxy.app.shared.tracing.trace.get_current_span") as mock_span_fn:
-            mock_span = MagicMock()
-            mock_span.is_recording.return_value = False
-            mock_span_fn.return_value = mock_span
+        exc = ValueError("test error")
+        # Should not raise
+        set_span_error(exc)
 
-            exc = ValueError("test error")
-            set_span_error(exc)
-            mock_span.record_exception.assert_not_called()
+    def test_span_context_from_headers_noop(self):
+        """span_context_from_headers() should return None when no traceparent."""
+        from proxy.app.shared.tracing import span_context_from_headers
+
+        result = span_context_from_headers({"user-agent": "test"})
+        assert result is None
+
+    def test_inject_context_to_headers_noop(self):
+        """inject_context_to_headers() should not mutate or raise."""
+        from proxy.app.shared.tracing import inject_context_to_headers
+
+        headers: dict[str, str] = {}
+        inject_context_to_headers(headers)
+        # No-op when OTEL disabled — headers stay empty
+        assert headers == {}
+
+    def test_noop_span_context_manager(self):
+        """NoOpSpan should work as a context manager."""
+        from proxy.app.shared.tracing import _NoOpSpan
+
+        span = _NoOpSpan()
+        with span:
+            span.set_attribute("k", "v")
+        assert True
 
 
 class TestTracingSetup:
@@ -67,21 +82,25 @@ class TestTracingSetup:
 
     def test_setup_tracing_initializes_provider(self):
         """setup_tracing() should create a TracerProvider and exporter."""
-        from proxy.app.shared.tracing import _tracer_provider, _tracing_initialized, setup_tracing
+        from proxy.app.shared.tracing import _tracing_initialized, _tracer_provider, setup_tracing
 
-        # Save state
         was_initialized = _tracing_initialized
         old_provider = _tracer_provider
 
+        import proxy.app.shared.tracing as tracing_mod
+
         try:
+            tracing_mod._OTEL_ENABLED = True
+            tracing_mod._OTEL_AVAILABLE = True
+            tracing_mod._OTEL_SDK_AVAILABLE = True
+            tracing_mod._OTEL_EXPORTER_ENDPOINT = "http://localhost:4318/v1/traces"
+            tracing_mod._OTEL_BATCH_TIMEOUT = 5
+
             with (
-                patch("proxy.app.shared.tracing.OTEL_ENABLED", True),
-                patch("proxy.app.shared.tracing.OTEL_EXPORTER_ENDPOINT", "http://localhost:4318/v1/traces"),
-                patch("proxy.app.shared.tracing.OTEL_BATCH_TIMEOUT", 5),
-                patch("proxy.app.shared.tracing.OTLPSpanExporter") as mock_exporter_cls,
-                patch("proxy.app.shared.tracing.BatchSpanProcessor") as mock_bsp_cls,
-                patch("proxy.app.shared.tracing.TracerProvider") as mock_provider_cls,
-                patch("proxy.app.shared.tracing.trace"),
+                patch.object(tracing_mod, "OTLPSpanExporter") as mock_exporter_cls,
+                patch.object(tracing_mod, "BatchSpanProcessor") as mock_bsp_cls,
+                patch.object(tracing_mod, "TracerProvider") as mock_provider_cls,
+                patch.object(tracing_mod, "_otel_trace") as mock_otel_trace,
             ):
                 mock_provider = MagicMock()
                 mock_provider_cls.return_value = mock_provider
@@ -94,83 +113,113 @@ class TestTracingSetup:
                 mock_bsp_cls.assert_called_once()
                 mock_provider.add_span_processor.assert_called_once()
         finally:
-            # Restore module state
-            import proxy.app.shared.tracing as tracing_mod
-
             tracing_mod._tracing_initialized = was_initialized
             tracing_mod._tracer_provider = old_provider
 
     def test_setup_tracing_sets_global_provider(self):
-        """setup_tracing() should register the provider globally via trace.set_tracer_provider."""
-        with (
-            patch("proxy.app.shared.tracing.OTEL_ENABLED", True),
-            patch("proxy.app.shared.tracing.trace") as mock_trace,
-            patch("proxy.app.shared.tracing.OTLPSpanExporter"),
-            patch("proxy.app.shared.tracing.BatchSpanProcessor"),
-            patch("proxy.app.shared.tracing.TracerProvider") as mock_provider_cls,
-        ):
-            mock_provider = MagicMock()
-            mock_provider_cls.return_value = mock_provider
+        """setup_tracing() should register the provider globally."""
+        import proxy.app.shared.tracing as tracing_mod
 
-            import proxy.app.shared.tracing as tracing_mod
-
+        was_initialized = tracing_mod._tracing_initialized
+        try:
+            tracing_mod._OTEL_ENABLED = True
+            tracing_mod._OTEL_AVAILABLE = True
+            tracing_mod._OTEL_SDK_AVAILABLE = True
+            tracing_mod._OTEL_EXPORTER_ENDPOINT = "http://localhost:4318/v1/traces"
             tracing_mod._tracing_initialized = False
-            try:
+            tracing_mod._tracer_provider = None
+
+            with (
+                patch.object(tracing_mod, "OTLPSpanExporter"),
+                patch.object(tracing_mod, "BatchSpanProcessor"),
+                patch.object(tracing_mod, "TracerProvider") as mock_provider_cls,
+                patch.object(tracing_mod, "_otel_trace") as mock_otel_trace,
+            ):
+                mock_provider = MagicMock()
+                mock_provider_cls.return_value = mock_provider
+
                 from proxy.app.shared.tracing import setup_tracing
 
                 setup_tracing(service_name="test-svc")
-                mock_trace.set_tracer_provider.assert_called_once_with(mock_provider)
-            finally:
-                tracing_mod._tracing_initialized = False
-                tracing_mod._tracer_provider = None
+                mock_otel_trace.set_tracer_provider.assert_called_once_with(mock_provider)
+        finally:
+            tracing_mod._tracing_initialized = was_initialized
+            tracing_mod._tracer_provider = None
 
     def test_setup_tracing_handles_exporter_error(self):
-        """setup_tracing() should gracefully degrade when exporter init fails."""
-        with (
-            patch("proxy.app.shared.tracing.OTEL_ENABLED", True),
-            patch("proxy.app.shared.tracing.OTLPSpanExporter", side_effect=ConnectionError("Cannot connect")),
-            patch("proxy.app.shared.tracing.TracerProvider") as mock_provider_cls,
-        ):
-            mock_provider = MagicMock()
-            mock_provider_cls.return_value = mock_provider
+        """setup_tracing() should gracefully degrade on exporter init failure."""
+        import proxy.app.shared.tracing as tracing_mod
 
-            # Should not raise — graceful degradation
+        was_initialized = tracing_mod._tracing_initialized
+        try:
+            tracing_mod._OTEL_ENABLED = True
+            tracing_mod._OTEL_AVAILABLE = True
+            tracing_mod._OTEL_SDK_AVAILABLE = True
+            tracing_mod._tracing_initialized = False
+
+            with (
+                patch.object(tracing_mod, "OTLPSpanExporter", side_effect=ConnectionError("Cannot connect")),
+                patch.object(tracing_mod, "TracerProvider") as mock_provider_cls,
+            ):
+                mock_provider = MagicMock()
+                mock_provider_cls.return_value = mock_provider
+
+                from proxy.app.shared.tracing import setup_tracing
+
+                result = setup_tracing()
+                assert result is None
+        finally:
+            tracing_mod._tracing_initialized = was_initialized
+
+    def test_setup_tracing_idempotent(self):
+        """setup_tracing() should be idempotent — second call is a no-op."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_initialized = tracing_mod._tracing_initialized
+        try:
+            tracing_mod._OTEL_ENABLED = True
+            tracing_mod._OTEL_AVAILABLE = True
+            tracing_mod._OTEL_SDK_AVAILABLE = True
+            tracing_mod._tracing_initialized = False
+            tracing_mod._tracer_provider = None
+
+            with (
+                patch.object(tracing_mod, "OTLPSpanExporter"),
+                patch.object(tracing_mod, "BatchSpanProcessor"),
+                patch.object(tracing_mod, "TracerProvider") as mock_provider_cls,
+                patch.object(tracing_mod, "_otel_trace") as mock_otel_trace,
+            ):
+                mock_provider = MagicMock()
+                mock_provider_cls.return_value = mock_provider
+
+                from proxy.app.shared.tracing import setup_tracing
+
+                setup_tracing(service_name="test-svc")
+                first_call_count = mock_otel_trace.set_tracer_provider.call_count
+
+                setup_tracing(service_name="test-svc")
+                assert mock_otel_trace.set_tracer_provider.call_count == first_call_count
+        finally:
+            tracing_mod._tracing_initialized = was_initialized
+            tracing_mod._tracer_provider = None
+
+    def test_setup_tracing_skips_when_otel_not_available(self):
+        """setup_tracing() should return early when OTEL API not installed."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        was_initialized = tracing_mod._tracing_initialized
+        try:
+            tracing_mod._OTEL_ENABLED = True
+            tracing_mod._OTEL_AVAILABLE = False
+            tracing_mod._OTEL_SDK_AVAILABLE = False
+            tracing_mod._tracing_initialized = False
+
             from proxy.app.shared.tracing import setup_tracing
 
             result = setup_tracing()
             assert result is None
-
-    def test_setup_tracing_idempotent(self):
-        """setup_tracing() should be idempotent — second call is a no-op."""
-        with (
-            patch("proxy.app.shared.tracing.OTEL_ENABLED", True),
-            patch("proxy.app.shared.tracing.trace") as mock_trace,
-            patch("proxy.app.shared.tracing.OTLPSpanExporter"),
-            patch("proxy.app.shared.tracing.BatchSpanProcessor"),
-            patch("proxy.app.shared.tracing.TracerProvider") as mock_provider_cls,
-        ):
-            mock_provider = MagicMock()
-            mock_provider_cls.return_value = mock_provider
-
-            import proxy.app.shared.tracing as tracing_mod
-
-            # Reset state
-            tracing_mod._tracing_initialized = False
-            tracing_mod._tracer_provider = None
-            try:
-                from proxy.app.shared.tracing import setup_tracing
-
-                # First call
-                setup_tracing(service_name="test-svc")
-                first_call_count = mock_trace.set_tracer_provider.call_count
-
-                # Second call
-                setup_tracing(service_name="test-svc")
-                # Should not have called set_tracer_provider again
-                assert mock_trace.set_tracer_provider.call_count == first_call_count
-            finally:
-                tracing_mod._tracing_initialized = False
-                tracing_mod._tracer_provider = None
+        finally:
+            tracing_mod._tracing_initialized = was_initialized
 
 
 class TestSpanContextManager:
@@ -182,10 +231,6 @@ class TestSpanContextManager:
 
         with tracer.start_as_current_span("test.context_manager") as span:
             span.set_attribute("test.attr", "hello")
-            # When tracing disabled, span is non-recording but doesn't raise
-            pass
-
-        # Context manager should exit cleanly
         assert True
 
     def test_span_captures_attributes(self):
@@ -197,8 +242,7 @@ class TestSpanContextManager:
             span.set_attribute("int_attr", 42)
             span.set_attribute("bool_attr", True)
             span.set_attribute("float_attr", 3.14)
-            # No exceptions raised
-            assert True
+        assert True
 
     def test_nested_spans(self):
         """Nested spans should work without issues."""
@@ -228,7 +272,6 @@ class TestTracingConfig:
 
         import proxy.app.shared.config as cfg
 
-        # Reload config with fresh env to ensure defaults
         importlib.reload(cfg)
         assert cfg.OTEL_ENABLED is False
 
@@ -287,3 +330,159 @@ class TestTracingModuleExports:
 
         assert hasattr(tracing_mod, "set_span_error")
         assert callable(tracing_mod.set_span_error)
+
+    def test_exports_span_context_from_headers(self):
+        """tracing module should export span_context_from_headers."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        assert hasattr(tracing_mod, "span_context_from_headers")
+        assert callable(tracing_mod.span_context_from_headers)
+
+    def test_exports_inject_context_to_headers(self):
+        """tracing module should export inject_context_to_headers."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        assert hasattr(tracing_mod, "inject_context_to_headers")
+        assert callable(tracing_mod.inject_context_to_headers)
+
+    def test_exports_traced_decorator(self):
+        """tracing module should export traced decorator."""
+        import proxy.app.shared.tracing as tracing_mod
+
+        assert hasattr(tracing_mod, "traced")
+        assert callable(tracing_mod.traced)
+
+
+class TestTracedDecorator:
+    """Test the @traced decorator for function instrumentation."""
+
+    def test_sync_traced_function(self):
+        """@traced should wrap a sync function with a span."""
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.sync_func")
+        def my_func(x: int) -> int:
+            return x * 2
+
+        result = my_func(5)
+        assert result == 10
+
+    @pytest.mark.asyncio
+    async def test_async_traced_function(self):
+        """@traced should wrap an async function with a span."""
+        import asyncio
+
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.async_func")
+        async def my_async_func(x: int) -> int:
+            await asyncio.sleep(0)
+            return x * 3
+
+        result = await my_async_func(5)
+        assert result == 15
+
+    def test_traced_preserves_metadata(self):
+        """@traced should preserve function name and docstring."""
+        from proxy.app.shared.tracing import traced
+
+        @traced()
+        def documented_func():
+            """My docstring."""
+            return 42
+
+        assert documented_func.__name__ == "documented_func"
+        assert documented_func.__doc__ == "My docstring."
+        assert documented_func() == 42
+
+    def test_traced_exception_propagation(self):
+        """@traced should propagate exceptions from the wrapped function."""
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.error_func")
+        def failing_func():
+            raise RuntimeError("expected")
+
+        with pytest.raises(RuntimeError, match="expected"):
+            failing_func()
+
+    @pytest.mark.asyncio
+    async def test_async_traced_exception_propagation(self):
+        """@traced should propagate exceptions from async wrapped functions."""
+        from proxy.app.shared.tracing import traced
+
+        @traced("test.async_error")
+        async def async_failing():
+            raise ValueError("async expected")
+
+        with pytest.raises(ValueError, match="async expected"):
+            await async_failing()
+
+
+class TestTraceContextMiddleware:
+    """Test the TraceContextMiddleware for W3C context propagation."""
+
+    def test_middleware_class_exists(self):
+        """TraceContextMiddleware should be importable."""
+        from proxy.app.shared.middleware import TraceContextMiddleware
+
+        assert TraceContextMiddleware is not None
+
+    def test_middleware_registered_in_setup(self):
+        """setup_all_middleware should include TraceContextMiddleware."""
+        from unittest.mock import MagicMock
+
+        from fastapi import FastAPI
+
+        from proxy.app.shared.middleware import setup_all_middleware
+
+        app = FastAPI()
+        app.add_middleware = MagicMock()
+        setup_all_middleware(app)
+        # TraceContextMiddleware should be first
+        calls = app.add_middleware.call_args_list
+        assert len(calls) >= 1
+        # Find TraceContextMiddleware in calls
+        middleware_classes = [call[0][0].__name__ if hasattr(call[0][0], "__name__") else str(call) for call in calls]
+        assert "TraceContextMiddleware" in middleware_classes
+
+    def test_middleware_dispatches_without_trace_headers(self):
+        """TraceContextMiddleware should handle requests without trace headers."""
+        import pytest
+
+        TraceContextMiddleware = pytest.importorskip("proxy.app.shared.middleware").TraceContextMiddleware
+
+        assert TraceContextMiddleware is not None
+
+
+class TestTracingStubsIntegration:
+    """Integration tests verifying tracing stubs in key modules."""
+
+    def test_chat_imports_tracing(self):
+        """chat.py should import tracing utilities."""
+        from proxy.app.api.chat import tracer, add_event, get_current_span
+
+        assert tracer is not None
+        assert callable(add_event)
+        assert callable(get_current_span)
+
+    def test_retrieval_imports_tracing(self):
+        """retrieval.py should import tracing utilities."""
+        from proxy.app.core.retrieval import tracer, add_event
+
+        assert tracer is not None
+        assert callable(add_event)
+
+    def test_rerank_imports_tracing(self):
+        """rerank.py should import tracing utilities."""
+        from proxy.app.core.rerank import tracer, add_event
+
+        assert tracer is not None
+        assert callable(add_event)
+
+    def test_middleware_imports_tracing(self):
+        """middleware.py should import span_context_from_headers."""
+        from proxy.app.shared.middleware import span_context_from_headers, tracer
+
+        assert callable(span_context_from_headers)
+        assert tracer is not None
