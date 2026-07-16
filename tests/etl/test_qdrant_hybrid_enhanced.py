@@ -5,6 +5,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+class _StubPointStruct:
+    """Minimal PointStruct replacement for when proxy tests leak MagicMock into sys.modules."""
+
+    def __init__(self, id=None, vector=None, payload=None, **kwargs):
+        self.id = id
+        self.vector = vector
+        self.payload = payload or {}
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -195,6 +205,7 @@ class TestQdrantHybridIndexerIndexing:
 class TestQdrantHybridIndexerConversion:
     """Test chunk-to-point conversion logic."""
 
+    @patch("etl.indexer.qdrant_hybrid.PointStruct", _StubPointStruct)
     @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
     @patch("etl.indexer.qdrant_hybrid.QdrantClient")
     def test_chunk_to_point_creates_valid_point(self, mock_client_cls, mock_st, mock_qdrant_client, sample_chunks):

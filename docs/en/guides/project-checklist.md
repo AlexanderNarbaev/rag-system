@@ -148,15 +148,15 @@ architecture, testing, documentation, deployment, and operational status into on
 | ADR-005 | Version-Aware Indexing          | ✅ Accepted  | 2026-06-22 |
 | ADR-006 | Agentic RAG (LangGraph)         | ✅ Accepted  | 2026-06-22 |
 | ADR-007 | HITL Feedback System            | ✅ Accepted  | 2026-06-22 |
-| ADR-008 | Java/Quarkus Hybrid Migration   | 🟡 Proposed | 2026-07-03 |
-| ADR-009 | Agentic Tools Expansion         | ✅ Accepted  | 2026-07-05 |
-| ADR-010 | Model Evolution (Fine-Tuning)   | ✅ Accepted  | 2026-07-05 |
+| ADR-008 | Java/Quarkus Hybrid Migration   | 🔴 Rejected  | 2026-07-16 |
+| ADR-009 | Agentic Tools Expansion         | ✅ Implemented | 2026-07-05 |
+| ADR-010 | Model Evolution (Fine-Tuning)   | ✅ Implemented | 2026-07-05 |
 | ADR-011 | Incremental Architecture        | ✅ Accepted  | 2026-07-10 |
 | ADR-012 | OpenWebUI Integration           | ✅ Accepted  | 2026-07-10 |
 | ADR-013 | MCP Server Architecture         | ✅ Accepted  | 2026-07-10 |
 | ADR-014 | MinIO Object Storage            | ✅ Accepted  | 2026-07-10 |
 
-**Summary:** 13 Accepted, 1 Proposed (ADR-008), 0 Deprecated
+**Summary:** 11 Accepted, 2 Implemented (ADRs 009, 010), 1 Rejected (ADR-008), 0 Deprecated
 
 ---
 
@@ -455,7 +455,7 @@ architecture, testing, documentation, deployment, and operational status into on
 | 9  | CHANGELOG.md                                      | Release tracking                | Low    | ✅ Fixed                                               |
 | 10 | `tests/etl/conftest.py` missing                   | ETL test isolation              | Low    | ✅ Fixed                                               |
 | 11 | `tests/integration/conftest.py` missing           | Integration test fixtures       | Low    | ✅ Fixed                                               |
-| 12 | ADR-008 (Java migration) still "Proposed"         | Decision pending                | Low    | ✅ Deferred (well-researched, implementation deferred) |
+| 12 | ADR-008 (Java migration) formally rejected | Decision finalized                        | Low    | ✅ Fixed (ADR-008 rejected 2026-07-16)                 |
 | 13 | AGENTS.md project structure                       | Doc inconsistency               | Low    | ✅ Fixed                                               |
 
 ### 🟢 Nice to Have
@@ -531,7 +531,7 @@ architecture, testing, documentation, deployment, and operational status into on
 
 | Horizon   | Theme                                   | Status      |
 |-----------|-----------------------------------------|-------------|
-| Near-term | Java/Quarkus Hybrid Migration (ADR-008) | 🟡 Proposed |
+| Near-term | Java/Quarkus Hybrid Migration (ADR-008) | 🔴 Rejected  |
 | Mid-term  | Advanced Multi-Modal (video/audio, OCR) | 📋 Planned  |
 | Mid-term  | Autonomous Knowledge Curation           | 📋 Planned  |
 | Long-term | Federated Learning across instances     | 📋 Planned  |

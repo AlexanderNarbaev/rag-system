@@ -99,8 +99,13 @@ def mock_healthy_services():
         patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
         patch("requests.get") as mock_get,
     ):
-        mock_qdrant.get_collections.return_value = {}
         mock_get.return_value.status_code = 200
+
+        # The health check does: len(collections.collections),
+        # so get_collections() must return something with a .collections attribute.
+        mock_collections = MagicMock()
+        mock_collections.collections = []
+        mock_qdrant.get_collections.return_value = mock_collections
         yield
 
 

@@ -354,6 +354,19 @@ class TestStreamingChatCompletion:
             yield {"id": "2", "choices": [{"delta": {"content": "is "}}]}
             yield {"id": "3", "choices": [{"delta": {"content": "great."}}]}
 
+        payload = {
+            "text": "RAG stands for Retrieval-Augmented Generation.",
+            "source_type": "docs",
+            "title": "RAG",
+            "version": "1.0",
+            "doc_title": "Docs",
+        }
+        mock_hit = MagicMock()
+        mock_hit.payload = payload
+        mock_hit.score = 0.90
+        mock_rag_pipeline["hybrid_search"].return_value = [mock_hit, mock_hit]
+        mock_rag_pipeline["rerank_chunks"].return_value = [0, 1]
+        mock_rag_pipeline["deduplicate_chunks"].return_value = [(payload, 0.90), (payload, 0.90)]
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
 
         response = client.post(
@@ -366,9 +379,7 @@ class TestStreamingChatCompletion:
         )
         assert response.status_code == 200
         body = response.text
-        # Must contain SSE data lines
         assert "data:" in body
-        # Must contain the streamed content
         assert "RAG" in body
         assert "great." in body
 
@@ -378,6 +389,19 @@ class TestStreamingChatCompletion:
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "test"}}]}
 
+        payload = {
+            "text": "test document",
+            "source_type": "docs",
+            "title": "Test",
+            "version": "1.0",
+            "doc_title": "Test",
+        }
+        mock_hit = MagicMock()
+        mock_hit.payload = payload
+        mock_hit.score = 0.90
+        mock_rag_pipeline["hybrid_search"].return_value = [mock_hit, mock_hit]
+        mock_rag_pipeline["rerank_chunks"].return_value = [0, 1]
+        mock_rag_pipeline["deduplicate_chunks"].return_value = [(payload, 0.90), (payload, 0.90)]
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
 
         response = client.post(
@@ -398,6 +422,19 @@ class TestStreamingChatCompletion:
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "Answer"}}]}
 
+        payload = {
+            "text": "test document",
+            "source_type": "docs",
+            "title": "Test",
+            "version": "1.0",
+            "doc_title": "Test",
+        }
+        mock_hit = MagicMock()
+        mock_hit.payload = payload
+        mock_hit.score = 0.90
+        mock_rag_pipeline["hybrid_search"].return_value = [mock_hit, mock_hit]
+        mock_rag_pipeline["rerank_chunks"].return_value = [0, 1]
+        mock_rag_pipeline["deduplicate_chunks"].return_value = [(payload, 0.90), (payload, 0.90)]
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
 
         response = client.post(
@@ -409,7 +446,6 @@ class TestStreamingChatCompletion:
             },
         )
         body = response.text
-        # Find the metadata line (JSON with rag_feedback_id)
         metadata_found = False
         for line in body.split("\n"):
             if line.startswith("data: ") and "rag_feedback_id" in line:
@@ -421,7 +457,7 @@ class TestStreamingChatCompletion:
         assert metadata_found, "RAG metadata not found in streaming response"
 
     def test_streaming_handles_search_failure_gracefully(self, client, mock_rag_pipeline):
-        """When search fails, streaming returns error in the stream, not HTTP 500."""
+        """When search fails, streaming returns a graceful degradation message, not HTTP 500."""
         mock_rag_pipeline["hybrid_search"].side_effect = Exception("Qdrant unavailable")
 
         response = client.post(
@@ -432,10 +468,9 @@ class TestStreamingChatCompletion:
                 "stream": True,
             },
         )
-        # Should still be 200 — errors go into the stream
         assert response.status_code == 200
         body = response.text
-        assert "error" in body
+        assert "No relevant documents" in body
 
     def test_streaming_content_type_is_event_stream(self, client, mock_rag_pipeline):
         """Streaming response has text/event-stream content type."""
@@ -443,6 +478,19 @@ class TestStreamingChatCompletion:
         async def mock_stream_gen(*args, **kwargs):
             yield {"id": "1", "choices": [{"delta": {"content": "ok"}}]}
 
+        payload = {
+            "text": "test document",
+            "source_type": "docs",
+            "title": "Test",
+            "version": "1.0",
+            "doc_title": "Test",
+        }
+        mock_hit = MagicMock()
+        mock_hit.payload = payload
+        mock_hit.score = 0.90
+        mock_rag_pipeline["hybrid_search"].return_value = [mock_hit, mock_hit]
+        mock_rag_pipeline["rerank_chunks"].return_value = [0, 1]
+        mock_rag_pipeline["deduplicate_chunks"].return_value = [(payload, 0.90), (payload, 0.90)]
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
 
         response = client.post(
@@ -540,7 +588,9 @@ class TestHealthChecks:
             patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
             patch("requests.get") as mock_get,
         ):
-            mock_qdrant.get_collections.return_value = {}
+            mock_collections_response = MagicMock()
+            mock_collections_response.collections = []
+            mock_qdrant.get_collections.return_value = mock_collections_response
             mock_get.return_value.status_code = 200
 
             response = client.get("/v1/health/ready")
@@ -553,10 +603,9 @@ class TestHealthChecks:
     def test_health_ready_with_qdrant_down(self, client):
         """GET /v1/health/ready -> 503 when Qdrant is down."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("proxy.app.core.retrieval.qdrant_client", None),
             patch("requests.get") as mock_get,
         ):
-            mock_qdrant.get_collections.side_effect = Exception("Connection refused")
             mock_get.return_value.status_code = 200
 
             response = client.get("/v1/health/ready")
@@ -585,7 +634,9 @@ class TestHealthChecks:
             patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
             patch("requests.get") as mock_get,
         ):
-            mock_qdrant.get_collections.return_value = {}
+            mock_collections_response = MagicMock()
+            mock_collections_response.collections = []
+            mock_qdrant.get_collections.return_value = mock_collections_response
             mock_get.return_value.status_code = 200
 
             response = client.get("/v1/health")
@@ -599,16 +650,15 @@ class TestHealthChecks:
     def test_health_full_degraded_when_qdrant_fails(self, client):
         """GET /v1/health -> 503 with status degraded when Qdrant fails."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
+            patch("proxy.app.core.retrieval.qdrant_client", None),
             patch("requests.get") as mock_get,
         ):
-            mock_qdrant.get_collections.side_effect = Exception("down")
             mock_get.return_value.status_code = 200
 
             response = client.get("/v1/health")
             data = response.json()
             assert data["status"] == "degraded"
-            assert "error" in data["components"]["qdrant"]
+            assert data["components"]["qdrant"] == "unavailable"
 
 
 # ---------------------------------------------------------------------------
@@ -724,7 +774,9 @@ class TestFullPipelineIntegration:
             patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
             patch("requests.get") as mock_get,
         ):
-            mock_qdrant.get_collections.return_value = {}
+            mock_collections_response = MagicMock()
+            mock_collections_response.collections = []
+            mock_qdrant.get_collections.return_value = mock_collections_response
             mock_get.return_value.status_code = 200
             health1 = client.get("/v1/health")
             assert health1.status_code == 200
@@ -745,7 +797,9 @@ class TestFullPipelineIntegration:
             patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
             patch("requests.get") as mock_get,
         ):
-            mock_qdrant.get_collections.return_value = {}
+            mock_collections_response = MagicMock()
+            mock_collections_response.collections = []
+            mock_qdrant.get_collections.return_value = mock_collections_response
             mock_get.return_value.status_code = 200
             health2 = client.get("/v1/health")
             assert health2.status_code == 200

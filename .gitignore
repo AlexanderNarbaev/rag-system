@@ -52,4 +52,8 @@ site/
 .coverage
 htmlcov/
 coverage.xml
+coverage.json
 rag-system/
+
+# TLS certificates & keys (generated locally via deploy/nginx/generate-certs.sh)
+deploy/nginx/ssl/

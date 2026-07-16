@@ -80,7 +80,7 @@
 
 ---
 
-## S4 Wave 3 — Infrastructure (Aug 3–16) ✅ COMPLETE (5/7)
+## S4 Wave 3 — Infrastructure (Aug 3–16) ✅ COMPLETE (5/7 completed, 2 deferred)
 
 | ID | Description | Status | Commit | Effort | Role |
 |----|-------------|--------|--------|--------|------|
@@ -94,7 +94,7 @@
 
 ---
 
-## S4 Wave 4 — Polish (Aug 17–24, stretch) ✅ COMPLETE (5/5)
+## S4 Wave 4 — Polish (Jul 2026, stretch) ✅ COMPLETE (5/5)
 
 | ID | Description | Status | Commit | Effort | Role |
 |----|-------------|--------|--------|--------|------|
@@ -154,7 +154,7 @@
 |------|-------|-------|--------|
 | Wave 1 (P0) | 5 | ~13h | ✅ COMPLETE |
 | Wave 2 (P1) | 5 | ~74h | ✅ COMPLETE |
-| Wave 3 (P2) | 7 (5 done) | ~80h | ✅ COMPLETE (5/7) |
+| Wave 3 (P2) | 7 (5 done, 2 deferred) | ~80h | ✅ COMPLETE (partial) |
 | Wave 4 (P3, stretch) | 5 | ~130h | ✅ COMPLETE (5/5) |
 | Wave 5 (P4, validation) | 5 | ~26h | ✅ COMPLETE |
-| **Total** | **27** | **~323h** | **✅ SPRINT COMPLETE** |
+| **Total** | **27 (25 done, 2 deferred)** | **~323h** | **✅ SPRINT COMPLETE** |

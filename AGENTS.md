@@ -12,7 +12,7 @@ switcher. See `docs/en/` and `docs/ru/`.
 
 ## Architecture
 
-Three-layer system plus supporting services, with multi-provider LLM backend support:
+Six-layer system plus supporting services, with multi-provider LLM backend support:
 
 1. **ETL Layer** — data extraction, chunking, embedding, indexing (runs on a separate machine)
 2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing (
@@ -163,7 +163,7 @@ rag-system/
 ├── mcp_server/                       # MCP server for OpenCode/Claude Desktop integration
 │   ├── server.py                     # STDIO + Streamable HTTP transports, tools/resources/prompts
 │   └── __init__.py
-├── dashboard/                        # Streamlit expert review dashboard (Planned)
+├── dashboard/                        # Streamlit expert review dashboard (Implemented)
 ├── tui/                              # Terminal UI for RAG interaction
 │   ├── app.py
 │   └── requirements.txt
@@ -183,7 +183,7 @@ rag-system/
 │   ├── docker/                       # Docker Compose variants
 │   │   ├── docker-compose.prod.yml   # Production deployment
 │   │   └── docker-compose.openwebui.yml # OpenWebUI integration
-│   └── k8s/helm/rag-system/          # Kubernetes Helm chart (Planned)
+│   └── k8s/helm/rag-system/          # Kubernetes Helm chart (Implemented)
 ├── config/                           # Monitoring configuration
 │   └── monitoring/                   # Prometheus + Grafana configs
 ├── tests/                            # Test suite
@@ -197,7 +197,7 @@ rag-system/
 ├── docs/                             # Documentation (EN + RU)
 │   ├── en/adr/                       # Architecture Decision Records (14 ADRs)
 │   ├── en/diagrams/                  # C4 diagrams (SVG + Excalidraw)
-│   ├── en/guides/                    # Design & implementation guides (29 guides)
+│   ├── en/guides/                    # Design & implementation guides (43 guides)
 │   ├── ru/adr/                       # Russian translations of ADRs
 │   └── ru/guides/                    # Russian translations of guides
 ├── Makefile                          # Primary dev entry point (36 targets)

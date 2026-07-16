@@ -39,7 +39,7 @@ class TestNeo4jLoaderInit:
 
 class TestNeo4jLoaderConnect:
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
-    @patch("etl.graph_builder.neo4j_loader.GraphDatabase")
+    @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
     def test_connect(self, MockGD):
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 
@@ -68,7 +68,7 @@ class TestNeo4jLoaderConnect:
         loader.close()  # Should not raise
 
     @patch("etl.graph_builder.neo4j_loader.NEO4J_AVAILABLE", True)
-    @patch("etl.graph_builder.neo4j_loader.GraphDatabase")
+    @patch("etl.graph_builder.neo4j_loader.GraphDatabase", create=True)
     def test_context_manager(self, MockGD):
         from etl.graph_builder.neo4j_loader import Neo4jLoader
 

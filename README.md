@@ -123,7 +123,7 @@ graph TB
 | **3. HITL**            | Streamlit                 | Expert feedback dashboard, quality control           |
 | **4. MCP Server**      | FastMCP                   | STDIO + Streamable HTTP, IDE integration             |
 | **5. Model Evolution** | LoRA/QLoRA, MLflow, MinIO | Fine-tune SLM/LLM/Reranker, canary deployment        |
-| **6. Federated RAG**   | FastAPI, asyncio          | Multi-silo fan-out, weighted RRF merge               |
+| **6. Agentic Tools**   | Python SDK, OpenAPI        | Custom tool definitions, auto-discovery, MCP integration |
 
 [Full architecture →](docs/en/index.md) | [C4 Diagrams →](docs/en/diagrams/)
 
@@ -305,12 +305,9 @@ rag-system/
 │   ├── Dockerfile
 │   └── docker-compose.yml
 ├── etl/                   # ETL pipeline (standalone)
-├── federation/            # Federated RAG proxy
-│   ├── app/               # Fan-out, merge, circuit breakers
-│   └── tests/
 ├── mcp_server/            # MCP server (STDIO + HTTP)
-├── hitl_dashboard/        # Streamlit expert dashboard
-├── k8s/helm/rag-system/   # K8s Helm chart
+├── dashboard/             # Streamlit expert dashboard
+├── deploy/k8s/helm/rag-system/  # K8s Helm chart
 ├── tests/                 # Test suite
 │   ├── proxy/             # Proxy unit tests
 │   ├── etl/               # ETL unit tests

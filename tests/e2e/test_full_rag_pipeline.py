@@ -291,6 +291,19 @@ class TestFullRAGPipeline:
             yield {"id": "2", "choices": [{"delta": {"content": "is "}}]}
             yield {"id": "3", "choices": [{"delta": {"content": "great."}}]}
 
+        payload = {
+            "text": "RAG stands for Retrieval-Augmented Generation.",
+            "source_type": "docs",
+            "title": "RAG",
+            "version": "1.0",
+            "doc_title": "Docs",
+        }
+        mock_hit = MagicMock()
+        mock_hit.payload = payload
+        mock_hit.score = 0.90
+        mock_rag_pipeline["hybrid_search"].return_value = [mock_hit, mock_hit]
+        mock_rag_pipeline["rerank_chunks"].return_value = [0, 1]
+        mock_rag_pipeline["deduplicate_chunks"].return_value = [(payload, 0.90), (payload, 0.90)]
         mock_rag_pipeline["stream_completion"].side_effect = mock_stream_gen
 
         response = app_client.post(

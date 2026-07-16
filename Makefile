@@ -92,7 +92,7 @@ format-check: ## Check formatting without changes
 	@cd $(ROOT) && ruff format --check .
 
 typecheck: ## Run mypy static type checker
-	@cd $(ROOT) && mypy proxy/ etl/ --exclude '.venv|__pycache__'
+	@cd $(ROOT) && mypy proxy/ etl/ --exclude '\.venv|__pycache__'
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 clean: ## Remove build artifacts and caches

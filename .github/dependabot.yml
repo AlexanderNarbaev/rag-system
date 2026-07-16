@@ -56,3 +56,11 @@ updates:
       - "dependencies"
       - "docker"
 
+  - package-ecosystem: "docker"
+    directory: "/deploy/docker"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "docker"
+

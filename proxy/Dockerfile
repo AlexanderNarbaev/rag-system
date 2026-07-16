@@ -13,13 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Копирование зависимостей и их установка
-COPY requirements_proxy.txt .
+COPY proxy/requirements_proxy.txt .
 RUN pip install --no-cache-dir -r requirements_proxy.txt
 
 # Копирование исходного кода прокси
 COPY proxy/app /app/app
 # Если есть дополнительные файлы (например, .env.example), можно скопировать
-COPY proxy/.env.example /app/.env.example
+COPY .env.example /app/.env.example
 
 # ── Опционально: поддержка GPU для дообучения моделей ──
 # Для использования GPU раскомментировать следующие строки и пересобрать образ

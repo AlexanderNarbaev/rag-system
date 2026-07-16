@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - "proxy/app/model_evolution/**"
-      - "tests/model_evolution/**"
       - "proxy/.env"
       - ".github/workflows/model-evolution.yml"
   workflow_dispatch:
@@ -71,7 +70,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r proxy/requirements_proxy.txt
+          pip install -r requirements-proxy.txt
 
       - name: Export training dataset from HITL feedback
         id: export
@@ -185,7 +184,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r proxy/requirements_proxy.txt
+          pip install -r requirements-proxy.txt
           pip install mlflow boto3
 
       - name: Create MinIO bucket
@@ -363,7 +362,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r proxy/requirements_proxy.txt
+          pip install -r requirements-proxy.txt
 
       - name: Run evaluation gate
         id: evaluate
@@ -501,7 +500,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r proxy/requirements_proxy.txt
+          pip install -r requirements-proxy.txt
 
       - name: Promote models to registry
         run: |

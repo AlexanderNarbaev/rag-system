@@ -27,7 +27,7 @@ make install-dev
 
 ```bash
 cd proxy
-cp .env.example .env
+cp ../.env.example .env
 # Edit .env — set LLM_ENDPOINT, LLM_MODEL_NAME, QDRANT_HOST
 ```
 
@@ -213,7 +213,7 @@ curl -X POST http://localhost:8081/v1/search \
 | Define tools in YAML/JSON    | [Declarative Tools](guides/agentic-tools-declarative.md)    |
 | Auto-discover API tools      | [OpenAPI Discovery](guides/agentic-tools-openapi.md)        |
 | Set up federated search      | Deployment Guide                                            |
-| Fine-tune models             | [Model Evolution](#)                                        |
+| Fine-tune models             | [Model Evolution](guides/model-evolution.md)                |
 | Add a data source            | [Extensibility Guide](guides/extensibility-data-sources.md) |
 
 ### Operations
@@ -266,14 +266,14 @@ curl -X POST http://localhost:8081/v1/search \
 | Dimension         | Ready           | Details                                                     |
 |-------------------|-----------------|-------------------------------------------------------------|
 | **Code Quality**  | 90%             | ruff, mypy strict, pre-commit hooks, type hints             |
-| **Testing**       | 80%             | 2196 tests, 0 failures, 80% coverage                        |
+| **Testing**       | 80%             | 3468 tests, 0 failures, 80% coverage                        |
 | **Security**      | 90%             | JWT + RBAC + LDAP + input sanitization + pip-audit + CodeQL |
 | **Observability** | 90%             | Prometheus + Grafana + OpenTelemetry + structured logging   |
 | **Reliability**   | 90%             | Circuit breakers, exponential backoff, graceful degradation |
 | **Performance**   | 80%             | Benchmarks, caching, connection pooling                     |
 | **Operations**    | 90%             | K8s Helm, deploy scripts, backup/restore, runbook           |
-| **Documentation** | 100%            | 11 ADRs, 25+ EN guides, 25+ RU guides, API examples         |
-| **Overall**       | **89%** (71/80) | Production-ready                                            |
+| **Documentation** | 100%            | 14 ADRs, 43 EN guides, 30 RU guides, API examples           |
+| **Overall**       | **90%** (72/80) | Production-ready                                            |
 
 [Full assessment →](guides/best-practices-checklist.md)
 

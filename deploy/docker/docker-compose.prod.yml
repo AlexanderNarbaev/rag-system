@@ -150,7 +150,7 @@ services:
   rag-proxy:
     build:
       context: ../..
-      dockerfile: Dockerfile.proxy
+      dockerfile: proxy/Dockerfile
     container_name: rag-proxy
     # Port 8080 is only exposed to internal network (nginx handles external traffic)
     expose:
@@ -158,7 +158,7 @@ services:
     volumes:
       - ${MODEL_CACHE_PATH:-/opt/models/cache}:/app/cache:ro
       - proxy_logs:/app/logs
-      - ../.env:/app/.env:ro
+      - ../../proxy/.env:/app/.env:ro
     environment:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333

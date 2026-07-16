@@ -50,7 +50,7 @@ class TestHealthReady:
         assert response.status_code == 503
         data = response.json()
         assert data["status"] == "not_ready"
-        assert data["components"]["llm"] == "error: timeout"
+        assert data["components"]["llm"] == "unavailable"
 
     @patch("proxy.app.api.health._check_llm", return_value=("ok", {}))
     @patch("proxy.app.api.health._check_qdrant", return_value=("unavailable", {}))

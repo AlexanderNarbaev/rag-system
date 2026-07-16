@@ -224,8 +224,8 @@ cp server.pem deploy/haproxy/ssl/server.pem
 #### Start with HAProxy
 
 ```bash
-# Use HAProxy-specific docker-compose (create separate file)
-docker compose -f docker-compose.haproxy.yml up -d
+# Use HAProxy-specific docker-compose (see deploy/haproxy/haproxy.cfg)
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ## Certificate Rotation

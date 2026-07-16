@@ -41,7 +41,7 @@ All baselines below were measured on:
 |------|-------|
 | **CPU** | Intel Xeon E5-2686 v4 (8 cores) / AMD EPYC equivalent |
 | **RAM** | 32 GB DDR4 |
-| **Python** | 3.12+ |
+| **Python** | 3.11+ |
 | **GPU** | None (CPU-only benchmarks) |
 | **OS** | Linux (Ubuntu 22.04+ / Debian 12+) |
 

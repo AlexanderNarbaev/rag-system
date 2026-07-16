@@ -77,7 +77,7 @@ self-correcting, agentic, and federated architectures.
 - Coverage: 80.00%
 - mypy strict: 0 errors (139 source files) ✅
 - CI/CD: All green (CI, Security, Docs)
-- Security: bandit + trivy + dependabot
+- Security: bandit + Trivy + dependabot
 
 ---
 
