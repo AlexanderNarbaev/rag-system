@@ -230,8 +230,10 @@ class TestSecretsManager:
 
     def test_generate_api_key_entropy(self):
         key = SecretsManager.generate_api_key()
-        parts = key.split("_")
-        random_part = parts[-1]
+        # Key format: prefix_random_part (prefix is "rag")
+        # The random part is after the first "_"
+        prefix_end = key.index("_")
+        random_part = key[prefix_end + 1:]
         assert len(random_part) >= 20
 
     def test_hash_secret_deterministic(self):
