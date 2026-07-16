@@ -1,8 +1,9 @@
 # tests/etl/test_semantic_chunker.py
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from etl.chunker.semantic_chunker import (
+    AdaptiveChunker,
     Chunk,
     MDKeyChunker,
     MetadataEnricher,
@@ -329,3 +330,352 @@ class TestSaveChunksToJson:
         assert len(data) == 1
         assert data[0]["text"] == "chunk text"
         assert data[0]["hash"] == "abc123"
+
+
+class TestAdaptiveChunkerInit:
+    def test_default_construction(self):
+        chunker = AdaptiveChunker()
+        assert chunker.min_chunk_size == 200
+        assert chunker.max_chunk_size == 2000
+        assert chunker.target_chunk_size == 800
+        assert chunker.overlap_ratio == 0.15
+
+    def test_custom_construction(self):
+        chunker = AdaptiveChunker(
+            min_chunk_size=100,
+            max_chunk_size=1000,
+            target_chunk_size=500,
+            overlap_ratio=0.2,
+        )
+        assert chunker.min_chunk_size == 100
+        assert chunker.target_chunk_size == 500
+        assert chunker.overlap_ratio == 0.2
+
+
+class TestAdaptiveChunkerDetectStructure:
+    def test_header_detection(self):
+        chunker = AdaptiveChunker()
+        text = "# Main Title\nSome content.\n## Subtitle\nMore content."
+        elements = chunker._detect_structure(text)
+        assert len(elements) >= 4
+        types = [e["type"] for e in elements]
+        assert "header" in types
+
+    def test_header_levels(self):
+        chunker = AdaptiveChunker()
+        text = "### H3 Level\nContent under h3."
+        elements = chunker._detect_structure(text)
+        headers = [e for e in elements if e["type"] == "header"]
+        assert len(headers) == 1
+        assert headers[0]["level"] == 3
+
+    def test_code_block_detection(self):
+        chunker = AdaptiveChunker()
+        text = "Before\n```python\nprint('hello')\nx = 1\n```\nAfter"
+        elements = chunker._detect_structure(text)
+        code_blocks = [e for e in elements if e["type"] == "code"]
+        assert len(code_blocks) == 1
+        assert "print" in code_blocks[0]["text"]
+
+    def test_code_block_unclosed(self):
+        chunker = AdaptiveChunker()
+        text = "```\ncode without closing\n"
+        elements = chunker._detect_structure(text)
+        code_blocks = [e for e in elements if e["type"] == "code"]
+        assert len(code_blocks) >= 1
+
+    def test_table_detection(self):
+        chunker = AdaptiveChunker()
+        text = "| Col1 | Col2 |\n|------|------|\n| A    | B    |\n\nAfter table."
+        elements = chunker._detect_structure(text)
+        tables = [e for e in elements if e["type"] == "table"]
+        assert len(tables) == 1
+        assert "Col1" in tables[0]["text"]
+
+    def test_paragraph_detection(self):
+        chunker = AdaptiveChunker()
+        text = "This is a simple paragraph.\n\nAnother paragraph."
+        elements = chunker._detect_structure(text)
+        paragraphs = [e for e in elements if e["type"] == "paragraph"]
+        assert len(paragraphs) >= 2
+
+    def test_empty_text(self):
+        chunker = AdaptiveChunker()
+        elements = chunker._detect_structure("")
+        assert elements == []
+
+    def test_mixed_content(self):
+        chunker = AdaptiveChunker()
+        text = """# Header
+Some paragraph.
+
+```python
+code block
+```
+
+| A | B |
+|---|---|
+| 1 | 2 |
+
+Final paragraph."""
+        elements = chunker._detect_structure(text)
+        types = {e["type"] for e in elements}
+        assert "header" in types
+        assert "code" in types
+        assert "table" in types
+        assert "paragraph" in types
+
+
+class TestAdaptiveChunkerMergeSmallElements:
+    def test_merge_small_paragraphs(self):
+        chunker = AdaptiveChunker(min_chunk_size=10, target_chunk_size=200)
+        elements = [
+            {"type": "paragraph", "text": "Short.", "start": 0, "end": 6},
+            {"type": "paragraph", "text": "Also short.", "start": 7, "end": 18},
+            {"type": "paragraph", "text": "Long enough " + "x" * 50, "start": 19, "end": 70},
+        ]
+        merged = chunker._merge_small_elements(elements)
+        assert len(merged) < len(elements)
+
+    def test_headers_not_merged_with_previous(self):
+        chunker = AdaptiveChunker(min_chunk_size=10, target_chunk_size=200)
+        elements = [
+            {"type": "paragraph", "text": "Content before header.", "start": 0, "end": 20},
+            {"type": "header", "level": 2, "text": "## Section", "start": 21, "end": 31},
+            {"type": "paragraph", "text": "Content after header.", "start": 32, "end": 52},
+        ]
+        merged = chunker._merge_small_elements(elements)
+        assert len(merged) >= 2
+
+    def test_empty_elements(self):
+        chunker = AdaptiveChunker()
+        assert chunker._merge_small_elements([]) == []
+
+    def test_single_element(self):
+        chunker = AdaptiveChunker()
+        elements = [{"type": "paragraph", "text": "Only one.", "start": 0, "end": 9}]
+        merged = chunker._merge_small_elements(elements)
+        assert len(merged) == 1
+        assert merged[0]["text"] == "Only one."
+
+    def test_merge_below_min_size(self):
+        chunker = AdaptiveChunker(min_chunk_size=100, target_chunk_size=200)
+        elements = [
+            {"type": "paragraph", "text": "Tiny.", "start": 0, "end": 5},
+            {"type": "paragraph", "text": "Small.", "start": 6, "end": 12},
+        ]
+        merged = chunker._merge_small_elements(elements)
+        assert len(merged) == 1
+
+    def test_merge_stops_at_header(self):
+        chunker = AdaptiveChunker(min_chunk_size=10, target_chunk_size=200)
+        elements = [
+            {"type": "paragraph", "text": "Larger paragraph here.", "start": 0, "end": 22},
+            {"type": "header", "level": 1, "text": "# H1", "start": 23, "end": 27},
+            {"type": "paragraph", "text": "Para2.", "start": 28, "end": 34},
+        ]
+        merged = chunker._merge_small_elements(elements)
+        assert len(merged) >= 2
+
+
+class TestAdaptiveChunkerSplitLargeChunks:
+    def test_small_chunk_not_split(self):
+        chunker = AdaptiveChunker(max_chunk_size=2000)
+        elements = [{"type": "paragraph", "text": "Short text.", "start": 0, "end": 11}]
+        result = chunker._split_large_chunks(elements)
+        assert len(result) == 1
+        assert result[0]["text"] == "Short text."
+
+    def test_large_chunk_split_at_sentences(self):
+        chunker = AdaptiveChunker(max_chunk_size=50, target_chunk_size=30)
+        text = "First sentence is here. Second sentence goes here. Third one too."
+        elements = [{"type": "paragraph", "text": text, "start": 0, "end": len(text)}]
+        result = chunker._split_large_chunks(elements)
+        assert len(result) >= 2
+
+    def test_single_long_sentence_not_splittable(self):
+        chunker = AdaptiveChunker(max_chunk_size=20, target_chunk_size=10)
+        text = "NoPunctuationMakesOneSentence " * 5
+        elements = [{"type": "paragraph", "text": text.strip(), "start": 0, "end": len(text)}]
+        result = chunker._split_large_chunks(elements)
+        assert len(result) >= 1
+
+    def test_empty_result_for_empty_input(self):
+        chunker = AdaptiveChunker()
+        assert chunker._split_large_chunks([]) == []
+
+
+class TestAdaptiveChunkerApplyOverlap:
+    def test_no_overlap_when_disabled(self):
+        chunker = AdaptiveChunker(overlap_ratio=0.0)
+        chunks = [
+            {"type": "paragraph", "text": "Chunk one.", "start": 0, "end": 10},
+            {"type": "paragraph", "text": "Chunk two.", "start": 11, "end": 21},
+        ]
+        result = chunker._apply_overlap(chunks)
+        assert len(result) == 2
+        assert "previous context" not in result[0]["text"]
+
+    def test_overlap_adds_context_prefix(self):
+        chunker = AdaptiveChunker(overlap_ratio=0.3)
+        chunks = [
+            {"type": "paragraph", "text": "First chunk which has more text.", "start": 0, "end": 30},
+            {"type": "paragraph", "text": "Second chunk text.", "start": 31, "end": 50},
+        ]
+        result = chunker._apply_overlap(chunks)
+        assert "[previous context" in result[1]["text"]
+
+    def test_single_chunk_no_overlap(self):
+        chunker = AdaptiveChunker(overlap_ratio=0.5)
+        chunks = [{"type": "paragraph", "text": "Only chunk.", "start": 0, "end": 11}]
+        result = chunker._apply_overlap(chunks)
+        assert len(result) == 1
+        assert "previous context" not in result[0]["text"]
+
+
+class TestAdaptiveChunkerChunk:
+    def test_chunk_plain_text(self):
+        chunker = AdaptiveChunker(
+            min_chunk_size=10,
+            max_chunk_size=2000,
+            target_chunk_size=500,
+            overlap_ratio=0.1,
+        )
+        text = "# Title\n\nFirst paragraph with enough text to be a chunk.\n\nAnother chunk of content."
+        result = chunker.chunk(text)
+        assert len(result) >= 1
+        for r in result:
+            assert "text" in r
+            assert "type" in r
+            assert "start" in r
+            assert "end" in r
+
+    def test_chunk_with_code_and_tables(self):
+        chunker = AdaptiveChunker(
+            max_chunk_size=5000,
+            target_chunk_size=2000,
+            overlap_ratio=0.1,
+        )
+        text = """# Header
+
+Some paragraph here.
+
+```python
+x = 1
+y = 2
+```
+
+| A | B |
+|---|---|
+| 1 | 2 |
+
+Final text here with more words to ensure separation."""
+        result = chunker.chunk(text)
+        assert len(result) >= 1
+
+    def test_chunk_long_document(self):
+        chunker = AdaptiveChunker(
+            min_chunk_size=50,
+            max_chunk_size=500,
+            target_chunk_size=200,
+            overlap_ratio=0.1,
+        )
+        text = "# Long Document\n\n" + ("Some paragraph with reasonable length. " * 50)
+        result = chunker.chunk(text)
+        assert len(result) >= 5
+
+
+class TestAdaptiveChunkerChunkMarkdown:
+    def test_chunk_markdown_simple(self):
+        chunker = AdaptiveChunker(max_chunk_size=2000)
+        md = "# Title\n\nContent here.\n\n## Section\n\nMore text."
+        chunks = chunker.chunk_markdown(md)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert isinstance(c, Chunk)
+            assert c.text
+            assert c.hash
+
+    def test_chunk_markdown_with_metadata(self):
+        chunker = AdaptiveChunker(max_chunk_size=2000)
+        md = "# Doc\n\nSome content."
+        metadata = {
+            "source_type": "gitlab",
+            "source_id": "repo1",
+            "version": "v1.0",
+            "doc_title": "README",
+        }
+        chunks = chunker.chunk_markdown(md, metadata)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.source_type == "gitlab"
+            assert c.source_id == "repo1"
+            assert c.doc_title == "README"
+            assert c.version == "v1.0"
+
+    def test_chunk_markdown_positions(self):
+        chunker = AdaptiveChunker(max_chunk_size=2000)
+        md = "# One\n\nFirst.\n\n## Two\n\nSecond.\n\n# Three\n\nThird."
+        chunks = chunker.chunk_markdown(md)
+        positions = [c.position for c in chunks]
+        assert positions == sorted(positions)
+        assert len(set(positions)) == len(chunks)
+
+    def test_chunk_markdown_empty(self):
+        chunker = AdaptiveChunker()
+        chunks = chunker.chunk_markdown("")
+        assert chunks == []
+
+    def test_chunk_markdown_single_para(self):
+        chunker = AdaptiveChunker(max_chunk_size=2000)
+        md = "Just a single paragraph with no headings."
+        chunks = chunker.chunk_markdown(md)
+        assert len(chunks) == 1
+        assert "single paragraph" in chunks[0].text
+
+
+class TestMetadataEnricherEnrichWithSlm:
+    def test_enrich_with_slm_disabled(self):
+        enricher = MetadataEnricher(use_slm=False)
+        result = enricher.enrich_with_slm("some text")
+        assert result == {}
+
+    def test_enrich_with_slm_success(self):
+        enricher = MetadataEnricher(use_slm=True, slm_endpoint="http://localhost:8000/slm")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "text": '{"summary": "A summary", "keywords": ["k1", "k2"], "questions": ["Q1?"]}'
+        }
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = mock_resp
+            result = enricher.enrich_with_slm("test text")
+        assert result["summary"] == "A summary"
+        assert "k1" in result["keywords"]
+        assert len(result["hypothetical_questions"]) >= 1
+
+    def test_enrich_with_slm_http_error(self):
+        enricher = MetadataEnricher(use_slm=True, slm_endpoint="http://localhost:8000/slm")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = mock_resp
+            result = enricher.enrich_with_slm("test text")
+        assert result == {}
+
+    def test_enrich_with_slm_network_error(self):
+        enricher = MetadataEnricher(use_slm=True, slm_endpoint="http://localhost:8000/slm")
+        with patch("requests.post") as mock_post:
+            mock_post.side_effect = ConnectionError("unreachable")
+            result = enricher.enrich_with_slm("test text")
+        assert result == {}
+
+    def test_enrich_with_slm_invalid_json_response(self):
+        enricher = MetadataEnricher(use_slm=True, slm_endpoint="http://localhost:8000/slm")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"text": "not valid json at all"}
+        with patch("requests.post") as mock_post:
+            mock_post.return_value = mock_resp
+            result = enricher.enrich_with_slm("test text")
+        assert result == {}

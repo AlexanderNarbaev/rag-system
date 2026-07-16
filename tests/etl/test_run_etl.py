@@ -4,6 +4,214 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+class TestRunExtractConfluence:
+    @patch("etl.scheduler.run_etl.ConfluenceExtractor")
+    def test_successful_extraction(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_confluence
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_extractor.run.return_value = None
+        mock_wal = MagicMock()
+        config = {
+            "confluence": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "confluence"),
+            },
+        }
+        result = run_extract_confluence(config, mock_wal)
+        assert result == tmp_path / "confluence"
+        mock_extractor.run.assert_called_once()
+        mock_wal.update_last_run.assert_called_once()
+
+    @patch("etl.scheduler.run_etl.ConfluenceExtractor")
+    def test_custom_output_dir(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_confluence
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        custom_dir = tmp_path / "custom_conflu"
+        config = {
+            "confluence": {
+                "base_url": "http://test",
+                "output_dir": str(custom_dir),
+            },
+        }
+        result = run_extract_confluence(config, mock_wal)
+        assert result == custom_dir
+
+
+class TestRunExtractJira:
+    @patch("etl.scheduler.run_etl.JiraExtractor")
+    def test_successful_extraction(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_jira
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = None
+        config = {
+            "jira": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "jira"),
+            },
+        }
+        result = run_extract_jira(config, mock_wal)
+        assert result == tmp_path / "jira"
+        mock_extractor.run.assert_called_once()
+
+    @patch("etl.scheduler.run_etl.JiraExtractor")
+    def test_incremental_when_last_run_exists(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_jira
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = "2025-01-01"
+        config = {
+            "jira": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "jira"),
+            },
+        }
+        result = run_extract_jira(config, mock_wal)
+        assert config["jira"].get("since_date") == "2025-01-01"
+
+    @patch("etl.scheduler.run_etl.JiraExtractor")
+    def test_respects_existing_since_date(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_jira
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = "2025-01-01"
+        config = {
+            "jira": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "jira"),
+                "since_date": "2024-01-01",
+            },
+        }
+        result = run_extract_jira(config, mock_wal)
+        assert config["jira"]["since_date"] == "2024-01-01"
+
+
+class TestRunExtractGitlab:
+    @patch("etl.scheduler.run_etl.GitLabExtractor")
+    def test_successful_extraction(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_gitlab
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = None
+        config = {
+            "gitlab": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "gitlab"),
+            },
+        }
+        result = run_extract_gitlab(config, mock_wal)
+        assert result == tmp_path / "gitlab"
+
+    @patch("etl.scheduler.run_etl.GitLabExtractor")
+    def test_incremental_when_last_run_exists(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_gitlab
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = "2025-06-01"
+        config = {
+            "gitlab": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "gitlab"),
+            },
+        }
+        result = run_extract_gitlab(config, mock_wal)
+        assert config["gitlab"].get("since_date") == "2025-06-01"
+
+
+class TestRunExtractorSafe:
+    def test_success(self, tmp_path):
+        from etl.scheduler.run_etl import _run_extractor_safe
+
+        def mock_fn(config, wal):
+            return tmp_path
+
+        mock_wal = MagicMock()
+        name, output_dir, error = _run_extractor_safe("test", mock_fn, {}, mock_wal)
+        assert name == "test"
+        assert output_dir == tmp_path
+        assert error is None
+
+    def test_failure_captures_error(self):
+        from etl.scheduler.run_etl import _run_extractor_safe
+
+        def mock_fn(config, wal):
+            raise RuntimeError("extraction failed")
+
+        mock_wal = MagicMock()
+        name, output_dir, error = _run_extractor_safe("test", mock_fn, {}, mock_wal)
+        assert name == "test"
+        assert output_dir is None
+        assert error is not None
+        assert "extraction failed" in error
+
+
+class TestRunChunkingShutdown:
+    def test_shutdown_stops_chunking(self, tmp_path):
+        import etl.scheduler.run_etl as run_etl_mod
+
+        run_etl_mod._shutdown_requested = True
+        try:
+            from etl.scheduler.run_etl import run_chunking
+
+            mock_chunker = MagicMock()
+            mock_chunk = MagicMock()
+            mock_chunk.__dict__ = {"text": "c", "source_id": "d1"}
+            mock_chunker.process_document.return_value = [mock_chunk]
+            docs = [
+                {
+                    "id": "doc1",
+                    "source_type": "w",
+                    "title": "T",
+                    "content": "c",
+                    "content_type": "markdown",
+                    "metadata": {},
+                },
+            ]
+            output_dir = tmp_path / "chunks"
+            result = run_chunking(docs, mock_chunker, output_dir)
+            assert result == []
+        finally:
+            run_etl_mod._shutdown_requested = False
+
+
+class TestRunIndexingShutdown:
+    def test_shutdown_stops_indexing(self):
+        import etl.scheduler.run_etl as run_etl_mod
+
+        from etl.scheduler.run_etl import run_indexing
+
+        run_etl_mod._shutdown_requested = True
+        try:
+            mock_lake = MagicMock()
+            mock_wal = MagicMock()
+            chunks = [
+                {"text": "c", "id": "c1", "source_id": "d1"},
+                {"text": "c2", "id": "c2", "source_id": "d2"},
+            ]
+            run_indexing(chunks, mock_lake, mock_wal)
+            mock_lake.sync_document.assert_not_called()
+        finally:
+            run_etl_mod._shutdown_requested = False
+
+
 
 class TestLoadConfig:
     def test_load_yaml_config(self, tmp_path):

@@ -245,3 +245,248 @@ class TestQdrantHybridIndexerConversion:
         )
         point = indexer._chunk_to_point({"hash": "x", "text": ""})
         assert point is None
+
+
+class TestQdrantHybridIndexerLiveOps:
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_live_upsert_success(self, mock_client_cls, mock_st, mock_qdrant_client):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_embedder = MagicMock()
+        mock_embedder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 1024)
+        mock_st.return_value = mock_embedder
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+        chunk = {
+            "hash": "abc123",
+            "text": "test chunk text for live upsert",
+            "title": "Test",
+            "source_type": "wiki",
+            "source_id": "42",
+        }
+        result = indexer.live_upsert(chunk)
+        assert result is True
+        mock_qdrant_client.upsert.assert_called_once()
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_live_upsert_empty_text(self, mock_client_cls, mock_st, mock_qdrant_client):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_st.return_value = MagicMock()
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+        chunk = {"hash": "x", "text": ""}
+        result = indexer.live_upsert(chunk)
+        assert result is False
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_live_delete_success(self, mock_client_cls, mock_st, mock_qdrant_client):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_st.return_value = MagicMock()
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+        result = indexer.live_delete("abc123")
+        assert result is True
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_live_delete_empty_id(self, mock_client_cls, mock_st, mock_qdrant_client):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_st.return_value = MagicMock()
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+        result = indexer.live_delete("")
+        assert result is False
+
+
+class TestQdrantHybridIndexerColbert:
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_compute_colbert_disabled(self, mock_client_cls, mock_st, mock_qdrant_client):
+        import etl.indexer.qdrant_hybrid as qdrant_mod
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_embedder = MagicMock()
+        mock_embedder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 1024)
+        mock_st.return_value = mock_embedder
+
+        original_colbert = qdrant_mod.COLBERT_ENABLED
+        try:
+            qdrant_mod.COLBERT_ENABLED = False
+            indexer = QdrantHybridIndexer(
+                host="localhost",
+                port=6333,
+                collection_name="test_kb",
+                embedder_model_name="BAAI/bge-m3",
+            )
+            result = indexer._compute_colbert_vectors("test text")
+            assert len(result) == 1
+            assert isinstance(result[0], list)
+        finally:
+            qdrant_mod.COLBERT_ENABLED = original_colbert
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_index_with_colbert_disabled(self, mock_client_cls, mock_st, mock_qdrant_client):
+        import etl.indexer.qdrant_hybrid as qdrant_mod
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_st.return_value = MagicMock()
+
+        original_colbert = qdrant_mod.COLBERT_ENABLED
+        try:
+            qdrant_mod.COLBERT_ENABLED = False
+            indexer = QdrantHybridIndexer(
+                host="localhost",
+                port=6333,
+                collection_name="test_kb",
+                embedder_model_name="BAAI/bge-m3",
+            )
+            result = indexer.index_with_colbert("test")
+            assert result is False
+        finally:
+            qdrant_mod.COLBERT_ENABLED = original_colbert
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_search_colbert_disabled(self, mock_client_cls, mock_st, mock_qdrant_client):
+        import etl.indexer.qdrant_hybrid as qdrant_mod
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_st.return_value = MagicMock()
+
+        original_colbert = qdrant_mod.COLBERT_ENABLED
+        try:
+            qdrant_mod.COLBERT_ENABLED = False
+            indexer = QdrantHybridIndexer(
+                host="localhost",
+                port=6333,
+                collection_name="test_kb",
+                embedder_model_name="BAAI/bge-m3",
+            )
+            result = indexer.search_colbert("query")
+            assert result == []
+        finally:
+            qdrant_mod.COLBERT_ENABLED = original_colbert
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_compute_colbert_success(self, mock_client_cls, mock_st, mock_qdrant_client):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_embedder = MagicMock()
+        mock_embedder.encode.return_value = MagicMock(
+            tolist=lambda: [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
+        )
+        mock_st.return_value = mock_embedder
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+        result = indexer._compute_colbert_vectors("test")
+        assert isinstance(result, list)
+        assert len(result) == 3
+
+
+class TestBatchIndexFromJsonFiles:
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_batch_index_from_files(self, mock_client_cls, mock_st, mock_qdrant_client, tmp_path):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer, batch_index_from_json_files
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_embedder = MagicMock()
+        mock_embedder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 1024)
+        mock_st.return_value = mock_embedder
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+
+        chunks_dir = tmp_path / "chunks"
+        chunks_dir.mkdir()
+        json_file = chunks_dir / "chunks.json"
+        import json
+
+        json_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "hash": "test1",
+                        "text": "test text one",
+                        "title": "Test1",
+                        "source_type": "wiki",
+                        "source_id": "1",
+                    },
+                    {
+                        "hash": "test2",
+                        "text": "test text two",
+                        "title": "Test2",
+                        "source_type": "wiki",
+                        "source_id": "2",
+                    },
+                ],
+            ),
+        )
+
+        batch_index_from_json_files(indexer, chunks_dir)
+        mock_qdrant_client.upsert.assert_called_once()
+
+    @patch("etl.indexer.qdrant_hybrid.SentenceTransformer")
+    @patch("etl.indexer.qdrant_hybrid.QdrantClient")
+    def test_batch_index_empty_dir(self, mock_client_cls, mock_st, mock_qdrant_client, tmp_path):
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer, batch_index_from_json_files
+
+        mock_client_cls.return_value = mock_qdrant_client
+        mock_st.return_value = MagicMock()
+
+        indexer = QdrantHybridIndexer(
+            host="localhost",
+            port=6333,
+            collection_name="test_kb",
+            embedder_model_name="BAAI/bge-m3",
+        )
+
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        batch_index_from_json_files(indexer, empty_dir)
+        mock_qdrant_client.upsert.assert_not_called()
