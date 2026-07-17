@@ -32,6 +32,8 @@ def app_client():
         patch("proxy.app.main.LOG_REQUESTS", False),
         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
         patch("proxy.app.auth.jwt.AUTH_ENABLED", False),
+        patch("proxy.app.shared.config.RBAC_ENABLED", False),
+        patch("proxy.app.main.PROGRESSIVE_RETRIEVAL_ENABLED", False),
     ):
         from fastapi.testclient import TestClient
 

@@ -46,11 +46,19 @@ from proxy.app.main import app
 def _disable_auth(monkeypatch):
     """Disable authentication for all tests in this module."""
     import proxy.app.auth.jwt as _jwt
+    import proxy.app.auth.rbac as _rbac
     import proxy.app.shared.config as _cfg
 
     monkeypatch.setenv("AUTH_ENABLED", "false")
+    monkeypatch.setenv("RBAC_ENABLED", "false")
+    monkeypatch.setenv("PROGRESSIVE_RETRIEVAL_ENABLED", "false")
     monkeypatch.setattr(_cfg, "AUTH_ENABLED", False)
+    monkeypatch.setattr(_cfg, "RBAC_ENABLED", False)
+    monkeypatch.setattr(_cfg, "PROGRESSIVE_RETRIEVAL_ENABLED", False)
     monkeypatch.setattr(_jwt, "AUTH_ENABLED", False)
+    monkeypatch.setattr(_rbac, "RBAC_ENABLED", False)
+    import proxy.app.main as _main
+    monkeypatch.setattr(_main, "PROGRESSIVE_RETRIEVAL_ENABLED", False)
 
 
 @pytest.fixture

@@ -21,6 +21,7 @@ def _isolate_env(monkeypatch):
     # Tests that need auth should monkeypatch AUTH_ENABLED back to True.
     monkeypatch.setenv("AUTH_ENABLED", "false")
     monkeypatch.setenv("RBAC_ENABLED", "false")
+    monkeypatch.setenv("PROGRESSIVE_RETRIEVAL_ENABLED", "false")
     try:
         import proxy.app.auth.jwt as _jwt
         import proxy.app.auth.rbac as _rbac
@@ -30,5 +31,15 @@ def _isolate_env(monkeypatch):
         monkeypatch.setattr(_jwt, "AUTH_ENABLED", False)
         monkeypatch.setattr(_cfg, "RBAC_ENABLED", False)
         monkeypatch.setattr(_rbac, "RBAC_ENABLED", False)
+        monkeypatch.setattr(_cfg, "PROGRESSIVE_RETRIEVAL_ENABLED", False)
+        monkeypatch.setattr(_cfg, "RBAC_ENABLED", False)
+        monkeypatch.setattr(_rbac, "RBAC_ENABLED", False)
+    except ImportError:
+        pass
+
+    # Also patch main.py's local import of PROGRESSIVE_RETRIEVAL_ENABLED
+    try:
+        import proxy.app.main as _main
+        monkeypatch.setattr(_main, "PROGRESSIVE_RETRIEVAL_ENABLED", False)
     except ImportError:
         pass

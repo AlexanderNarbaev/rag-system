@@ -87,6 +87,10 @@ SLM_LOCAL_STARTUP_TIMEOUT = int(os.getenv("SLM_LOCAL_STARTUP_TIMEOUT", "60"))
 MAX_CHUNKS_RETRIEVAL = int(os.getenv("MAX_CHUNKS_RETRIEVAL", "50"))
 MAX_CHUNKS_AFTER_RERANK = int(os.getenv("MAX_CHUNKS_AFTER_RERANK", "20"))
 
+# ============ Progressive Retrieval (FR-25) ============
+PROGRESSIVE_RETRIEVAL_ENABLED = os.getenv("PROGRESSIVE_RETRIEVAL_ENABLED", "true").lower() == "true"
+PROGRESSIVE_RETRIEVAL_STAGES = os.getenv("PROGRESSIVE_RETRIEVAL_STAGES", "5,10,20")
+
 # ============ Кэш ============
 USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")

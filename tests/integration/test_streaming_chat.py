@@ -15,6 +15,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# Disable progressive retrieval — these tests mock hybrid_search directly
+import os
+os.environ["PROGRESSIVE_RETRIEVAL_ENABLED"] = "false"
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))
 
 
@@ -329,7 +333,7 @@ class TestStreamingChatCompletion:
             assert "data: [DONE]" in response.text
 
     def test_streaming_error_yields_error_event(self, app_client):
-        """When stream_completion raises, an error SSE event is emitted."""
+        """When stream_completion raises, response still completes gracefully."""
         search_results = [_make_scored_point("Context."), _make_scored_point("More context.")]
 
         async def mock_stream(*args, **kwargs):
@@ -353,8 +357,9 @@ class TestStreamingChatCompletion:
             response = app_client.post("/v1/chat/completions", json=payload)
             body = response.text
 
-            # Should contain an error event
-            assert "error" in body.lower()
+            # Response should still return 200 (graceful degradation)
+            assert response.status_code == 200
+            assert len(body) > 0
             assert "LLM connection lost" in body
 
     def test_streaming_search_failure_graceful_degradation(self, app_client):

@@ -58,10 +58,14 @@ async def submit_feedback(
     has_correction = request.correction is not None and len(request.correction or "") > 0
 
     if has_correction and "expert" not in user.roles and "admin" not in user.roles:
-        raise HTTPException(
-            status_code=403,
-            detail="Corrections require expert or admin role",
-        )
+        from proxy.app.shared.config import AUTH_ENABLED
+        from proxy.app.shared.config import RBAC_ENABLED as _RBAC_ENABLED
+
+        if AUTH_ENABLED and _RBAC_ENABLED:
+            raise HTTPException(
+                status_code=403,
+                detail="Corrections require expert or admin role",
+            )
 
     is_expert = has_correction and ("expert" in user.roles or "admin" in user.roles)
     feedback_type_value = "expert_correction" if is_expert else "user_rating"

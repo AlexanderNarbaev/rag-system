@@ -44,6 +44,7 @@ from proxy.app.core.context import (  # noqa: F401 — re-export for test patchi
     deduplicate_chunks,
     extract_version_from_query,
 )
+from proxy.app.core.progressive_retrieval import progressive_retrieve
 from proxy.app.core.rerank import rerank_chunks
 from proxy.app.core.retrieval import hybrid_search
 from proxy.app.core.retrieval_evaluator import RetrievalEvaluator
@@ -74,6 +75,8 @@ from proxy.app.shared.config import (
     NEO4J_URI,
     NEO4J_USER,
     OTEL_ENABLED,
+    PROGRESSIVE_RETRIEVAL_ENABLED,
+    PROGRESSIVE_RETRIEVAL_STAGES,
     RATE_LIMIT_BURST,
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_PER_MINUTE,
@@ -424,14 +427,28 @@ async def process_rag_query(
             response_text = await non_stream_completion(messages, temperature=temperature, max_tokens=max_tokens)
             return response_text, "", False, [], {}
 
-    # 3. Hybrid search
+    # 3. Progressive or standard hybrid search
+    retrieval_stage = "direct"
     try:
-        search_results = hybrid_search(
-            query=user_query,
-            version=version,
-            top_k=top_k_override or MAX_CHUNKS_RETRIEVAL,
-            access_filter=_access_filter,
-        )
+        if PROGRESSIVE_RETRIEVAL_ENABLED and not top_k_override:
+            _raw_stages = [
+                int(s.strip()) for s in PROGRESSIVE_RETRIEVAL_STAGES.split(",") if s.strip().isdigit()
+            ]
+            _stages = _raw_stages if _raw_stages else [5, 10, 20]
+            search_results, retrieval_stage = await progressive_retrieve(
+                query=user_query,
+                version=version,
+                stages=_stages,
+                access_filter=_access_filter,
+            )
+            logger.info("Progressive retrieval: stage=%s, results=%d", retrieval_stage, len(search_results or []))
+        else:
+            search_results = hybrid_search(
+                query=user_query,
+                version=version,
+                top_k=top_k_override or MAX_CHUNKS_RETRIEVAL,
+                access_filter=_access_filter,
+            )
     except Exception as e:
         logger.warning(f"Hybrid search failed (degraded mode): {e}")
         search_results = None

@@ -150,8 +150,8 @@ def _enable_auth(monkeypatch):
     """Re-enable auth for auth-specific tests."""
     monkeypatch.setenv("AUTH_ENABLED", "true")
     monkeypatch.setenv("RBAC_ENABLED", "true")
-    import proxy.app.shared.config as _cfg
     import proxy.app.auth.rbac as _rbac
+    import proxy.app.shared.config as _cfg
 
     monkeypatch.setattr(_cfg, "AUTH_ENABLED", True)
     monkeypatch.setattr(_cfg, "RBAC_ENABLED", True)
