@@ -329,7 +329,16 @@ class ConnectionPool:
     def _close_connection_sync(self, conn: Any) -> None:
         try:
             if hasattr(conn, "close"):
-                conn.close()
+                close_fn = conn.close
+                import inspect as _insp
+
+                if _insp.iscoroutinefunction(close_fn):
+                    logger.debug(
+                        "Cannot close async connection synchronously in pool '%s'",
+                        self.name,
+                    )
+                    return
+                close_fn()
         except Exception as e:
             logger.debug("Error closing connection in pool '%s': %s", self.name, e)
 

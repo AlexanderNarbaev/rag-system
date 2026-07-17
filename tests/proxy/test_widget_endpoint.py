@@ -28,12 +28,12 @@ class TestWidgetEndpoints:
 
     def test_serve_widget_function_exists(self):
         """serve_widget is an async function."""
-        import asyncio
+        import inspect
 
-        assert asyncio.iscoroutinefunction(widget_mod.serve_widget)
+        assert inspect.iscoroutinefunction(widget_mod.serve_widget)
 
     def test_serve_widget_js_function_exists(self):
         """serve_widget_js is an async function."""
-        import asyncio
+        import inspect
 
-        assert asyncio.iscoroutinefunction(widget_mod.serve_widget_js)
+        assert inspect.iscoroutinefunction(widget_mod.serve_widget_js)
