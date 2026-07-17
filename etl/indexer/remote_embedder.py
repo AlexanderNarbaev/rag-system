@@ -103,7 +103,7 @@ class RemoteEmbedder:
                 break
         self._endpoint = base
         self._embedding_url = f"{self._endpoint}/v1/embeddings"
-        self._model = model or "default"
+        self._model = model.strip().rstrip("}")
         self._api_key = api_key
         self._timeout = timeout
         self._max_batch_size = max_batch_size

@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.3.0] - 2026-07-17
+
+### Added
+
+- **Streaming ETL pipeline** — new `--mode streaming` extracts→chunks→embeds→indexes
+  documents in a single in-memory pass with zero disk storage. Uses generator-based
+  document iteration, `asyncio.Semaphore` for embedder backpressure, and atomic
+  `live_upsert()` to Qdrant. Configurable via `pipeline.mode` and `streaming.*` settings.
+- **Remote embedder with retry + connection pooling** — `RemoteEmbedder` class is a
+  drop-in SentenceTransformer replacement that calls OpenAI-compatible `/v1/embeddings`.
+  Includes exponential backoff with jitter, configurable retry budget, HTTP connection
+  pooling via `requests.Session` + `HTTPAdapter`, async support via `aiohttp`, and
+  graceful degradation (`encode_sparse` returns `None`, health tracking).
+- **Qdrant UUID v5 point IDs** — all point IDs are now derived from SHA-256 chunk hashes
+  via `uuid.uuid5(uuid.NAMESPACE_OID, hash)`, ensuring idempotent upserts: re-indexing
+  the same content always produces the same UUID, eliminating duplicate points.
+- **Ungrounded generation** — LLM generates answers even when no relevant knowledge is
+  found, with a configurable notice prepended to warn users (`ALLOW_UNGROUNDED_GENERATION`,
+  `UNGOUNDED_NOTICE`). Prevents empty responses when the knowledge base lacks coverage.
+- **Incremental Confluence extraction** — ETL now tracks last extraction state per space
+  via WAL checkpoints, enabling delta-only ingestion of new and modified pages without
+  re-processing the entire space.
+
+### Changed
+
+- **WAL backend extensibility** — `WAL_BACKEND` now supports `file` (local JSON, default),
+  `redis` (per-key checkpoints via Redis), and `proxy` (POST to proxy API). Factory
+  function `create_wal_manager()` auto-selects the backend from config or env var.
+
+### Fixed
+
+- **ETL WAL lock fix** — resolved race condition in WAL file locking that caused checkpoint
+  corruption under concurrent ETL worker access. Added stale lock recovery (auto-release
+  locks older than 10 minutes).
+
 ## [v2.2.0] - 2026-07-17
 
 ### Added

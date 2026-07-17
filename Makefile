@@ -46,6 +46,18 @@ run-dev: ## Start proxy with hot reload for development
 etl: ## Run full ETL pipeline
 	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml
 
+etl-run-streaming: ## Run ETL in streaming mode with remote embedder
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --mode streaming
+
+etl-run-batch: ## Run ETL in batch mode
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --mode batch
+
+etl-test-connection: ## Test connections to all sources
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --test-connection
+
+etl-cleanup: ## Clean raw data after indexing
+	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --cleanup-after-index
+
 etl-confluence: ## Run Confluence extractor only
 	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
 

@@ -569,7 +569,7 @@ class TestArgumentParsing:
         )
 
         with (  # noqa: SIM117
-            patch("sys.argv", ["run_etl.py"]) as _argv,
+            patch("sys.argv", ["run_etl.py", "--mode", "batch"]) as _argv,
             patch("etl.scheduler.run_etl.load_config") as mock_load,
             patch("etl.scheduler.run_etl.WALManager") as mock_wal,
             patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
@@ -586,7 +586,7 @@ class TestArgumentParsing:
 
     def test_custom_config_path(self) -> None:
         with (  # noqa: SIM117
-            patch("sys.argv", ["run_etl.py", "--config", "/custom/path.yaml"]),
+            patch("sys.argv", ["run_etl.py", "--config", "/custom/path.yaml", "--mode", "batch"]),
             patch("etl.scheduler.run_etl.load_config") as mock_load,
             patch("etl.scheduler.run_etl.WALManager") as mock_wal,
             patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
@@ -643,7 +643,7 @@ class TestArgumentParsing:
 
     def test_skip_extract_flag(self) -> None:
         with (  # noqa: SIM117
-            patch("sys.argv", ["run_etl.py", "--skip-extract"]),
+            patch("sys.argv", ["run_etl.py", "--skip-extract", "--mode", "batch"]),
             patch("etl.scheduler.run_etl.load_config") as mock_load,
             patch("etl.scheduler.run_etl.WALManager") as mock_wal,
             patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
@@ -709,7 +709,7 @@ class TestArgumentParsing:
 
     def test_all_extractors_fail_exits(self) -> None:
         with (  # noqa: SIM117
-            patch("sys.argv", ["run_etl.py"]),
+            patch("sys.argv", ["run_etl.py", "--mode", "batch"]),
             patch("etl.scheduler.run_etl.load_config") as mock_load,
             patch("etl.scheduler.run_etl.WALManager") as mock_wal,
             patch("etl.scheduler.run_etl._run_extractor_safe") as mock_safe,

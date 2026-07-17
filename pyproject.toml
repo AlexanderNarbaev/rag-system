@@ -43,6 +43,27 @@ markers = [
     "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
     "regression: Quality regression tests for retrieval and evaluation metrics",
 ]
+filterwarnings = [
+    # Persistent SQLite user database singleton — connections live for app lifetime,
+    # garbage collected at test teardown. Normal test behavior.
+    "ignore::ResourceWarning",
+    # Emitted on every proxy app import in tests — expected in CI without real secret
+    "ignore:JWT_SECRET is ephemeral:UserWarning",
+    # Emitted when AUTH_ENABLED is true but no JWT_SECRET set
+    "ignore:AUTH_ENABLED is true but JWT_SECRET is empty:UserWarning",
+    # Torch JIT scripting not supported on Python 3.14+
+    "ignore:.*torch.jit.script.*not supported:DeprecationWarning",
+    # Neo4j driver version deprecation
+    "ignore::DeprecationWarning:neo4j",
+    # GRAPH_ENABLED without Neo4j password — expected in unit tests
+    "ignore:GRAPH_ENABLED is true but NEO4J_PASSWORD is empty:UserWarning",
+    # Mock async methods created during tests — coroutine not awaited is expected
+    "ignore:coroutine.*was never awaited:RuntimeWarning",
+    # MINIO_ACCESS_KEY not set in unit test environment
+    "ignore:MODEL_EVOLUTION_ENABLED is true but MINIO_ACCESS_KEY:UserWarning",
+    # spaCy model not installed in CI — expected warning
+    "ignore:spaCy model not found:UserWarning",
+]
 
 [tool.coverage.run]
 source = ["proxy", "etl"]

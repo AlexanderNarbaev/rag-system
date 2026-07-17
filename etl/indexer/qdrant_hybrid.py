@@ -136,8 +136,8 @@ class QdrantHybridIndexer:
             sparse_config = models.SparseVectorParams(index=models.SparseIndexParams(on_disk=self.sparse_index_on_disk))
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config={"dense": dense_config, "sparse": sparse_config},
-                # Для старых версий Qdrant без поддержки sparse, можно отдельно настроить
+                vectors_config={"dense": dense_config},
+                sparse_vectors_config={"sparse": sparse_config},
             )
             logger.info(f"Created collection {self.collection_name} with dense and sparse vectors")
             return True
