@@ -96,7 +96,8 @@ class SemanticChunker:
                 current_heading = elem.get_text(strip=True)
                 current_content = []
             else:
-                current_content.append(str(elem))
+                # Extract clean text — strip HTML to avoid embedding raw markup
+                current_content.append(elem.get_text(separator=" ", strip=True))
         if current_content:
             sections.append({"heading": current_heading, "content": "\n".join(current_content)})
         return sections

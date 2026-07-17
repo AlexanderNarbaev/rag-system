@@ -148,8 +148,12 @@ class RemoteEmbedder:
 
     def _call_api_sync(self, texts: list[str]) -> list[list[float]]:
         session = self._get_session()
+        # Truncate texts to avoid 400 from oversized payloads.
+        # bge-m3 has 8192 token limit — ~12000 chars with safety margin.
+        max_chars = 12000
+        truncated = [t[:max_chars] if len(t) > max_chars else t for t in texts]
         payload = {
-            "input": texts,
+            "input": truncated,
             "model": self._model,
             "encoding_format": "float",
         }
