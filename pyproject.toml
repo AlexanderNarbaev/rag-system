@@ -41,6 +41,7 @@ markers = [
     "asyncio: Tests using asyncio for async code paths",
     "slow: Tests that take longer than 5 seconds to complete",
     "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
+    "regression: Quality regression tests for retrieval and evaluation metrics",
 ]
 
 [tool.coverage.run]
