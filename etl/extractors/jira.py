@@ -13,6 +13,7 @@
 import json
 import logging
 import os
+import threading
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -43,13 +44,15 @@ class JiraExtractor:
             "output_dir": "./raw_data/jira",
             "wal_file": "./wal/jira_wal.json",
             "incremental": True,
-            "download_attachments": True,
+            "download_attachments": true,
             "max_issues_per_run": 0,
-            "since_date": None,
+            "since_date": null,
             "fields": "*all",
             "expand": "changelog,renderedBody"
         }
         """
+        # Graceful shutdown event (injected by orchestrator)
+        self._shutdown_event: threading.Event | None = None
         # Input validation
         url = config.get("url", "")
         if not url or not url.strip():
@@ -100,6 +103,16 @@ class JiraExtractor:
         self.wal_path.parent.mkdir(parents=True, exist_ok=True)
         self.wal_data = self._load_wal()
 
+    def _check_shutdown(self) -> None:
+        """Проверяет, запрошена ли остановка. Вызывает InterruptedError если да."""
+        if self._shutdown_event and self._shutdown_event.is_set():
+            raise InterruptedError("Shutdown requested")
+
+    def _interruptible_sleep(self, seconds: float) -> None:
+        """Sleep, который прерывается при shutdown."""
+        if self._shutdown_event and self._shutdown_event.wait(timeout=seconds):
+            raise InterruptedError("Shutdown during sleep")
+
     def _load_wal(self) -> dict[str, Any]:
         if self.wal_path.exists():
             try:
@@ -121,6 +134,7 @@ class JiraExtractor:
         base_delay = self.config.get("retry_delay", 2)
 
         for attempt in range(max_retries + 1):
+            self._check_shutdown()
             try:
                 logger.debug(f"Requesting: {url} (attempt {attempt + 1})")
                 resp = self.session.get(url, params=params, timeout=self.timeout)
@@ -135,7 +149,7 @@ class JiraExtractor:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
+                    self._interruptible_sleep(delay)
                 else:
                     raise
             except requests.exceptions.Timeout as e:
@@ -143,7 +157,7 @@ class JiraExtractor:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
+                    self._interruptible_sleep(delay)
                 else:
                     raise
 
@@ -395,6 +409,7 @@ class JiraExtractor:
         logger.info(f"Executing JQL: {jql}")
         total_processed = 0
         for issue in self._paginated_issues(jql):
+            self._check_shutdown()
             key = issue["key"]
             if key in self.wal_data["processed_issues"] and self.incremental:
                 logger.debug(f"Skipping already processed issue {key}")
@@ -420,6 +435,9 @@ class JiraExtractor:
                     break
 
                 logger.info(f"Processed issue {key}")
+            except InterruptedError:
+                logger.warning("Jira extraction interrupted by shutdown")
+                return
             except Exception as e:
                 logger.error(f"Failed to process issue {key}: {e}", exc_info=True)  # продолжаем со следующей задачей
 

@@ -165,7 +165,7 @@ class TestRunChunkingShutdown:
     def test_shutdown_stops_chunking(self, tmp_path):
         import etl.scheduler.run_etl as run_etl_mod
 
-        run_etl_mod._shutdown_requested = True
+        run_etl_mod._shutdown_event.set()
         try:
             from etl.scheduler.run_etl import run_chunking
 
@@ -187,7 +187,7 @@ class TestRunChunkingShutdown:
             result = run_chunking(docs, mock_chunker, output_dir)
             assert result == []
         finally:
-            run_etl_mod._shutdown_requested = False
+            run_etl_mod._shutdown_event.clear()
 
 
 class TestRunIndexingShutdown:
@@ -195,7 +195,7 @@ class TestRunIndexingShutdown:
         import etl.scheduler.run_etl as run_etl_mod
         from etl.scheduler.run_etl import run_indexing
 
-        run_etl_mod._shutdown_requested = True
+        run_etl_mod._shutdown_event.set()
         try:
             mock_lake = MagicMock()
             mock_wal = MagicMock()
@@ -206,7 +206,7 @@ class TestRunIndexingShutdown:
             run_indexing(chunks, mock_lake, mock_wal)
             mock_lake.sync_document.assert_not_called()
         finally:
-            run_etl_mod._shutdown_requested = False
+            run_etl_mod._shutdown_event.clear()
 
 
 class TestLoadConfig:

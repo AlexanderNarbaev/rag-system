@@ -79,10 +79,27 @@ class StreamingETLPipeline:
         parsed = urlparse(qdrant_url)
         host = parsed.hostname or "localhost"
         port = parsed.port or 6333
+
+        # Создаём эмбеддер: удалённый или локальный
+        embedder = None
+        remote_cfg = config.get("remote_services", {})
+        remote_embedder_cfg = remote_cfg.get("embedder", {})
+        if remote_embedder_cfg.get("url"):
+            from etl.indexer.remote_embedder import create_remote_embedder
+
+            embedder = create_remote_embedder(
+                url=remote_embedder_cfg["url"],
+                model=remote_embedder_cfg.get("model", ""),
+                api_key=remote_cfg.get("api_key", ""),
+                timeout=remote_embedder_cfg.get("timeout", 60),
+            )
+            logger.info("Using remote embedder: %s", remote_embedder_cfg["url"])
+
         self.indexer = QdrantHybridIndexer(
             host=host,
             port=port,
             collection_name=index_cfg.get("collection_name", "knowledge_base"),
+            embedder=embedder,
         )
 
         # Stats

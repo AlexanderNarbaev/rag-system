@@ -13,7 +13,7 @@
 import json
 import logging
 import os
-import time
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,20 +38,22 @@ class GitLabExtractor:
             "api_key": "",                          # alternative to "token"
             "verify_ssl": true,                     # false для самоподписанных сертификатов
             "ca_bundle": "",                        # путь к корпоративному CA bundle
-            "project_ids": None,                    # None/empty → fetch ALL accessible projects
+            "project_ids": null,                    # null = fetch ALL accessible projects
             "max_projects": 0,                      # limit total projects (0 = no limit)
             "output_dir": "./raw_data/gitlab",
             "wal_file": "./wal/gitlab_wal.json",
-            "incremental": True,
-            "fetch_commits": True,
-            "fetch_files": True,
-            "fetch_merge_requests": True,
+            "incremental": true,
+            "fetch_commits": true,
+            "fetch_files": true,
+            "fetch_merge_requests": true,
             "max_commits_per_project": 0,
-            "since_date": None,
+            "since_date": null,
             "file_paths_filter": ["*.py", "*.md", "Dockerfile", "*.yaml"],
             "file_paths_exclude": ["*.java", "*.kt", "*.class", "node_modules/*"],
         }
         """
+        # Graceful shutdown event (injected by orchestrator)
+        self._shutdown_event: threading.Event | None = None
         # Input validation
         url = config.get("url", "")
         if not url or not url.strip():
@@ -103,6 +105,16 @@ class GitLabExtractor:
         self.wal_path.parent.mkdir(parents=True, exist_ok=True)
         self.wal_data = self._load_wal()
 
+    def _check_shutdown(self) -> None:
+        """Проверяет, запрошена ли остановка. Вызывает InterruptedError если да."""
+        if self._shutdown_event and self._shutdown_event.is_set():
+            raise InterruptedError("Shutdown requested")
+
+    def _interruptible_sleep(self, seconds: float) -> None:
+        """Sleep, который прерывается при shutdown."""
+        if self._shutdown_event and self._shutdown_event.wait(timeout=seconds):
+            raise InterruptedError("Shutdown during sleep")
+
     def _load_wal(self) -> dict[str, Any]:
         if self.wal_path.exists():
             try:
@@ -124,6 +136,7 @@ class GitLabExtractor:
         base_delay = self.config.get("retry_delay", 1)
 
         for attempt in range(max_retries + 1):
+            self._check_shutdown()
             try:
                 logger.debug(f"Requesting: {method} {url} (attempt {attempt + 1})")
                 resp = self.session.request(method, url, params=params, timeout=self.timeout)
@@ -138,7 +151,7 @@ class GitLabExtractor:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
+                    self._interruptible_sleep(delay)
                 else:
                     raise
             except requests.exceptions.Timeout as e:
@@ -146,7 +159,7 @@ class GitLabExtractor:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
+                    self._interruptible_sleep(delay)
                 else:
                     raise
 
@@ -344,50 +357,54 @@ class GitLabExtractor:
             logger.info(f"Processing configured project_ids: {self.project_ids}")
 
         for idx, project in enumerate(projects, 1):
+            self._check_shutdown()
             project_id = project["id"]
             logger.info(f"[{idx}/{total}] Processing project {project['path_with_namespace']} (id={project_id})")
 
-            commits = []
-            if self.fetch_commits:
-                commits = self.get_commits(project_id, since=self.since_date)
-                logger.info(f"  Retrieved {len(commits)} commits")
-                if commits:
-                    last_commit = commits[0]  # самый новый (первый в списке)
-                    self._update_wal_commit(project_id, last_commit["id"], last_commit["created_at"])
+            try:
+                commits = []
+                if self.fetch_commits:
+                    commits = self.get_commits(project_id, since=self.since_date)
+                    logger.info(f"  Retrieved {len(commits)} commits")
+                    if commits:
+                        last_commit = commits[0]  # самый новый (первый в списке)
+                        self._update_wal_commit(project_id, last_commit["id"], last_commit["created_at"])
 
-            branches = []
-            if self.fetch_commits:  # ветки не требуют отдельного флага, но идём вместе
-                branches = self.get_branches(project_id)
-                logger.info(f"  Retrieved {len(branches)} branches")
+                branches = []
+                if self.fetch_commits:  # ветки не требуют отдельного флага, но идём вместе
+                    branches = self.get_branches(project_id)
+                    logger.info(f"  Retrieved {len(branches)} branches")
 
-            merge_requests = []
-            if self.fetch_merge_requests:
-                merge_requests = self.get_merge_requests(project_id)
-                logger.info(f"  Retrieved {len(merge_requests)} merge requests")
+                merge_requests = []
+                if self.fetch_merge_requests:
+                    merge_requests = self.get_merge_requests(project_id)
+                    logger.info(f"  Retrieved {len(merge_requests)} merge requests")
 
-            files_data = []
-            if self.fetch_files:
-                # Для каждого коммита (или последнего) получаем изменённые файлы, но лучше взять из последнего коммита на  # noqa: E501
-                # main
-                # Или сканируем репозиторий через API дерева (неэффективно). Для простоты:
-                # Берём корневую структуру и выбираем файлы по фильтру.
-                try:
-                    # Получаем дерево корня репозитория
-                    tree = self._request(f"/api/v4/projects/{project_id}/repository/tree", params={"recursive": "true"})
-                    for item in tree:
-                        if item["type"] == "blob":
-                            # Проверяем, соответствует ли путь фильтру (упрощённо по расширению)
-                            path = item["path"]
-                            if self._matches_filter(path):
-                                content = self.get_file_content(project_id, path, ref=self.branch)
-                                if content:
-                                    files_data.append({"path": path, "content": content, "sha": item["id"]})
-                    logger.info(f"  Retrieved {len(files_data)} files from repository")
-                except Exception as e:
-                    logger.error(f"  Failed to fetch repository tree for project {project_id}: {e}")
+                files_data = []
+                if self.fetch_files:
+                    try:
+                        # Получаем дерево корня репозитория
+                        tree = self._request(
+                            f"/api/v4/projects/{project_id}/repository/tree",
+                            params={"recursive": "true"},
+                        )
+                        for item in tree:
+                            self._check_shutdown()
+                            if item["type"] == "blob":
+                                path = item["path"]
+                                if self._matches_filter(path):
+                                    content = self.get_file_content(project_id, path, ref=self.branch)
+                                    if content:
+                                        files_data.append({"path": path, "content": content, "sha": item["id"]})
+                        logger.info(f"  Retrieved {len(files_data)} files from repository")
+                    except Exception as e:
+                        logger.error(f"  Failed to fetch repository tree for project {project_id}: {e}")
 
-            self._save_project_data(project, commits, branches, merge_requests, files_data)
-            logger.info(f"Finished project {project_id}")
+                self._save_project_data(project, commits, branches, merge_requests, files_data)
+                logger.info(f"Finished project {project_id}")
+            except InterruptedError:
+                logger.warning("GitLab extraction interrupted by shutdown")
+                return
 
         logger.info("GitLab extraction finished.")
 

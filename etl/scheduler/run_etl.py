@@ -12,25 +12,35 @@
 """
 
 import argparse
+import atexit
 import json
 import logging
 import os
 import signal
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-# Глобальный флаг для graceful shutdown
-_shutdown_requested = False
+# Глобальное событие для graceful shutdown (потокобезопасное)
+_shutdown_event = threading.Event()
+# Флаг для обработки двойного Ctrl+C (принудительный выход)
+_force_exit = False
 
 
 def _signal_handler(signum: int, frame: Any) -> None:
     """Обработчик SIGINT/SIGTERM для graceful shutdown."""
-    global _shutdown_requested
-    _shutdown_requested = True
+    global _force_exit
+    if _shutdown_event.is_set():
+        # Второй нажатие Ctrl+C — принудительный выход
+        _force_exit = True
+        logger.warning("Forced shutdown requested — exiting immediately")
+        sys.exit(1)
+    _shutdown_event.set()
     logger.warning(f"Received signal {signum}, shutting down gracefully...")
 
 
@@ -77,6 +87,7 @@ def run_extract_confluence(config: dict, wal: WALManager) -> Path:
     confluence_config["wal_file"] = str(wal.wal_path)
     confluence_config["incremental"] = True
     extractor = ConfluenceExtractor(confluence_config)
+    extractor._shutdown_event = _shutdown_event  # inject graceful shutdown
     extractor.run()
     wal.update_last_run(PIPELINE_CONFLUENCE)
     output_dir = Path(confluence_config.get("output_dir", "./raw_data/confluence"))
@@ -95,6 +106,7 @@ def run_extract_jira(config: dict, wal: WALManager) -> Path:
     jira_config["incremental"] = True
     jira_config["wal_file"] = str(wal.wal_path)
     extractor = JiraExtractor(jira_config)
+    extractor._shutdown_event = _shutdown_event  # inject graceful shutdown
     extractor.run()
     wal.update_last_run(PIPELINE_JIRA)
     output_dir = Path(jira_config.get("output_dir", "./raw_data/jira"))
@@ -112,6 +124,7 @@ def run_extract_gitlab(config: dict, wal: WALManager) -> Path:
     gitlab_config["incremental"] = True
     gitlab_config["wal_file"] = str(wal.wal_path)
     extractor = GitLabExtractor(gitlab_config)
+    extractor._shutdown_event = _shutdown_event  # inject graceful shutdown
     extractor.run()
     wal.update_last_run(PIPELINE_GITLAB)
     output_dir = Path(gitlab_config.get("output_dir", "./raw_data/gitlab"))
@@ -298,7 +311,7 @@ def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path)
     output_dir.mkdir(parents=True, exist_ok=True)
     all_chunks = []
     for i, doc in enumerate(documents):
-        if _shutdown_requested:
+        if _shutdown_event.is_set():
             logger.warning(f"Shutdown requested, stopping chunking at document {i}/{len(documents)}")
             break
         source_metadata = {
@@ -343,12 +356,11 @@ def run_graph_extraction(
     entities, relations = entity_extractor.extract_batch(chunk_inputs)
     logger.info(f"Extracted {len(entities)} entities and {len(relations)} relations")
     if neo4j_loader and (entities or relations):
-        # Конвертируем в формат для загрузчика
+        # Создаём индексы и ограничения (один раз)
+        neo4j_loader.create_constraints_and_indexes()
+        # Конвертируем в формат для загрузчика (НЕ удаляем source_id — он нужен для MERGE)
         entity_dicts = [e.__dict__ for e in entities]
         relation_dicts = [r.__dict__ for r in relations]
-        # Удаляем лишние поля
-        for e in entity_dicts:
-            e.pop("source_id", None)
         neo4j_loader.load_entities(entity_dicts)
         neo4j_loader.load_relations(relation_dicts)
         logger.info("Loaded graph into Neo4j")
@@ -368,7 +380,7 @@ def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager)
     total_added = 0
     total_deleted = 0
     for i, (doc_id, doc_chunks_list) in enumerate(doc_chunks.items()):
-        if _shutdown_requested:
+        if _shutdown_event.is_set():
             logger.warning(f"Shutdown requested, stopping indexing at document {i}/{len(doc_chunks)}")
             break
         added, deleted = live_lake.sync_document(doc_id, doc_chunks_list)
@@ -476,6 +488,24 @@ def main():
         wal.reset_all()
         logger.info("WAL has been reset")
 
+    # Регистрируем сохранение WAL при завершении процесса (atexit + signal)
+    def _save_wal_on_exit() -> None:
+        """Сохраняет WAL checkpoint при завершении процесса."""
+        try:
+            wal.set_checkpoint(
+                "pipeline",
+                {
+                    "shutdown": True,
+                    "shutdown_at": datetime.now(UTC).isoformat(),
+                    "forced": _force_exit,
+                },
+            )
+            logger.info("WAL checkpoint saved on exit")
+        except Exception as e:
+            logger.error(f"Failed to save WAL on exit: {e}")
+
+    atexit.register(_save_wal_on_exit)
+
     # 1. Извлечение (параллельно с graceful degradation)
     extract_dirs = []
     if not args.skip_extract:
@@ -505,7 +535,7 @@ def main():
                     pool.submit(_run_extractor_safe, name, fn, config, wal): name for name, fn in extractors_to_run
                 }
                 for future in as_completed(futures):
-                    if _shutdown_requested:
+                    if _shutdown_event.is_set():
                         logger.warning("Shutdown requested, cancelling remaining extractors...")
                         pool.shutdown(wait=False, cancel_futures=True)
                         break
@@ -593,6 +623,22 @@ def main():
     # 5. Индексация в Qdrant
     if not args.skip_index:
         index_config = config.get("indexing", {})
+
+        # Создаём эмбеддер: удалённый или локальный
+        embedder = None
+        remote_cfg = config.get("remote_services", {})
+        remote_embedder_cfg = remote_cfg.get("embedder", {})
+        if remote_embedder_cfg.get("url"):
+            from etl.indexer.remote_embedder import create_remote_embedder
+
+            embedder = create_remote_embedder(
+                url=remote_embedder_cfg["url"],
+                model=remote_embedder_cfg.get("model", ""),
+                api_key=remote_cfg.get("api_key", ""),
+                timeout=remote_embedder_cfg.get("timeout", 60),
+            )
+            logger.info("Using remote embedder: %s", remote_embedder_cfg["url"])
+
         qdrant_idx = QdrantHybridIndexer(
             host=index_config.get("qdrant_host", "localhost"),
             port=index_config.get("qdrant_port", 6333),
@@ -600,6 +646,7 @@ def main():
             embedder_model_name=index_config.get("embedder_model", "BAAI/bge-m3"),
             embedder_device=index_config.get("embedder_device", "cpu"),
             batch_size=index_config.get("batch_size", 100),
+            embedder=embedder,
         )
         qdrant_idx.create_collection(recreate=args.force_reindex)
 
@@ -621,7 +668,7 @@ def main():
     streaming_enabled = (
         args.streaming or args.webhook_only or args.consumer_only or streaming_cfg.get("streaming_enabled", False)
     )
-    live_upsert_enabled = index_config.get("live_upsert_enabled", False)
+    live_upsert_enabled = config.get("indexing", {}).get("live_upsert_enabled", False)
     if live_upsert_enabled:
         logger.info("Live upsert enabled: atomic chunk-level updates in Qdrant")
 

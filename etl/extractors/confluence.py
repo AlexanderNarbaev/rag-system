@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +52,8 @@ class ConfluenceExtractor:
             "api_version": "2"                  # '2' для нового REST API, '1' для старого
         }
         """
+        # Graceful shutdown event (injected by orchestrator)
+        self._shutdown_event: threading.Event | None = None
         # Input validation
         url = config.get("url", "")
         if not url or not url.strip():
@@ -101,6 +104,16 @@ class ConfluenceExtractor:
 
         self.wal_data = self._load_wal()
 
+    def _check_shutdown(self) -> None:
+        """Проверяет, запрошена ли остановка. Вызывает InterruptedError если да."""
+        if self._shutdown_event and self._shutdown_event.is_set():
+            raise InterruptedError("Shutdown requested")
+
+    def _interruptible_sleep(self, seconds: float) -> None:
+        """Sleep, который прерывается при shutdown."""
+        if self._shutdown_event and self._shutdown_event.wait(timeout=seconds):
+            raise InterruptedError("Shutdown during sleep")
+
     def test_connection(self) -> bool:
         """Тестирует подключение к Confluence API."""
         logger.info(f"Testing connection to {self.url}...")
@@ -144,6 +157,7 @@ class ConfluenceExtractor:
         base_delay = self.config.get("retry_delay", 2)
 
         for attempt in range(max_retries + 1):
+            self._check_shutdown()
             try:
                 logger.debug(f"Requesting: {url} (attempt {attempt + 1})")
                 resp = self.session.get(url, params=params, timeout=self.timeout)
@@ -159,7 +173,7 @@ class ConfluenceExtractor:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
+                    self._interruptible_sleep(delay)
                 else:
                     logger.error(f"Failed to connect to {self.url} after {max_retries} attempts")
                     raise
@@ -168,7 +182,7 @@ class ConfluenceExtractor:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(f"Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    time.sleep(delay)
+                    self._interruptible_sleep(delay)
                 else:
                     logger.error(f"Server not responding after {max_retries} attempts. Increase timeout in config")
                     raise
@@ -475,10 +489,12 @@ class ConfluenceExtractor:
         """Основной цикл выгрузки всех страниц (по указанным пространствам или всем)."""
         spaces_to_process = self.space_keys or [None]  # None = все пространства
         for space in spaces_to_process:
+            self._check_shutdown()
             logger.info(f"Processing space: {space or 'ALL'}")
             pages = self._get_all_pages(space_key=space)
             logger.info(f"Found {len(pages)} pages in space {space}")
             for page in pages:
+                self._check_shutdown()
                 page_id = str(page["id"])
                 new_hash = self._calculate_page_hash(page)
                 if not self._should_process_page(page_id, new_hash):
@@ -491,6 +507,9 @@ class ConfluenceExtractor:
                     self.wal_data.setdefault("pages_hash", {})[page_id] = new_hash
                     self.wal_data["last_run"] = datetime.now(UTC).isoformat()
                     self._save_wal()
+                except InterruptedError:
+                    logger.warning("Confluence extraction interrupted by shutdown")
+                    return
                 except Exception as e:
                     logger.error(
                         f"Failed to process page {page_id}: {e}",

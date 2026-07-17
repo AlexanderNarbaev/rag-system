@@ -59,6 +59,7 @@ class QdrantHybridIndexer:
         # bge-m3 размер
         sparse_index_on_disk: bool = True,
         batch_size: int = 100,
+        embedder: Any | None = None,
     ):
         """:param host: Qdrant host
         :param port: Qdrant port (HTTP)
@@ -72,11 +73,11 @@ class QdrantHybridIndexer:
         :param dense_vector_size: размерность dense вектора
         :param sparse_index_on_disk: хранить sparse индекс на диске
         :param batch_size: размер пакета для upsert
+        :param embedder: pre-initialized embedder instance (remote or local).
+                         If None, loads SentenceTransformer locally.
         """
         if not QDRANT_AVAILABLE:
             raise ImportError("qdrant-client is required. Install: pip install qdrant-client")
-        if not ST_AVAILABLE:
-            raise ImportError("sentence-transformers is required. Install: pip install sentence-transformers")
 
         # Подключение к Qdrant
         self.client = QdrantClient(
@@ -94,9 +95,19 @@ class QdrantHybridIndexer:
         self.sparse_index_on_disk = sparse_index_on_disk
         self.batch_size = batch_size
 
-        # Загрузка модели эмбеддера
-        self.embedder = SentenceTransformer(embedder_model_name, device=embedder_device)
-        logger.info(f"Loaded embedder {embedder_model_name} on {embedder_device}")
+        # Используем инжектированный эмбеддер или загружаем локальный
+        if embedder is not None:
+            self.embedder = embedder
+            logger.info("Using injected embedder: %s", type(embedder).__name__)
+        else:
+            if not ST_AVAILABLE:
+                raise ImportError(
+                    "sentence-transformers is required for local embedding. "
+                    "Install: pip install sentence-transformers, "
+                    "or provide a remote embedder via the 'embedder' parameter."
+                )
+            self.embedder = SentenceTransformer(embedder_model_name, device=embedder_device)
+            logger.info(f"Loaded local embedder {embedder_model_name} on {embedder_device}")
 
         # Проверяем, поддерживает ли модель sparse векторы
         self.supports_sparse = hasattr(self.embedder, "encode_sparse") or hasattr(self.embedder, "tokenizer")
