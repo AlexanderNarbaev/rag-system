@@ -1,580 +1,578 @@
-#!/usr/bin/env python3
-"""ETL Pipeline — Parallel extraction with streaming indexing.
+# etl/scheduler/streaming_pipeline.py
+"""Streaming-first ETL pipeline: extract -> chunk -> embed -> index, one doc at a time.
 
-Extracts from Confluence, Jira, GitLab in parallel with concurrency limits.
-Streams chunks directly to Qdrant instead of saving locally first.
-Resumes from WAL checkpoints on restart.
+Each source is extracted as a generator, each document is chunked immediately,
+each chunk is embedded via remote API, and each chunk is indexed to Qdrant immediately.
+No disk storage — everything flows through memory.
 
-Supports graceful shutdown via SIGINT/SIGTERM — saves WAL checkpoint
-before exiting so the pipeline can resume from where it left off.
+Uses:
+- RemoteEmbedder (with retry, connection pooling) for embedding
+- QdrantHybridIndexer.live_upsert() for atomic chunk-level indexing
+- asyncio.Semaphore for backpressure on concurrent API calls
+- SHA-256 content-addressable chunks for idempotent indexing
 """
 
+from __future__ import annotations
+
 import asyncio
+import json
 import logging
-import signal
-import sys
-import time
+import threading
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import yaml
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from etl.chunker.semantic_chunker import SemanticChunker
-from etl.extractors.confluence import ConfluenceExtractor
-from etl.extractors.gitlab import GitLabExtractor
-from etl.extractors.jira import JiraExtractor
-from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
-from etl.indexer.wal_manager import WALManager
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger("etl-pipeline")
+logger = logging.getLogger(__name__)
 
 
-class StreamingETLPipeline:
-    """Parallel ETL pipeline with streaming indexing.
+@dataclass
+class StreamingResult:
+    """Result of processing one document through the streaming pipeline."""
+    source: str
+    doc_id: str
+    chunks_count: int = 0
+    chunks_indexed: int = 0
+    errors: list[str] = field(default_factory=list)
+    duration_ms: float = 0.0
+    embedded_at: str = ""
 
-    - Extracts from multiple sources concurrently
-    - Chunks and indexes directly to Qdrant (no local storage)
-    - Resumes from WAL checkpoints
+
+@dataclass
+class PipelineProgress:
+    total_docs: int = 0
+    processed_docs: int = 0
+    total_chunks: int = 0
+    indexed_chunks: int = 0
+    errors: int = 0
+    started_at: str = ""
+
+    @property
+    def progress_pct(self) -> float:
+        if self.total_docs == 0:
+            return 0.0
+        return (self.processed_docs / self.total_docs) * 100
+
+
+class StreamingPipeline:
+    """Streaming-first ETL pipeline.
+
+    Process flow per document:
+      1. Chunk document (semantic_chunker)
+      2. Embed chunks (remote API, parallel with semaphore)
+      3. Index to Qdrant (hybrid indexer, live_upsert)
+      4. Yield StreamingResult
+
+    Supports:
+    - Graceful shutdown via shutdown_event
+    - Progress logging every N documents
+    - Backpressure via semaphore for concurrent API calls
     """
 
-    def __init__(self, config: dict[str, Any]):
-        self.config = config
-        self.global_cfg = config.get("global", {})
-        self.timeout = self.global_cfg.get("timeout", 120)
-        self.connect_timeout = self.global_cfg.get("connect_timeout", 30)
-        self.max_retries = self.global_cfg.get("max_retries", 5)
-        self.retry_delay = self.global_cfg.get("retry_delay", 5)
+    def __init__(
+        self,
+        config: dict[str, Any],
+        wal: Any,
+        shutdown_event: threading.Event | None = None,
+    ):
+        self._config = config
+        self._wal = wal
+        self._shutdown_event = shutdown_event
+        self._progress = PipelineProgress(started_at=datetime.now(UTC).isoformat())
 
-        # Concurrency limits
-        self.max_concurrent_sources = self.global_cfg.get("max_concurrent_sources", 3)
-        self.max_concurrent_pages = self.global_cfg.get("max_concurrent_pages", 5)
+        self._embedder: Any = None
+        self._indexer: Any = None
+        self._chunker: Any = None
+        self._semaphore: asyncio.Semaphore | None = None
+        self._progress_interval: int = config.get("streaming", {}).get("progress_interval", 50)
+        self._max_concurrent: int = config.get("streaming", {}).get("max_concurrent_api_calls", 10)
 
-        # WAL
-        wal_cfg = config.get("wal", {})
-        self.wal = WALManager(
-            Path(wal_cfg.get("wal_file", "./wal/etl_wal.json")),
-            use_lock=wal_cfg.get("use_lock", True),
+    async def _init_components(self) -> None:
+        """Lazy initialization of embedder, indexer, chunker."""
+        if self._embedder is None:
+            self._embedder = self._create_embedder()
+        if self._indexer is None:
+            self._indexer = self._create_indexer()
+        if self._chunker is None:
+            self._chunker = self._create_chunker()
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self._max_concurrent)
+
+    def _create_embedder(self) -> Any:
+        remote_cfg = self._config.get("remote_services", {})
+        embedder_cfg = remote_cfg.get("embedder", {})
+
+        from etl.indexer.remote_embedder import RemoteEmbedder, RetryConfig
+
+        retry_cfg = RetryConfig(
+            max_attempts=embedder_cfg.get("max_retries", 5),
+            base_delay=embedder_cfg.get("retry_delay", 2.0),
+            max_delay=embedder_cfg.get("retry_max_delay", 30.0),
+            retryable_http_statuses=(429, 500, 502, 503, 504),
         )
 
-        # Chunker
-        chunk_cfg = config.get("chunking", {})
-        self.chunker = SemanticChunker(
-            max_tokens=chunk_cfg.get("max_tokens", 1500),
-            overlap_tokens=chunk_cfg.get("overlap_tokens", 200),
-            min_chunk_tokens=chunk_cfg.get("min_chunk_tokens", 100),
+        endpoint = embedder_cfg.get("endpoint", embedder_cfg.get("url", ""))
+        return RemoteEmbedder(
+            endpoint=endpoint,
+            model=embedder_cfg.get("model", ""),
+            api_key=embedder_cfg.get("api_key", remote_cfg.get("api_key", "")),
+            timeout=embedder_cfg.get("timeout", 60),
+            max_batch_size=embedder_cfg.get("batch_size", 64),
+            retry_config=retry_cfg,
+            connection_pool_size=embedder_cfg.get("connection_pool_size", 16),
         )
 
-        # Indexer (Qdrant)
-        index_cfg = config.get("indexing", {})
-        qdrant_url = index_cfg.get("qdrant_url", "http://localhost:6333")
-        parsed = urlparse(qdrant_url)
-        host = parsed.hostname or "localhost"
-        port = parsed.port or 6333
+    def _create_indexer(self) -> Any:
+        index_cfg = self._config.get("indexing", {})
 
-        # Создаём эмбеддер: удалённый или локальный
-        embedder = None
-        remote_cfg = config.get("remote_services", {})
-        remote_embedder_cfg = remote_cfg.get("embedder", {})
-        if remote_embedder_cfg.get("url"):
-            from etl.indexer.remote_embedder import create_remote_embedder
+        from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
 
-            embedder = create_remote_embedder(
-                url=remote_embedder_cfg["url"],
-                model=remote_embedder_cfg.get("model", ""),
-                api_key=remote_cfg.get("api_key", ""),
-                timeout=remote_embedder_cfg.get("timeout", 60),
-            )
-            logger.info("Using remote embedder: %s", remote_embedder_cfg["url"])
-
-        self.indexer = QdrantHybridIndexer(
-            host=host,
-            port=port,
+        return QdrantHybridIndexer(
+            host=index_cfg.get("qdrant_host", "localhost"),
+            port=index_cfg.get("qdrant_port", 6333),
             collection_name=index_cfg.get("collection_name", "knowledge_base"),
-            embedder=embedder,
+            embedder_model_name=index_cfg.get("embedder_model", "BAAI/bge-m3"),
+            embedder_device=index_cfg.get("embedder_device", "cpu"),
+            batch_size=index_cfg.get("batch_size", 100),
+            embedder=self._embedder,
         )
 
-        # Stats
-        self.stats = {
-            "confluence": {"pages": 0, "chunks": 0, "errors": 0},
-            "jira": {"issues": 0, "chunks": 0, "errors": 0},
-            "gitlab": {"projects": 0, "chunks": 0, "errors": 0},
+    def _create_chunker(self) -> Any:
+        chunker_cfg = self._config.get("chunking", {})
+
+        from etl.chunker.semantic_chunker import MDKeyChunker, MetadataEnricher, SemanticChunker
+
+        base_chunker = SemanticChunker(
+            max_tokens=chunker_cfg.get("max_tokens", 1500),
+            overlap_tokens=chunker_cfg.get("overlap_tokens", 200),
+            min_chunk_tokens=chunker_cfg.get("min_chunk_tokens", 100),
+        )
+        enricher = MetadataEnricher(
+            use_slm=chunker_cfg.get("use_slm", False),
+            slm_endpoint=chunker_cfg.get("slm_endpoint"),
+        )
+        return MDKeyChunker(base_chunker, enricher)
+
+    async def _process_chunk(self, chunk_dict: dict[str, Any]) -> bool:
+        """Embed a single chunk and index to Qdrant.
+
+        Uses semaphore for backpressure on concurrent API calls.
+        Returns True on success.
+        """
+        sem = self._semaphore
+        if sem is None:
+            raise RuntimeError("Semaphore not initialized — call _init_components() first")
+        async with sem:
+            try:
+                loop = asyncio.get_running_loop()
+                dense_vec = await loop.run_in_executor(
+                    None,
+                    lambda: self._embedder.encode(chunk_dict["text"], normalize_embeddings=True),
+                )
+                chunk_dict["_dense_vec"] = dense_vec.tolist()
+            except Exception as e:
+                logger.error("Failed to embed chunk %s: %s", chunk_dict.get("hash", "?"), e)
+                return False
+
+        return True
+
+    async def _index_chunk(self, chunk_dict: dict[str, Any]) -> bool:
+        """Index a single embedded chunk to Qdrant via live_upsert."""
+        try:
+            dense_vec = chunk_dict.pop("_dense_vec", None)
+            if dense_vec is None:
+                return False
+            result = self._indexer.live_upsert(chunk_dict)
+            if not result:
+                point = self._indexer._chunk_to_point(chunk_dict)
+                if point is not None:
+                    self._indexer.client.upsert(
+                        collection_name=self._indexer.collection_name,
+                        points=[point],
+                    )
+                    return True
+                return False
+            return True
+        except Exception as e:
+            logger.error("Failed to index chunk %s: %s", chunk_dict.get("hash", "?"), e)
+            return False
+
+    async def process_document(self, doc: dict[str, Any]) -> StreamingResult:
+        """Process a single document: chunk -> embed -> index -> yield result.
+
+        :param doc: Document dict with id, source_type, title, content, content_type, metadata.
+        :return: StreamingResult with processing summary.
+        """
+        started = datetime.now(UTC)
+        result = StreamingResult(
+            source=doc.get("source_type", "unknown"),
+            doc_id=doc.get("id", "unknown"),
+        )
+        errors: list[str] = []
+
+        source_metadata = {
+            "source_type": doc.get("source_type", ""),
+            "source_id": doc.get("id", ""),
+            "version": doc.get("metadata", {}).get("version", "latest"),
+            "doc_title": doc.get("title", ""),
         }
 
-        # Graceful shutdown
-        self._shutdown = False
-        self._setup_signal_handlers()
-
-    def _setup_signal_handlers(self):
-        """Setup signal handlers for graceful shutdown."""
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, self._handle_shutdown, sig)
-
-    def _handle_shutdown(self, sig):
-        """Handle shutdown signal — save WAL and exit gracefully."""
-        if self._shutdown:
-            logger.warning("Forced shutdown requested — exiting immediately")
-            sys.exit(1)
-        self._shutdown = True
-        logger.warning(f"Received {sig.name} — saving WAL checkpoint and shutting down gracefully...")
-        self._save_shutdown_checkpoint()
-
-    def _save_shutdown_checkpoint(self):
-        """Save current progress to WAL before shutdown."""
         try:
-            self.wal.set_checkpoint(
-                "pipeline",
-                {
-                    "last_run": datetime.now(UTC).isoformat(),
-                    "shutdown": True,
-                    "stats": self.stats,
-                    "total_chunks": sum(s["chunks"] for s in self.stats.values()),
-                    "total_errors": sum(s["errors"] for s in self.stats.values()),
-                },
+            chunks = self._chunker.process_document(
+                doc["content"],
+                doc.get("content_type", "html"),
+                source_metadata,
             )
-            logger.info("WAL checkpoint saved — pipeline can resume from this point")
         except Exception as e:
-            logger.error(f"Failed to save WAL checkpoint: {e}")
+            error_msg = f"Chunking failed for {doc['id']}: {e}"
+            logger.error(error_msg)
+            errors.append(error_msg)
+            result.errors = errors
+            result.duration_ms = (datetime.now(UTC) - started).total_seconds() * 1000
+            return result
 
-    def _create_extractors(self) -> dict[str, Any]:
-        """Create extractors for configured sources."""
-        extractors: dict[str, Any] = {}
+        chunk_dicts = [ch.__dict__ for ch in chunks]
+        result.chunks_count = len(chunk_dicts)
 
-        for source in ["confluence", "jira", "gitlab"]:
-            if source in self.config:
-                cfg = dict(self.config[source])
-                cfg.setdefault("timeout", self.timeout)
-                cfg.setdefault("connect_timeout", self.connect_timeout)
-                cfg.setdefault("max_retries", self.max_retries)
-                cfg.setdefault("retry_delay", self.retry_delay)
+        # Embed chunks in parallel (with semaphore backpressure)
+        embed_tasks = [self._process_chunk(ch) for ch in chunk_dicts]
+        embed_results = await asyncio.gather(*embed_tasks, return_exceptions=True)
 
-                if source == "confluence" and cfg.get("url"):
-                    cfg["wal_file"] = str(self.wal.wal_path)
-                    extractors["confluence"] = ConfluenceExtractor(cfg)
-                elif source == "jira" and cfg.get("url"):
-                    cfg["wal_file"] = str(self.wal.wal_path)
-                    extractors["jira"] = JiraExtractor(cfg)
-                elif source == "gitlab" and cfg.get("url"):
-                    cfg["wal_file"] = str(self.wal.wal_path)
-                    extractors["gitlab"] = GitLabExtractor(cfg)
+        for ch, embed_result in zip(chunk_dicts, embed_results, strict=True):
+            if isinstance(embed_result, Exception):
+                errors.append(f"Embedding failed for chunk {ch.get('hash', '?')}: {embed_result}")
+                continue
+            if embed_result is False:
+                errors.append(f"Embedding returned False for chunk {ch.get('hash', '?')}")
+                continue
 
-        return extractors
+        # Index chunks (must be sequential for live_upsert due to Qdrant client)
+        for ch in chunk_dicts:
+            if "_dense_vec" not in ch:
+                continue
+            indexed = await asyncio.get_running_loop().run_in_executor(
+                None, self._index_chunk_sync, ch
+            )
+            if indexed:
+                result.chunks_indexed += 1
+            else:
+                errors.append(f"Indexing failed for chunk {ch.get('hash', '?')}")
 
-    def _chunk_and_index(self, text: str, metadata: dict[str, Any], source: str) -> int:
-        """Chunk text and stream directly to Qdrant. Returns number of chunks indexed."""
-        if not text or not text.strip():
-            return 0
+        if result.chunks_indexed > 0:
+            self._wal.update_last_run("streaming_index")
 
+        result.errors = errors
+        self._progress.processed_docs += 1
+        self._progress.total_chunks += result.chunks_count
+        self._progress.indexed_chunks += result.chunks_indexed
+        if errors:
+            self._progress.errors += 1
+        result.duration_ms = (datetime.now(UTC) - started).total_seconds() * 1000
+        result.embedded_at = datetime.now(UTC).isoformat()
+
+        if self._progress.processed_docs % self._progress_interval == 0:
+            logger.info(
+                "Progress: %d/%d docs, %d chunks, %d indexed, %d errors (%.1f%%)",
+                self._progress.processed_docs,
+                self._progress.total_docs,
+                self._progress.total_chunks,
+                self._progress.indexed_chunks,
+                self._progress.errors,
+                self._progress.progress_pct,
+            )
+
+        return result
+
+    def _index_chunk_sync(self, chunk_dict: dict[str, Any]) -> bool:
+        """Synchronous wrapper for chunk indexing (called via run_in_executor)."""
+        dense_vec = chunk_dict.get("_dense_vec")
+        if dense_vec is None:
+            return False
         try:
-            # Use chunk_markdown for text content
-            chunks = self.chunker.chunk_markdown(text, source_metadata=metadata)
-            if not chunks:
-                return 0
-
-            # Convert Chunk objects to dicts for indexer
-            chunk_dicts = []
-            for chunk in chunks:
-                chunk_dicts.append(
-                    {
-                        "text": chunk.text,
-                        "source_id": metadata.get("source_id", ""),
-                        "source_type": metadata.get("source", ""),
-                        "title": metadata.get("title", ""),
-                        "hash": chunk.hash if hasattr(chunk, "hash") else "",
-                        "position": chunk.position if hasattr(chunk, "position") else 0,
-                        "metadata": metadata,
-                    },
+            point = self._indexer._chunk_to_point(chunk_dict)
+            if point is not None:
+                self._indexer.client.upsert(
+                    collection_name=self._indexer.collection_name,
+                    points=[point],
                 )
-
-            # Index directly to Qdrant
-            self.indexer.index_chunks(chunk_dicts)
-            return len(chunk_dicts)
+                return True
         except Exception as e:
-            logger.error(f"Error chunking/indexing from {source}: {e}")
-            self.stats[source]["errors"] += 1
-            return 0
+            logger.error("Failed to index chunk %s: %s", chunk_dict.get("hash", "?"), e)
+        return False
 
-    def _process_confluence_page(self, extractor: ConfluenceExtractor, page: dict) -> int:
-        """Process a single Confluence page: extract content, chunk, index."""
-        page_id = str(page["id"])
-        title = page.get("title", "Untitled")
+    def _extract_documents_generator(self) -> Any:
+        """Generate documents from raw data directories (streaming, not batching).
 
-        try:
-            # Extract full page content
-            full_data = extractor.extract_page(page)
-            text = full_data.get("body", "")
-            if not text:
-                return 0
+        Returns a generator that yields document dicts one at a time.
+        This is the streaming equivalent of collect_all_documents().
+        """
+        source_names = ["confluence", "jira", "gitlab"]
+        default_dirs = {
+            "confluence": Path(self._config.get("confluence", {}).get("output_dir", "./raw_data/confluence")),
+            "jira": Path(self._config.get("jira", {}).get("output_dir", "./raw_data/jira")),
+            "gitlab": Path(self._config.get("gitlab", {}).get("output_dir", "./raw_data/gitlab")),
+        }
 
-            metadata = {
-                "source": "confluence",
-                "source_id": page_id,
-                "title": title,
-                "space": page.get("space", {}).get("key", ""),
-                "url": f"{extractor.url}/wiki/spaces/{page.get('space', {}).get('key', '')}/pages/{page_id}",
-                "version": page.get("version", {}).get("number", 1),
-                "extracted_at": datetime.now(UTC).isoformat(),
+        for source_name in source_names:
+            source_dir = default_dirs[source_name]
+            if not source_dir.exists():
+                logger.warning("Directory for %s does not exist: %s — skipping", source_name, source_dir)
+                continue
+
+            logger.info("Streaming documents from %s: %s", source_name, source_dir)
+
+            if source_name == "confluence":
+                yield from self._extract_confluence_docs(source_dir)
+            elif source_name == "jira":
+                yield from self._extract_jira_docs(source_dir)
+            elif source_name == "gitlab":
+                yield from self._extract_gitlab_docs(source_dir)
+
+    @staticmethod
+    def _extract_confluence_docs(source_dir: Path) -> Any:
+        for conflu_dir in source_dir.glob("*"):
+            if not conflu_dir.is_dir():
+                continue
+            page_file = conflu_dir / "page.json"
+            if not page_file.exists():
+                continue
+            with open(page_file, encoding="utf-8") as f:
+                data = json.load(f)
+            yield {
+                "id": f"confluence_{data['id']}",
+                "source_type": "confluence",
+                "title": data.get("title", ""),
+                "content": data.get("body_view_html", "") or data.get("body_storage_raw", ""),
+                "content_type": "html",
+                "metadata": {
+                    "version": str(data.get("version", "")),
+                    "space": data.get("space", ""),
+                    "space_key": data.get("space_key", ""),
+                    "page_id": data.get("id", ""),
+                    "author": data.get("author", ""),
+                    "contributors": data.get("contributors", []),
+                    "labels": data.get("labels", []),
+                    "restrictions": data.get("restrictions", {}),
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                    "url": f"{conflu_dir.name}",
+                },
             }
 
-            chunks_count = self._chunk_and_index(text, metadata, "confluence")
-            self.stats["confluence"]["pages"] += 1
-            self.stats["confluence"]["chunks"] += chunks_count
-
-            # Update WAL
-            self.wal.set_checkpoint(
-                "confluence",
-                {
-                    "last_page_id": page_id,
-                    "last_title": title,
-                    "pages_processed": self.stats["confluence"]["pages"],
-                    "chunks_indexed": self.stats["confluence"]["chunks"],
+    @staticmethod
+    def _extract_jira_docs(source_dir: Path) -> Any:
+        for jira_dir in source_dir.glob("*"):
+            if not jira_dir.is_dir():
+                continue
+            issue_file = jira_dir / "issue.json"
+            if not issue_file.exists():
+                continue
+            with open(issue_file, encoding="utf-8") as f:
+                data = json.load(f)
+            content = data.get("description", "")
+            for comment in data.get("comments", []):
+                content += f"\n\nComment by {comment['author']}: {comment['body']}"
+            yield {
+                "id": f"jira_{data['key']}",
+                "source_type": "jira",
+                "title": data.get("summary", ""),
+                "content": content,
+                "content_type": "html",
+                "metadata": {
+                    "key": data["key"],
+                    "status": data.get("status", ""),
+                    "priority": data.get("priority", ""),
+                    "assignee": data.get("assignee", ""),
+                    "reporter": data.get("reporter", ""),
+                    "project_key": data.get("project_key", ""),
+                    "issue_type": data.get("issue_type", ""),
+                    "labels": data.get("labels", []),
+                    "components": data.get("components", []),
+                    "created": data.get("created", ""),
+                    "updated": data.get("updated", ""),
                 },
-            )
-
-            return chunks_count
-
-        except Exception as e:
-            logger.error(f"Error processing Confluence page {page_id}: {e}")
-            self.stats["confluence"]["errors"] += 1
-            return 0
-
-    def _process_jira_issue(self, extractor: JiraExtractor, issue: dict) -> int:
-        """Process a single Jira issue: extract content, chunk, index."""
-        issue_key = issue.get("key", "UNKNOWN")
-        summary = issue.get("fields", {}).get("summary", "")
-
-        try:
-            # Build text from issue
-            description = issue.get("fields", {}).get("description", "") or ""
-            comments = []
-            for comment in issue.get("fields", {}).get("comment", {}).get("comments", []):
-                comments.append(comment.get("body", ""))
-
-            text = f"# {summary}\n\n{description}"
-            if comments:
-                text += "\n\n## Comments\n\n" + "\n\n".join(comments)
-
-            metadata = {
-                "source": "jira",
-                "source_id": issue_key,
-                "title": summary,
-                "project": issue.get("fields", {}).get("project", {}).get("key", ""),
-                "issue_type": issue.get("fields", {}).get("issuetype", {}).get("name", ""),
-                "status": issue.get("fields", {}).get("status", {}).get("name", ""),
-                "url": f"{extractor.url}/browse/{issue_key}",
-                "extracted_at": datetime.now(UTC).isoformat(),
             }
 
-            chunks_count = self._chunk_and_index(text, metadata, "jira")
-            self.stats["jira"]["issues"] += 1
-            self.stats["jira"]["chunks"] += chunks_count
+    @staticmethod
+    def _extract_gitlab_docs(source_dir: Path) -> Any:
+        for gitlab_dir in source_dir.glob("*"):
+            if not gitlab_dir.is_dir():
+                continue
 
-            # Update WAL
-            self.wal.set_checkpoint(
-                "jira",
-                {
-                    "last_issue_key": issue_key,
-                    "issues_processed": self.stats["jira"]["issues"],
-                    "chunks_indexed": self.stats["jira"]["chunks"],
-                },
-            )
+            project_info: dict[str, Any] = {}
+            project_file = gitlab_dir / "project.json"
+            if project_file.exists():
+                with open(project_file, encoding="utf-8") as f:
+                    project_info = json.load(f)
+            project_id = project_info.get("id", gitlab_dir.name)
+            namespace = project_info.get("namespace", {}).get("full_path", "")
+            visibility = project_info.get("visibility", "")
 
-            return chunks_count
-
-        except Exception as e:
-            logger.error(f"Error processing Jira issue {issue_key}: {e}")
-            self.stats["jira"]["errors"] += 1
-            return 0
-
-    def _process_gitlab_project(self, extractor: GitLabExtractor, project: dict) -> int:
-        """Process a single GitLab project: extract content, chunk, index."""
-        project_id = project.get("id")
-        project_name = project.get("name", "Unknown")
-
-        try:
-            chunks_count = 0
-
-            # Process commits
-            if extractor.fetch_commits:
-                commits = extractor._request(f"/api/v4/projects/{project_id}/repository/commits", {"per_page": 100})
-                for commit in commits[: extractor.max_commits_per_project]:
-                    text = f"Commit: {commit.get('title', '')}\n\n{commit.get('message', '')}"
-                    metadata = {
-                        "source": "gitlab_commit",
-                        "source_id": f"{project_id}_{commit.get('id', '')}",
-                        "title": commit.get("title", ""),
-                        "project": project_name,
-                        "url": commit.get("web_url", ""),
-                        "extracted_at": datetime.now(UTC).isoformat(),
+            commits_file = gitlab_dir / "commits.json"
+            if commits_file.exists():
+                with open(commits_file, encoding="utf-8") as f:
+                    commits = json.load(f)
+                for commit in commits[:100]:
+                    content = commit.get("message", "")
+                    for diff in commit.get("diff", [])[:5]:
+                        content += f"\n{diff.get('new_path', '')}: {diff.get('diff', '')[:200]}"
+                    yield {
+                        "id": f"gitlab_commit_{commit['id']}",
+                        "source_type": "gitlab_commit",
+                        "title": commit.get("title", commit["id"][:8]),
+                        "content": content,
+                        "content_type": "markdown",
+                        "metadata": {
+                            "sha": commit["id"],
+                            "author": commit.get("author_name", ""),
+                            "date": commit.get("created_at", ""),
+                            "project_id": project_id,
+                            "namespace": namespace,
+                            "visibility": visibility,
+                        },
                     }
-                    chunks_count += self._chunk_and_index(text, metadata, "gitlab")
 
-            # Process merge requests
-            if extractor.fetch_merge_requests:
-                mrs = extractor._request(
-                    f"/api/v4/projects/{project_id}/merge_requests",
-                    {"state": "all", "per_page": 100},
-                )
+            mr_file = gitlab_dir / "merge_requests.json"
+            if mr_file.exists():
+                with open(mr_file, encoding="utf-8") as f:
+                    mrs = json.load(f)
                 for mr in mrs:
-                    if not isinstance(mr, dict):
-                        continue
-                    text = f"MR: {mr.get('title', '')}\n\n{mr.get('description', '')}"
-                    metadata = {
-                        "source": "gitlab_mr",
-                        "source_id": f"{project_id}_mr_{mr.get('iid', '')}",
-                        "title": str(mr.get("title", "")),
-                        "project": project_name,
-                        "url": str(mr.get("web_url", "")),
-                        "state": str(mr.get("state", "")),
-                        "extracted_at": datetime.now(UTC).isoformat(),
+                    content = mr.get("title", "") + "\n" + mr.get("description", "")
+                    for disc in mr.get("discussions", []):
+                        for note in disc.get("notes", []):
+                            content += f"\n{note['author']}: {note['body']}"
+                    yield {
+                        "id": f"gitlab_mr_{mr['iid']}",
+                        "source_type": "gitlab_merge_request",
+                        "title": mr.get("title", ""),
+                        "content": content,
+                        "content_type": "markdown",
+                        "metadata": {
+                            "iid": mr["iid"],
+                            "state": mr.get("state", ""),
+                            "author": mr.get("author", {}).get("username", ""),
+                            "project_id": project_id,
+                            "namespace": namespace,
+                            "visibility": visibility,
+                        },
                     }
-                    chunks_count += self._chunk_and_index(text, metadata, "gitlab")
 
-            self.stats["gitlab"]["projects"] += 1
-            self.stats["gitlab"]["chunks"] += chunks_count
+            files_dir = gitlab_dir / "files"
+            if files_dir.exists():
+                for code_file in files_dir.glob("*.txt"):
+                    content = code_file.read_text(encoding="utf-8")
+                    yield {
+                        "id": f"gitlab_file_{code_file.stem}",
+                        "source_type": "gitlab_code",
+                        "title": code_file.stem,
+                        "content": content,
+                        "content_type": "plaintext",
+                        "metadata": {
+                            "path": code_file.stem,
+                            "project_id": project_id,
+                            "namespace": namespace,
+                            "visibility": visibility,
+                        },
+                    }
 
-            # Update WAL
-            self.wal.set_checkpoint(
-                "gitlab",
-                {
-                    "last_project_id": project_id,
-                    "projects_processed": self.stats["gitlab"]["projects"],
-                    "chunks_indexed": self.stats["gitlab"]["chunks"],
-                },
-            )
+    def _count_docs(self) -> int:
+        """Count total documents for progress tracking."""
+        count = 0
+        for _ in self._extract_documents_generator():
+            count += 1
+        return count
 
-            return chunks_count
+    async def run(self) -> AsyncIterator[StreamingResult]:
+        """Execute the full streaming pipeline.
 
-        except Exception as e:
-            logger.error(f"Error processing GitLab project {project_id}: {e}")
-            self.stats["gitlab"]["errors"] += 1
-            return 0
+        Yields StreamingResult for each processed document.
+        """
+        await self._init_components()
 
-    async def _run_confluence(self, extractor: ConfluenceExtractor):
-        """Run Confluence extraction with parallel page processing."""
-        logger.info("=== Starting Confluence extraction ===")
+        self._indexer.create_collection(recreate=False)
 
-        loop = asyncio.get_event_loop()
-        space_keys = extractor.space_keys or [None]
+        docs = list(self._extract_documents_generator())
+        self._progress.total_docs = len(docs)
+        logger.info(
+            "Streaming pipeline starting: %d documents, %d concurrent API calls",
+            self._progress.total_docs,
+            self._max_concurrent,
+        )
 
-        for space in space_keys:
-            if self._shutdown:
-                logger.info("Shutdown requested — stopping Confluence extraction")
+        self._progress.processed_docs = 0
+
+        for doc in docs:
+            if self._shutdown_event and self._shutdown_event.is_set():
+                logger.warning(
+                    "Shutdown requested, stopping at doc %d/%d",
+                    self._progress.processed_docs,
+                    self._progress.total_docs,
+                )
                 break
 
-            logger.info(f"Processing space: {space or 'ALL'}")
-
-            # Get page list (metadata only)
-            pages = await loop.run_in_executor(None, extractor._get_all_pages, space)
-            logger.info(f"Found {len(pages)} pages in space {space}")
-
-            # Process pages with concurrency limit
-            sem = asyncio.Semaphore(self.max_concurrent_pages)
-
-            async def process_page(page, _sem=sem):
-                async with _sem:
-                    await loop.run_in_executor(None, self._process_confluence_page, extractor, page)
-
-            tasks = [process_page(page) for page in pages]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            result = await self.process_document(doc)
+            yield result
 
         logger.info(
-            f"Confluence done: {self.stats['confluence']['pages']} pages, "
-            f"{self.stats['confluence']['chunks']} chunks, "
-            f"{self.stats['confluence']['errors']} errors",
+            "Streaming pipeline complete: %d docs, %d chunks, %d indexed, %d errors",
+            self._progress.processed_docs,
+            self._progress.total_chunks,
+            self._progress.indexed_chunks,
+            self._progress.errors,
         )
 
-    async def _run_jira(self, extractor: JiraExtractor):
-        """Run Jira extraction with parallel issue processing."""
-        logger.info("=== Starting Jira extraction ===")
+    def run_sync(self) -> list[StreamingResult]:
+        """Synchronous wrapper for the streaming pipeline.
 
-        loop = asyncio.get_event_loop()
-
-        # Get issues list using paginated fetch
-        def fetch_all_issues():
-            issues = []
-            for issue in extractor._paginated_issues(extractor.base_jql):
-                issues.append(issue)
-            return issues
-
-        issues = await loop.run_in_executor(None, fetch_all_issues)
-        logger.info(f"Found {len(issues)} issues")
-
-        # Process issues with concurrency limit
-        sem = asyncio.Semaphore(self.max_concurrent_pages)
-
-        async def process_issue(issue):
-            async with sem:
-                await loop.run_in_executor(None, self._process_jira_issue, extractor, issue)
-
-        tasks = [process_issue(issue) for issue in issues]
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-        logger.info(
-            f"Jira done: {self.stats['jira']['issues']} issues, "
-            f"{self.stats['jira']['chunks']} chunks, "
-            f"{self.stats['jira']['errors']} errors",
-        )
-
-    async def _run_gitlab(self, extractor: GitLabExtractor):
-        """Run GitLab extraction with parallel project processing."""
-        logger.info("=== Starting GitLab extraction ===")
-
-        loop = asyncio.get_event_loop()
-
-        # Get projects list
-        projects = await loop.run_in_executor(None, extractor.get_projects)
-        logger.info(f"Found {len(projects)} projects")
-
-        # Process projects with concurrency limit
-        sem = asyncio.Semaphore(self.max_concurrent_pages)
-
-        async def process_project(project):
-            async with sem:
-                await loop.run_in_executor(None, self._process_gitlab_project, extractor, project)
-
-        tasks = [process_project(proj) for proj in projects]
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-        logger.info(
-            f"GitLab done: {self.stats['gitlab']['projects']} projects, "
-            f"{self.stats['gitlab']['chunks']} chunks, "
-            f"{self.stats['gitlab']['errors']} errors",
-        )
-
-    async def run(self, sources: list[str] | None = None):
-        """Run the ETL pipeline.
-
-        Args:
-            sources: List of sources to run. None = all configured sources.
-
+        Returns list of all StreamingResults.
         """
-        start_time = time.time()
+        return asyncio.run(self._run_collect())
 
-        # Create extractors
-        extractors = self._create_extractors()
-
-        if not extractors:
-            logger.error("No sources configured!")
-            return
-
-        # Filter sources if specified
-        if sources:
-            extractors = {k: v for k, v in extractors.items() if k in sources}
-
-        logger.info(f"Starting ETL pipeline with sources: {list(extractors.keys())}")
-        logger.info(f"Concurrency: {self.max_concurrent_sources} sources, {self.max_concurrent_pages} pages/source")
-
-        # Run all sources concurrently
-        tasks = []
-        if "confluence" in extractors:
-            tasks.append(self._run_confluence(extractors["confluence"]))
-        if "jira" in extractors:
-            tasks.append(self._run_jira(extractors["jira"]))
-        if "gitlab" in extractors:
-            tasks.append(self._run_gitlab(extractors["gitlab"]))
-
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Final stats
-        elapsed = time.time() - start_time
-        total_chunks = sum(s["chunks"] for s in self.stats.values())
-        total_errors = sum(s["errors"] for s in self.stats.values())
-
-        logger.info("=" * 60)
-        logger.info(f"ETL Pipeline completed in {elapsed:.1f}s")
-        logger.info(f"  Total chunks indexed: {total_chunks}")
-        logger.info(f"  Total errors: {total_errors}")
-        logger.info(f"  Confluence: {self.stats['confluence']}")
-        logger.info(f"  Jira: {self.stats['jira']}")
-        logger.info(f"  GitLab: {self.stats['gitlab']}")
-        logger.info("=" * 60)
-
-        # Update WAL
-        self.wal.set_checkpoint(
-            "pipeline",
-            {
-                "last_run": datetime.now(UTC).isoformat(),
-                "elapsed_seconds": elapsed,
-                "total_chunks": total_chunks,
-                "total_errors": total_errors,
-                "stats": self.stats,
-            },
-        )
+    async def _run_collect(self) -> list[StreamingResult]:
+        results: list[StreamingResult] = []
+        async for result in self.run():
+            results.append(result)
+        return results
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
-    """Load YAML configuration."""
+    import os
+    import re
+
     with open(config_path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        raw = f.read()
+
+    def _expand(m: re.Match) -> str:
+        var_name = m.group(1)
+        default = m.group(2) if m.group(2) is not None else ""
+        return os.environ.get(var_name, default)
+
+    expanded = re.sub(r"\$\{(\w+):-([^}]*)\}", _expand, raw)
+    expanded = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), expanded)
+
+    return yaml.safe_load(expanded)
 
 
-def main():
-    import argparse
+async def main_streaming(config: dict[str, Any], wal: Any) -> None:
+    """Entry point for streaming pipeline from run_etl.py.
 
-    parser = argparse.ArgumentParser(description="RAG ETL Pipeline — Parallel Streaming")
-    parser.add_argument("--config", type=Path, default=Path("etl/config/etl_config.yaml"))
-    parser.add_argument(
-        "--sources",
-        nargs="+",
-        choices=["confluence", "jira", "gitlab"],
-        help="Sources to extract (default: all configured)",
-    )
-    parser.add_argument("--timeout", type=int, help="Override request timeout")
-    parser.add_argument("--concurrency", type=int, help="Max concurrent pages per source")
-    parser.add_argument("--test-connection", action="store_true", help="Test connections and exit")
-    parser.add_argument("--reset-wal", action="store_true", help="Reset WAL checkpoints")
-    args = parser.parse_args()
+    :param config: Full ETL YAML config as dict.
+    :param wal: WALManager instance for checkpoint tracking.
+    """
+    pipeline = StreamingPipeline(config, wal)
 
-    config = load_config(args.config)
-
-    # Override from CLI
-    if args.timeout:
-        for source in ["confluence", "jira", "gitlab"]:
-            if source in config:
-                config[source]["timeout"] = args.timeout
-        config.setdefault("global", {})["timeout"] = args.timeout
-
-    if args.concurrency:
-        config.setdefault("global", {})["max_concurrent_pages"] = args.concurrency
-
-    # Test connection mode
-    if args.test_connection:
-        logger.info("=== Testing connections ===")
-        pipeline = StreamingETLPipeline(config)
-        extractors = pipeline._create_extractors()
-
-        for name, extractor in extractors.items():
-            try:
-                if hasattr(extractor, "test_connection"):
-                    ok = extractor.test_connection()
-                    logger.info(f"  {name}: {'✅ OK' if ok else '❌ FAILED'}")
-                else:
-                    logger.info(f"  {name}: ⚠️ No test_connection method")
-            except Exception as e:
-                logger.error(f"  {name}: ❌ {e}")
-        return
-
-    # Reset WAL
-    if args.reset_wal:
-        pipeline = StreamingETLPipeline(config)
-        pipeline.wal.reset_all()
-        logger.info("WAL reset complete")
-        return
-
-    # Run pipeline
-    pipeline = StreamingETLPipeline(config)
-    asyncio.run(pipeline.run(sources=args.sources))
-
-
-if __name__ == "__main__":
-    main()
+    async for result in pipeline.run():
+        level = logging.WARNING if result.errors else logging.INFO
+        logger.log(
+            level,
+            "Processed: %s doc %s — %d chunks, %d indexed, %d errors (%.0fms)",
+            result.source,
+            result.doc_id,
+            result.chunks_count,
+            result.chunks_indexed,
+            len(result.errors),
+            result.duration_ms,
+        )

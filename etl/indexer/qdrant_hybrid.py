@@ -182,10 +182,15 @@ class QdrantHybridIndexer:
         """Преобразует чанк (словарь) в PointStruct для Qdrant.
         Ожидаемые поля: hash (id), text, title, source_type, source_id, version, doc_title, keywords, entities, summary.
         """
-        point_id = chunk.get("hash")
-        if not point_id:
+        point_id_raw = chunk.get("hash")
+        if not point_id_raw:
             logger.warning("Chunk missing 'hash' field, skipping")
             return None
+
+        # Qdrant requires UUID or unsigned integer as point ID.
+        # SHA-256 hashes (64 hex chars) are not valid UUIDs.
+        # Convert to deterministic UUID v5 so same content → same UUID.
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_OID, point_id_raw))
 
         text = chunk.get("text", "")
         if not text:
@@ -365,16 +370,18 @@ class QdrantHybridIndexer:
     def live_delete(self, chunk_id: str) -> bool:
         """Atomic delete of a single chunk from Qdrant by point ID.
 
-        :param chunk_id: the point ID (chunk hash) to delete
+        :param chunk_id: the point ID (SHA-256 hash, converted to UUID v5 internally)
         :return: True if delete succeeded
         """
         if not chunk_id:
             logger.warning("Empty chunk_id for live_delete")
             return False
+        # Convert SHA-256 hash to UUID v5 (same conversion as _chunk_to_point)
+        uuid_id = str(uuid.uuid5(uuid.NAMESPACE_OID, chunk_id))
         try:
             self.client.delete(
                 collection_name=self.collection_name,
-                points_selector=models.PointIdsList(points=[chunk_id]),
+                points_selector=models.PointIdsList(points=[uuid_id]),
             )
             logger.debug("Live delete for chunk %s", chunk_id)
             return True

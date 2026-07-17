@@ -61,6 +61,7 @@ from etl.graph_builder.entity_extractor import EntityRelationExtractor  # noqa: 
 from etl.graph_builder.neo4j_loader import Neo4jLoader  # noqa: E402
 from etl.indexer.live_vector_lake import LiveVectorLake  # noqa: E402
 from etl.indexer.qdrant_hybrid import QdrantHybridIndexer  # noqa: E402
+from etl.indexer.remote_embedder import build_remote_embedder_from_config  # noqa: E402
 from etl.indexer.wal_manager import (  # noqa: E402
     PIPELINE_CONFLUENCE,
     PIPELINE_GITLAB,
@@ -74,10 +75,24 @@ logger = logging.getLogger("ETL Orchestrator")
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
-    """Загружает YAML-конфигурацию."""
+    """Загружает YAML-конфигурацию с подстановкой переменных окружения.
+
+    Поддерживает синтаксис ${VAR:-default} в строковых значениях.
+    """
     with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-    return config
+        raw = f.read()
+
+    import re
+
+    def _expand_env(match: re.Match) -> str:
+        var_name = match.group(1)
+        default = match.group(2) if match.group(2) is not None else ""
+        return os.environ.get(var_name, default)
+
+    expanded = re.sub(r"\$\{(\w+):-([^}]*)\}", _expand_env, raw)
+    expanded = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), expanded)
+
+    return yaml.safe_load(expanded)
 
 
 def run_extract_confluence(config: dict, wal: WALManager) -> Path:
@@ -511,12 +526,18 @@ def run_cleanup(
 def main():
     parser = argparse.ArgumentParser(description="RAG ETL Pipeline Orchestrator")
     parser.add_argument("--config", type=Path, default=Path("etl_config.yaml"), help="Path to YAML config")
+    parser.add_argument(
+        "--mode",
+        choices=["streaming", "batch"],
+        default=None,
+        help="Pipeline mode (default: from config pipeline.mode, falls back to streaming)",
+    )
     parser.add_argument("--timeout", type=int, default=None, help="Request timeout in seconds (overrides config)")
     parser.add_argument("--test-connection", action="store_true", help="Test connection to all sources and exit")
-    parser.add_argument("--skip-extract", action="store_true", help="Skip extraction phase")
-    parser.add_argument("--skip-chunk", action="store_true", help="Skip chunking phase")
+    parser.add_argument("--skip-extract", action="store_true", help="Skip extraction phase (batch mode only)")
+    parser.add_argument("--skip-chunk", action="store_true", help="Skip chunking phase (batch mode only)")
     parser.add_argument("--skip-graph", action="store_true", help="Skip graph building phase")
-    parser.add_argument("--skip-index", action="store_true", help="Skip indexing phase")
+    parser.add_argument("--skip-index", action="store_true", help="Skip indexing phase (batch mode only)")
     parser.add_argument("--force-reindex", action="store_true", help="Force reindex all documents (ignore WAL)")
     parser.add_argument("--reset-wal", action="store_true", help="Reset all WAL checkpoints before run")
     parser.add_argument(
@@ -532,7 +553,7 @@ def main():
     parser.add_argument(
         "--streaming",
         action="store_true",
-        help="Start streaming ETL (webhook + consumer) alongside batch",
+        help="Start streaming ETL (webhook + consumer) alongside batch (deprecated: use --mode streaming)",
     )
     parser.add_argument("--webhook-only", action="store_true", help="Start only webhook server")
     parser.add_argument("--consumer-only", action="store_true", help="Start only stream consumer")
@@ -553,6 +574,11 @@ def main():
             if source in config:
                 config[source]["timeout"] = args.timeout
         logger.info(f"Timeout overridden to {args.timeout}s")
+
+    # Determine pipeline mode: CLI > config > default
+    pipeline_cfg = config.get("pipeline", {})
+    mode = args.mode or pipeline_cfg.get("mode", "streaming")
+    logger.info("Pipeline mode: %s (config: %s, CLI: %s)", mode, pipeline_cfg.get("mode"), args.mode)
 
     # Test connection mode
     if args.test_connection:
@@ -620,7 +646,17 @@ def main():
         wal.reset_all()
         logger.info("WAL has been reset")
 
-    # Регистрируем сохранение WAL при завершении процесса (atexit + signal)
+    # --- Streaming mode: use StreamingPipeline (extract->chunk->embed->index in one pass) ---
+    if mode == "streaming":
+        logger.info("=== Starting streaming pipeline ===")
+        from etl.scheduler.streaming_pipeline import StreamingPipeline
+
+        pipeline = StreamingPipeline(config, wal, shutdown_event=_shutdown_event)
+        pipeline.run_sync()
+        logger.info("Streaming pipeline completed successfully")
+        return
+
+    # --- Batch mode: traditional extract -> collect -> chunk -> index ---
     def _save_wal_on_exit() -> None:
         """Сохраняет WAL checkpoint при завершении процесса."""
         try:
@@ -757,20 +793,9 @@ def main():
     if not args.skip_index:
         index_config = config.get("indexing", {})
 
-        # Создаём эмбеддер: удалённый или локальный
-        embedder = None
-        remote_cfg = config.get("remote_services", {})
-        remote_embedder_cfg = remote_cfg.get("embedder", {})
-        if remote_embedder_cfg.get("url"):
-            from etl.indexer.remote_embedder import create_remote_embedder
-
-            embedder = create_remote_embedder(
-                url=remote_embedder_cfg["url"],
-                model=remote_embedder_cfg.get("model", ""),
-                api_key=remote_cfg.get("api_key", ""),
-                timeout=remote_embedder_cfg.get("timeout", 60),
-            )
-            logger.info("Using remote embedder: %s", remote_embedder_cfg["url"])
+        embedder = build_remote_embedder_from_config(config)
+        if embedder:
+            logger.info("Using remote embedder: %s", embedder._embedding_url)
 
         qdrant_idx = QdrantHybridIndexer(
             host=index_config.get("qdrant_host", "localhost"),

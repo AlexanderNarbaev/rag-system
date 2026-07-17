@@ -105,21 +105,38 @@ gitlab:
     - "build/*"
     - ".gradle/*"
 
-# Удалённые ML-сервисы (GPUStack / vLLM / llama.cpp)
+# Удалённые ML-сервисы (GPUStack / vLLM / llama.cpp / RAG Proxy)
+# Каждый сервис может иметь свой endpoint, модель и API-ключ.
+# Переменные окружения (${VAR:-default}) подставляются при загрузке.
 remote_services:
-  api_key: "your_api_key_here"             # API-ключ для доступа к ML-сервисам
   embedder:
-    url: "http://your-embedder-host:8080/v1/embeddings"
-    model: "bge-m3"
-    timeout: 30
+    endpoint: "${EMBEDDER_ENDPOINT:-http://rag-proxy:8080/v1}"   # OpenAI-compatible /v1/embeddings
+    model: "${EMBEDDER_MODEL:-BAAI/bge-m3}"
+    api_key: "${EMBEDDER_API_KEY:-}"
+    timeout: 60
+    batch_size: 64                          # Max texts per single API call
+    max_retries: 5                          # Retry attempts for API calls
+    retry_delay: 2.0                        # Base retry delay (seconds)
+    retry_max_delay: 30.0                   # Max retry delay cap (seconds)
+    connection_pool_size: 16                # HTTP connection pool size
   reranker:
-    url: "http://your-reranker-host:8080/v1/rerank"
-    model: "bge-reranker-v2-m3"
+    endpoint: "${RERANKER_ENDPOINT:-http://rag-proxy:8080/v1}"   # или http://host:8080/v1/rerank
+    model: "${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
+    api_key: "${RERANKER_API_KEY:-}"
     timeout: 30
-  llm:
-    url: "http://your-llm-host:8080/v1/chat/completions"
-    model: ""                              # оставить пустым для auto-detect
-    timeout: 120
+  slm:
+    endpoint: "${SLM_ENDPOINT:-http://rag-proxy:8080/v1}"        # лёгкая модель для entity extraction
+    model: "${SLM_MODEL:-qwen2.5-3b}"
+    api_key: "${SLM_API_KEY:-}"
+    timeout: 30
+
+# Настройки режима пайплайна
+pipeline:
+  mode: streaming                # "streaming" — extract→chunk→embed→index в один проход
+                                 # "batch"     — extract→collect→chunk→index поэтапно
+  batch_size: 10                 # документов за один батч в streaming режиме
+  save_raw: false                # сохранять сырые данные на диск (только для batch)
+  save_chunks: false             # сохранять чанки на диск (только для batch)
 
 # Семантический чанкинг
 # Research-backed optimal settings: 500-1500 chars with 10-20% overlap
@@ -158,6 +175,9 @@ streaming:
   redis_port: 6379
   redis_stream_key: "etl:events"
   redis_consumer_group: "etl-workers"
+  # Streaming pipeline settings (--mode streaming)
+  progress_interval: 50                     # Log progress every N documents
+  max_concurrent_api_calls: 10              # Max concurrent embedder API calls (backpressure)
 
 # ETL-level settings
 etl:
