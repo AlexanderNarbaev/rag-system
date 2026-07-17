@@ -59,6 +59,7 @@ from proxy.app.shared.cache import CacheManager
 
 # Internal module imports
 from proxy.app.shared.config import (
+    ALLOW_UNGROUNDED_GENERATION,
     COLLECTION_NAME,
     COMPRESSION_ENABLED,
     COMPRESSION_LEVEL,
@@ -85,6 +86,7 @@ from proxy.app.shared.config import (
     TOOLS_DECLARATIVE_DIR,
     TOOLS_ENABLED,
     TOOLS_OPENAPI_SPECS,
+    UNGROUNDED_NOTICE,
     USE_LANGGRAPH,
     USE_REDIS,
     USER_DB_PATH,
@@ -590,17 +592,29 @@ async def process_rag_query(
 
     # 9. Negative evidence check — refuse to hallucinate if retrieval is insufficient
     should_gen, reason = should_generate_answer(chunks_for_eval)
-    if not should_gen:
+    generate_without_knowledge = not should_gen and ALLOW_UNGROUNDED_GENERATION
+    if not should_gen and not ALLOW_UNGROUNDED_GENERATION:
         logger.info(f"Negative evidence: refusing to generate — {reason}")
         refusal = f"I don't have enough relevant information to answer this question reliably. {reason}"
         return refusal, "", False, sources, {}
 
     # 10. Build system prompt
-    system_prompt = (
-        "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
-        "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
-        f"Контекст:\n{context}"
-    )
+    if generate_without_knowledge:
+        # Prepend the ungrounded notice so the model knows to qualify its answer
+        system_prompt = (
+            f"{UNGROUNDED_NOTICE}\n\n"
+            "Ты – технический ассистент. Если в базе знаний нет информации, "
+            "честно укажи это в начале ответа, но всё равно дай полезный ответ, "
+            "основываясь на своих знаниях.\n\n"
+            f"Контекст:\n{context}"
+        )
+        logger.info("Allowing ungrounded generation (ALLOW_UNGROUNDED_GENERATION=true)")
+    else:
+        system_prompt = (
+            "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
+            "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
+            f"Контекст:\n{context}"
+        )
     messages_for_llm = [{"role": "system", "content": system_prompt}]
     if other_messages:
         for msg in other_messages:

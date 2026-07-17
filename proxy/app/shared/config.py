@@ -287,6 +287,18 @@ EVAL_DATASET_PATH = os.getenv("EVAL_DATASET_PATH", "./data/eval_dataset.json")
 ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
 ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")
 
+# ============ Ungrounded Generation ============
+# When enabled, the LLM will generate answers even when no relevant knowledge is found.
+# A notice is prepended indicating the answer is not based on the knowledge base.
+ALLOW_UNGROUNDED_GENERATION = os.getenv("ALLOW_UNGROUNDED_GENERATION", "true").lower() == "true"
+UNGROUNDED_NOTICE = os.getenv(
+    "UNGROUNDED_NOTICE",
+    "⚠️ The RAG knowledge base contains no relevant information on this topic. "
+    "The following answer is based on the model's internal training data "
+    "and may be inaccurate. For reliable answers, please add relevant "
+    "documents to the knowledge base.",
+)
+
 # ============ Tool Calling / Function Calling ============
 TOOLS_ENABLED = os.getenv("TOOLS_ENABLED", "false").lower() == "true"
 LIVE_SOURCES_ENABLED = os.getenv("LIVE_SOURCES_ENABLED", "false").lower() == "true"

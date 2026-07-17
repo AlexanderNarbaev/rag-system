@@ -559,7 +559,7 @@ async def chat_completions(
     from proxy.app.core.confidence import compute_confidence, should_generate_answer
     from proxy.app.core.hitl import generate_feedback_id
     from proxy.app.core.knowledge_status import determine_knowledge_status
-    from proxy.app.shared.config import CLARIFICATION_ENABLED
+    from proxy.app.shared.config import ALLOW_UNGROUNDED_GENERATION, CLARIFICATION_ENABLED, UNGROUNDED_NOTICE
     from proxy.app.shared.memory_manager import get_conversation
 
     feedback_id = generate_feedback_id()
@@ -584,14 +584,18 @@ async def chat_completions(
     # Build structured uncertainty response when knowledge is insufficient
     final_response = response_text
     if knowledge_status.status == "no_knowledge" and not should_gen:
-        uncertainty_message = build_uncertainty_response(
-            query=user_query,
-            status=knowledge_status.status,
-            sources=sources,
-            clarification=clarification_result,
-        )
-        if uncertainty_message:
-            final_response = uncertainty_message
+        if ALLOW_UNGROUNDED_GENERATION:
+            # Keep LLM response but prepend notice about missing knowledge
+            final_response = f"{UNGROUNDED_NOTICE}\n\n{response_text}"
+        else:
+            uncertainty_message = build_uncertainty_response(
+                query=user_query,
+                status=knowledge_status.status,
+                sources=sources,
+                clarification=clarification_result,
+            )
+            if uncertainty_message:
+                final_response = uncertainty_message
 
     # Store conversation turn
     session_id = user.user_id if user.is_authenticated else client_ip
