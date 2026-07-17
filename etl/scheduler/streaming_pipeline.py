@@ -146,8 +146,9 @@ class StreamingPipeline:
 
         from etl.chunker.semantic_chunker import MDKeyChunker, MetadataEnricher, SemanticChunker
 
+        max_tokens = self._resolve_chunk_max_tokens(chunker_cfg)
         base_chunker = SemanticChunker(
-            max_tokens=chunker_cfg.get("max_tokens", 1500),
+            max_tokens=max_tokens,
             overlap_tokens=chunker_cfg.get("overlap_tokens", 200),
             min_chunk_tokens=chunker_cfg.get("min_chunk_tokens", 100),
         )
@@ -156,6 +157,27 @@ class StreamingPipeline:
             slm_endpoint=chunker_cfg.get("slm_endpoint"),
         )
         return MDKeyChunker(base_chunker, enricher)
+
+    def _resolve_chunk_max_tokens(self, chunker_cfg: dict) -> int:
+        """Resolve chunking max_tokens, supporting 'auto' detection from embedder model."""
+        raw_value = chunker_cfg.get("max_tokens", 1500)
+        if raw_value != "auto":
+            return int(raw_value)
+
+        model = self._config.get("remote_services", {}).get("embedder", {}).get("model", "")
+        if model:
+            from etl.indexer.remote_embedder import _resolve_max_tokens
+
+            resolved = _resolve_max_tokens(model)
+            logger.info(
+                "Auto-detected chunk max_tokens=%d from embedder model '%s'",
+                resolved,
+                model,
+            )
+            return resolved
+
+        logger.warning("chunking.max_tokens='auto' but no embedder model configured. Defaulting to 1500 tokens.")
+        return 1500
 
     async def _process_chunk(self, chunk_dict: dict[str, Any]) -> bool:
         """Embed a single chunk and index to Qdrant.
@@ -204,6 +226,8 @@ class StreamingPipeline:
     async def process_document(self, doc: dict[str, Any]) -> StreamingResult:
         """Process a single document: chunk -> embed -> index -> yield result.
 
+        Also creates heading-level and document-level chunks for Confluence pages.
+
         :param doc: Document dict with id, source_type, title, content, content_type, metadata.
         :return: StreamingResult with processing summary.
         """
@@ -235,14 +259,36 @@ class StreamingPipeline:
             result.duration_ms = (datetime.now(UTC) - started).total_seconds() * 1000
             return result
 
-        chunk_dicts = [ch.__dict__ for ch in chunks]
-        result.chunks_count = len(chunk_dicts)
+        all_chunk_dicts = [ch.__dict__ for ch in chunks]
+        result.chunks_count = len(all_chunk_dicts)
+
+        # Heading-level and document-level chunks for Confluence
+        if doc.get("source_type") == "confluence" and doc.get("content_type") == "html":
+            try:
+                h_chunks = self._chunker.base.create_heading_chunks(
+                    doc["content"],
+                    source_metadata,
+                )
+                h_dicts = [h.__dict__ for h in h_chunks]
+                all_chunk_dicts.extend(h_dicts)
+                logger.debug("Added %d heading chunks for %s", len(h_dicts), doc["id"])
+            except Exception as e:
+                logger.warning("Heading chunk creation failed for %s: %s", doc["id"], e)
+
+            try:
+                md_text = self._chunker.base._html_to_markdown(doc["content"])
+                doc_chunk = self._chunker.base.create_document_chunk(md_text, source_metadata)
+                if doc_chunk:
+                    all_chunk_dicts.append(doc_chunk.__dict__)
+                    logger.debug("Added document chunk for %s", doc["id"])
+            except Exception as e:
+                logger.warning("Document chunk creation failed for %s: %s", doc["id"], e)
 
         # Embed chunks in parallel (with semaphore backpressure)
-        embed_tasks = [self._process_chunk(ch) for ch in chunk_dicts]
+        embed_tasks = [self._process_chunk(ch) for ch in all_chunk_dicts]
         embed_results = await asyncio.gather(*embed_tasks, return_exceptions=True)
 
-        for ch, embed_result in zip(chunk_dicts, embed_results, strict=True):
+        for ch, embed_result in zip(all_chunk_dicts, embed_results, strict=True):
             if isinstance(embed_result, Exception):
                 errors.append(f"Embedding failed for chunk {ch.get('hash', '?')}: {embed_result}")
                 continue
@@ -251,7 +297,7 @@ class StreamingPipeline:
                 continue
 
         # Index chunks (must be sequential for live_upsert due to Qdrant client)
-        for ch in chunk_dicts:
+        for ch in all_chunk_dicts:
             if "_dense_vec" not in ch:
                 continue
             indexed = await asyncio.get_running_loop().run_in_executor(None, self._index_chunk_sync, ch)

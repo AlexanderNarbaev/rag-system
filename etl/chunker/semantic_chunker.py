@@ -2,6 +2,7 @@
 """Семантический чанкинг для RAG-системы.
 Реализует MDKeyChunker (Semantic Chunker) с извлечением метаданных и каскадированием.
 Поддерживает HTML и Markdown, LLM-обогащение (опционально).
+Добавлены: HTML→Markdown конвертация, heading-level indexing, document-level embedding.
 """
 
 import hashlib
@@ -21,6 +22,14 @@ try:
     import markdown
 except ImportError:
     markdown = None
+
+# HTML→Markdown конвертер
+try:
+    import markdownify
+
+    MARKDOWNIFY_AVAILABLE = True
+except ImportError:
+    MARKDOWNIFY_AVAILABLE = False
 
 # Для NLP (опционально)
 try:
@@ -75,13 +84,89 @@ class SemanticChunker:
         self.min_chunk_tokens = min_chunk_tokens
 
     def _estimate_tokens(self, text: str) -> int:
-        """Грубая оценка токенов (4 символа ~ 1 токен для рус/англ). Для точности использовать tiktoken."""
-        return len(text) // 4
+        """Language-aware token estimation.
+
+        BPE tokenization ratios vary by script:
+        - Latin scripts (English, etc.): ~4 chars/token
+        - Cyrillic scripts (Russian, etc.): ~3 chars/token (UTF-8 multibyte)
+        - CJK scripts: ~1.5 chars/token
+        - Mixed text: weighted average based on script detection.
+
+        Uses character-script classification to choose the appropriate ratio.
+        For multilingual models (bge-m3, multilingual-e5), Cyrillic and CJK
+        consume more tokens per character than Latin text.
+        """
+        if not text:
+            return 0
+
+        cyrillic = 0
+        latin = 0
+        cjk = 0
+        other = 0
+
+        for ch in text:
+            cp = ord(ch)
+            if 0x0400 <= cp <= 0x04FF or 0x0500 <= cp <= 0x052F:
+                cyrillic += 1
+            elif (0x0041 <= cp <= 0x005A) or (0x0061 <= cp <= 0x007A) or (0x00C0 <= cp <= 0x024F):
+                latin += 1
+            elif (
+                (0x4E00 <= cp <= 0x9FFF)
+                or (0x3040 <= cp <= 0x309F)
+                or (0x30A0 <= cp <= 0x30FF)
+                or (0xAC00 <= cp <= 0xD7AF)
+            ):
+                cjk += 1
+            else:
+                other += 1
+        weighted_ratio = cyrillic / 3.0 + latin / 4.0 + cjk / 1.5 + other / 4.0
+        return max(1, int(weighted_ratio))
+
+    def _html_to_markdown(self, html: str) -> str:
+        """Convert Confluence HTML to clean Markdown.
+
+        Preserves structure: headings as # ## ###, tables as Markdown tables,
+        links as [text](url), lists as - item. Strips scripts, styles, images.
+        """
+        if not MARKDOWNIFY_AVAILABLE:
+            raise ImportError("markdownify is required for HTML→Markdown conversion. Install: pip install markdownify")
+        md = markdownify.markdownify(
+            html,
+            heading_style="ATX",  # # Heading 1, ## Heading 2
+            bullets="-",
+            strip=["img", "script", "style"],
+        )
+        return md
+
+    def _split_markdown_by_headings(self, md_text: str) -> list[dict[str, Any]]:
+        """Split Markdown text into sections by ATX headings (#, ##, ###).
+        Returns list of {heading: str, level: int, content: str}
+        """
+        heading_re = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
+        matches = list(heading_re.finditer(md_text))
+        if not matches:
+            return [{"heading": "root", "level": 0, "content": md_text.strip()}]
+
+        sections = []
+        for i, match in enumerate(matches):
+            level = len(match.group(1))
+            heading = match.group(2).strip()
+            start = match.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(md_text)
+            content = md_text[start:end].strip()
+            sections.append({"heading": heading, "level": level, "content": content})
+
+        return sections
 
     def _split_by_headings(self, html: str) -> list[dict[str, Any]]:
-        """Разбивает HTML на секции по заголовкам h1, h2, h3.
+        """Разбивает HTML на секции по заголовкам — преобразует HTML в Markdown и разбивает.
         Возвращает список {heading: str, content: str}
         """
+        if MARKDOWNIFY_AVAILABLE:
+            md_text = self._html_to_markdown(html)
+            sections = self._split_markdown_by_headings(md_text)
+            return [{"heading": s["heading"], "content": s["content"]} for s in sections]
+
         if BeautifulSoup is None:
             raise ImportError("BeautifulSoup4 is required for HTML parsing. Install: pip install beautifulsoup4")
         soup = BeautifulSoup(html, "html.parser")
@@ -90,13 +175,11 @@ class SemanticChunker:
         current_content = []
         for elem in soup.find_all(["h1", "h2", "h3", "p", "ul", "ol", "table"]):
             if elem.name in ["h1", "h2", "h3"]:
-                # Сохраняем предыдущую секцию
                 if current_content:
                     sections.append({"heading": current_heading, "content": "\n".join(current_content)})
                 current_heading = elem.get_text(strip=True)
                 current_content = []
             else:
-                # Extract clean text — strip HTML to avoid embedding raw markup
                 current_content.append(elem.get_text(separator=" ", strip=True))
         if current_content:
             sections.append({"heading": current_heading, "content": "\n".join(current_content)})
@@ -157,17 +240,22 @@ class SemanticChunker:
 
     def chunk_html(self, html: str, source_metadata: dict[str, Any]) -> list[Chunk]:
         """Нарезка HTML-документа на семантические чанки.
+        Конвертирует HTML в Markdown, затем разбивает по заголовкам.
+        Таблицы, списки, ссылки сохраняются в Markdown-формате.
         :param html: HTML-строка документа
         :param source_metadata: базовые метаданные (source_type, doc_title, version и т.д.)
         :return: список Chunk
         """
+        if MARKDOWNIFY_AVAILABLE:
+            md_text = self._html_to_markdown(html)
+            return self.chunk_markdown_with_overlap(md_text, source_metadata)
+
         sections = self._split_by_headings(html)
         chunks = []
         position = 0
         for sec in sections:
             heading = sec["heading"]
             content = sec["content"]
-            # Разбиваем содержимое на абзацы, если слишком большой
             paragraphs = self._split_by_paragraphs(content)
             current_text = f"## {heading}\n" if heading != "root" else ""
             for para in paragraphs:
@@ -175,7 +263,6 @@ class SemanticChunker:
                     continue
                 candidate = current_text + para
                 if self._estimate_tokens(candidate) > self.max_tokens and current_text:
-                    # Сохраняем текущий накопленный чанк и начинаем новый
                     if current_text:
                         chunk = self._create_chunk(current_text, position, source_metadata, heading)
                         chunks.append(chunk)
@@ -189,11 +276,278 @@ class SemanticChunker:
                 chunk = self._create_chunk(current_text, position, source_metadata, heading)
                 chunks.append(chunk)
                 position += 1
-        # Применяем перекрытие (overlap)
         chunks = self._apply_overlap(chunks)
-        # Объединяем короткие чанки
         chunks = self._merge_short_chunks(chunks)
         return chunks
+
+    def chunk_markdown_with_overlap(
+        self,
+        md_text: str,
+        source_metadata: dict[str, Any] | None = None,
+    ) -> list[Chunk]:
+        """Chunk Markdown text with token-aware overlap.
+
+        Splits by ATX headings (#, ##, ###), then by paragraphs within
+        sections that exceed max_tokens. Overlap from the end of chunk N
+        is prepended to chunk N+1 to preserve context across boundaries.
+
+        :param md_text: Markdown text to chunk
+        :param source_metadata: optional metadata dict (source_type, doc_title, etc.)
+        :return: list of Chunk objects
+        """
+        if source_metadata is None:
+            source_metadata = {}
+
+        sections = self._split_markdown_by_headings(md_text)
+        chunks = []
+        position = 0
+        for sec in sections:
+            heading = sec["heading"]
+            content = sec["content"]
+            heading_prefix = f"{'#' * max(sec['level'], 1)} {heading}\n" if heading != "root" else ""
+            paragraphs = self._split_by_paragraphs(content)
+            current_text = heading_prefix
+            for para in paragraphs:
+                if not para.strip():
+                    continue
+                candidate = current_text + "\n\n" + para if current_text else para
+                if self._estimate_tokens(candidate) > self.max_tokens and current_text:
+                    if current_text.strip():
+                        chunk = self._create_chunk(current_text, position, source_metadata, heading)
+                        chunks.append(chunk)
+                        position += 1
+                    current_text = heading_prefix + para
+                elif not current_text:
+                    current_text = para
+                else:
+                    current_text += "\n\n" + para
+            if current_text.strip():
+                chunk = self._create_chunk(current_text, position, source_metadata, heading)
+                chunks.append(chunk)
+                position += 1
+        chunks = self._apply_overlap(chunks)
+        chunks = self._merge_short_chunks(chunks)
+        return chunks
+
+    def extract_headings(self, html: str) -> list[dict[str, Any]]:
+        """Extract all headings (h1, h2, h3) with anchor IDs from Confluence HTML.
+
+        Returns a flat list of heading dicts with:
+        - text: heading text
+        - level: 1, 2, or 3
+        - anchor_id: Confluence anchor ID (for URL: /display/SPACE/Page#anchor)
+        """
+        if BeautifulSoup is None:
+            logger.warning("BeautifulSoup not available, cannot extract headings")
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        headings: list[dict[str, Any]] = []
+
+        for elem in soup.find_all(["h1", "h2", "h3"]):
+            level = int(elem.name[1])
+            text = elem.get_text(strip=True)
+            if not text:
+                continue
+
+            # Try to find Confluence anchor ID:
+            # 1. Look for preceding <ac:structured-macro ac:name="anchor">
+            # 2. Look for id attribute on the heading itself
+            anchor_id = self._find_anchor_id(elem)
+
+            headings.append(
+                {
+                    "text": text,
+                    "level": level,
+                    "anchor_id": anchor_id,
+                }
+            )
+
+        return headings
+
+    def _find_anchor_id(self, heading_elem: Any) -> str:
+        """Find Confluence anchor ID associated with a heading element.
+
+        Confluence stores anchors as:
+        <ac:structured-macro ac:name="anchor">
+          <ac:parameter ac:name="">anchor-name</ac:parameter>
+        </ac:structured-macro>
+        or as <h2 id="Header-Text">.
+        """
+        # Check element's own id attribute
+        elem_id = heading_elem.get("id", "")
+        if elem_id:
+            return elem_id
+
+        # Check preceding sibling for anchor macro
+        prev = heading_elem.previous_sibling
+        while prev is not None:
+            if hasattr(prev, "get") and prev.get("ac:name") == "anchor":
+                param = prev.find("ac:parameter")
+                if param and param.get_text(strip=True):
+                    return param.get_text(strip=True)
+            if hasattr(prev, "name") and prev.name == "ac:structured-macro" and prev.get("ac:name") == "anchor":
+                param = prev.find("ac:parameter")
+                if param and param.get_text(strip=True):
+                    return param.get_text(strip=True)
+                return ""
+            prev = prev.previous_sibling if hasattr(prev, "previous_sibling") else None
+
+        return ""
+
+    def _build_heading_tree(
+        self,
+        headings: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Build a hierarchical heading tree from a flat list.
+
+        Each node has: text, level, anchor_id, children (list of sub-headings).
+        """
+        if not headings:
+            return []
+
+        root: list[dict[str, Any]] = []
+        stack: list[dict[str, Any]] = []
+
+        for h in headings:
+            node = {
+                "text": h["text"],
+                "level": h["level"],
+                "anchor_id": h["anchor_id"],
+                "children": [],
+            }
+
+            while stack and stack[-1]["level"] >= h["level"]:
+                stack.pop()
+
+            if stack:
+                stack[-1]["children"].append(node)
+            else:
+                root.append(node)
+
+            stack.append(node)
+
+        return root
+
+    def create_heading_chunks(
+        self,
+        html: str,
+        source_metadata: dict[str, Any],
+    ) -> list[Chunk]:
+        """Create heading-level index chunks for a Confluence page.
+
+        Each chunk represents a heading with its position in the document
+        hierarchy. These are indexed with source_type="heading" to enable
+        queries like "Find the section about network racks".
+
+        :param html: Confluence page HTML
+        :param source_metadata: dict with source_type, doc_title, source_id (page_id), etc.
+        :return: list of Chunk objects with source_type="heading"
+        """
+        headings = self.extract_headings(html)
+        if not headings:
+            return []
+
+        tree = self._build_heading_tree(headings)
+
+        chunks: list[Chunk] = []
+        page_id = source_metadata.get("source_id", "")
+        page_title = source_metadata.get("doc_title", "")
+
+        for i, h in enumerate(headings):
+            heading_node = self._find_node_in_tree(tree, h["text"], h["level"])
+            child_headings = [c["text"] for c in (heading_node.get("children", []) if heading_node else [])]
+
+            text_parts = [f"{'#' * h['level']} {h['text']}"]
+            if page_title:
+                text_parts.insert(0, f"Document: {page_title}")
+            if child_headings:
+                text_parts.append(f"Sections: {', '.join(child_headings)}")
+
+            text = "\n".join(text_parts)
+            chunk_hash = hashlib.sha256(text.encode()).hexdigest()
+
+            chunk = Chunk(
+                text=text,
+                hash=chunk_hash,
+                title=h["text"],
+                source_type="heading",
+                source_id=page_id,
+                doc_title=page_title,
+                position=i,
+                tokens_approx=self._estimate_tokens(text),
+                keywords=[h["text"], *child_headings],
+                parent_metadata={
+                    "heading_text": h["text"],
+                    "heading_level": h["level"],
+                    "anchor_id": h["anchor_id"],
+                    "page_id": page_id,
+                    "page_title": page_title,
+                    "child_headings": child_headings,
+                },
+            )
+            # Use original_text to store the raw heading for display
+            chunk.original_text = h["text"]
+            chunks.append(chunk)
+
+        return chunks
+
+    def _find_node_in_tree(
+        self,
+        tree: list[dict[str, Any]],
+        text: str,
+        level: int,
+    ) -> dict[str, Any] | None:
+        """Find a heading node in the tree by text and level."""
+        for node in tree:
+            if node["text"] == text and node["level"] == level:
+                return node
+            result = self._find_node_in_tree(node.get("children", []), text, level)
+            if result:
+                return result
+        return None
+
+    def create_document_chunk(self, markdown_text: str, source_metadata: dict[str, Any]) -> Chunk | None:
+        """Create a document-level summary chunk for broad topic matching.
+
+        Encodes the page title + first ~500 characters of content
+        as a single point with source_type="document".
+
+        :param markdown_text: Markdown content of the page
+        :param source_metadata: dict with source_type, doc_title, source_id (page_id)
+        :return: Chunk with source_type="document" or None if content is empty
+        """
+        page_title = source_metadata.get("doc_title", "Untitled")
+        page_id = source_metadata.get("source_id", "")
+
+        first_line = markdown_text.split("\n")[0] if markdown_text else ""
+        # Get first ~500 chars after stripping heading markers
+        clean_text = re.sub(r"^#+\s*", "", markdown_text, flags=re.MULTILINE).strip()
+        preview = clean_text[:500]
+        if len(clean_text) > 500:
+            preview += "..."
+
+        summary_text = f"# {page_title}\n\n{preview}"
+
+        chunk_hash = hashlib.sha256(summary_text.encode()).hexdigest()
+
+        return Chunk(
+            text=summary_text,
+            hash=chunk_hash,
+            title=page_title,
+            summary=preview,
+            source_type="document",
+            source_id=page_id,
+            doc_title=page_title,
+            position=0,
+            tokens_approx=self._estimate_tokens(summary_text),
+            keywords=[page_title],
+            parent_metadata={
+                "page_id": page_id,
+                "page_title": page_title,
+                "first_line": first_line,
+            },
+        )
 
     def chunk_markdown(self, markdown_text: str, source_metadata: dict[str, Any]) -> list[Chunk]:
         """Конвертирует Markdown в HTML и использует chunk_html."""
@@ -466,6 +820,29 @@ class AdaptiveChunker:
         self.target_chunk_size = target_chunk_size
         self.overlap_ratio = overlap_ratio
 
+    def _estimate_tokens(self, text: str) -> int:
+        """Language-aware token estimation for chunks. Same logic as SemanticChunker."""
+        if not text:
+            return 0
+        cyrillic = latin = cjk = other = 0
+        for ch in text:
+            cp = ord(ch)
+            if 0x0400 <= cp <= 0x04FF or 0x0500 <= cp <= 0x052F:
+                cyrillic += 1
+            elif (0x0041 <= cp <= 0x005A) or (0x0061 <= cp <= 0x007A) or (0x00C0 <= cp <= 0x024F):
+                latin += 1
+            elif (
+                (0x4E00 <= cp <= 0x9FFF)
+                or (0x3040 <= cp <= 0x309F)
+                or (0x30A0 <= cp <= 0x30FF)
+                or (0xAC00 <= cp <= 0xD7AF)
+            ):
+                cjk += 1
+            else:
+                other += 1
+        weighted_ratio = cyrillic / 3.0 + latin / 4.0 + cjk / 1.5 + other / 4.0
+        return max(1, int(weighted_ratio))
+
     def _detect_structure(self, text: str) -> list[dict[str, Any]]:
         """Detect document structure: headers, code blocks, tables, paragraphs.
         Returns list of structural elements.
@@ -683,8 +1060,7 @@ class AdaptiveChunker:
                 version=source_metadata.get("version", ""),
                 doc_title=source_metadata.get("doc_title", ""),
                 position=i,
-                tokens_approx=len(text) // 4,
-                # Rough token estimate
+                tokens_approx=self._estimate_tokens(text),
             )
             chunks.append(chunk)
 

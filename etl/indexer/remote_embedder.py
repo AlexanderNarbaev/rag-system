@@ -40,6 +40,58 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+MODEL_MAX_TOKENS: dict[str, int] = {
+    "bge-m3": 8192,
+    "BAAI/bge-m3": 8192,
+    "bge-large-en-v1.5": 512,
+    "BAAI/bge-large-en-v1.5": 512,
+    "bge-large-en": 512,
+    "BAAI/bge-large-en": 512,
+    "text-embedding-3-small": 8191,
+    "text-embedding-3-large": 8191,
+    "text-embedding-ada-002": 8191,
+    "multilingual-e5-large": 512,
+    "intfloat/multilingual-e5-large": 512,
+    "multilingual-e5-base": 512,
+    "intfloat/multilingual-e5-base": 512,
+    "multilingual-e5-small": 512,
+    "intfloat/multilingual-e5-small": 512,
+    "e5-large-v2": 512,
+    "intfloat/e5-large-v2": 512,
+    "e5-base-v2": 512,
+    "intfloat/e5-base-v2": 512,
+    "gte-large": 512,
+    "thenlper/gte-large": 512,
+    "gte-base": 512,
+    "thenlper/gte-base": 512,
+    "all-MiniLM-L6-v2": 256,
+    "sentence-transformers/all-MiniLM-L6-v2": 256,
+    "all-MiniLM-L12-v2": 256,
+    "sentence-transformers/all-MiniLM-L12-v2": 256,
+    "all-mpnet-base-v2": 384,
+    "sentence-transformers/all-mpnet-base-v2": 384,
+}
+
+DEFAULT_MAX_TOKENS = 8192
+
+
+def _resolve_max_tokens(model: str) -> int:
+    """Look up known token limit for a model. Falls back to default with a warning."""
+    model_lower = model.lower().strip().rstrip("}")
+    if model_lower in MODEL_MAX_TOKENS:
+        return MODEL_MAX_TOKENS[model_lower]
+    for known_name, limit in MODEL_MAX_TOKENS.items():
+        if known_name.lower() in model_lower or model_lower in known_name.lower():
+            logger.info("Matched model '%s' to known '%s' (max_tokens=%d)", model, known_name, limit)
+            return limit
+    logger.warning(
+        "Unknown embedder model '%s' — defaulting max_tokens=%d. "
+        "Set explicitly via chunking config if this is incorrect.",
+        model,
+        DEFAULT_MAX_TOKENS,
+    )
+    return DEFAULT_MAX_TOKENS
+
 
 class BackoffStrategy(StrEnum):
     CONSTANT = "constant"
@@ -109,6 +161,8 @@ class RemoteEmbedder:
         self._max_batch_size = max_batch_size
         self._healthy = True
         self._embedding_dim: int | None = None
+        self._max_tokens: int | None = None
+        self._max_tokens_detected = False
         self._retry_config = retry_config or RetryConfig()
         self._connection_pool_size = connection_pool_size
         self._session: Any = None
@@ -149,8 +203,11 @@ class RemoteEmbedder:
     def _call_api_sync(self, texts: list[str]) -> list[list[float]]:
         session = self._get_session()
         # Truncate texts to avoid 400 from oversized payloads.
-        # bge-m3 has 8192 token limit — ~12000 chars with safety margin.
-        max_chars = 12000
+        # Use detected max_tokens if available, otherwise safe default (~12000 chars for 8192 tokens).
+        known_max_tokens = self._max_tokens or 8192
+        max_chars = known_max_tokens * 4  # conservative: 4 chars/token for worst-case Latin text
+        if max_chars < 1:
+            max_chars = 12000
         truncated = [t[:max_chars] if len(t) > max_chars else t for t in texts]
         payload = {
             "input": truncated,
@@ -200,6 +257,22 @@ class RemoteEmbedder:
             last_error or RuntimeError("unknown"),
         )
 
+    def _detect_max_tokens(self) -> None:
+        """Resolve the embedder model's max token context size.
+
+        Called after the first successful embedding call so we know the model name is valid.
+        Uses a lookup table for known models; falls back to default with a warning.
+        """
+        if self._max_tokens_detected:
+            return
+        self._max_tokens = _resolve_max_tokens(self._model)
+        self._max_tokens_detected = True
+        logger.info(
+            "Embedder max_tokens resolved: model=%s max_tokens=%d",
+            self._model,
+            self._max_tokens,
+        )
+
     def encode_batch(self, texts: list[str], normalize_embeddings: bool = True) -> np.ndarray:
         """Encode a batch of texts in a single API call.
 
@@ -219,6 +292,8 @@ class RemoteEmbedder:
         if self._embedding_dim is None and vecs.ndim == 2:
             self._embedding_dim = vecs.shape[1]
             logger.info("Remote embedder dimension: %d", self._embedding_dim)
+
+        self._detect_max_tokens()
 
         if normalize_embeddings:
             norms = np.linalg.norm(vecs, axis=1, keepdims=True)
@@ -266,6 +341,8 @@ class RemoteEmbedder:
         if self._embedding_dim is None and vecs.ndim == 2:
             self._embedding_dim = vecs.shape[1]
             logger.info("Remote embedder dimension: %d", self._embedding_dim)
+
+        self._detect_max_tokens()
 
         if normalize_embeddings:
             norms = np.linalg.norm(vecs, axis=1, keepdims=True)
@@ -361,6 +438,8 @@ class RemoteEmbedder:
         if self._embedding_dim is None and vecs.ndim == 2:
             self._embedding_dim = vecs.shape[1]
 
+        self._detect_max_tokens()
+
         if normalize_embeddings:
             norms = np.linalg.norm(vecs, axis=1, keepdims=True)
             norms = np.where(norms == 0, 1.0, norms)
@@ -378,6 +457,10 @@ class RemoteEmbedder:
     @property
     def embedding_dimension(self) -> int | None:
         return self._embedding_dim
+
+    @property
+    def max_tokens(self) -> int | None:
+        return self._max_tokens
 
 
 def create_remote_embedder(

@@ -142,12 +142,17 @@ pipeline:
 # Research-backed optimal settings: 500-1500 chars with 10-20% overlap
 # See: https://habr.com/ru/articles/1029740/
 chunking:
-  max_tokens: 1500                       # ~6000 chars, optimal for retrieval quality
+  max_tokens: 1500                       # Chunk token limit. Set to "auto" to auto-detect from embedder model.
+                                         #   "auto" — resolve from embedder's known context window
+                                         #   number — explicit token limit for chunking
+                                         #   Known embedder limits: bge-m3=8192, text-embedding-3=8191, e5=512
   overlap_tokens: 200                    # ~800 chars, ~13% overlap for context continuity
   min_chunk_tokens: 100                  # ~400 chars, minimum viable chunk
   use_slm: false                         # использовать SLM для обогащения (требуется эндпоинт)
   slm_endpoint: "http://localhost:8080/v1/completions"  # если use_slm true
   output_dir: "./chunks"                 # директория для сохранения чанков (JSON)
+  index_headings: true                   # создавать heading-level чанки с source_type="heading"
+  index_documents: true                  # создавать document-level чанки с source_type="document"
 
 # Гибридная индексация Qdrant
 indexing:

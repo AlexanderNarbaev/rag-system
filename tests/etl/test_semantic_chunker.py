@@ -679,3 +679,394 @@ class TestMetadataEnricherEnrichWithSlm:
             mock_post.return_value = mock_resp
             result = enricher.enrich_with_slm("test text")
         assert result == {}
+
+
+class TestHtmlToMarkdownConversion:
+    """Tests for HTML → Markdown conversion."""
+
+    def test_html_to_markdown_basic(self):
+        chunker = SemanticChunker()
+        html = "<h1>Title</h1><p>Some paragraph.</p>"
+        md = chunker._html_to_markdown(html)
+        assert "# Title" in md
+        assert "Some paragraph." in md
+
+    def test_html_to_markdown_tables(self):
+        chunker = SemanticChunker()
+        html = "<table><tr><th>Col1</th><th>Col2</th></tr><tr><td>A</td><td>B</td></tr></table>"
+        md = chunker._html_to_markdown(html)
+        assert "Col1" in md
+        assert "Col2" in md
+
+    def test_html_to_markdown_lists(self):
+        chunker = SemanticChunker()
+        html = "<ul><li>Item 1</li><li>Item 2</li></ul>"
+        md = chunker._html_to_markdown(html)
+        assert "- " in md
+        assert "Item 1" in md
+
+    def test_html_to_markdown_links(self):
+        chunker = SemanticChunker()
+        html = '<a href="http://example.com">Click here</a>'
+        md = chunker._html_to_markdown(html)
+        assert "Click here" in md
+        assert "http://example.com" in md
+
+    def test_html_to_markdown_strips_images_scripts_styles(self):
+        chunker = SemanticChunker()
+        html = "<p>Visible</p><img src='x.png' alt='photo'/><script>alert('xss')</script><style>body{}</style>"
+        md = chunker._html_to_markdown(html)
+        assert "Visible" in md
+        assert "photo" not in md  # img tag stripped, alt text removed
+
+
+class TestSplitMarkdownByHeadings:
+    """Tests for _split_markdown_by_headings."""
+
+    def test_split_markdown_by_headings(self):
+        chunker = SemanticChunker()
+        md = "# H1\nContent under h1.\n\n## H2\nContent under h2."
+        sections = chunker._split_markdown_by_headings(md)
+        assert len(sections) == 2
+        assert sections[0]["heading"] == "H1"
+        assert sections[0]["level"] == 1
+        assert sections[1]["heading"] == "H2"
+        assert sections[1]["level"] == 2
+
+    def test_split_markdown_with_h3(self):
+        chunker = SemanticChunker()
+        md = "### H3\nContent under h3."
+        sections = chunker._split_markdown_by_headings(md)
+        assert len(sections) == 1
+        assert sections[0]["heading"] == "H3"
+        assert sections[0]["level"] == 3
+
+    def test_split_markdown_no_headings(self):
+        chunker = SemanticChunker()
+        md = "Just plain text without any headings."
+        sections = chunker._split_markdown_by_headings(md)
+        assert len(sections) == 1
+        assert sections[0]["heading"] == "root"
+
+    def test_split_markdown_empty(self):
+        chunker = SemanticChunker()
+        sections = chunker._split_markdown_by_headings("")
+        assert len(sections) == 1
+        assert sections[0]["heading"] == "root"
+        assert sections[0]["content"] == ""
+
+    def test_split_markdown_preserves_section_content(self):
+        chunker = SemanticChunker()
+        md = "# Section 1\n\nContent one.\n\n# Section 2\n\nContent two."
+        sections = chunker._split_markdown_by_headings(md)
+        assert len(sections) == 2
+        assert "Content one." in sections[0]["content"]
+        assert "Content two." in sections[1]["content"]
+
+    def test_split_markdown_h4_ignored(self):
+        chunker = SemanticChunker()
+        md = "#### H4\nNot a heading level we chunk on."
+        sections = chunker._split_markdown_by_headings(md)
+        assert len(sections) == 1
+        assert sections[0]["heading"] == "root"
+
+
+class TestChunkMarkdownWithOverlap:
+    """Tests for chunk_markdown_with_overlap."""
+
+    def test_chunk_markdown_basic(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        md = "# Title\n\nSome content here.\n\n## Section\n\nMore text."
+        chunks = chunker.chunk_markdown_with_overlap(md)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert isinstance(c, Chunk)
+            assert c.hash
+
+    def test_chunk_markdown_with_metadata(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        md = "# Doc\n\nContent."
+        metadata = {"source_type": "wiki", "doc_title": "Test Doc"}
+        chunks = chunker.chunk_markdown_with_overlap(md, metadata)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.source_type == "wiki"
+            assert c.doc_title == "Test Doc"
+
+    def test_chunk_markdown_overlap_preserves_context(self):
+        chunker = SemanticChunker(max_tokens=10, overlap_tokens=5)
+        md = "# Section\n\n" + "word " * 50
+        chunks = chunker.chunk_markdown_with_overlap(md)
+        assert len(chunks) > 1
+        assert "[previous context" in chunks[1].text
+
+    def test_chunk_markdown_empty(self):
+        chunker = SemanticChunker()
+        chunks = chunker.chunk_markdown_with_overlap("")
+        assert len(chunks) == 0
+
+    def test_chunk_markdown_preserves_headings_in_chunks(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        md = "# Overview\n\nBrief intro.\n\n## Details\n\nSpecific info."
+        chunks = chunker.chunk_markdown_with_overlap(md)
+        assert len(chunks) >= 1
+        texts = [c.text for c in chunks]
+        joined = " ".join(texts)
+        assert "# Overview" in joined
+        assert "## Details" in joined
+
+
+class TestExtractHeadings:
+    """Tests for heading extraction from HTML."""
+
+    def test_extract_headings_basic(self):
+        chunker = SemanticChunker()
+        html = "<h1>Title</h1><p>content</p><h2>Section</h2><p>more</p>"
+        headings = chunker.extract_headings(html)
+        assert len(headings) == 2
+        assert headings[0]["text"] == "Title"
+        assert headings[0]["level"] == 1
+        assert headings[1]["text"] == "Section"
+        assert headings[1]["level"] == 2
+
+    def test_extract_headings_with_ids(self):
+        chunker = SemanticChunker()
+        html = '<h1 id="overview">Overview</h1><h2 id="details">Details</h2>'
+        headings = chunker.extract_headings(html)
+        assert len(headings) == 2
+        assert headings[0]["anchor_id"] == "overview"
+        assert headings[1]["anchor_id"] == "details"
+
+    def test_extract_headings_no_headings(self):
+        chunker = SemanticChunker()
+        html = "<p>No headings here.</p>"
+        headings = chunker.extract_headings(html)
+        assert headings == []
+
+    def test_extract_headings_empty(self):
+        chunker = SemanticChunker()
+        html = ""
+        headings = chunker.extract_headings(html)
+        assert headings == []
+
+
+class TestBuildHeadingTree:
+    """Tests for _build_heading_tree."""
+
+    def test_build_heading_tree_flat(self):
+        chunker = SemanticChunker()
+        headings = [
+            {"text": "A", "level": 1, "anchor_id": ""},
+            {"text": "B", "level": 1, "anchor_id": ""},
+        ]
+        tree = chunker._build_heading_tree(headings)
+        assert len(tree) == 2
+        assert tree[0]["text"] == "A"
+        assert tree[1]["text"] == "B"
+
+    def test_build_heading_tree_nested(self):
+        chunker = SemanticChunker()
+        headings = [
+            {"text": "A", "level": 1, "anchor_id": ""},
+            {"text": "A1", "level": 2, "anchor_id": ""},
+            {"text": "A2", "level": 2, "anchor_id": ""},
+            {"text": "B", "level": 1, "anchor_id": ""},
+        ]
+        tree = chunker._build_heading_tree(headings)
+        assert len(tree) == 2
+        assert len(tree[0]["children"]) == 2
+        assert tree[0]["children"][0]["text"] == "A1"
+        assert tree[0]["children"][1]["text"] == "A2"
+
+    def test_build_heading_tree_deep_nested(self):
+        chunker = SemanticChunker()
+        headings = [
+            {"text": "H1", "level": 1, "anchor_id": ""},
+            {"text": "H2", "level": 2, "anchor_id": ""},
+            {"text": "H3", "level": 3, "anchor_id": ""},
+        ]
+        tree = chunker._build_heading_tree(headings)
+        assert len(tree) == 1
+        assert len(tree[0]["children"]) == 1
+        assert tree[0]["children"][0]["text"] == "H2"
+        assert tree[0]["children"][0]["children"][0]["text"] == "H3"
+
+    def test_build_heading_tree_empty(self):
+        chunker = SemanticChunker()
+        tree = chunker._build_heading_tree([])
+        assert tree == []
+
+
+class TestCreateHeadingChunks:
+    """Tests for create_heading_chunks."""
+
+    def test_create_heading_chunks_basic(self):
+        chunker = SemanticChunker()
+        html = "<h1>Main</h1><p>text</p><h2>Sub</h2><p>more</p>"
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "page_1",
+            "doc_title": "Test Page",
+            "version": "2.0",
+        }
+        chunks = chunker.create_heading_chunks(html, source_metadata)
+        assert len(chunks) == 2
+        for c in chunks:
+            assert c.source_type == "heading"
+            assert c.source_id == "page_1"
+            assert c.doc_title == "Test Page"
+
+    def test_create_heading_chunks_with_child_headings(self):
+        chunker = SemanticChunker()
+        html = "<h1>Parent</h1><p>x</p><h2>Child1</h2><p>x</p><h2>Child2</h2><p>x</p>"
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "page_2",
+            "doc_title": "Parent Page",
+        }
+        chunks = chunker.create_heading_chunks(html, source_metadata)
+        assert len(chunks) == 3
+        parent = chunks[0]
+        assert parent.title == "Parent"
+        assert "Child1" in parent.text
+        assert "Child2" in parent.text
+        assert "Sections:" in parent.text
+
+    def test_create_heading_chunks_no_headings(self):
+        chunker = SemanticChunker()
+        html = "<p>No headings.</p>"
+        source_metadata = {"source_type": "confluence"}
+        chunks = chunker.create_heading_chunks(html, source_metadata)
+        assert chunks == []
+
+    def test_create_heading_chunks_metadata_stored(self):
+        chunker = SemanticChunker()
+        html = "<h1 id='intro'>Intro</h1><p>text</p>"
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "page_3",
+            "doc_title": "Metadata Page",
+        }
+        chunks = chunker.create_heading_chunks(html, source_metadata)
+        assert len(chunks) == 1
+        pm = chunks[0].parent_metadata
+        assert pm["heading_text"] == "Intro"
+        assert pm["heading_level"] == 1
+        assert pm["anchor_id"] == "intro"
+        assert pm["page_id"] == "page_3"
+        assert pm["page_title"] == "Metadata Page"
+
+
+class TestCreateDocumentChunk:
+    """Tests for create_document_chunk."""
+
+    def test_create_document_chunk_basic(self):
+        chunker = SemanticChunker()
+        md = "# Page Title\n\nFirst paragraph with some content."
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "page_1",
+            "doc_title": "Page Title",
+        }
+        doc_chunk = chunker.create_document_chunk(md, source_metadata)
+        assert doc_chunk is not None
+        assert doc_chunk.source_type == "document"
+        assert doc_chunk.source_id == "page_1"
+        assert doc_chunk.doc_title == "Page Title"
+        assert "# Page Title" in doc_chunk.text
+        assert "First paragraph" in doc_chunk.text
+
+    def test_create_document_chunk_long_content_truncated(self):
+        chunker = SemanticChunker()
+        long_text = "x" * 1000
+        md = f"# Title\n\n{long_text}"
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "page_2",
+            "doc_title": "Title",
+        }
+        doc_chunk = chunker.create_document_chunk(md, source_metadata)
+        assert doc_chunk is not None
+        assert doc_chunk.text.endswith("...")
+        assert len(doc_chunk.text) < len(long_text) + 100
+
+    def test_create_document_chunk_empty_content(self):
+        chunker = SemanticChunker()
+        md = ""
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "empty",
+            "doc_title": "Empty Page",
+        }
+        doc_chunk = chunker.create_document_chunk(md, source_metadata)
+        assert doc_chunk is not None
+        assert "Empty Page" in doc_chunk.text
+
+    def test_create_document_chunk_preserves_metadata(self):
+        chunker = SemanticChunker()
+        md = "# Doc\n\nContent."
+        source_metadata = {
+            "source_type": "confluence",
+            "source_id": "page_3",
+            "doc_title": "Doc",
+        }
+        doc_chunk = chunker.create_document_chunk(md, source_metadata)
+        assert doc_chunk is not None
+        pm = doc_chunk.parent_metadata
+        assert pm["page_id"] == "page_3"
+        assert pm["page_title"] == "Doc"
+
+
+class TestChunkHtmlWithMarkdownConversion:
+    """Tests for chunk_html with HTML→Markdown conversion."""
+
+    def test_chunk_html_preserves_table_structure(self):
+        chunker = SemanticChunker(max_tokens=2000)
+        html = (
+            "<h1>Table Section</h1><table><tr><th>Name</th><th>Value</th></tr><tr><td>Alpha</td><td>1</td></tr></table>"
+        )
+        metadata = {"source_type": "confluence", "doc_title": "Table Doc"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+        all_text = " ".join(c.text for c in chunks)
+        assert "Name" in all_text
+        assert "Alpha" in all_text
+
+    def test_chunk_html_preserves_lists(self):
+        chunker = SemanticChunker(max_tokens=2000)
+        html = "<h1>List Section</h1><ul><li>First item</li><li>Second item</li></ul>"
+        metadata = {"source_type": "confluence", "doc_title": "List Doc"}
+        chunks = chunker.chunk_html(html, metadata)
+        all_text = " ".join(c.text for c in chunks)
+        assert "First item" in all_text
+        assert "Second item" in all_text
+
+    def test_chunk_html_preserves_links(self):
+        chunker = SemanticChunker(max_tokens=2000)
+        html = '<h1>Links</h1><p>See <a href="http://wiki/page">this page</a> for details.</p>'
+        metadata = {"source_type": "confluence", "doc_title": "Links Doc"}
+        chunks = chunker.chunk_html(html, metadata)
+        all_text = " ".join(c.text for c in chunks)
+        assert "this page" in all_text
+
+
+class TestFindAnchorId:
+    """Tests for _find_anchor_id."""
+
+    def test_find_anchor_from_element_id(self):
+        from bs4 import BeautifulSoup
+
+        chunker = SemanticChunker()
+        soup = BeautifulSoup('<h2 id="section-id">Section</h2>', "html.parser")
+        elem = soup.find("h2")
+        anchor = chunker._find_anchor_id(elem)
+        assert anchor == "section-id"
+
+    def test_find_anchor_no_id(self):
+        from bs4 import BeautifulSoup
+
+        chunker = SemanticChunker()
+        soup = BeautifulSoup("<h2>No Anchor</h2>", "html.parser")
+        elem = soup.find("h2")
+        anchor = chunker._find_anchor_id(elem)
+        assert anchor == ""

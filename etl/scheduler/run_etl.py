@@ -61,7 +61,7 @@ from etl.graph_builder.entity_extractor import EntityRelationExtractor  # noqa: 
 from etl.graph_builder.neo4j_loader import Neo4jLoader  # noqa: E402
 from etl.indexer.live_vector_lake import LiveVectorLake  # noqa: E402
 from etl.indexer.qdrant_hybrid import QdrantHybridIndexer  # noqa: E402
-from etl.indexer.remote_embedder import build_remote_embedder_from_config  # noqa: E402
+from etl.indexer.remote_embedder import _resolve_max_tokens, build_remote_embedder_from_config  # noqa: E402
 from etl.indexer.wal_manager import (  # noqa: E402
     PIPELINE_CONFLUENCE,
     PIPELINE_GITLAB,
@@ -93,6 +93,31 @@ def load_config(config_path: Path) -> dict[str, Any]:
     expanded = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), ""), expanded)
 
     return yaml.safe_load(expanded)
+
+
+def _resolve_chunk_max_tokens(chunker_config: dict, full_config: dict) -> int:
+    """Resolve chunking max_tokens, supporting 'auto' detection from embedder model.
+
+    When chunking.max_tokens is "auto", looks up the embedder model name from
+    remote_services.embedder.model and resolves its known context window.
+    Falls back to 1500 if no model info is available.
+    """
+    raw_value = chunker_config.get("max_tokens", 1500)
+    if raw_value != "auto":
+        return int(raw_value)
+
+    model = full_config.get("remote_services", {}).get("embedder", {}).get("model", "")
+    if model:
+        resolved = _resolve_max_tokens(model)
+        logger.info(
+            "Auto-detected chunk max_tokens=%d from embedder model '%s'",
+            resolved,
+            model,
+        )
+        return resolved
+
+    logger.warning("chunking.max_tokens='auto' but no embedder model configured. Defaulting to 1500 tokens.")
+    return 1500
 
 
 def run_extract_confluence(config: dict, wal: WALManager) -> Path:
@@ -326,9 +351,13 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
 
 
 def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path):
-    """Выполняет семантический чанкинг всех документов и сохраняет чанки в JSON."""
+    """Выполняет семантический чанкинг всех документов и сохраняет чанки в JSON.
+    Также создаёт heading-level и document-level чанки для Confluence-страниц.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     all_chunks = []
+    heading_chunks = []
+    document_chunks = []
     for i, doc in enumerate(documents):
         if _shutdown_event.is_set():
             logger.warning(f"Shutdown requested, stopping chunking at document {i}/{len(documents)}")
@@ -341,21 +370,63 @@ def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path)
         }
         try:
             chunks = chunker.process_document(doc["content"], doc["content_type"], source_metadata)
-            # Конвертируем Chunk объекты в словари
             chunk_dicts = [ch.__dict__ for ch in chunks]
-            # Сохраняем чанки этого документа в отдельный JSON
             doc_chunk_file = output_dir / f"{doc['id'].replace('/', '_')}.json"
             with open(doc_chunk_file, "w", encoding="utf-8") as f:
                 json.dump(chunk_dicts, f, ensure_ascii=False, indent=2)
             all_chunks.extend(chunk_dicts)
             logger.info(f"Chunked {doc['id']} -> {len(chunks)} chunks")
+
+            # Heading-level and document-level indexing for Confluence pages
+            if doc["source_type"] == "confluence" and doc["content_type"] == "html":
+                html_content = doc["content"]
+                # Convert to markdown for document chunk
+                try:
+                    md_text = chunker.base._html_to_markdown(html_content)
+                except Exception:
+                    md_text = doc["content"]
+                # Heading chunks
+                try:
+                    h_chunks = chunker.base.create_heading_chunks(html_content, source_metadata)
+                    h_dicts = [h.__dict__ for h in h_chunks]
+                    heading_chunks.extend(h_dicts)
+                    logger.info(f"  -> {len(h_chunks)} heading chunks for {doc['id']}")
+                except Exception as e:
+                    logger.warning(f"  Failed to create heading chunks for {doc['id']}: {e}")
+                # Document chunk
+                try:
+                    doc_chunk = chunker.base.create_document_chunk(md_text, source_metadata)
+                    if doc_chunk:
+                        document_chunks.append(doc_chunk.__dict__)
+                        logger.info(f"  -> document chunk for {doc['id']}")
+                except Exception as e:
+                    logger.warning(f"  Failed to create document chunk for {doc['id']}: {e}")
+
         except Exception as e:
             logger.error(f"Failed to chunk {doc['id']}: {e}")
-    # Сохраняем все чанки в один файл (опционально)
+
+    # Сохраняем все чанки
     all_chunks_file = output_dir / "all_chunks.json"
     with open(all_chunks_file, "w", encoding="utf-8") as f:
         json.dump(all_chunks, f, ensure_ascii=False, indent=2)
-    logger.info(f"Total chunks created: {len(all_chunks)}")
+    if heading_chunks:
+        heading_file = output_dir / "heading_chunks.json"
+        with open(heading_file, "w", encoding="utf-8") as f:
+            json.dump(heading_chunks, f, ensure_ascii=False, indent=2)
+        all_chunks.extend(heading_chunks)
+    if document_chunks:
+        doc_file = output_dir / "document_chunks.json"
+        with open(doc_file, "w", encoding="utf-8") as f:
+            json.dump(document_chunks, f, ensure_ascii=False, indent=2)
+        all_chunks.extend(document_chunks)
+
+    logger.info(
+        "Total chunks: %d (content=%d, heading=%d, document=%d)",
+        len(all_chunks),
+        len(all_chunks) - len(heading_chunks) - len(document_chunks),
+        len(heading_chunks),
+        len(document_chunks),
+    )
     return all_chunks
 
 
@@ -741,8 +812,9 @@ def main():
     # 3. Чанкинг (если нужен)
     if not args.skip_chunk:
         chunker_config = config.get("chunking", {})
+        max_tokens = _resolve_chunk_max_tokens(chunker_config, config)
         base_chunker = SemanticChunker(
-            max_tokens=chunker_config.get("max_tokens", 1500),
+            max_tokens=max_tokens,
             overlap_tokens=chunker_config.get("overlap_tokens", 200),
             min_chunk_tokens=chunker_config.get("min_chunk_tokens", 100),
         )

@@ -181,6 +181,9 @@ class TestStreamingPipelineProcessDocument:
             "enriched": False,
         }
         mock_chunker.process_document.return_value = [mock_chunk]
+        # Configure mock base for heading/document chunk creation
+        mock_chunker.base.create_heading_chunks.return_value = []
+        mock_chunker.base.create_document_chunk.return_value = None
         pipeline._chunker = mock_chunker
 
         mock_embedder = MagicMock()
@@ -346,6 +349,8 @@ class TestStreamingPipelineRun:
             "enriched": False,
         }
         mock_chunker.process_document.return_value = [mock_chunk]
+        mock_chunker.base.create_heading_chunks.return_value = []
+        mock_chunker.base.create_document_chunk.return_value = None
         pipeline._chunker = mock_chunker
 
         mock_embedder = MagicMock()
