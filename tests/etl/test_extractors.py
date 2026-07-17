@@ -181,6 +181,128 @@ class TestConfluenceGetPageVersions:
         assert versions[0]["number"] == 5
 
 
+class TestConfluenceGetPagesSince:
+    def _make_extractor(self, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        return ConfluenceExtractor(config)
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_pages_since_uses_cql_search(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {
+            "results": [
+                {
+                    "content": {
+                        "id": "1",
+                        "type": "page",
+                        "title": "Updated Page",
+                        "version": {"number": 2, "when": "2025-06-15T00:00:00Z"},
+                        "space": {"key": "DEV"},
+                    },
+                },
+            ],
+            "start": 0,
+            "limit": 50,
+            "size": 1,
+            "totalSize": 1,
+        }
+        pages = ex._get_all_pages(since="2025-06-01T00:00:00Z")
+        assert len(pages) == 1
+        assert pages[0]["title"] == "Updated Page"
+        assert pages[0]["id"] == "1"
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_pages_since_with_space(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {
+            "results": [],
+            "start": 0,
+            "limit": 50,
+            "size": 0,
+            "totalSize": 0,
+        }
+        pages = ex._get_all_pages(space_key="DEV", since="2025-06-01T00:00:00Z")
+        assert pages == []
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_since_date_stored_in_extractor(self, mock_request, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        config["since_date"] = "2025-06-01T00:00:00Z"
+        ex = ConfluenceExtractor(config)
+        assert ex.since_date == "2025-06-01T00:00:00Z"
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_pages_since_filters_non_page_types(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {
+            "results": [
+                {
+                    "content": {"id": "1", "type": "page", "title": "Page"},
+                    "lastModified": "2025-06-15",
+                },
+                {
+                    "content": {"id": "2", "type": "blogpost", "title": "Blog"},
+                    "lastModified": "2025-06-15",
+                },
+            ],
+            "start": 0,
+            "limit": 50,
+            "size": 2,
+            "totalSize": 2,
+        }
+        pages = ex._get_all_pages(since="2025-01-01T00:00:00Z")
+        assert len(pages) == 1
+        assert pages[0]["id"] == "1"
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_pages_since_pagination(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        page1 = {"content": {"id": "1", "type": "page", "title": "P1"}}
+        page2 = {"content": {"id": "2", "type": "page", "title": "P2"}}
+        mock_request.side_effect = [
+            {"results": [page1], "start": 0, "limit": 1, "size": 1, "totalSize": 2},
+            {"results": [page2], "start": 1, "limit": 1, "size": 1, "totalSize": 2},
+        ]
+        pages = ex._get_all_pages(since="2025-01-01T00:00:00Z", limit=1)
+        assert len(pages) == 2
+        assert pages[0]["id"] == "1"
+        assert pages[1]["id"] == "2"
+
+
+class TestConfluenceRunIncremental:
+    def _make_extractor(self, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        return ConfluenceExtractor(config)
+
+    @patch.object(ConfluenceExtractor, "_get_all_pages")
+    def test_run_passes_since_date_to_get_all_pages(self, mock_get_pages, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        config["since_date"] = "2025-07-01T00:00:00Z"
+        ex = ConfluenceExtractor(config)
+        mock_get_pages.return_value = []
+        ex.run()
+        mock_get_pages.assert_called_once()
+        call_kwargs = mock_get_pages.call_args[1]
+        assert call_kwargs["since"] == "2025-07-01T00:00:00Z"
+
+    @patch.object(ConfluenceExtractor, "_get_all_pages")
+    def test_run_no_since_date_queries_all(self, mock_get_pages, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_get_pages.return_value = []
+        ex.run()
+        mock_get_pages.assert_called_once()
+        call_kwargs = mock_get_pages.call_args[1]
+        assert call_kwargs["since"] is None
+
+
 class TestConfluenceRun:
     def _make_extractor(self, tmp_path):
         config = dict(CONFLUENCE_BASE_CONFIG)

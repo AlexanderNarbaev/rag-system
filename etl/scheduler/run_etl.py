@@ -84,6 +84,10 @@ def run_extract_confluence(config: dict, wal: WALManager) -> Path:
     """Запускает выгрузку Confluence, возвращает директорию с сырыми данными."""
     logger.info("=== Starting Confluence extraction ===")
     confluence_config = config.get("confluence", {})
+    last_run = wal.get_last_run(PIPELINE_CONFLUENCE)
+    if last_run and not confluence_config.get("since_date"):
+        confluence_config["since_date"] = last_run
+        logger.info(f"Using incremental since_date: {last_run}")
     confluence_config["wal_file"] = str(wal.wal_path)
     confluence_config["incremental"] = True
     extractor = ConfluenceExtractor(confluence_config)

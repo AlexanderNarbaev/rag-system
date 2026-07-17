@@ -48,7 +48,8 @@ class ConfluenceExtractor:
             "incremental": True,
             "download_attachments": True,
             "max_versions": 0,                  # 0 = все версии
-            "api_version": "2"                  # '2' для нового REST API, '1' для старого
+            "api_version": "2",                 # '2' для нового REST API, '1' для старого
+            "since_date": null                  # ISO 8601 — выгружать только страницы, изменённые после этой даты
         }
         """
         # Graceful shutdown event (injected by orchestrator)
@@ -72,6 +73,7 @@ class ConfluenceExtractor:
         self.download_attachments = config.get("download_attachments", True)
         self.max_versions = config.get("max_versions", 0)
         self.api_version = config.get("api_version", "2")
+        self.since_date = config.get("since_date")
 
         # Timeout configuration
         self.connect_timeout = config.get("connect_timeout", 10)
@@ -186,10 +188,18 @@ class ConfluenceExtractor:
                     logger.error(f"Server not responding after {max_retries} attempts. Increase timeout in config")
                     raise
 
-    def _get_all_pages(self, space_key: str | None = None, start: int = 0, limit: int = 50) -> list[dict[str, Any]]:
+    def _get_all_pages(
+        self, space_key: str | None = None, since: str | None = None, start: int = 0, limit: int = 50
+    ) -> list[dict[str, Any]]:
         """Получает все страницы с пагинацией (только метаданные, без body).
         Body загружается отдельно при обработке каждой страницы.
+
+        Если указан since (ISO 8601 timestamp), используется CQL-поиск через
+        /rest/api/search для фильтрации только изменённых страниц.
         """
+        if since:
+            return self._get_pages_since(since, space_key, start, limit)
+
         pages = []
         while True:
             params = {
@@ -206,6 +216,40 @@ class ConfluenceExtractor:
 
             # Проверяем есть ли следующая страница
             if len(results) < limit:
+                break
+            start += limit
+
+        return pages
+
+    def _get_pages_since(
+        self, since: str, space_key: str | None = None, start: int = 0, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Получает страницы, изменённые с указанной даты, используя CQL поиск."""
+        cql_parts = [f'lastModified > "{since}"', 'type = "page"']
+        if space_key:
+            cql_parts.append(f'space = "{space_key}"')
+        cql = " AND ".join(cql_parts)
+        logger.info(f"  Searching with CQL: {cql}")
+
+        pages = []
+        while True:
+            params = {
+                "cql": cql,
+                "start": start,
+                "limit": limit,
+                "expand": "content.version,content.space",
+            }
+            data = self._request("/rest/api/search", params)
+            results = data.get("results", [])
+            for result in results:
+                content = result.get("content", {})
+                if content.get("type") == "page":
+                    pages.append(content)
+            logger.info(
+                f"  Fetched {len(results)} pages since {since} (total: {len(pages)})"
+            )
+
+            if start + limit >= data.get("totalSize", 0):
                 break
             start += limit
 
@@ -495,7 +539,7 @@ class ConfluenceExtractor:
         for space in spaces_to_process:
             self._check_shutdown()
             logger.info(f"Processing space: {space or 'ALL'}")
-            pages = self._get_all_pages(space_key=space)
+            pages = self._get_all_pages(space_key=space, since=self.since_date)
             logger.info(f"Found {len(pages)} pages in space {space}")
             for page in pages:
                 self._check_shutdown()

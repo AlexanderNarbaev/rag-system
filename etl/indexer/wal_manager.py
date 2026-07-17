@@ -17,6 +17,7 @@ Remote backends:
 import json
 import logging
 import os
+import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +32,8 @@ except ImportError:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+STALE_LOCK_MINUTES = 10
 
 
 class BaseWALBackend(ABC):
@@ -49,18 +52,53 @@ class FileWALBackend(BaseWALBackend):
     """Local JSON file backend (default)."""
 
     def __init__(self, wal_path: Path, use_lock: bool = True, lock_timeout: int = 30):
-        self.wal_path = Path(wal_path)
+        self.wal_path = Path(wal_path).resolve()
         self.use_lock = use_lock and FILELOCK_AVAILABLE
         self.lock_timeout = lock_timeout
         self.wal_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.wal_path.exists():
             self._write_raw({})
 
+    @staticmethod
+    def _safe_remove(path: Path) -> bool:
+        try:
+            path.unlink(missing_ok=True)
+            return True
+        except OSError:
+            return False
+
+    @classmethod
+    def _release_stale_lock(cls, lock_path: Path, stale_minutes: int = STALE_LOCK_MINUTES) -> bool:
+        if not lock_path.exists():
+            return False
+        age_seconds = time.time() - lock_path.stat().st_mtime
+        if age_seconds > stale_minutes * 60:
+            logger.warning(
+                "Stale lock file detected: %s (%.1f minutes old). Forcing release.",
+                lock_path,
+                age_seconds / 60,
+            )
+            cls._safe_remove(lock_path)
+            return True
+        return False
+
     def _get_lock(self) -> Any:
-        if self.use_lock and FILELOCK_AVAILABLE:
-            lock_path = self.wal_path.with_suffix(".lock")
-            return FileLock(lock_path, timeout=self.lock_timeout)
-        return None
+        if not self.use_lock or not FILELOCK_AVAILABLE:
+            return None
+        lock_path = self.wal_path.with_suffix(".lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._release_stale_lock(lock_path)
+        try:
+            return FileLock(str(lock_path), timeout=self.lock_timeout)
+        except Exception as e:
+            logger.error(
+                "Failed to create lock file %s (dir=%s, exists=%s): %s",
+                lock_path,
+                lock_path.parent,
+                lock_path.parent.exists(),
+                e,
+            )
+            raise OSError(f"Cannot create lock file {lock_path}: {e}") from e
 
     def _read_raw(self) -> dict[str, Any]:
         try:
@@ -72,10 +110,18 @@ class FileWALBackend(BaseWALBackend):
 
     def _write_raw(self, data: dict[str, Any]) -> None:
         try:
+            self.wal_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.wal_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except OSError as e:
-            logger.error(f"Failed to write WAL file {self.wal_path}: {e}")
+            logger.error(
+                "Failed to write WAL file %s (dir=%s, exists=%s, writable=%s): %s",
+                self.wal_path,
+                self.wal_path.parent,
+                self.wal_path.parent.exists(),
+                os.access(self.wal_path.parent, os.W_OK) if self.wal_path.parent.exists() else False,
+                e,
+            )
             raise
 
     def read(self) -> dict[str, Any]:
@@ -235,13 +281,13 @@ class WALManager:
         """Безопасное обновление WAL с блокировкой.
         update_func принимает текущие данные и возвращает обновлённые.
         """
-        if self.use_lock and isinstance(self._backend, FileWALBackend):
+        if self.use_lock and isinstance(self._backend, FileWALBackend) and FILELOCK_AVAILABLE:
             lock = self._backend._get_lock()
             if lock:
                 with lock:
                     data = self._read_wal()
                     new_data = update_func(data)
-                    self._write_wal(new_data)
+                    self._backend._write_raw(new_data)
                 return
         data = self._read_wal()
         new_data = update_func(data)

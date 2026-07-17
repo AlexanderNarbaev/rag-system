@@ -31,6 +31,57 @@ class TestRunExtractConfluence:
         mock_wal.update_last_run.assert_called_once()
 
     @patch("etl.scheduler.run_etl.ConfluenceExtractor")
+    def test_incremental_when_last_run_exists(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_confluence
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = "2025-06-01T00:00:00"
+        config = {
+            "confluence": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "confluence"),
+            },
+        }
+        run_extract_confluence(config, mock_wal)
+        assert config["confluence"].get("since_date") == "2025-06-01T00:00:00"
+
+    @patch("etl.scheduler.run_etl.ConfluenceExtractor")
+    def test_respects_existing_since_date(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_confluence
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        mock_wal.get_last_run.return_value = "2025-06-01T00:00:00"
+        config = {
+            "confluence": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "confluence"),
+                "since_date": "2024-01-01T00:00:00",
+            },
+        }
+        run_extract_confluence(config, mock_wal)
+        assert config["confluence"]["since_date"] == "2024-01-01T00:00:00"
+
+    @patch("etl.scheduler.run_etl.ConfluenceExtractor")
+    def test_wal_updated_after_extraction(self, MockExtractor, tmp_path):
+        from etl.scheduler.run_etl import run_extract_confluence
+
+        mock_extractor = MagicMock()
+        MockExtractor.return_value = mock_extractor
+        mock_wal = MagicMock()
+        config = {
+            "confluence": {
+                "base_url": "http://test",
+                "output_dir": str(tmp_path / "confluence"),
+            },
+        }
+        run_extract_confluence(config, mock_wal)
+        mock_wal.update_last_run.assert_called_once()
+
+    @patch("etl.scheduler.run_etl.ConfluenceExtractor")
     def test_custom_output_dir(self, MockExtractor, tmp_path):
         from etl.scheduler.run_etl import run_extract_confluence
 
