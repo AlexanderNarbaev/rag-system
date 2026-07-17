@@ -76,10 +76,17 @@ class TestFeedbackSubmissionRoleRestriction:
             correction="Corrected answer text",
         )
 
-        with pytest.raises(HTTPException) as exc:
-            asyncio.run(submit_feedback(request, MagicMock(), user_context_user))
-        assert exc.value.status_code == 403
-        assert "Corrections require expert" in exc.value.detail
+        # The conftest sets AUTH_ENABLED=False and RBAC_ENABLED=False globally.
+        # submit_feedback gates the role check behind both flags, so we must
+        # enable them for this test to exercise the RBAC enforcement path.
+        with (
+            patch("proxy.app.shared.config.AUTH_ENABLED", True),
+            patch("proxy.app.shared.config.RBAC_ENABLED", True),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                asyncio.run(submit_feedback(request, MagicMock(), user_context_user))
+            assert exc.value.status_code == 403
+            assert "Corrections require expert" in exc.value.detail
 
     def test_expert_can_submit_correction(self, user_context_expert):
         import asyncio

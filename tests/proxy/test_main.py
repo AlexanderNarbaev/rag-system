@@ -345,13 +345,18 @@ class TestChatCompletionsStreaming:
         The RAG pipeline catches hybrid_search exceptions in degraded mode,
         then should_generate_answer returns a refusal.  The streaming endpoint
         emits the refusal as a normal content delta (not an error event).
+
+        ALLOW_UNGROUNDED_GENERATION must be disabled so the refusal path is
+        taken instead of falling through to stream_completion (whose default
+        mock returns a non-async iterator that breaks ``async for``).
         """
         mock_rag_pipeline["hybrid_search"].side_effect = Exception("Search failed")
 
-        response = client.post(
-            "/v1/chat/completions",
-            json={"model": "test-model", "messages": [{"role": "user", "content": "query"}], "stream": True},
-        )
+        with patch("proxy.app.main.ALLOW_UNGROUNDED_GENERATION", False):
+            response = client.post(
+                "/v1/chat/completions",
+                json={"model": "test-model", "messages": [{"role": "user", "content": "query"}], "stream": True},
+            )
         body = response.text
         # Graceful refusal is emitted as content, not as an error event
         assert "don't have enough" in body.lower() or "no relevant" in body.lower()

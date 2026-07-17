@@ -5,11 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.0] - 2026-07-17
+
+### Added
+
+- **Ungrounded generation** — LLM generates answers even when no relevant knowledge is found,
+  with a configurable notice prepended to warn users (`ALLOW_UNGROUNDED_GENERATION`,
+  `UNGOUNDED_NOTICE`). Prevents empty responses when the knowledge base lacks coverage.
+- **Incremental Confluence extraction** — ETL now tracks last extraction state per space,
+  enabling delta-only ingestion of new and modified pages without re-processing the entire space.
+- **WAL checkpoint WAL backend** — `WAL_BACKEND` supports `file` (local JSON), `redis`, and
+  `proxy` (POST to proxy API for centralized checkpoint management).
+
+### Fixed
+
+- **ETL WAL lock fix** — resolved race condition in WAL file locking that caused checkpoint
+  corruption under concurrent ETL worker access.
+
 ## [v2.1.0] - 2026-07-17
 
 This release completes all 5 waves of the S4-2026 sprint: Foundation Fixes, Quality Push,
 Infrastructure, Polish, and Final Validation. See `docs/en/guides/sprint-plan-2026-s4.md`
 for the full sprint plan.
+
+### Highlights
+
+- **Progressive retrieval** — multi-stage chunk retrieval with configurable depth
+  (`PROGRESSIVE_RETRIEVAL_ENABLED`, `PROGRESSIVE_RETRIEVAL_STAGES`).
+- **Admin config API** — `/v1/admin/config` endpoints for runtime configuration management
+  without restarts.
+- **RBAC by default** — role-based access control now enabled by default alongside
+  `AUTH_ENABLED=true` for secure-by-default deployments.
+- **Granian migration (ADR-008)** — Proxy ASGI server migrated from uvicorn to granian
+  (Rust-based, ~5x faster startup).
 
 ### Added
 
