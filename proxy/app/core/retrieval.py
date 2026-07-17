@@ -495,8 +495,12 @@ def hybrid_search(
         for cond in access_filter:
             if "key" in cond and "match" in cond:
                 filter_conditions.append(
-                    models.FieldCondition(key=cond["key"], match=models.MatchAny(**cond["match"])
-                    if "any" in cond["match"] else models.MatchValue(**cond["match"]))
+                    models.FieldCondition(
+                        key=cond["key"],
+                        match=models.MatchAny(**cond["match"])
+                        if "any" in cond["match"]
+                        else models.MatchValue(**cond["match"]),
+                    )
                 )
 
     q_filter = models.Filter(must=list(filter_conditions)) if filter_conditions else None

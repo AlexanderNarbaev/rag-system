@@ -29,16 +29,19 @@ _DEFAULT_DB_PATH = "data/knowledge_bases.db"
 
 def _get_qdrant_hnsw_m() -> int:
     from proxy.app.shared.config import QDRANT_HNSW_M
+
     return QDRANT_HNSW_M
 
 
 def _get_qdrant_hnsw_ef_construct() -> int:
     from proxy.app.shared.config import QDRANT_HNSW_EF_CONSTRUCT
+
     return QDRANT_HNSW_EF_CONSTRUCT
 
 
 def _get_qdrant_quantization_enabled() -> bool:
     from proxy.app.shared.config import QDRANT_QUANTIZATION_ENABLED
+
     return QDRANT_QUANTIZATION_ENABLED
 
 

@@ -2,6 +2,7 @@
 """Tests for live Qdrant upsert/delete operations (atomic chunk-level updates)."""
 
 import hashlib
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -114,7 +115,7 @@ class TestLiveUpsert:
         indexer.live_upsert(chunk)
         call_args = mock_qdrant_client.upsert.call_args
         points = call_args[1]["points"] if "points" in call_args[1] else call_args[0][1]
-        assert points[0].id == chunk_hash
+        assert points[0].id == str(uuid.uuid5(uuid.NAMESPACE_OID, chunk_hash))
 
     def test_live_upsert_missing_hash_returns_false(self, indexer):
         chunk = {"text": "no hash field", "title": "Bad"}

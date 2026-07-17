@@ -245,9 +245,7 @@ class ConfluenceExtractor:
                 content = result.get("content", {})
                 if content.get("type") == "page":
                     pages.append(content)
-            logger.info(
-                f"  Fetched {len(results)} pages since {since} (total: {len(pages)})"
-            )
+            logger.info(f"  Fetched {len(results)} pages since {since} (total: {len(pages)})")
 
             if start + limit >= data.get("totalSize", 0):
                 break

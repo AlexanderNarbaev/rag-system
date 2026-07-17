@@ -89,9 +89,7 @@ class TestRemoteEmbedderEncode:
         """Mock requests.Session().post() to return given vectors."""
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "data": [{"embedding": v, "index": i} for i, v in enumerate(mock_vectors)]
-        }
+        mock_resp.json.return_value = {"data": [{"embedding": v, "index": i} for i, v in enumerate(mock_vectors)]}
         mock_resp.raise_for_status = MagicMock()
         mock_session = MagicMock()
         mock_session.post.return_value = mock_resp
@@ -136,10 +134,7 @@ class TestRemoteEmbedderEncode:
             mock_resp = MagicMock()
             mock_resp.status_code = 200
             mock_resp.json.return_value = {
-                "data": [
-                    {"embedding": [float(i), float(i + 1)], "index": i}
-                    for i in range(len(texts_in_batch))
-                ]
+                "data": [{"embedding": [float(i), float(i + 1)], "index": i} for i in range(len(texts_in_batch))]
             }
             mock_resp.raise_for_status = MagicMock()
             return mock_resp
@@ -229,9 +224,7 @@ class TestBuildRemoteEmbedderFromConfig:
 
     def test_with_endpoint(self) -> None:
         config: dict[str, Any] = {
-            "remote_services": {
-                "embedder": {"endpoint": "http://embedder:8080/v1/embeddings", "model": "bge-m3"}
-            }
+            "remote_services": {"embedder": {"endpoint": "http://embedder:8080/v1/embeddings", "model": "bge-m3"}}
         }
         embedder = build_remote_embedder_from_config(config)
         assert embedder is not None
@@ -264,9 +257,7 @@ class TestBuildRemoteEmbedderFromConfig:
 
     def test_backward_compat_url_key(self) -> None:
         config: dict[str, Any] = {
-            "remote_services": {
-                "embedder": {"url": "http://old:8080/v1/embeddings", "model": "old-model"}
-            }
+            "remote_services": {"embedder": {"url": "http://old:8080/v1/embeddings", "model": "old-model"}}
         }
         embedder = build_remote_embedder_from_config(config)
         assert embedder is not None

@@ -47,6 +47,7 @@ def _disable_auth(monkeypatch):
     monkeypatch.setattr(_jwt, "AUTH_ENABLED", False)
     monkeypatch.setattr(_rbac, "RBAC_ENABLED", False)
     import proxy.app.main as _main
+
     monkeypatch.setattr(_main, "PROGRESSIVE_RETRIEVAL_ENABLED", False)
 
 

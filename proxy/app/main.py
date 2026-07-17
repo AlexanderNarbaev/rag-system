@@ -433,9 +433,7 @@ async def process_rag_query(
     retrieval_stage = "direct"
     try:
         if PROGRESSIVE_RETRIEVAL_ENABLED and not top_k_override:
-            _raw_stages = [
-                int(s.strip()) for s in PROGRESSIVE_RETRIEVAL_STAGES.split(",") if s.strip().isdigit()
-            ]
+            _raw_stages = [int(s.strip()) for s in PROGRESSIVE_RETRIEVAL_STAGES.split(",") if s.strip().isdigit()]
             _stages = _raw_stages if _raw_stages else [5, 10, 20]
             search_results, retrieval_stage = await progressive_retrieve(
                 query=user_query,

@@ -193,10 +193,7 @@ async def progressive_retrieve(
             )
             return all_results, "graph_expanded"
 
-    strong_count = sum(
-        1 for r in all_results
-        if _get_score(r) >= STRONG_SCORE_THRESHOLD
-    )
+    strong_count = sum(1 for r in all_results if _get_score(r) >= STRONG_SCORE_THRESHOLD)
     logger.warning(
         "Progressive retrieval: all stages exhausted (%d results, %d strong)",
         len(all_results),

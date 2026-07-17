@@ -143,13 +143,16 @@ class TestProgressiveRetrieve:
 
     @pytest.fixture(autouse=True)
     def _mock_deps(self):
-        with patch(
-            "proxy.app.core.progressive_retrieval.hybrid_search",
-            new_callable=MagicMock,
-        ) as self.mock_search, patch(
-            "proxy.app.core.progressive_retrieval.graph_expand_query",
-            new_callable=MagicMock,
-        ) as self.mock_graph:
+        with (
+            patch(
+                "proxy.app.core.progressive_retrieval.hybrid_search",
+                new_callable=MagicMock,
+            ) as self.mock_search,
+            patch(
+                "proxy.app.core.progressive_retrieval.graph_expand_query",
+                new_callable=MagicMock,
+            ) as self.mock_graph,
+        ):
             yield
 
     @pytest.mark.asyncio
@@ -235,8 +238,12 @@ class TestProgressiveRetrieve:
         results_5 = [_make_scored_point("a", 0.1), _make_scored_point("b", 0.2)]
         self.mock_search.side_effect = [
             results_5,
-            [_make_scored_point("a", 0.1), _make_scored_point("b", 0.2),
-             _make_scored_point("c", 0.35), _make_scored_point("d", 0.4)],
+            [
+                _make_scored_point("a", 0.1),
+                _make_scored_point("b", 0.2),
+                _make_scored_point("c", 0.35),
+                _make_scored_point("d", 0.4),
+            ],
         ]
 
         final, stage = await progressive_retrieve("test query")

@@ -226,6 +226,7 @@ def _enable_auth(monkeypatch):
     monkeypatch.setattr(_cfg, "RBAC_ENABLED", True)
     monkeypatch.setattr(_rbac, "RBAC_ENABLED", True)
 
+
 class TestExpertKBAuth:
     def test_review_requires_expert(self, client, user_ctx):
         _override_auth(user_ctx)

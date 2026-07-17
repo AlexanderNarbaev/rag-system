@@ -345,9 +345,7 @@ class RemoteEmbedder:
 
                 tasks.append(_do_batch())
 
-            gathered: list[list[list[float]] | BaseException] = await asyncio.gather(
-                *tasks, return_exceptions=True
-            )
+            gathered: list[list[list[float]] | BaseException] = await asyncio.gather(*tasks, return_exceptions=True)
             for result in gathered:
                 if isinstance(result, BaseException):
                     self._healthy = False

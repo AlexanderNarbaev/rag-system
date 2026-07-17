@@ -177,10 +177,14 @@ class TestFeedbackStore:
         assert result["average_confidence"] is not None
 
     def test_stats_with_corrections(self):
-        self.store.insert(FeedbackEntry(
-            feedback_id="cor1", rating="negative",
-            question="How to X?", correction="Use Y instead.",
-        ))
+        self.store.insert(
+            FeedbackEntry(
+                feedback_id="cor1",
+                rating="negative",
+                question="How to X?",
+                correction="Use Y instead.",
+            )
+        )
 
         result = self.store.stats()
         assert result["total"] == 1
@@ -192,13 +196,21 @@ class TestFeedbackStore:
 
     def test_chunk_stats_with_data(self):
         cf_json = json.dumps([{"chunk_id": "chunk-a", "relevance_score": 3}])
-        self.store.insert(FeedbackEntry(
-            feedback_id="cs1", chunk_feedback_json=cf_json, retrieval_quality=3,
-        ))
+        self.store.insert(
+            FeedbackEntry(
+                feedback_id="cs1",
+                chunk_feedback_json=cf_json,
+                retrieval_quality=3,
+            )
+        )
         cf_json2 = json.dumps([{"chunk_id": "chunk-a", "relevance_score": 5}])
-        self.store.insert(FeedbackEntry(
-            feedback_id="cs2", chunk_feedback_json=cf_json2, retrieval_quality=5,
-        ))
+        self.store.insert(
+            FeedbackEntry(
+                feedback_id="cs2",
+                chunk_feedback_json=cf_json2,
+                retrieval_quality=5,
+            )
+        )
 
         result = self.store.chunk_stats()
         assert len(result) == 1
@@ -217,13 +229,19 @@ class TestFeedbackStore:
         assert self.store.get_negative_training_pairs() == []
 
     def test_get_negative_training_pairs_filters_low_scores(self):
-        cf_json = json.dumps([
-            {"chunk_id": "bad-chunk", "relevance_score": 1},
-            {"chunk_id": "good-chunk", "relevance_score": 4},
-        ])
-        self.store.insert(FeedbackEntry(
-            feedback_id="nt1", question="What is X?", chunk_feedback_json=cf_json,
-        ))
+        cf_json = json.dumps(
+            [
+                {"chunk_id": "bad-chunk", "relevance_score": 1},
+                {"chunk_id": "good-chunk", "relevance_score": 4},
+            ]
+        )
+        self.store.insert(
+            FeedbackEntry(
+                feedback_id="nt1",
+                question="What is X?",
+                chunk_feedback_json=cf_json,
+            )
+        )
 
         result = self.store.get_negative_training_pairs()
         assert len(result) == 1

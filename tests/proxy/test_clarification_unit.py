@@ -158,9 +158,7 @@ class TestBuildUncertaintyResponse:
         assert "What about Y?" in result
 
     def test_sources_limited_to_three(self):
-        sources = [
-            {"title": f"Doc{i}", "relevance": 0.5} for i in range(5)
-        ]
+        sources = [{"title": f"Doc{i}", "relevance": 0.5} for i in range(5)]
         result = build_uncertainty_response("query", "partial", sources)
         assert "Doc0" in result
         assert "Doc2" in result

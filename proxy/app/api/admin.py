@@ -589,7 +589,7 @@ async def verify_etl_secret(request: Request) -> None:
     from proxy.app.shared.config import ETL_SECRET
 
     if ETL_SECRET:
-        header_value = (request.headers.get("X-ETL-Secret") or request.headers.get("x-etl-secret") or "")
+        header_value = request.headers.get("X-ETL-Secret") or request.headers.get("x-etl-secret") or ""
         if not header_value:
             raise HTTPException(status_code=401, detail="Missing X-ETL-Secret header")
         if header_value != ETL_SECRET:

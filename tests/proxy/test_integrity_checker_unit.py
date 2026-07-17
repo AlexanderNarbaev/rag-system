@@ -112,9 +112,10 @@ class TestFindContradictions:
         mock_qdrant = MagicMock()
         mock_qdrant.scroll.return_value = ([p1, p2], None)
 
-        with patch("proxy.app.core.integrity_checker.check_contradiction", return_value={
-            "contradiction_score": 0.8, "entailment_score": 0.1, "neutral_score": 0.1
-        }):
+        with patch(
+            "proxy.app.core.integrity_checker.check_contradiction",
+            return_value={"contradiction_score": 0.8, "entailment_score": 0.1, "neutral_score": 0.1},
+        ):
             result = find_contradictions("kb1", mock_qdrant, "test", threshold=0.5)
             assert len(result) == 1
 

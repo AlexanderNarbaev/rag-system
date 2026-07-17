@@ -62,7 +62,9 @@ class TestTriggerReindexForDocument:
             )
         assert result is True
         mock_kb_manager.create_task.assert_called_once_with(
-            kb_id="kb-1", source_type="confluence", source_id="conf-123",
+            kb_id="kb-1",
+            source_type="confluence",
+            source_id="conf-123",
         )
         mock_kb_manager.update_task.assert_called_once_with("task-1", status="running")
 

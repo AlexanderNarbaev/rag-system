@@ -40,6 +40,7 @@ def _isolate_env(monkeypatch):
     # Also patch main.py's local import of PROGRESSIVE_RETRIEVAL_ENABLED
     try:
         import proxy.app.main as _main
+
         monkeypatch.setattr(_main, "PROGRESSIVE_RETRIEVAL_ENABLED", False)
     except ImportError:
         pass

@@ -1,6 +1,7 @@
 # tests/etl/test_qdrant_hybrid_enhanced.py
 """Tests for QdrantHybridIndexer — validates collection management, indexing, and search."""
 
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -225,7 +226,7 @@ class TestQdrantHybridIndexerConversion:
         point = indexer._chunk_to_point(sample_chunks[0])
 
         assert point is not None
-        assert point.id == "abc123"
+        assert point.id == str(uuid.uuid5(uuid.NAMESPACE_OID, "abc123"))
         assert "text" in point.payload
         assert point.payload["source_type"] == "confluence"
 

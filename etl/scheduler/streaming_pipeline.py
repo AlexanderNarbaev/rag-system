@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StreamingResult:
     """Result of processing one document through the streaming pipeline."""
+
     source: str
     doc_id: str
     chunks_count: int = 0
@@ -253,9 +254,7 @@ class StreamingPipeline:
         for ch in chunk_dicts:
             if "_dense_vec" not in ch:
                 continue
-            indexed = await asyncio.get_running_loop().run_in_executor(
-                None, self._index_chunk_sync, ch
-            )
+            indexed = await asyncio.get_running_loop().run_in_executor(None, self._index_chunk_sync, ch)
             if indexed:
                 result.chunks_indexed += 1
             else:
