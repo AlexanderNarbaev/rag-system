@@ -1,7 +1,7 @@
 # proxy/Dockerfile
 # Docker-образ для RAG-прокси (OpenAI-совместимый сервер с Qdrant, реранкингом, LangGraph)
 
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 # Установка системных зависимостей (необходимы для некоторых Python-пакетов)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -46,7 +46,7 @@ EXPOSE 8080
 STOPSIGNAL SIGTERM
 
 # Health check for orchestration
-HEALTHCHECK --interval=5s --timeout=3s --retries=3 CMD curl -f http://localhost:8080/v1/health/live || exit 1
+HEALTHCHECK --interval=15s --timeout=3s --retries=3 CMD curl -f http://localhost:8080/v1/health/live || exit 1
 
 # Команда запуска через granian (производительный ASGI-сервер на Rust — ADR-008)
-CMD ["granian", "--interface", "asgi", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "app.main:app"]
+CMD ["granian", "--interface", "asgi", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--threads", "4", "app.main:app"]

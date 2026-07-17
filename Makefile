@@ -38,6 +38,9 @@ setup: ## Create .env from .env.example if missing
 run: ## Start proxy locally (requires .env and venv)
 	@cd $(ROOT) && granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 proxy.app.main:app
 
+run-dev: ## Start proxy with hot reload for development
+	@cd $(ROOT) && granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 --reload proxy.app.main:app
+
 # ── ETL ───────────────────────────────────────────────────────────────────────
 etl: ## Run full ETL pipeline
 	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml

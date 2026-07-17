@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Version:** v2.0 | **Last Updated:** 2026-07-06
+**Version:** v2.1.0 | **Last Updated:** 2026-07-06
 
 Comprehensive troubleshooting reference for the RAG Knowledge Assistant. Covers startup, query, retrieval, LLM,
 embedding, auth, cache, graph, performance, deployment, federation, and model evolution issues.

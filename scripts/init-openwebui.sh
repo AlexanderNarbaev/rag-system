@@ -1,25 +1,25 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════════
-# init-openwebui.sh — Инициализация и запуск OpenWebUI для RAG-системы
+# init-openwebui.sh — OpenWebUI initialization and startup for RAG System
 # ═══════════════════════════════════════════════════════════════════════════════
-# Назначение: Подготовка окружения, генерация секретов, создание ресурсов,
-#              запуск автономного OpenWebUI с PostgreSQL + Redis + Tika.
+# Purpose: Environment preparation, secret generation, resource creation,
+#          launching standalone OpenWebUI with PostgreSQL + Redis + Tika.
 #
-# Использование:
+# Usage:
 #   chmod +x scripts/init-openwebui.sh
-#   ./scripts/init-openwebui.sh              # Интерактивный режим
-#   ./scripts/init-openwebui.sh --auto       # Автоматический режим (без вопросов)
-#   ./scripts/init-openwebui.sh --recreate   # Полная переустановка (удалить все данные)
+#   ./scripts/init-openwebui.sh              # Interactive mode
+#   ./scripts/init-openwebui.sh --auto       # Automatic mode (no prompts)
+#   ./scripts/init-openwebui.sh --recreate   # Full reinstall (delete all data)
 #
-# Требования:
-#   - Docker 24+ и Docker Compose v2
-#   - Запущенный RAG Proxy в сети rag-network
-#   - Доступ к MinIO (minio:9000 в rag-network)
+# Requirements:
+#   - Docker 24+ and Docker Compose v2
+#   - Running RAG Proxy in rag-network
+#   - Access to MinIO (minio:9000 in rag-network)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
 
-# ── Цвета для вывода ──────────────────────────────────────────────────────────
+# ── Output colors ──────────────────────────────────────────────────────────────
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
@@ -27,7 +27,7 @@ readonly BLUE='\033[0;34m'
 readonly BOLD='\033[1m'
 readonly NC='\033[0m' # No Color
 
-# ── Пути ──────────────────────────────────────────────────────────────────────
+# ── Paths ──────────────────────────────────────────────────────────────────────
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly COMPOSE_DIR="$PROJECT_ROOT/deploy/docker"
@@ -38,12 +38,12 @@ readonly MINIO_BUCKET="openwebui-files"
 readonly POSTGRES_PASSWORD_LENGTH=24
 readonly SECRET_KEY_LENGTH=32
 
-# ── Флаги ─────────────────────────────────────────────────────────────────────
+# ── Flags ─────────────────────────────────────────────────────────────────────
 AUTO_MODE=false
 RECREATE_MODE=false
 SKIP_CHECKS=false
 
-# ── Функции ───────────────────────────────────────────────────────────────────
+# ── Functions ──────────────────────────────────────────────────────────────────
 
 log_section() {
     echo ""
@@ -94,7 +94,7 @@ generate_secret() {
     }
 }
 
-# ── Проверка аргументов командной строки ─────────────────────────────────────
+# ── Command-line argument parsing ──────────────────────────────────────────────
 parse_args() {
     for arg in "$@"; do
         case "$arg" in
@@ -108,35 +108,35 @@ parse_args() {
                 SKIP_CHECKS=true
                 ;;
             --help|-h)
-                echo "Использование: $0 [--auto] [--recreate] [--skip-checks]"
+                echo "Usage: $0 [--auto] [--recreate] [--skip-checks]"
                 echo ""
-                echo "  --auto, -a       Автоматический режим (без интерактивных вопросов)"
-                echo "  --recreate, -r   Полная переустановка (удалить все тома и данные)"
-                echo "  --skip-checks, -s Пропустить проверки зависимостей"
-                echo "  --help, -h       Показать эту справку"
+                echo "  --auto, -a        Automatic mode (no interactive prompts)"
+                echo "  --recreate, -r    Full reinstall (delete all volumes and data)"
+                echo "  --skip-checks, -s Skip dependency checks"
+                echo "  --help, -h        Show this help"
                 exit 0
                 ;;
             *)
-                log_error "Неизвестный аргумент: $arg"
-                echo "Используйте --help для справки"
+                log_error "Unknown argument: $arg"
+                echo "Use --help for usage"
                 exit 1
                 ;;
         esac
     done
 }
 
-# ── Проверка зависимостей ────────────────────────────────────────────────────
+# ── Dependency check ──────────────────────────────────────────────────────────
 check_prerequisites() {
-    log_section "Проверка зависимостей"
+    log_section "Dependency Check"
 
     if [ "$SKIP_CHECKS" = true ]; then
-        log_warning "Проверки пропущены (--skip-checks)"
+        log_warning "Checks skipped (--skip-checks)"
         return 0
     fi
 
     # Docker
     if ! command -v docker &> /dev/null; then
-        log_error "Docker не установлен. Установите Docker 24.0+"
+        log_error "Docker not found. Install Docker 24.0+"
         exit 1
     fi
     local docker_version
@@ -147,103 +147,103 @@ check_prerequisites() {
     if docker compose version &> /dev/null; then
         log_success "Docker Compose: $(docker compose version --short)"
     elif docker-compose version &> /dev/null; then
-        log_warning "Найден старый docker-compose v1. Рекомендуется Docker Compose v2 (плагин)"
+        log_warning "Found legacy docker-compose v1. Docker Compose v2 (plugin) is recommended"
     else
-        log_error "Docker Compose не найден. Установите Docker Compose v2"
+        log_error "Docker Compose not found. Install Docker Compose v2"
         exit 1
     fi
 
-    # openssl (для генерации секретов)
+    # openssl (for secret generation)
     if ! command -v openssl &> /dev/null; then
-        log_warning "openssl не найден — секреты будут сгенерированы через /dev/urandom"
+        log_warning "openssl not found — secrets will be generated via /dev/urandom"
     fi
 
-    # xxd (fallback для генерации секретов)
+    # xxd (fallback for secret generation)
     if ! command -v xxd &> /dev/null; then
-        log_warning "xxd не найден — убедитесь что openssl доступен для генерации секретов"
+        log_warning "xxd not found — ensure openssl is available for secret generation"
     fi
 
-    # curl (для health-check и создания бакета)
+    # curl (for health-check and bucket creation)
     if ! command -v curl &> /dev/null; then
-        log_warning "curl не найден — проверка health-check будет недоступна"
+        log_warning "curl not found — health-check will be unavailable"
     fi
 
-    # Проверка доступности docker socket
+    # Check docker socket availability
     if ! docker info &> /dev/null; then
-        log_error "Docker не запущен или недостаточно прав. Запустите Docker daemon"
+        log_error "Docker is not running or insufficient permissions. Start Docker daemon"
         exit 1
     fi
 
-    log_success "Все зависимости удовлетворены"
+    log_success "All prerequisites satisfied"
 }
 
-# ── Проверка сети rag-network ─────────────────────────────────────────────────
+# ── rag-network check ─────────────────────────────────────────────────────────
 check_rag_network() {
-    log_section "Проверка сети rag-network"
+    log_section "rag-network Check"
 
     if docker network inspect rag-network &> /dev/null; then
-        log_success "Сеть rag-network существует"
+        log_success "rag-network exists"
     else
-        log_warning "Сеть rag-network не найдена. Она будет создана при запуске proxy."
-        log_info "Убедитесь, что RAG Proxy запущен с сетью rag-network:"
+        log_warning "rag-network not found. It will be created when proxy starts."
+        log_info "Ensure RAG Proxy is running with rag-network:"
         echo "       cd $PROJECT_ROOT/proxy && docker compose up -d"
-        if ! confirm "Продолжить без rag-network?"; then
+        if ! confirm "Continue without rag-network?"; then
             exit 0
         fi
     fi
 }
 
-# ── Проверка доступности MinIO ────────────────────────────────────────────────
+# ── MinIO availability check ──────────────────────────────────────────────────
 check_minio() {
-    log_section "Проверка доступности MinIO"
+    log_section "MinIO Availability Check"
 
-    # Проверяем, запущен ли контейнер MinIO
+    # Check if MinIO container is running
     if docker ps --format '{{.Names}}' | grep -q 'rag-minio'; then
-        log_success "Контейнер MinIO (rag-minio) запущен"
+        log_success "MinIO container (rag-minio) is running"
     else
-        log_warning "Контейнер MinIO не найден. Убедитесь, что MinIO запущен в rag-network"
-        if ! confirm "Продолжить без MinIO? (загрузка файлов будет недоступна)"; then
+        log_warning "MinIO container not found. Ensure MinIO is running in rag-network"
+        if ! confirm "Continue without MinIO? (file uploads will be unavailable)"; then
             exit 0
         fi
         return 0
     fi
 
-    # Проверяем API MinIO
+    # Check MinIO API
     if docker exec rag-minio curl -sf "$MINIO_ENDPOINT/minio/health/live" &> /dev/null; then
-        log_success "MinIO API доступен"
+        log_success "MinIO API is available"
     else
-        log_warning "MinIO API недоступен. Проверьте состояние контейнера"
+        log_warning "MinIO API is unavailable. Check container state"
     fi
 }
 
-# ── Создание бакета MinIO ─────────────────────────────────────────────────────
+# ── Create MinIO bucket ───────────────────────────────────────────────────────
 create_minio_bucket() {
-    log_section "Создание бакета MinIO: $MINIO_BUCKET"
+    log_section "Create MinIO Bucket: $MINIO_BUCKET"
 
-    # Используем mc (MinIO Client) внутри контейнера MinIO
+    # Use mc (MinIO Client) inside MinIO container
     if docker exec rag-minio mc alias list 2>/dev/null | grep -q 'local'; then
-        log_info "Alias 'local' уже настроен в MinIO"
+        log_info "Alias 'local' already configured in MinIO"
     else
-        log_step "Настройка MinIO client alias..."
+        log_step "Configuring MinIO client alias..."
         docker exec rag-minio mc alias set local "$MINIO_ENDPOINT" minioadmin minioadmin &> /dev/null || true
     fi
 
-    # Создаем бакет, если не существует
+    # Create bucket if it doesn't exist
     if docker exec rag-minio mc ls local/$MINIO_BUCKET &> /dev/null; then
-        log_success "Бакет '$MINIO_BUCKET' уже существует"
+        log_success "Bucket '$MINIO_BUCKET' already exists"
     else
-        log_step "Создание бакета '$MINIO_BUCKET'..."
+        log_step "Creating bucket '$MINIO_BUCKET'..."
         if docker exec rag-minio mc mb local/$MINIO_BUCKET &> /dev/null; then
-            log_success "Бакет '$MINIO_BUCKET' создан"
+            log_success "Bucket '$MINIO_BUCKET' created"
         else
-            log_warning "Не удалось создать бакет. Возможно, он будет создан автоматически"
+            log_warning "Failed to create bucket. It may be created automatically"
         fi
     fi
 }
 
-# ── Генерация секретов ────────────────────────────────────────────────────────
+# ── Generate secrets ──────────────────────────────────────────────────────────
 generate_secrets() {
-    log_section "Генерация секретов"
+    log_section "Generate Secrets"
 
     # WEBUI_SECRET_KEY
     local current_key
@@ -252,19 +252,19 @@ generate_secrets() {
     if [ -z "$current_key" ]; then
         local new_key
         new_key=$(generate_secret "$SECRET_KEY_LENGTH")
-        log_step "Генерация WEBUI_SECRET_KEY..."
+        log_step "Generating WEBUI_SECRET_KEY..."
 
-        # Обновление .env.openwebui
+        # Update .env.openwebui
         if [ -f "$ENV_FILE" ]; then
             sed -i "s/^WEBUI_SECRET_KEY=.*/WEBUI_SECRET_KEY=$new_key/" "$ENV_FILE"
         fi
-        log_success "WEBUI_SECRET_KEY сгенерирован"
-        echo -e "       ${YELLOW}Секретный ключ:${NC} $new_key"
-        echo -e "       ${YELLOW}СОХРАНИТЕ этот ключ в надежном месте!${NC} Он нужен для:"
-        echo "       - Валидации JWT токенов при перезапуске"
-        echo "       - Восстановления доступа к сессиям пользователей"
+        log_success "WEBUI_SECRET_KEY generated"
+        echo -e "       ${YELLOW}Secret key:${NC} $new_key"
+        echo -e "       ${YELLOW}SAVE this key in a secure location!${NC} It is needed for:"
+        echo "       - JWT token validation across restarts"
+        echo "       - Restoring access to user sessions"
     else
-        log_success "WEBUI_SECRET_KEY уже задан"
+        log_success "WEBUI_SECRET_KEY already set"
     fi
 
     # POSTGRES_PASSWORD
@@ -274,94 +274,96 @@ generate_secrets() {
     if [ -z "$current_pg_pass" ]; then
         local new_pg_pass
         new_pg_pass=$(generate_secret "$POSTGRES_PASSWORD_LENGTH")
-        log_step "Генерация POSTGRES_PASSWORD..."
+        log_step "Generating POSTGRES_PASSWORD..."
 
         if [ -f "$ENV_FILE" ]; then
             sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$new_pg_pass/" "$ENV_FILE"
         fi
-        log_success "POSTGRES_PASSWORD сгенерирован"
-        echo -e "       ${YELLOW}Пароль БД:${NC} $new_pg_pass"
+        log_success "POSTGRES_PASSWORD generated"
+        echo -e "       ${YELLOW}DB password:${NC} $new_pg_pass"
     else
-        log_success "POSTGRES_PASSWORD уже задан"
+        log_success "POSTGRES_PASSWORD already set"
     fi
 }
 
-# ── Полная переустановка ──────────────────────────────────────────────────────
+# ── Full reinstall ────────────────────────────────────────────────────────────
 recreate_deployment() {
-    log_section "Переустановка (удаление всех данных)"
+    log_section "Reinstall (delete all data)"
 
     if [ "$RECREATE_MODE" = false ]; then
         return 0
     fi
 
-    log_warning "ВНИМАНИЕ: Это удалит ВСЕ данные OpenWebUI — пользователей, чаты, файлы!"
-    if ! confirm "Вы уверены? Введите 'yes' для подтверждения:"; then
-        log_info "Переустановка отменена"
+    log_warning "WARNING: This will delete ALL OpenWebUI data — users, chats, files!"
+    if ! confirm "Are you sure?"; then
+        log_info "Reinstall cancelled"
         RECREATE_MODE=false
         return 0
     fi
 
-    local confirm_text
-    read -r -p "Введите 'yes' для подтверждения: " confirm_text
-    if [ "$confirm_text" != "yes" ]; then
-        log_info "Переустановка отменена"
-        RECREATE_MODE=false
-        return 0
+    if [ "$AUTO_MODE" = false ]; then
+        local confirm_text
+        read -r -p "Type 'yes' to confirm: " confirm_text
+        if [ "$confirm_text" != "yes" ]; then
+            log_info "Reinstall cancelled"
+            RECREATE_MODE=false
+            return 0
+        fi
     fi
 
-    log_step "Остановка контейнеров..."
+    log_step "Stopping containers..."
     docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down -v --timeout 30 2>/dev/null || true
 
-    log_step "Удаление томов..."
+    log_step "Removing volumes..."
     docker volume rm rag-openwebui-data rag-openwebui-tmp rag-openwebui-postgres rag-openwebui-redis 2>/dev/null || true
 
-    log_step "Удаление сети openwebui-network..."
+    log_step "Removing openwebui-network..."
     docker network rm rag-openwebui-network 2>/dev/null || true
 
-    log_success "Переустановка завершена. Все данные удалены."
+    log_success "Reinstall complete. All data deleted."
 }
 
-# ── Запуск развертывания ──────────────────────────────────────────────────────
+# ── Deploy services ───────────────────────────────────────────────────────────
 deploy_services() {
-    log_section "Запуск сервисов OpenWebUI"
+    log_section "Deploy OpenWebUI Services"
 
-    log_step "Загрузка образов (это может занять время)..."
+    log_step "Pulling images (this may take a while)..."
     docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull 2>&1 | grep -v "Pulling from\|Digest:\|Status:" || true
 
-    log_step "Запуск контейнеров..."
+    log_step "Starting containers..."
     docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --wait --wait-timeout 120 2>&1 || {
-        log_error "Не удалось запустить сервисы. Проверьте логи:"
+        log_error "Failed to start services. Check logs:"
         echo "       docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs"
         exit 1
     }
 
-    log_success "Сервисы запущены"
+    log_success "Services started"
 }
 
-# ── Проверка работоспособности ────────────────────────────────────────────────
+# ── Health check ──────────────────────────────────────────────────────────────
 health_check() {
-    log_section "Проверка работоспособности"
+    log_section "Health Check"
 
     local openwebui_url="http://localhost:${OPENWEBUI_HOST_PORT:-3000}"
 
     if ! command -v curl &> /dev/null; then
-        log_warning "curl не найден — пропускаем health-check"
+        log_warning "curl not found — skipping health-check"
         return 0
     fi
 
-    # Ожидаем запуск OpenWebUI
-    log_step "Ожидание готовности OpenWebUI..."
+    # Wait for OpenWebUI startup
+    log_step "Waiting for OpenWebUI to be ready..."
     local retries=12
     local delay=5
 
     for i in $(seq 1 $retries); do
         if curl -sf "$openwebui_url/health" &> /dev/null; then
-            log_success "OpenWebUI отвечает ($openwebui_url)"
+            log_success "OpenWebUI is responding ($openwebui_url)"
             break
         fi
         if [ "$i" -eq "$retries" ]; then
-            log_warning "OpenWebUI не отвечает после $((retries * delay)) секунд."
-            log_info "Проверьте логи: docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs openwebui"
+            log_warning "OpenWebUI did not respond after $((retries * delay)) seconds."
+            log_info "Check logs: docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs openwebui"
             return 1
         fi
         echo -n "."
@@ -369,97 +371,97 @@ health_check() {
     done
     echo ""
 
-    # Проверка PostgreSQL
+    # Check PostgreSQL
     if docker exec rag-openwebui-postgres pg_isready -U openwebui &> /dev/null; then
-        log_success "PostgreSQL: готов"
+        log_success "PostgreSQL: ready"
     else
-        log_warning "PostgreSQL: не отвечает"
+        log_warning "PostgreSQL: not responding"
     fi
 
-    # Проверка Redis
+    # Check Redis
     if docker exec rag-openwebui-redis redis-cli ping &> /dev/null; then
-        log_success "Redis: готов"
+        log_success "Redis: ready"
     else
-        log_warning "Redis: не отвечает"
+        log_warning "Redis: not responding"
     fi
 
-    # Проверка Tika
+    # Check Tika
     if docker exec rag-openwebui-tika curl -sf http://localhost:9998/tika &> /dev/null; then
-        log_success "Apache Tika: готов"
+        log_success "Apache Tika: ready"
     else
-        log_warning "Apache Tika: не отвечает"
+        log_warning "Apache Tika: not responding"
     fi
 }
 
-# ── Инструкции по созданию администратора ─────────────────────────────────────
+# ── Admin setup instructions ──────────────────────────────────────────────────
 print_admin_instructions() {
-    log_section "Создание учетной записи администратора"
+    log_section "Admin Account Setup"
 
     local openwebui_url="http://localhost:${OPENWEBUI_HOST_PORT:-3000}"
 
     echo ""
-    echo -e "  ${BOLD}${GREEN}OpenWebUI развернут и готов к настройке!${NC}"
+    echo -e "  ${BOLD}${GREEN}OpenWebUI is deployed and ready to configure!${NC}"
     echo ""
-    echo -e "  ${BOLD}1. Откройте в браузере:${NC}"
+    echo -e "  ${BOLD}1. Open in browser:${NC}"
     echo -e "     ${BLUE}$openwebui_url${NC}"
     echo ""
-    echo -e "  ${BOLD}2. Создайте учетную запись администратора:${NC}"
-    echo "     • Нажмите \"Sign up\" на странице входа"
-    echo "     • Введите имя, email и пароль"
-    echo "     • Эта учетная запись будет единственной с правами администратора"
-    echo "     • После создания администратора регистрация будет отключена"
+    echo -e "  ${BOLD}2. Create admin account:${NC}"
+    echo "     • Click \"Sign up\" on the login page"
+    echo "     • Enter name, email, and password"
+    echo "     • This will be the only account with admin privileges"
+    echo "     • After admin creation, self-registration will be disabled"
     echo ""
-    echo -e "  ${BOLD}3. Настройте подключение к RAG Proxy:${NC}"
-    echo "     • Перейдите: Admin Panel → Settings → Connections"
-    echo "     • Проверьте OpenAI API: $OPENAI_API_BASE_URLS"
-    echo "     • Убедитесь что модель 'rag' видна в списке моделей"
+    echo -e "  ${BOLD}3. Configure RAG Proxy connection:${NC}"
+    echo "     • Go to: Admin Panel → Settings → Connections"
+    echo "     • Verify OpenAI API: $OPENAI_API_BASE_URLS"
+    echo "     • Ensure the 'rag' model appears in the model list"
     echo ""
-    echo -e "  ${BOLD}4. Управление пользователями:${NC}"
-    echo "     • Admin Panel → Users — создание и активация учетных записей"
-    echo "     • Самостоятельная регистрация отключена (корпоративное требование)"
-    echo "     • Для Keycloak OIDC: Admin Panel → Settings → General → OAuth"
+    echo -e "  ${BOLD}4. User management:${NC}"
+    echo "     • Admin Panel → Users — create and activate accounts"
+    echo "     • Self-registration is disabled (corporate requirement)"
+    echo "     • For Keycloak OIDC: Admin Panel → Settings → General → OAuth"
     echo ""
-    echo -e "  ${BOLD}5. Полезные команды управления:${NC}"
-    echo "     • Просмотр логов:"
+    echo -e "  ${BOLD}5. Useful management commands:${NC}"
+    echo "     • View logs:"
     echo "       docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs -f openwebui"
-    echo "     • Статус сервисов:"
+    echo "     • Service status:"
     echo "       docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps"
-    echo "     • Перезапуск:"
+    echo "     • Restart:"
     echo "       docker compose -f $COMPOSE_FILE --env-file $ENV_FILE restart"
-    echo "     • Остановка:"
+    echo "     • Stop:"
     echo "       docker compose -f $COMPOSE_FILE --env-file $ENV_FILE down"
     echo ""
-    echo -e "  ${BOLD}Сохраненные секреты:${NC}"
-    echo "  WEBUI_SECRET_KEY:   из файла $ENV_FILE"
-    echo "  POSTGRES_PASSWORD:  из файла $ENV_FILE"
+    echo -e "  ${BOLD}Saved secrets:${NC}"
+    echo "  WEBUI_SECRET_KEY:   from file $ENV_FILE"
+    echo "  POSTGRES_PASSWORD:  from file $ENV_FILE"
     echo ""
-    echo -e "  ${YELLOW}${BOLD}⚠ Сохраните эти секреты в корпоративном хранилище секретов!${NC}"
+    echo -e "  ${YELLOW}${BOLD}⚠ Save these secrets in your corporate secret store!${NC}"
     echo ""
 }
 
-# ── Сводка развертывания ──────────────────────────────────────────────────────
+# ── Deployment summary ────────────────────────────────────────────────────────
 print_summary() {
-    log_section "Сводка развертывания"
+    log_section "Deployment Summary"
 
     echo ""
-    echo -e "  ${BOLD}Сервисы:${NC}"
+    echo -e "  ${BOLD}Services:${NC}"
     echo "  ├── OpenWebUI       → http://localhost:${OPENWEBUI_HOST_PORT:-3000}"
-    echo "  ├── PostgreSQL      → postgres:5432 (внутренняя сеть)"
-    echo "  ├── Redis           → redis:6379 (внутренняя сеть)"
-    echo "  └── Apache Tika     → tika:9998 (внутренняя сеть)"
+    echo "  ├── PostgreSQL      → postgres:5432 (internal network)"
+    echo "  ├── Redis           → redis:6379 (internal network)"
+    echo "  └── Apache Tika     → tika:9998 (internal network)"
     echo ""
-    echo -e "  ${BOLD}Внешние зависимости (сеть rag-network):${NC}"
+    echo -e "  ${BOLD}External dependencies (rag-network):${NC}"
     echo "  ├── RAG Proxy       → http://rag-proxy:8080/v1"
     echo "  └── MinIO           → http://minio:9000"
     echo ""
-    echo -e "  ${BOLD}Файлы конфигурации:${NC}"
+    echo -e "  ${BOLD}Configuration files:${NC}"
     echo "  ├── Compose:        $COMPOSE_FILE"
-    echo "  └── Переменные:     $ENV_FILE"
+    echo "  └── Env vars:       $ENV_FILE"
     echo ""
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Главный процесс
+# Main process
 # ═══════════════════════════════════════════════════════════════════════════════
 
 main() {
@@ -467,52 +469,52 @@ main() {
 
     echo -e "${BLUE}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║   Инициализация OpenWebUI для корпоративной RAG-системы  ║"
-    echo "║   Версия 2.0.0                                           ║"
+    echo "║   OpenWebUI Initialization for Corporate RAG System      ║"
+    echo "║   Version 2.1.0                                           ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    # Проверка compose файла
+    # Check compose file
     if [ ! -f "$COMPOSE_FILE" ]; then
-        log_error "Compose-файл не найден: $COMPOSE_FILE"
+        log_error "Compose file not found: $COMPOSE_FILE"
         exit 1
     fi
 
-    # Проверка .env файла
+    # Check .env file
     if [ ! -f "$ENV_FILE" ]; then
-        log_error ".env файл не найден: $ENV_FILE"
+        log_error ".env file not found: $ENV_FILE"
         exit 1
     fi
 
-    # 1. Проверка зависимостей
+    # 1. Dependency check
     check_prerequisites
 
-    # 2. Проверка сети
+    # 2. Network check
     check_rag_network
 
-    # 3. Проверка MinIO
+    # 3. MinIO check
     check_minio
 
-    # 4. Генерация секретов
+    # 4. Generate secrets
     generate_secrets
 
-    # 5. Переустановка (если запрошена)
+    # 5. Reinstall (if requested)
     recreate_deployment
 
-    # 6. Создание бакета MinIO
+    # 6. Create MinIO bucket
     create_minio_bucket
 
-    # 7. Запуск сервисов
+    # 7. Deploy services
     deploy_services
 
     # 8. Health-check
     health_check
 
-    # 9. Сводка и инструкции
+    # 9. Summary and instructions
     print_summary
     print_admin_instructions
 
-    log_success "Инициализация OpenWebUI завершена!"
+    log_success "OpenWebUI initialization complete!"
 }
 
 main "$@"

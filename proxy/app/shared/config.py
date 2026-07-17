@@ -146,8 +146,10 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost
 # ============ Authentication & RBAC ============
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
 JWT_SECRET = os.getenv("JWT_SECRET", "")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "RS256")
 JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
+JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "rag-proxy")
+JWT_ISSUER = os.getenv("JWT_ISSUER", "rag-proxy")
 TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "24"))
 AUTH_VALID_USERS = os.getenv("AUTH_VALID_USERS", "{}")  # JSON dict of valid users for login endpoint
 
@@ -156,16 +158,32 @@ USER_DB_PATH = os.getenv("USER_DB_PATH", "./data/users.db")
 BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 
 # ── Auth startup validation ──
+_JWT_IS_EPHEMERAL = False
 if AUTH_ENABLED and not JWT_SECRET:
     import secrets
     import warnings
 
     JWT_SECRET = secrets.token_hex(32)
+    _JWT_IS_EPHEMERAL = True
     warnings.warn(
-        "AUTH_ENABLED is true but JWT_SECRET is empty — auto-generated a random secret. "
-        "Tokens will not survive restarts. Set JWT_SECRET in your environment for persistence.",
+        "AUTH_ENABLED is true but JWT_SECRET is empty — auto-generated an ephemeral key. "
+        "Tokens WILL NOT survive restarts. Set JWT_SECRET in your environment for persistence. "
+        "Generate with: openssl rand -hex 32",
         stacklevel=2,
     )
+
+
+def validate_auth_config() -> None:
+    """Validate authentication configuration at startup. Called from main.py lifespan."""
+    if _JWT_IS_EPHEMERAL:
+        import warnings
+
+        warnings.warn(
+            "JWT_SECRET is ephemeral (auto-generated). All issued tokens will be invalidated on restart. "
+            "For production, set JWT_SECRET in your environment.",
+            stacklevel=2,
+        )
+
 
 # ── Token Management ──
 ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))

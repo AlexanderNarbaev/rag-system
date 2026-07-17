@@ -179,6 +179,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global cache_manager, orchestrator, audit_logger, kb_manager
     setup_logging()
     logger.info("Starting RAG Proxy...")
+
+    from proxy.app.shared.config import validate_auth_config
+
+    validate_auth_config()
     init_metrics()
 
     # OpenTelemetry tracing (graceful degradation)

@@ -17,7 +17,7 @@ services:
     container_name: rag-openwebui
     # Порт 3000 — доступ с хоста; замените на 127.0.0.1:3000:8080 для продакшена
     ports:
-      - "${OPENWEBUI_HOST_PORT:-3000}:8080"
+      - "127.0.0.1:${OPENWEBUI_HOST_PORT:-3000}:8080"
     env_file:
       - .env.openwebui
     environment:
@@ -33,8 +33,8 @@ services:
       # Хранилище файлов — MinIO (общий с прокси)
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://minio:9000}
-      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-minioadmin}
-      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-minioadmin}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:?"REQUIRED: set S3_ACCESS_KEY_ID in .env.openwebui"}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:?"REQUIRED: set S3_SECRET_ACCESS_KEY in .env.openwebui"}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME:-openwebui-files}
       - S3_REGION_NAME=${S3_REGION_NAME:-us-east-1}
       - S3_ADDRESSING_STYLE=${S3_ADDRESSING_STYLE:-path}
@@ -72,7 +72,7 @@ services:
           memory: "${OPENWEBUI_MEM_RESERVE:-512M}"
     # Безопасность — непривилегированный режим
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     cap_drop:
       - ALL
     logging:
@@ -107,7 +107,7 @@ services:
       -c effective_cache_size=${PG_EFFECTIVE_CACHE:-768MB}
       -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-64MB}
       -c wal_buffers=${PG_WAL_BUFFERS:-16MB}
-      -c max_connections=${PG_MAX_CONNS:-100}
+      -c max_connections=${PG_MAX_CONNS:-50}
       -c random_page_cost=1.1
       -c effective_io_concurrency=200
       -c max_wal_size=${PG_MAX_WAL_SIZE:-2GB}
@@ -133,7 +133,7 @@ services:
           cpus: "${POSTGRES_CPU_RESERVE:-0.25}"
           memory: "${POSTGRES_MEM_RESERVE:-256M}"
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     cap_drop:
       - ALL
     logging:
@@ -183,7 +183,7 @@ services:
           cpus: "${REDIS_CPU_RESERVE:-0.1}"
           memory: "${REDIS_MEM_RESERVE:-64M}"
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     cap_drop:
       - ALL
     logging:
@@ -198,7 +198,7 @@ services:
   # Apache Tika — извлечение текста из офисных документов, PDF, изображений
   # ═══════════════════════════════════════════════════════════════════════════════
   tika:
-    image: apache/tika:latest
+    image: apache/tika:3.1.0-full
     container_name: rag-openwebui-tika
     expose:
       - "9998"
@@ -227,7 +227,7 @@ services:
           cpus: "${TIKA_CPU_RESERVE:-0.25}"
           memory: "${TIKA_MEM_RESERVE:-256M}"
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     cap_drop:
       - ALL
     logging:

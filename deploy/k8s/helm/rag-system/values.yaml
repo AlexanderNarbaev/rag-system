@@ -59,6 +59,9 @@ proxy:
     capabilities:
       drop:
         - ALL
+    # NOTE: HuggingFace transformers cache (/root/.cache/huggingface) requires
+    # write access. An emptyDir volume is mounted at /app/cache to provide an
+    # ephemeral writable location. Set TRANSFORMERS_CACHE=/app/cache in env.
     readOnlyRootFilesystem: true
     allowPrivilegeEscalation: false
     runAsNonRoot: true
@@ -297,7 +300,10 @@ proxy:
     host: "0.0.0.0"
     # -- Server port
     port: "8080"
-    # -- Number of granian workers (keep at 1 per ADR-008)
+    # -- Number of granian workers (keep at 1 per ADR-008).
+    # This env var is consumed by the deployment template's command override
+    # to pass --workers to the granian CLI. The proxy-deployment.yaml template
+    # reads this value and sets the granian --workers flag accordingly.
     workers: "1"
     # -- Enable tools / function calling
     toolsEnabled: "false"

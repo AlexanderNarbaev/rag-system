@@ -41,6 +41,18 @@ spec:
             {{- toYaml .Values.proxy.securityContext | nindent 12 }}
           image: "{{ .Values.global.imageRegistry | default "" }}{{ .Values.proxy.image.repository }}:{{ .Values.proxy.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.proxy.image.pullPolicy }}
+          command:
+            - granian
+          args:
+            - --interface
+            - asgi
+            - --host
+            - "{{ .Values.proxy.env.host }}"
+            - --port
+            - "{{ .Values.proxy.env.port }}"
+            - --workers
+            - "{{ .Values.proxy.env.workers }}"
+            - proxy.app.main:app
           ports:
             - name: http
               containerPort: {{ .Values.proxy.service.targetPort }}

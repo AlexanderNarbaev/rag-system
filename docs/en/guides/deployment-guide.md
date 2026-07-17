@@ -154,7 +154,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 This deploys all services on one machine for development or small production workloads.
 
-### 2.1 Clone and Configure
+### 3.1 Clone and Configure
 
 ```bash
 # Clone the repository
@@ -165,7 +165,7 @@ cd /opt/rag-system
 cp proxy/.env.example proxy/.env  2>/dev/null || cp proxy/.env proxy/.env.bak
 ```
 
-### 2.2 Edit proxy/.env
+### 3.2 Edit proxy/.env
 
 Set only the required variables; all others have safe defaults:
 
@@ -220,7 +220,7 @@ JWT_SECRET=       # Auto-generated if empty; set for persistence
 RBAC_ENABLED=false
 ```
 
-### 2.3 Set Model Path
+### 3.3 Set Model Path
 
 In `proxy/docker-compose.yml`, update the LLM model mount:
 
@@ -238,7 +238,7 @@ rag-proxy:
     - /opt/models/cache:/app/cache:ro
 ```
 
-### 2.4 Start Services
+### 3.4 Start Services
 
 ```bash
 cd proxy
@@ -254,7 +254,7 @@ docker compose ps
 # Expected: qdrant, neo4j, redis, vllm, rag-proxy, minio, mlflow, hitl-dashboard — all "Up" and "healthy"
 ```
 
-### 2.5 Initialize Qdrant Collections
+### 3.5 Initialize Qdrant Collections
 
 ```bash
 # Once Qdrant is running (wait ~15s):
@@ -265,7 +265,7 @@ curl http://localhost:6333/collections/knowledge_base
 # → {"result": {"collections": [{"name": "knowledge_base"}]}}
 ```
 
-### 2.6 Verify Health
+### 3.6 Verify Health
 
 ```bash
 # Proxy health check
@@ -290,7 +290,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-### 2.7 Run First ETL Pipeline
+### 3.7 Run First ETL Pipeline
 
 ```bash
 cd /opt/rag-system
@@ -313,7 +313,7 @@ docker run --rm --network proxy_rag-network \
   rag-etl --config /app/config/etl_config.yaml
 ```
 
-### 2.8 Stop Services
+### 3.8 Stop Services
 
 ```bash
 cd proxy
@@ -349,7 +349,7 @@ The standalone compose file pins exact image tags (e.g., `qdrant/qdrant:v1.10.0`
 - **nginx reverse proxy** on ports 80/443 with TLS
 - **Bridge network** with fixed subnet (`172.28.0.0/16`)
 
-### 3.2 High-Availability Docker Compose
+### 4.2 High-Availability Docker Compose
 
 For multi-node clustering, layer `docker-compose.ha.yml` on top:
 
@@ -382,7 +382,7 @@ sentinel failover-timeout rag-redis 30000
 sentinel parallel-syncs rag-redis 1
 ```
 
-### 3.3 Custom Dockerfiles
+### 4.3 Custom Dockerfiles
 
 #### Proxy Dockerfile (`proxy/Dockerfile`)
 
@@ -438,7 +438,7 @@ COPY etl/ /app/etl/
 CMD ["python", "scheduler/run_etl.py", "--config", "config/etl_config.yaml"]
 ```
 
-### 3.4 Resource Limits Reference
+### 4.4 Resource Limits Reference
 
 | Service           | CPU Limit | Memory Limit | Justification                                |
 |-------------------|-----------|--------------|----------------------------------------------|
@@ -450,7 +450,7 @@ CMD ["python", "scheduler/run_etl.py", "--config", "config/etl_config.yaml"]
 | RAG Proxy         | 4 cores   | 8 GB         | Embedder + reranker loaded in-process        |
 | nginx             | 0.5 cores | 256 MB       | Static reverse proxy                         |
 
-### 3.5 Volume Strategy
+### 4.5 Volume Strategy
 
 ```yaml
 volumes:
@@ -491,7 +491,7 @@ chown -R 1000:1000 /data/{qdrant,neo4j,redis,minio,mlflow}
 chmod 755 /data/{qdrant,neo4j,redis,minio,mlflow}
 ```
 
-### 3.6 Docker Logging Limits
+### 4.6 Docker Logging Limits
 
 ```yaml
 services:
@@ -1291,7 +1291,7 @@ python scripts/download_models_offline.py \
 # - LLM GGUF file (if --gguf-url provided)
 ```
 
-### 5.2 Transfer Assets
+### 7.2 Transfer Assets
 
 ```bash
 # Package models
@@ -1305,7 +1305,7 @@ cd /opt/rag-system
 tar -xzf offline_models.tar.gz
 ```
 
-### 5.3 Transfer Docker Images
+### 7.3 Transfer Docker Images
 
 ```bash
 # On internet-connected machine — pull all images:
@@ -1339,7 +1339,7 @@ scp rag-images.tar admin@airgap-host:/opt/rag-system/
 docker load -i rag-images.tar
 ```
 
-### 5.4 Transfer pip Packages
+### 7.4 Transfer pip Packages
 
 ```bash
 # On internet-connected machine:
@@ -1355,7 +1355,7 @@ pip install --no-index --find-links /opt/rag-system/pip-offline \
   -r /opt/rag-system/proxy/requirements_proxy.txt
 ```
 
-### 5.5 Configure Model Paths for Air-Gapped
+### 7.5 Configure Model Paths for Air-Gapped
 
 ```bash
 # proxy/.env
@@ -1387,7 +1387,7 @@ rag-proxy:
     - /opt/rag-system/offline_models:/app/cache:ro
 ```
 
-### 5.6 Offline Air-Gapped Values (Helm)
+### 7.6 Offline Air-Gapped Values (Helm)
 
 ```yaml
 # values-airgap.yaml
@@ -1409,7 +1409,7 @@ proxy:
 
 ---
 
-## 7. LLM Backend Setup
+## 8. LLM Backend Setup
 
 The RAG proxy communicates with ANY OpenAI-compatible `/v1/chat/completions` endpoint. Configure via:
 
@@ -1420,7 +1420,7 @@ LLM_API_KEY=<optional-api-key>
 LLM_PROVIDER_TYPE=openai    # "openai", "anthropic", or "generic"
 ```
 
-### 6.1 vLLM Backend
+### 8.1 vLLM Backend
 
 **Docker Compose:**
 
@@ -1472,7 +1472,7 @@ vllm:
 | `--max-num-seqs`           | Concurrent requests | 16                            |
 | `--api-key`                | Require API key     | Same as `LLM_API_KEY`         |
 
-### 6.2 llama.cpp Backend (CPU Inference)
+### 8.2 llama.cpp Backend (CPU Inference)
 
 **Docker Compose:**
 
@@ -1512,7 +1512,7 @@ vllm-cpu:
 | `--batch-size`   | Prompt processing batch | 512                    |
 | `--api-key`      | API key requirement     | `""` for no key        |
 
-### 6.3 OpenAI-Compatible Endpoint (any provider)
+### 8.3 OpenAI-Compatible Endpoint (any provider)
 
 For any third-party endpoint implementing the OpenAI API spec:
 
@@ -1529,7 +1529,7 @@ LLM_MODEL_NAME=llama3.1:70b
 LLM_PROVIDER_TYPE=generic
 ```
 
-### 6.4 GPUStack Backend
+### 8.4 GPUStack Backend
 
 [GPUStack](https://github.com/gpustack/gpustack) is an open-source GPU cluster manager that serves OpenAI-compatible
 endpoints for LLM, embedding, and reranker models. It's ideal for on-premise deployments where you need centralized
@@ -1576,7 +1576,7 @@ curl http://<gpu-host>:80/v1/models \
 
 See the [GPUStack documentation](https://docs.gpustack.ai/) for cluster setup and model management.
 
-### 6.5 Proxy Configuration for Backend
+### 8.5 Proxy Configuration for Backend
 
 ```bash
 # proxy/.env
@@ -1591,12 +1591,12 @@ PREFIX_CACHING_ENABLED=true             # vLLM KV-cache reuse
 
 ---
 
-## 8. Federation Setup
+## 9. Federation Setup
 
 Federation allows querying multiple RAG silos (e.g., different departments or geographic regions) through a single
 endpoint.
 
-### 7.1 Architecture
+### 9.1 Architecture
 
 ```
 Client
@@ -1612,7 +1612,7 @@ Client
 - **Hub** — receives user queries, fans out to spokes, aggregates results, reranks globally
 - **Spoke** — independent RAG instance with its own Qdrant + Neo4j + LLM
 
-### 7.2 Hub Configuration
+### 9.2 Hub Configuration
 
 ```bash
 # proxy/.env — Federation Hub
@@ -1647,7 +1647,7 @@ FEDERATION_MERGE_LIMIT=30               # Max results across all silos before re
 FEDERATION_TIMEOUT=45                   # Per-silo timeout, seconds
 ```
 
-### 7.3 Spoke Configuration
+### 9.3 Spoke Configuration
 
 ```bash
 # proxy/.env — Federation Spoke (each instance)
@@ -1655,7 +1655,7 @@ FEDERATION_MODE=spoke
 # No FEDERATION_INSTANCES_JSON needed for spokes
 ```
 
-### 7.4 Multi-Silo Topology Examples
+### 9.4 Multi-Silo Topology Examples
 
 **By Department:**
 
@@ -1677,7 +1677,7 @@ FEDERATION_INSTANCES_JSON='[
 ]'
 ```
 
-### 7.5 Federation in Docker Compose
+### 9.5 Federation in Docker Compose
 
 ```yaml
 # docker-compose.yml — add federation service
@@ -1698,7 +1698,7 @@ federation-proxy:
     - rag-network
 ```
 
-### 7.6 Federation in Kubernetes
+### 9.6 Federation in Kubernetes
 
 ```yaml
 # Deployment for each spoke (separate namespace)
@@ -1721,12 +1721,12 @@ spec:
 
 ---
 
-## 9. Model Evolution Setup
+## 10. Model Evolution Setup
 
 The Model Evolution pipeline supports fine-tuning SLM, LLM, and Reranker models, with MLflow tracking, MinIO artifact
 storage, automated quality gates, and canary rollouts.
 
-### 8.1 Enable in Configuration
+### 10.1 Enable in Configuration
 
 ```bash
 # proxy/.env
@@ -1770,7 +1770,7 @@ EVAL_GATE_RERANKER_MRR_MIN=0.75
 EVAL_GATE_RERANKER_NDCG_MIN=0.70
 ```
 
-### 8.2 Docker Compose Services
+### 10.2 Docker Compose Services
 
 MinIO and MLflow are included in `docker-compose.yml`:
 
@@ -1820,7 +1820,7 @@ mlflow:
     - mlflow_data:/mlflow
 ```
 
-### 8.3 Trigger Training
+### 10.3 Trigger Training
 
 ```bash
 # Train SLM on feedback data
@@ -1848,7 +1848,7 @@ curl http://localhost:8080/v1/admin/models \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-### 8.4 Training CronJob (Kubernetes)
+### 10.4 Training CronJob (Kubernetes)
 
 ```yaml
 apiVersion: batch/v1
@@ -1896,7 +1896,7 @@ spec:
           restartPolicy: OnFailure
 ```
 
-### 8.5 Canary Rollout
+### 10.5 Canary Rollout
 
 ```bash
 # Register new model version
@@ -1926,9 +1926,9 @@ curl -X POST http://localhost:8080/v1/admin/models/canary/split \
 
 ---
 
-## 10. Security Hardening
+## 11. Security Hardening
 
-### 9.1 Non-Root Users
+### 11.1 Non-Root Users
 
 All custom images should run as non-root:
 
@@ -1946,7 +1946,7 @@ docker inspect rag-proxy | jq '.[0].Config.User'
 # → "raguser" or "1000"
 ```
 
-### 9.2 Read-Only Filesystems
+### 11.2 Read-Only Filesystems
 
 ```yaml
 # docker-compose.yml
@@ -1976,7 +1976,7 @@ volumeMounts:
     mountPath: /tmp
 ```
 
-### 9.3 Capabilities Drop
+### 11.3 Capabilities Drop
 
 ```yaml
 # Docker Compose
@@ -1994,7 +1994,7 @@ securityContext:
   allowPrivilegeEscalation: false
 ```
 
-### 9.4 Secrets Rotation
+### 11.4 Secrets Rotation
 
 **Docker Compose secrets rotation:**
 
@@ -2044,7 +2044,7 @@ spec:
 When combined with `reloader.stakater.com/auto: "true"` annotation on the Deployment, pods restart automatically when
 secrets change.
 
-### 9.5 TLS Everywhere
+### 11.5 TLS Everywhere
 
 **Docker Compose (nginx + Let's Encrypt):**
 
@@ -2084,7 +2084,7 @@ server {
 }
 ```
 
-### 9.6 API Key Protection
+### 11.6 API Key Protection
 
 ```bash
 # Enforce API key on LLM backend
@@ -2098,7 +2098,7 @@ server {
 LLM_API_KEY=your-key
 ```
 
-### 9.7 Security Checklist
+### 11.7 Security Checklist
 
 - [ ] Change ALL default passwords (Neo4j, Redis, MinIO)
 - [ ] Set `LLM_API_KEY` and enforce it on the LLM backend
@@ -2116,9 +2116,9 @@ LLM_API_KEY=your-key
 
 ---
 
-## 11. Monitoring Setup
+## 12. Monitoring Setup
 
-### 10.1 Prometheus Scrape Configuration
+### 12.1 Prometheus Scrape Configuration
 
 ```yaml
 # prometheus.yml
@@ -2169,7 +2169,7 @@ spec:
       interval: 15s
 ```
 
-### 10.2 Key Metrics Exposed
+### 12.2 Key Metrics Exposed
 
 | Metric                         | Type      | Description                         |
 |--------------------------------|-----------|-------------------------------------|
@@ -2184,7 +2184,7 @@ spec:
 | `rag_etl_stream_lag`           | Gauge     | Pending messages per consumer group |
 | `rag_warmup_completed`         | Gauge     | 1 if warm-up finished               |
 
-### 10.3 Alert Rules
+### 12.3 Alert Rules
 
 ```yaml
 # prometheus-alerts.yml
@@ -2267,7 +2267,7 @@ groups:
           summary: "Neo4j graph database is down (graph expansion disabled)"
 ```
 
-### 10.4 Grafana Dashboard Import
+### 12.4 Grafana Dashboard Import
 
 ```bash
 # Import pre-built dashboards
@@ -2296,7 +2296,7 @@ kubectl label configmap grafana-dashboard-rag-overview \
 | **Retrieval Quality** | `grafana-retrieval.json`      | MRR, Recall@k, nDCG, cache hit ratio                       |
 | **Infrastructure**    | `grafana-infrastructure.json` | CPU, memory, disk, GPU per component                       |
 
-### 10.5 SLI/SLO Reference
+### 12.5 SLI/SLO Reference
 
 | SLI             | Target | Measurement Window |
 |-----------------|--------|--------------------|
@@ -2307,9 +2307,9 @@ kubectl label configmap grafana-dashboard-rag-overview \
 
 ---
 
-## 12. Backup Strategy
+## 13. Backup Strategy
 
-### 11.1 Backup Schedule
+### 13.1 Backup Schedule
 
 | Component        | Frequency       | Retention                    | Method                            |
 |------------------|-----------------|------------------------------|-----------------------------------|
@@ -2319,7 +2319,7 @@ kubectl label configmap grafana-dashboard-rag-overview \
 | ETL WAL state    | Every 30 min    | 7 daily                      | File copy                         |
 | Proxy config     | On change (git) | Full history                 | `git push`                        |
 
-### 11.2 Qdrant Snapshots
+### 13.2 Qdrant Snapshots
 
 ```bash
 # Create snapshot
@@ -2341,7 +2341,7 @@ curl -X PUT http://localhost:6333/collections/knowledge_base/snapshots/upload \
 # 0 */6 * * * curl -X POST http://localhost:6333/collections/knowledge_base/snapshots
 ```
 
-### 11.3 Neo4j Dumps
+### 13.3 Neo4j Dumps
 
 ```bash
 # Dump database
@@ -2359,7 +2359,7 @@ docker exec rag-neo4j cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
   "MATCH (n) RETURN count(n)"
 ```
 
-### 11.4 Redis Persistence
+### 13.4 Redis Persistence
 
 Redis in the standard docker-compose uses `--appendonly yes` (AOF persistence). This provides crash-safe recovery. For
 backups:
@@ -2377,7 +2377,7 @@ cp redis_backup_20260706_1200.rdb /data/redis/dump.rdb
 docker compose start redis
 ```
 
-### 11.5 S3/MinIO Backup Script
+### 13.5 S3/MinIO Backup Script
 
 ```bash
 #!/bin/bash
@@ -2418,7 +2418,7 @@ echo "Backup complete."
 # 0 */6 * * * /opt/rag-system/scripts/backup.sh >> /var/log/rag-backup.log 2>&1
 ```
 
-### 11.6 Backup CronJob (Kubernetes)
+### 13.6 Backup CronJob (Kubernetes)
 
 ```yaml
 apiVersion: batch/v1
@@ -2467,7 +2467,7 @@ spec:
           restartPolicy: OnFailure
 ```
 
-### 11.7 Restore Procedures
+### 13.7 Restore Procedures
 
 **Full recovery (all components):**
 
@@ -2495,7 +2495,7 @@ docker compose up -d rag-proxy
 curl http://localhost:8080/v1/health
 ```
 
-### 11.8 WAL Corruption Recovery
+### 13.8 WAL Corruption Recovery
 
 If the ETL Write-Ahead Log is corrupted:
 
@@ -2509,9 +2509,9 @@ python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --full
 
 ---
 
-## 13. Troubleshooting Common Deployment Issues
+## 14. Troubleshooting Common Deployment Issues
 
-### 12.1 Port Conflicts
+### 14.1 Port Conflicts
 
 **Symptom:** `Error starting userland proxy: listen tcp4 0.0.0.0:8080: bind: address already in use`
 
@@ -2525,7 +2525,7 @@ ports:
   - "8081:8080"     # Map host 8081 to container 8080
 ```
 
-### 12.2 Model Not Found
+### 14.2 Model Not Found
 
 **Symptom:** vLLM fails with `ValueError: Model /models/model-name not found`
 
@@ -2542,7 +2542,7 @@ vllm:
     - /opt/models/Llama-3.1-70B-Instruct:/models/Llama-3.1-70B-Instruct:ro
 ```
 
-### 12.3 OOM (Out of Memory)
+### 14.3 OOM (Out of Memory)
 
 **Symptom:** Container killed with exit code 137, `dmesg` shows OOM killer
 
@@ -2575,7 +2575,7 @@ MAX_CHUNKS_RETRIEVAL=20    # instead of 50
 RERANKER_BATCH_SIZE=8      # instead of 32
 ```
 
-### 12.4 Permission Denied
+### 14.4 Permission Denied
 
 **Symptom:** Container fails with `PermissionError: [Errno 13] Permission denied: '/app/logs'`
 
@@ -2593,7 +2593,7 @@ id raguser   # On host
 docker exec rag-proxy id   # In container
 ```
 
-### 12.5 Qdrant Connection Refused
+### 14.5 Qdrant Connection Refused
 
 **Symptom:** Proxy health check shows `"qdrant": "disconnected"`
 
@@ -2611,7 +2611,7 @@ docker exec rag-proxy curl -s http://qdrant:6333/health
 # Change QDRANT_HOST from "localhost" to "qdrant" in .env
 ```
 
-### 12.6 vLLM Startup Takes Too Long
+### 14.6 vLLM Startup Takes Too Long
 
 **Symptom:** vLLM container healthy but proxy reports LLM unavailable
 
@@ -2632,7 +2632,7 @@ rag-proxy:
 docker logs rag-vllm -f | grep -i "loading\|ready\|error"
 ```
 
-### 12.7 Docker Compose "no space left on device"
+### 14.7 Docker Compose "no space left on device"
 
 ```bash
 # Prune unused Docker data
@@ -2652,7 +2652,7 @@ find etl/cold_chunks/ -name "*.parquet" -mtime +30 -delete
 find proxy/logs/ -name "*.log" -mtime +7 -delete
 ```
 
-### 12.8 Redis Streams Consumer Lag
+### 14.8 Redis Streams Consumer Lag
 
 **Symptom:** ETL events backing up, Prometheus alert `StreamConsumerLag`
 
@@ -2674,7 +2674,7 @@ docker exec rag-redis redis-cli XLEN etl:events:dlq
 python etl/scheduler/reprocess_dlq.py --stream etl:events:dlq
 ```
 
-### 12.9 Neo4j APOC Plugin Not Loaded
+### 14.9 Neo4j APOC Plugin Not Loaded
 
 **Symptom:** `There is no procedure with the name 'apoc.export.cypher.all'`
 
@@ -2692,7 +2692,7 @@ neo4j:
 NEO4J_PLUGINS='["apoc"]'
 ```
 
-### 12.10 GPU Not Detected in Container
+### 14.10 GPU Not Detected in Container
 
 ```bash
 # Verify NVIDIA Container Toolkit is installed
