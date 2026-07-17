@@ -86,7 +86,7 @@ async def list_feedback(
     kb_id: str | None = Query(None, description="Filter by knowledge base"),
     date_from: str | None = Query(None, description="ISO datetime lower bound"),
     date_to: str | None = Query(None, description="ISO datetime upper bound"),
-    min_confidence: float | None = Query(None, description="Max confidence (filters low-confidence responses)"),
+    max_confidence: float | None = Query(None, description="Max confidence (filters low-confidence responses)"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     user: UserContext = Depends(require_role(Role.ADMIN)),  # noqa: B008
@@ -105,15 +105,15 @@ async def list_feedback(
             filters["date_from"] = date_from
         if date_to:
             filters["date_to"] = date_to
-        if min_confidence is not None:
-            filters["min_confidence"] = min_confidence
+        if max_confidence is not None:
+            filters["max_confidence"] = max_confidence
 
-        entries = store.list(**filters)
+        entries, total = store.list_entries(**filters)
         add_event("admin.feedback.listed", {"count": len(entries)})
 
     return FeedbackListResponse(
         entries=[FeedbackEntryResponse(**e.to_dict()) for e in entries],
-        total=len(entries),
+        total=total,
     )
 
 
@@ -148,11 +148,14 @@ async def update_feedback(
         add_event("admin.feedback.updated")
 
     updated = store.get(feedback_id)
-    return JSONResponse(status_code=200, content={
-        "feedback_id": feedback_id,
-        "status": updated.status if updated else existing.status,
-        **updates,
-    })
+    return JSONResponse(
+        status_code=200,
+        content={
+            "feedback_id": feedback_id,
+            "status": updated.status if updated else existing.status,
+            **updates,
+        },
+    )
 
 
 @router.get("/stats", response_model=FeedbackStatsResponse)

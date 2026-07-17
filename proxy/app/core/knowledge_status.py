@@ -66,8 +66,7 @@ def determine_knowledge_status(
             strong_source_count=strong_count,
             max_score=max_score,
             reason=(
-                f"Only {strong_count} strong source(s) from {len(sources)} — "
-                "answer may be incomplete or uncertain."
+                f"Only {strong_count} strong source(s) from {len(sources)} — answer may be incomplete or uncertain."
             ),
         )
 

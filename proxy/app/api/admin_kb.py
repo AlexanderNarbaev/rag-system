@@ -16,6 +16,7 @@ from proxy.app.auth.rbac import Role, require_role
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/admin/kb", tags=["admin-kb"])
+reindex_router = APIRouter(prefix="/v1/admin/reindex", tags=["admin-reindex"])
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +116,10 @@ def _get_kb_manager() -> Any:
 
 
 @router.post("/", response_model=KBResponse, status_code=201)
-async def create_knowledge_base(req: KBCreateRequest) -> KBResponse:
+async def create_knowledge_base(
+    req: KBCreateRequest,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> KBResponse:
     """Create a new knowledge base with its own Qdrant collection."""
     mgr = _get_kb_manager()
     try:
@@ -146,7 +150,10 @@ async def create_knowledge_base(req: KBCreateRequest) -> KBResponse:
 
 
 @router.get("/", response_model=KBListResponse)
-async def list_knowledge_bases(include_deleted: bool = False) -> KBListResponse:
+async def list_knowledge_bases(
+    include_deleted: bool = False,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> KBListResponse:
     """List all knowledge bases."""
     mgr = _get_kb_manager()
     kbs = mgr.list_kbs(include_deleted=include_deleted)
@@ -174,7 +181,10 @@ async def list_knowledge_bases(include_deleted: bool = False) -> KBListResponse:
 
 
 @router.get("/{kb_id}", response_model=KBResponse)
-async def get_knowledge_base(kb_id: str) -> KBResponse:
+async def get_knowledge_base(
+    kb_id: str,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> KBResponse:
     """Get a knowledge base by ID."""
     mgr = _get_kb_manager()
     kb = mgr.get_kb(kb_id)
@@ -198,7 +208,11 @@ async def get_knowledge_base(kb_id: str) -> KBResponse:
 
 
 @router.put("/{kb_id}", response_model=KBResponse)
-async def update_knowledge_base(kb_id: str, req: KBUpdateRequest) -> KBResponse:
+async def update_knowledge_base(
+    kb_id: str,
+    req: KBUpdateRequest,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> KBResponse:
     """Update a knowledge base."""
     mgr = _get_kb_manager()
     try:
@@ -224,7 +238,11 @@ async def update_knowledge_base(kb_id: str, req: KBUpdateRequest) -> KBResponse:
 
 
 @router.delete("/{kb_id}")
-async def delete_knowledge_base(kb_id: str, hard: bool = False) -> dict[str, Any]:
+async def delete_knowledge_base(
+    kb_id: str,
+    hard: bool = False,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> dict[str, Any]:
     """Delete a knowledge base (soft delete by default)."""
     mgr = _get_kb_manager()
     success = mgr.delete_kb(kb_id, hard=hard)
@@ -404,7 +422,7 @@ class ReindexStatusResponse(BaseModel):
     per_kb: dict[str, Any]
 
 
-@router.post("/{kb_id}/reindex/stale", response_model=ReindexResponse)
+@reindex_router.post("/stale/{kb_id}", response_model=ReindexResponse)
 async def force_reindex_stale_endpoint(
     kb_id: str,
     _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
@@ -447,7 +465,7 @@ async def force_reindex_stale_endpoint(
     )
 
 
-@router.get("/../reindex/status", response_model=ReindexStatusResponse)
+@reindex_router.get("/status", response_model=ReindexStatusResponse)
 async def get_reindex_status(
     _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> ReindexStatusResponse:
@@ -530,12 +548,14 @@ async def get_integrity_check(
 
     coverage_gaps = []
     for gap in result.get("coverage", {}).get("coverage_gaps", []):
-        coverage_gaps.append(CoverageGap(
-            type=gap.get("type", ""),
-            message=gap.get("message", ""),
-            age_days=gap.get("age_days"),
-            source=gap.get("source"),
-        ))
+        coverage_gaps.append(
+            CoverageGap(
+                type=gap.get("type", ""),
+                message=gap.get("message", ""),
+                age_days=gap.get("age_days"),
+                source=gap.get("source"),
+            )
+        )
 
     return IntegrityResponse(
         kb_id=result["kb_id"],

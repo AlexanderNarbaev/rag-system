@@ -39,6 +39,7 @@ class FeedbackRequest(BaseModel):
 class FeedbackResponse(BaseModel):
     status: str
     message: str
+    feedback_id: str
 
 
 @router.post("/v1/feedback", response_model=FeedbackResponse)
@@ -91,7 +92,7 @@ async def submit_feedback(
         except Exception as e:
             logger.error(f"Failed to record feedback: {e}")
             set_span_error(e)
-            raise HTTPException(status_code=500, detail=f"Failed to record feedback: {e}") from e
+            raise HTTPException(status_code=500, detail="Failed to record feedback") from e
 
         try:
             from proxy.app.core.feedback_store import FeedbackEntry, get_feedback_store
@@ -119,6 +120,7 @@ async def submit_feedback(
             add_event("feedback.store_inserted")
         except Exception as e:
             logger.error(f"Failed to store feedback in SQLite: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to store feedback: {e}") from e
 
         ragas_scores = None
         if request.contexts and request.question:
@@ -151,7 +153,11 @@ async def submit_feedback(
         duration = time.time() - start_time
         record_feedback(request.rating, duration)
 
-        return FeedbackResponse(status="ok", message="Feedback recorded")
+        return FeedbackResponse(
+            status="ok",
+            message="Feedback recorded",
+            feedback_id=request.feedback_id,
+        )
 
 
 def _json_dumps(obj: Any) -> str | None:

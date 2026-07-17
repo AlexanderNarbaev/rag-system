@@ -1,5 +1,6 @@
 # tests/etl/test_etl_cleanup.py
 """Tests for FR-07: Post-indexing data cleanup."""
+
 import json
 
 
@@ -216,7 +217,6 @@ class TestRunCleanup:
 class TestCLIFlags:
     def test_cleanup_after_index_flag_present(self):
         import argparse
-
 
         parser = argparse.ArgumentParser()
         parser.add_argument("--cleanup-after-index", action="store_true")

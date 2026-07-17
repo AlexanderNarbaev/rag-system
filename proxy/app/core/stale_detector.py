@@ -126,16 +126,19 @@ def detect_stale_documents(
 
         if score >= threshold:
             source_type = payload.get("source_type", "unknown")
-            stale_docs.append({
-                "id": point.id,
-                "source_type": source_type,
-                "source_id": payload.get("source_id", ""),
-                "title": payload.get("title") or payload.get("doc_title", ""),
-                "last_updated": payload.get("last_updated") or payload.get("updated_at") or payload.get("created_at"),
-                "staleness_score": round(score, 1),
-                "expected_refresh_days": payload.get("expected_refresh_days")
-                or _get_freshness_days(source_type),
-            })
+            stale_docs.append(
+                {
+                    "id": point.id,
+                    "source_type": source_type,
+                    "source_id": payload.get("source_id", ""),
+                    "title": payload.get("title") or payload.get("doc_title", ""),
+                    "last_updated": payload.get("last_updated")
+                    or payload.get("updated_at")
+                    or payload.get("created_at"),
+                    "staleness_score": round(score, 1),
+                    "expected_refresh_days": payload.get("expected_refresh_days") or _get_freshness_days(source_type),
+                }
+            )
 
     stale_docs.sort(key=lambda d: d["staleness_score"], reverse=True)
     return stale_docs

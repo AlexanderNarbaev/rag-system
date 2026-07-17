@@ -742,6 +742,7 @@ from proxy.app.api import (  # noqa: E402
     widget_router,
 )
 from proxy.app.api.admin_feedback import router as admin_feedback_router  # noqa: E402
+from proxy.app.api.admin_kb import reindex_router  # noqa: E402
 from proxy.app.api.admin_kb import router as admin_kb_router  # noqa: E402
 
 app.include_router(metrics_router)
@@ -755,6 +756,7 @@ app.include_router(widget_router)
 app.include_router(admin_router)
 app.include_router(admin_feedback_router)
 app.include_router(admin_kb_router)
+app.include_router(reindex_router)
 
 # ---------------------------------------------------------------------------
 # Backward-compatible re-exports for tests (proxy.app.main.*)

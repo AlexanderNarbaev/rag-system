@@ -1,5 +1,6 @@
 # tests/etl/test_wal_remote.py
 """Tests for FR-08: Remote WAL storage (Redis and Proxy backends)."""
+
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -139,10 +140,12 @@ class TestProxyWALBackend:
         from etl.indexer.wal_manager import ProxyWALBackend
 
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({
-            "checkpoints": {"pipe_a": {"last_run": "2025-01-01"}, "pipe_b": {"count": 10}},
-            "count": 2,
-        }).encode()
+        mock_response.read.return_value = json.dumps(
+            {
+                "checkpoints": {"pipe_a": {"last_run": "2025-01-01"}, "pipe_b": {"count": 10}},
+                "count": 2,
+            }
+        ).encode()
         mock_response.__enter__.return_value = mock_response
         mock_urlopen.return_value = mock_response
 

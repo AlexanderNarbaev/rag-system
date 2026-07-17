@@ -99,8 +99,10 @@ class TestImageCaptionQuality:
     def test_no_clip_model(self, tmp_path):
         img = tmp_path / "test.png"
         img.write_text("fake")
-        with patch("etl.extractors.image_extractor.IMAGE_EXTRACTION_ENABLED", True), \
-             patch("etl.extractors.image_extractor._ensure_clip", return_value=(None, None)):
+        with (
+            patch("etl.extractors.image_extractor.IMAGE_EXTRACTION_ENABLED", True),
+            patch("etl.extractors.image_extractor._ensure_clip", return_value=(None, None)),
+        ):
             assert compute_image_caption_quality(str(img), "a cat") == 0.0
 
 
@@ -112,8 +114,10 @@ class TestExtractImagesFromPdfMocked:
         pdf = tmp_path / "empty.pdf"
         pdf.write_text("%PDF")
 
-        with patch("etl.extractors.image_extractor._extract_images_with_pdfplumber", return_value=[]), \
-             patch("etl.extractors.image_extractor._extract_images_with_pymupdf", return_value=[]):
+        with (
+            patch("etl.extractors.image_extractor._extract_images_with_pdfplumber", return_value=[]),
+            patch("etl.extractors.image_extractor._extract_images_with_pymupdf", return_value=[]),
+        ):
             assert extract_images_from_pdf(str(pdf)) == []
 
     def test_pdfplumber_extracts_images(self, tmp_path):

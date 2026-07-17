@@ -459,15 +459,17 @@ class DocExtractor(BaseExtractor):
         extracted = _process_pdf(pdf_path, output_dir=output_dir)
         results = []
         for img in extracted:
-            results.append({
-                "path": img.path,
-                "page_number": img.page_number,
-                "width": img.width,
-                "height": img.height,
-                "format": img.format,
-                "ocr_text": img.ocr_text,
-                "ocr_confidence": img.ocr_confidence,
-            })
+            results.append(
+                {
+                    "path": img.path,
+                    "page_number": img.page_number,
+                    "width": img.width,
+                    "height": img.height,
+                    "format": img.format,
+                    "ocr_text": img.ocr_text,
+                    "ocr_confidence": img.ocr_confidence,
+                }
+            )
         return results
 
     def extract_pdf_with_ocr(self, pdf_path: str | Path) -> str:
@@ -521,8 +523,7 @@ class DocExtractor(BaseExtractor):
 
         if ocr_results:
             ocr_dicts = [
-                {"text": r.get("ocr_text", ""), "confidence": r.get("ocr_confidence", 0.0)}
-                for r in ocr_results
+                {"text": r.get("ocr_text", ""), "confidence": r.get("ocr_confidence", 0.0)} for r in ocr_results
             ]
             report.ocr = compute_ocr_quality(ocr_dicts)
 

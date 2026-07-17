@@ -24,6 +24,7 @@ def _get_nli_classifier() -> Any:
     """Lazy-import the NLI classifier pipeline."""
     try:
         from transformers import pipeline
+
         return pipeline(
             "text-classification",
             model="MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
@@ -155,12 +156,14 @@ def find_contradictions(
     for point in results:
         payload = point.payload or {}
         sid = payload.get("source_id", "")
-        by_source_id[sid].append({
-            "id": point.id,
-            "text": payload.get("text", "")[:512],
-            "title": payload.get("title") or payload.get("doc_title", ""),
-            "source_type": payload.get("source_type", ""),
-        })
+        by_source_id[sid].append(
+            {
+                "id": point.id,
+                "text": payload.get("text", "")[:512],
+                "title": payload.get("title") or payload.get("doc_title", ""),
+                "source_type": payload.get("source_type", ""),
+            }
+        )
 
     contradictions: list[dict[str, Any]] = []
 
@@ -172,19 +175,21 @@ def find_contradictions(
             for j in range(i + 1, min(i + 10, len(chunks))):
                 result = check_contradiction(chunks[i]["text"], chunks[j]["text"])
                 if result["contradiction_score"] >= threshold:
-                    contradictions.append({
-                        "source_id": source_id,
-                        "chunk_a_id": chunks[i]["id"],
-                        "chunk_a_title": chunks[i]["title"],
-                        "chunk_b_id": chunks[j]["id"],
-                        "chunk_b_title": chunks[j]["title"],
-                        "source_type": chunks[i]["source_type"],
-                        "contradiction_score": round(result["contradiction_score"], 3),
-                        "entailment_score": round(result["entailment_score"], 3),
-                        "neutral_score": round(result["neutral_score"], 3),
-                        "text_preview_a": chunks[i]["text"][:150],
-                        "text_preview_b": chunks[j]["text"][:150],
-                    })
+                    contradictions.append(
+                        {
+                            "source_id": source_id,
+                            "chunk_a_id": chunks[i]["id"],
+                            "chunk_a_title": chunks[i]["title"],
+                            "chunk_b_id": chunks[j]["id"],
+                            "chunk_b_title": chunks[j]["title"],
+                            "source_type": chunks[i]["source_type"],
+                            "contradiction_score": round(result["contradiction_score"], 3),
+                            "entailment_score": round(result["entailment_score"], 3),
+                            "neutral_score": round(result["neutral_score"], 3),
+                            "text_preview_a": chunks[i]["text"][:150],
+                            "text_preview_b": chunks[j]["text"][:150],
+                        }
+                    )
 
     contradictions.sort(key=lambda c: c["contradiction_score"], reverse=True)
     return contradictions[:100]
@@ -264,11 +269,13 @@ def compute_knowledge_coverage(
 
     coverage_gaps: list[dict[str, Any]] = []
     if len(source_dist) == 1:
-        coverage_gaps.append({
-            "type": "single_source",
-            "message": "Only one source type present; consider adding more sources for comprehensive coverage",
-            "source": list(source_dist.keys())[0],
-        })
+        coverage_gaps.append(
+            {
+                "type": "single_source",
+                "message": "Only one source type present; consider adding more sources for comprehensive coverage",
+                "source": list(source_dist.keys())[0],
+            }
+        )
 
     if has_timestamps > 0 and latest_ts > 0 and oldest_ts < float("inf"):
         from datetime import datetime
@@ -276,11 +283,13 @@ def compute_knowledge_coverage(
         now = datetime.now(UTC).timestamp()
         age_days = (now - latest_ts) / 86400
         if age_days > 30:
-            coverage_gaps.append({
-                "type": "outdated",
-                "message": f"Latest document is {age_days:.0f} days old",
-                "age_days": round(age_days, 1),
-            })
+            coverage_gaps.append(
+                {
+                    "type": "outdated",
+                    "message": f"Latest document is {age_days:.0f} days old",
+                    "age_days": round(age_days, 1),
+                }
+            )
 
     return {
         "total_chunks": len(results),
@@ -308,9 +317,7 @@ def compute_integrity_score(
 
     contradiction_penalty = min(len(contradictions) * 2, 40)
     coverage_score = min(len(coverage.get("source_distribution", {})) * 10, 50)
-    freshness_bonus = 10 if not any(
-        g["type"] == "outdated" for g in coverage.get("coverage_gaps", [])
-    ) else 0
+    freshness_bonus = 10 if not any(g["type"] == "outdated" for g in coverage.get("coverage_gaps", [])) else 0
 
     overall_score = 100 - contradiction_penalty - (50 - coverage_score) + freshness_bonus
     overall_score = max(0, min(100, overall_score))

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -584,6 +584,23 @@ _etl_wal_store: dict[str, dict[str, Any]] = {}
 _etl_wal_lock = threading.RLock()
 
 
+async def verify_etl_secret(request: Request) -> None:
+    """Verify X-ETL-Secret header or fall back to RBAC admin check."""
+    from proxy.app.shared.config import ETL_SECRET
+
+    if ETL_SECRET:
+        header_value = (request.headers.get("X-ETL-Secret") or request.headers.get("x-etl-secret") or "")
+        if not header_value:
+            raise HTTPException(status_code=401, detail="Missing X-ETL-Secret header")
+        if header_value != ETL_SECRET:
+            raise HTTPException(status_code=403, detail="Invalid ETL secret")
+        return
+
+    # Fallback: require admin role
+    _check = require_role(Role.ADMIN)
+    await _check(request)
+
+
 class ETLWALCheckpoint(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict, description="Checkpoint data")
 
@@ -598,10 +615,11 @@ class ETLWALResponse(BaseModel):
 async def admin_etl_wal_set(
     checkpoint_name: str,
     checkpoint: ETLWALCheckpoint,
+    _auth: None = Depends(verify_etl_secret),  # noqa: B008
 ) -> JSONResponse:
     """Store an ETL WAL checkpoint (used by ETL scheduler with WAL_BACKEND=proxy).
 
-    No auth required — this is an internal endpoint called by the ETL process.
+    Auth via X-ETL-Secret header or RBAC admin role.
     """
     with _etl_wal_lock:
         _etl_wal_store[checkpoint_name] = {
@@ -618,6 +636,7 @@ async def admin_etl_wal_set(
 @router.get("/v1/admin/etl/wal/{checkpoint_name}")
 async def admin_etl_wal_get(
     checkpoint_name: str,
+    _auth: None = Depends(verify_etl_secret),  # noqa: B008
 ) -> ETLWALResponse:
     """Retrieve an ETL WAL checkpoint by name."""
     with _etl_wal_lock:
@@ -632,7 +651,9 @@ async def admin_etl_wal_get(
 
 
 @router.get("/v1/admin/etl/wal")
-async def admin_etl_wal_list() -> JSONResponse:
+async def admin_etl_wal_list(
+    _auth: None = Depends(verify_etl_secret),  # noqa: B008
+) -> JSONResponse:
     """List all ETL WAL checkpoints."""
     with _etl_wal_lock:
         result = {

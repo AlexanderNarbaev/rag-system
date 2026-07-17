@@ -235,8 +235,10 @@ class TestEmbedImage:
     def test_no_clip_model_returns_empty(self, tmp_path):
         img = tmp_path / "test.png"
         img.write_text("fake")
-        with patch("etl.extractors.image_extractor.IMAGE_EXTRACTION_ENABLED", True), \
-             patch("etl.extractors.image_extractor._ensure_clip", return_value=(None, None)):
+        with (
+            patch("etl.extractors.image_extractor.IMAGE_EXTRACTION_ENABLED", True),
+            patch("etl.extractors.image_extractor._ensure_clip", return_value=(None, None)),
+        ):
             assert embed_image(str(img)) == []
 
 

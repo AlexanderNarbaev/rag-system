@@ -385,6 +385,9 @@ INTEGRITY_CHUNK_SAMPLE_LIMIT = int(os.getenv("INTEGRITY_CHUNK_SAMPLE_LIMIT", "20
 GRACEFUL_SHUTDOWN_ENABLED = os.getenv("GRACEFUL_SHUTDOWN_ENABLED", "true").lower() == "true"
 SHUTDOWN_TIMEOUT = int(os.getenv("SHUTDOWN_TIMEOUT", "30"))
 
+# ============ ETL IPC Secret ============
+ETL_SECRET = os.getenv("ETL_SECRET", "")
+
 
 # ============ Вспомогательная функция для отладки ============
 def print_config() -> None:

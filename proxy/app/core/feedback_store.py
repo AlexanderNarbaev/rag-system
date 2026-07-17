@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +44,13 @@ class FeedbackEntry:
     @property
     def contexts(self) -> list[str]:
         if self.contexts_json:
-            return json.loads(self.contexts_json)
+            return cast(list[str], json.loads(self.contexts_json))
         return []
 
     @property
     def chunk_feedback(self) -> list[dict[str, Any]]:
         if self.chunk_feedback_json:
-            return json.loads(self.chunk_feedback_json)
+            return cast(list[dict[str, Any]], json.loads(self.chunk_feedback_json))
         return []
 
     def to_dict(self) -> dict[str, Any]:
@@ -121,16 +121,32 @@ class FeedbackStore:
 
     def _row_to_entry(self, row: tuple[Any, ...]) -> FeedbackEntry:
         columns = [
-            "id", "feedback_id", "user_id", "username", "role", "rating",
-            "feedback_type", "comment", "correction", "question", "answer",
-            "contexts_json", "kb_id", "confidence", "chunk_feedback_json",
-            "retrieval_quality", "status", "admin_notes", "created_at", "updated_at",
+            "id",
+            "feedback_id",
+            "user_id",
+            "username",
+            "role",
+            "rating",
+            "feedback_type",
+            "comment",
+            "correction",
+            "question",
+            "answer",
+            "contexts_json",
+            "kb_id",
+            "confidence",
+            "chunk_feedback_json",
+            "retrieval_quality",
+            "status",
+            "admin_notes",
+            "created_at",
+            "updated_at",
         ]
         return FeedbackEntry(**dict(zip(columns, row, strict=False)))
 
     def insert(self, entry: FeedbackEntry) -> None:
         now = datetime.now(UTC).isoformat()
-        entry.id = entry.id or entry.feedback_id + "_" + now.replace(":", "").replace("-", "").replace("T", "_")
+        entry.id = entry.id or entry.feedback_id
         entry.created_at = now
         entry.updated_at = now
 
@@ -188,7 +204,7 @@ class FeedbackStore:
                 return self._row_to_entry(row)
         return None
 
-    def list(self, **filters: Any) -> list[FeedbackEntry]:
+    def list_entries(self, **filters: Any) -> tuple[list[FeedbackEntry], int]:
         conditions: list[str] = []
         params: list[Any] = []
 
@@ -204,20 +220,26 @@ class FeedbackStore:
         if "date_to" in filters and filters["date_to"]:
             conditions.append("created_at <= ?")
             params.append(filters["date_to"])
-        if "min_confidence" in filters and filters["min_confidence"] is not None:
+        if "max_confidence" in filters and filters["max_confidence"] is not None:
             conditions.append("confidence <= ?")
-            params.append(float(filters["min_confidence"]))
+            params.append(float(filters["max_confidence"]))
 
         where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
         limit = int(filters.get("limit", 50))
         offset = int(filters.get("offset", 0))
 
         with self._lock, sqlite3.connect(str(self._db_path)) as conn:
+            count_cursor = conn.execute(
+                f"SELECT COUNT(*) FROM feedback{where}",
+                params,
+            )
+            total = count_cursor.fetchone()[0]
+
             cursor = conn.execute(
                 f"SELECT * FROM feedback{where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
                 params + [limit, offset],
             )
-            return [self._row_to_entry(row) for row in cursor.fetchall()]
+            return [self._row_to_entry(row) for row in cursor.fetchall()], total
 
     def stats(self, date_from: str | None = None, date_to: str | None = None) -> dict[str, Any]:
         conditions: list[str] = []
@@ -298,14 +320,16 @@ class FeedbackStore:
             if len(scores) < min_count:
                 continue
             avg_score = sum(scores) / len(scores)
-            results.append({
-                "chunk_id": cid,
-                "average_relevance": round(avg_score, 2),
-                "ratings_count": len(scores),
-                "low_ratings": sum(1 for s in scores if s <= 2),
-            })
+            results.append(
+                {
+                    "chunk_id": cid,
+                    "average_relevance": round(avg_score, 2),
+                    "ratings_count": len(scores),
+                    "low_ratings": sum(1 for s in scores if s <= 2),
+                }
+            )
 
-        results.sort(key=lambda x: x["average_relevance"])
+        results.sort(key=lambda x: cast(float, x["average_relevance"]))
         return results
 
     def get_negative_training_pairs(self) -> list[dict[str, Any]]:
@@ -322,11 +346,13 @@ class FeedbackStore:
             chunk_feedback: list[dict[str, Any]] = json.loads(cf_json)
             for entry in chunk_feedback:
                 if entry.get("relevance_score", 5) <= 2:
-                    pairs.append({
-                        "query": question.strip(),
-                        "chunk_id": entry.get("chunk_id", ""),
-                        "relevance_score": entry.get("relevance_score", 0),
-                    })
+                    pairs.append(
+                        {
+                            "query": question.strip(),
+                            "chunk_id": entry.get("chunk_id", ""),
+                            "relevance_score": entry.get("relevance_score", 0),
+                        }
+                    )
 
         return pairs
 

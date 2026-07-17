@@ -69,9 +69,18 @@ def client(mock_kb_manager):
     from fastapi import FastAPI
 
     from proxy.app.api.admin_kb import router
+    from proxy.app.auth.jwt import UserContext, get_auth_context
 
     app = FastAPI()
     app.include_router(router)
+
+    admin_user = UserContext(
+        user_id="test-admin",
+        username="test-admin",
+        roles=["admin"],
+        groups=["admins"],
+    )
+    app.dependency_overrides[get_auth_context] = lambda: admin_user
 
     # Patch kb_manager in main module
     with (

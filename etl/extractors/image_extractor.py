@@ -42,6 +42,7 @@ _easyocr_reader = None
 def _ensure_pytesseract():
     try:
         import pytesseract as pt
+
         return pt
     except ImportError:
         return None
@@ -62,6 +63,7 @@ def _ensure_easyocr(langs: list[str] | None = None):
         return _easyocr_reader
     try:
         import easyocr
+
         _easyocr_reader = easyocr.Reader(langs or ["ru", "en"], gpu=False)
         return _easyocr_reader
     except ImportError:
@@ -77,7 +79,7 @@ def _ensure_clip():
         from transformers import CLIPModel, CLIPProcessor
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device)
+        model = CLIPModel.from_pretrained(CLIP_MODEL_NAME).to(device)  # type: ignore[arg-type]
         processor = CLIPProcessor.from_pretrained(CLIP_MODEL_NAME)
         _clip_model = model
         _clip_processor = processor
@@ -100,7 +102,7 @@ def _ensure_blip():
         from transformers import BlipForConditionalGeneration, BlipProcessor
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        model = BlipForConditionalGeneration.from_pretrained(BLIP_MODEL_NAME).to(device)
+        model = BlipForConditionalGeneration.from_pretrained(BLIP_MODEL_NAME).to(device)  # type: ignore[arg-type]
         processor = BlipProcessor.from_pretrained(BLIP_MODEL_NAME)
         _blip_model = model
         _blip_processor = processor
@@ -169,11 +171,11 @@ def extract_images_from_html(html: str) -> list[ImageInfo]:
     try:
         from bs4 import BeautifulSoup  # noqa: N814
     except ImportError:
-        BeautifulSoup = None  # type: ignore[assignment]  # noqa: N806
+        BeautifulSoup: Any = None  # type: ignore[no-redef]  # noqa: N806
 
     if BeautifulSoup is not None:
         try:
-            soup = BeautifulSoup(html, "html.parser") # type: ignore[operator]
+            soup = BeautifulSoup(html, "html.parser")
             for img in soup.find_all("img"):
                 src = str(img.get("src", "") or "")
                 if not src or src.startswith("data:"):
@@ -239,7 +241,7 @@ def _ocr_with_tesseract(image_path: str, languages: str = "rus+eng") -> OCRResul
     avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
 
     blocks = []
-    current_block = {"text": "", "conf": 0.0, "lines": []}
+    current_block: dict[str, Any] = {"text": "", "conf": 0.0, "lines": []}
     for i in range(len(data.get("text", []))):
         word = data["text"][i].strip()
         conf_val = int(data["conf"][i]) if data["conf"][i] != "-1" else 0
@@ -273,7 +275,7 @@ def _ocr_with_easyocr(image_path: str, languages: list[str] | None = None) -> OC
     avg_conf = (sum(confidences) / len(confidences) * 100) if confidences else 0.0
 
     blocks = []
-    current_block = {"text": "", "conf": 0.0, "bbox": None, "lines": []}
+    current_block: dict[str, Any] = {"text": "", "conf": 0.0, "bbox": None, "lines": []}
     for bbox, text, conf in results:
         current_block["lines"].append(
             {"word": text.strip(), "conf": round(conf * 100, 2), "bbox": bbox},
@@ -595,7 +597,12 @@ def _extract_images_with_pdfplumber(
                 page_images = pdf_page.images or []
                 for img_idx, img_data in enumerate(page_images):
                     image_path = _save_pdfplumber_image(
-                        img_data, pdf_doc, page_num, img_idx, output_dir, pdf_path,
+                        img_data,
+                        pdf_doc,
+                        page_num,
+                        img_idx,
+                        output_dir,
+                        pdf_path,
                     )
                     if image_path:
                         results.append(

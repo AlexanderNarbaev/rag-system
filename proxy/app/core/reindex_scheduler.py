@@ -117,9 +117,7 @@ async def force_reindex_stale(kb_id: str, kb_manager: Any, qdrant_client: Any) -
             if success:
                 result["tasks_created"] += 1
             else:
-                result["errors"].append(
-                    f"Failed: {doc['source_type']}/{doc['source_id']}"
-                )
+                result["errors"].append(f"Failed: {doc['source_type']}/{doc['source_id']}")
 
     tasks = [_trigger_with_limit(d) for d in stale_docs]
     if tasks:

@@ -77,7 +77,7 @@ def _generate_with_slm(
             sources_preview = f"Found documents: {', '.join(titles)}."
 
     prompt = (
-        f"The user asked: \"{query}\"\n"
+        f'The user asked: "{query}"\n'
         f"Knowledge base status: {status}\n"
         f"{sources_preview}\n"
         "Generate 1-2 short clarifying questions (in the same language as the query) "
@@ -172,7 +172,7 @@ def build_uncertainty_response(
 
     parts = []
 
-    parts.append(f"I wasn't able to find fully reliable information about: \"{query}\"")
+    parts.append(f'I wasn\'t able to find fully reliable information about: "{query}"')
 
     if sources:
         found_titles = []
@@ -194,8 +194,8 @@ def build_uncertainty_response(
     suggestions.append("Consider breaking your question into smaller, more focused parts.")
 
     parts.append("\nSuggestions to refine your query:")
-    for i, s in enumerate(suggestions, 1):
-        parts.append(f"{i}. {s}")
+    for i, suggestion in enumerate(suggestions, 1):
+        parts.append(f"{i}. {suggestion}")
 
     if clarification and clarification.questions:
         parts.append("\nClarifying questions:")

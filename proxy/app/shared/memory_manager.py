@@ -66,8 +66,14 @@ class WorkingMemoryStore:
 class EntityTracker:
     """Tracks entities mentioned across conversation turns."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_entities: int = 500) -> None:
         self._entities: dict[str, int] = {}  # entity name -> mention count
+        self._max_entities = max_entities
+
+    def _prune(self) -> None:
+        while len(self._entities) > self._max_entities:
+            oldest = min(self._entities.keys(), key=lambda k: self._entities[k])
+            del self._entities[oldest]
 
     def track(self, text: str) -> None:
         """Track capitalized words and technical terms from text."""
@@ -76,6 +82,8 @@ class EntityTracker:
             clean = word.strip(".,;:!?()[]{}'\"")
             if len(clean) > 2 and (clean[0].isupper() or "_" in clean or "-" in clean):
                 self._entities[clean] = self._entities.get(clean, 0) + 1
+        if len(self._entities) > self._max_entities:
+            self._prune()
 
     def get_top_entities(self, top_n: int = 10) -> list[str]:
         """Return most frequently mentioned entities."""

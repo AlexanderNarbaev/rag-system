@@ -830,7 +830,17 @@ do_openwebui_setup() {
         return 1
     fi
 
-    # Configure
+    # Check if init script exists
+    local init_script="$PROJECT_ROOT/scripts/init-openwebui.sh"
+    if [ ! -f "$init_script" ]; then
+        error "Файл $init_script не найден"
+        return 1
+    fi
+
+    # Make init script executable
+    chmod +x "$init_script"
+
+    # Configure API key in .env for init script
     local api_key
     api_key=$(ask 'OpenWebUI API Key (для подключения к прокси)' "sk-rag-proxy")
     set_env "OPENWEBUI_API_KEY" "$api_key"
@@ -843,13 +853,10 @@ do_openwebui_setup() {
         fi
     fi
 
-    # Start
+    # Start via init script (generates secrets, validates, deploys)
     if confirm "Запустить OpenWebUI?" "y"; then
-        local compose_cmd
-        compose_cmd=$(get_compose_cmd)
-
-        info "Запускаю OpenWebUI..."
-        $compose_cmd -f "$OPENWEBUI_COMPOSE" up -d
+        info "Запускаю OpenWebUI через init-openwebui.sh..."
+        bash "$init_script" --auto
 
         echo ""
         log "OpenWebUI запущен"

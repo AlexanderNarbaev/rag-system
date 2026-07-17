@@ -97,9 +97,9 @@ class RedisWALBackend(BaseWALBackend):
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.key_prefix = key_prefix
-        self._redis = None
+        self._redis: Any = None
 
-    def _get_redis(self):
+    def _get_redis(self) -> Any:
         if self._redis is None:
             import redis as redis_lib
 
@@ -118,7 +118,7 @@ class RedisWALBackend(BaseWALBackend):
             result: dict[str, Any] = {}
             for key in keys:
                 key_str: str = key if isinstance(key, str) else key.decode("utf-8")
-                checkpoint_name = key_str[len(self.key_prefix) + 1:]
+                checkpoint_name = key_str[len(self.key_prefix) + 1 :]
                 try:
                     result[checkpoint_name] = json.loads(r.get(key_str) or "{}")
                 except (json.JSONDecodeError, TypeError):
@@ -187,7 +187,6 @@ class ProxyWALBackend(BaseWALBackend):
             except Exception as e:
                 logger.error(f"Proxy WAL write failed for {checkpoint_name}: {e}")
                 raise
-
 
 
 class WALManager:

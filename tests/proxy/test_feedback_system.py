@@ -13,11 +13,13 @@ class TestFeedbackSubmissionRoleRestriction:
 
     @pytest.fixture(autouse=True)
     def _patch_deps(self):
-        with patch("proxy.app.core.hitl.get_logger", return_value=MagicMock()), \
-             patch("proxy.app.core.feedback_store.get_feedback_store", return_value=MagicMock()), \
-             patch("proxy.app.shared.metrics.record_enrichment"), \
-             patch("proxy.app.shared.metrics.record_feedback"), \
-             patch("proxy.app.core.ragas_eval.evaluate_rag_response", return_value={}):
+        with (
+            patch("proxy.app.core.hitl.get_logger", return_value=MagicMock()),
+            patch("proxy.app.core.feedback_store.get_feedback_store", return_value=MagicMock()),
+            patch("proxy.app.shared.metrics.record_enrichment"),
+            patch("proxy.app.shared.metrics.record_feedback"),
+            patch("proxy.app.core.ragas_eval.evaluate_rag_response", return_value={}),
+        ):
             yield
 
     @pytest.fixture
@@ -119,6 +121,7 @@ class TestAdminFeedbackEndpoints:
     def _patch_store(self):
         with patch("proxy.app.core.feedback_store.get_feedback_store") as mock:
             store = MagicMock()
+            store.list_entries.return_value = ([], 0)
             mock.return_value = store
             yield store
 
@@ -130,16 +133,18 @@ class TestAdminFeedbackEndpoints:
 
         from proxy.app.api.admin_feedback import list_feedback
 
-        result = asyncio.run(list_feedback(
-            status="pending",
-            kb_id="kb-1",
-            date_from="2026-01-01",
-            date_to="2026-07-01",
-            min_confidence=0.3,
-            limit=50,
-            offset=0,
-            user=self._admin_user(),
-        ))
+        result = asyncio.run(
+            list_feedback(
+                status="pending",
+                kb_id="kb-1",
+                date_from="2026-01-01",
+                date_to="2026-07-01",
+                max_confidence=0.3,
+                limit=50,
+                offset=0,
+                user=self._admin_user(),
+            )
+        )
 
         assert result.total == 0
         assert result.entries == []
@@ -163,6 +168,7 @@ class TestAdminFeedbackEndpoints:
         store.get.return_value = entry
 
         from proxy.app.api.admin_feedback import FeedbackUpdateRequest, update_feedback
+
         body = FeedbackUpdateRequest(status="reviewed", admin_notes="Looks good")
 
         result = await update_feedback("fb_1", body, admin_user)
@@ -312,6 +318,7 @@ class TestFeedbackStore:
     @pytest.fixture
     def store(self, tmp_path):
         from proxy.app.core.feedback_store import FeedbackStore
+
         db_path = tmp_path / "test_feedback.db"
         return FeedbackStore(db_path=db_path)
 
@@ -354,15 +361,18 @@ class TestFeedbackStore:
         store.insert(e2)
         store.insert(e3)
 
-        pending = store.list(status="pending")
-        assert len(pending) == 2
+        entries, total = store.list_entries(status="pending")
+        assert len(entries) == 2
+        assert total == 2
 
-        kb1 = store.list(kb_id="kb1")
-        assert len(kb1) == 2
+        entries, total = store.list_entries(kb_id="kb1")
+        assert len(entries) == 2
+        assert total == 2
 
-        low_conf = store.list(min_confidence=0.5)
-        assert len(low_conf) == 1
-        assert low_conf[0].feedback_id in ("fb_b",)
+        entries, total = store.list_entries(max_confidence=0.5)
+        assert len(entries) == 1
+        assert total == 1
+        assert entries[0].feedback_id in ("fb_b",)
 
     def test_update_status(self, store):
         from proxy.app.core.feedback_store import FeedbackEntry
@@ -378,12 +388,29 @@ class TestFeedbackStore:
     def test_stats(self, store):
         from proxy.app.core.feedback_store import FeedbackEntry
 
-        store.insert(FeedbackEntry(feedback_id="fb_s1", rating="positive", confidence=0.9, retrieval_quality=4,
-                                   question="Q1", correction="Fixed A1"))
-        store.insert(FeedbackEntry(feedback_id="fb_s2", rating="negative", confidence=0.5, retrieval_quality=2,
-                                   question="Q1", correction="Fixed A1b"))
-        store.insert(FeedbackEntry(feedback_id="fb_s3", rating="positive", confidence=0.8, retrieval_quality=5,
-                                   question="Q2"))
+        store.insert(
+            FeedbackEntry(
+                feedback_id="fb_s1",
+                rating="positive",
+                confidence=0.9,
+                retrieval_quality=4,
+                question="Q1",
+                correction="Fixed A1",
+            )
+        )
+        store.insert(
+            FeedbackEntry(
+                feedback_id="fb_s2",
+                rating="negative",
+                confidence=0.5,
+                retrieval_quality=2,
+                question="Q1",
+                correction="Fixed A1b",
+            )
+        )
+        store.insert(
+            FeedbackEntry(feedback_id="fb_s3", rating="positive", confidence=0.8, retrieval_quality=5, question="Q2")
+        )
         store.insert(FeedbackEntry(feedback_id="fb_s4", rating="negative", confidence=0.2, retrieval_quality=1))
 
         stats = store.stats()
@@ -399,22 +426,30 @@ class TestFeedbackStore:
     def test_chunk_stats(self, store):
         from proxy.app.core.feedback_store import FeedbackEntry
 
-        store.insert(FeedbackEntry(
-            feedback_id="fb_cs1",
-            rating="negative",
-            chunk_feedback_json=json.dumps([
-                {"chunk_id": "c1", "relevance_score": 1},
-                {"chunk_id": "c2", "relevance_score": 5},
-            ]),
-        ))
-        store.insert(FeedbackEntry(
-            feedback_id="fb_cs2",
-            rating="negative",
-            chunk_feedback_json=json.dumps([
-                {"chunk_id": "c1", "relevance_score": 2},
-                {"chunk_id": "c3", "relevance_score": 3},
-            ]),
-        ))
+        store.insert(
+            FeedbackEntry(
+                feedback_id="fb_cs1",
+                rating="negative",
+                chunk_feedback_json=json.dumps(
+                    [
+                        {"chunk_id": "c1", "relevance_score": 1},
+                        {"chunk_id": "c2", "relevance_score": 5},
+                    ]
+                ),
+            )
+        )
+        store.insert(
+            FeedbackEntry(
+                feedback_id="fb_cs2",
+                rating="negative",
+                chunk_feedback_json=json.dumps(
+                    [
+                        {"chunk_id": "c1", "relevance_score": 2},
+                        {"chunk_id": "c3", "relevance_score": 3},
+                    ]
+                ),
+            )
+        )
 
         results = store.chunk_stats()
         c1 = next(r for r in results if r["chunk_id"] == "c1")
@@ -424,21 +459,29 @@ class TestFeedbackStore:
     def test_negative_training_pairs(self, store):
         from proxy.app.core.feedback_store import FeedbackEntry
 
-        store.insert(FeedbackEntry(
-            feedback_id="fb_np1",
-            question="How to set up CI/CD?",
-            chunk_feedback_json=json.dumps([
-                {"chunk_id": "bad_chunk", "relevance_score": 1},
-                {"chunk_id": "good_chunk", "relevance_score": 5},
-            ]),
-        ))
-        store.insert(FeedbackEntry(
-            feedback_id="fb_np2",
-            question="What is RAG?",
-            chunk_feedback_json=json.dumps([
-                {"chunk_id": "mediocre_chunk", "relevance_score": 2},
-            ]),
-        ))
+        store.insert(
+            FeedbackEntry(
+                feedback_id="fb_np1",
+                question="How to set up CI/CD?",
+                chunk_feedback_json=json.dumps(
+                    [
+                        {"chunk_id": "bad_chunk", "relevance_score": 1},
+                        {"chunk_id": "good_chunk", "relevance_score": 5},
+                    ]
+                ),
+            )
+        )
+        store.insert(
+            FeedbackEntry(
+                feedback_id="fb_np2",
+                question="What is RAG?",
+                chunk_feedback_json=json.dumps(
+                    [
+                        {"chunk_id": "mediocre_chunk", "relevance_score": 2},
+                    ]
+                ),
+            )
+        )
 
         pairs = store.get_negative_training_pairs()
         assert len(pairs) == 2

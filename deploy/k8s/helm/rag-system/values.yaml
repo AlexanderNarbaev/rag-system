@@ -321,6 +321,34 @@ proxy:
     gracefulShutdownEnabled: "true"
     # -- Shutdown timeout (seconds)
     shutdownTimeout: "30"
+    # -- Enable clarification questions
+    clarificationEnabled: "true"
+    # -- Max conversation turns before summarization
+    conversationMaxTurns: "10"
+    # -- Token threshold for conversation summarization
+    conversationSummaryThresholdTokens: "2000"
+    # -- Enable stale document detection
+    staleDetectionEnabled: "true"
+    # -- Confluence staleness threshold (days)
+    staleConfluenceDays: "90"
+    # -- Jira staleness threshold (days)
+    staleJiraDays: "30"
+    # -- GitLab staleness threshold (days)
+    staleGitlabDays: "14"
+    # -- Enable reindex scheduler
+    reindexEnabled: "true"
+    # -- Reindex check interval (seconds)
+    reindexCheckInterval: "3600"
+    # -- Reindex staleness threshold (0-100)
+    reindexStalenessThreshold: "80"
+    # -- Max concurrent reindex tasks
+    reindexMaxConcurrentTasks: "5"
+    # -- Enable knowledge integrity validation
+    integrityCheckEnabled: "true"
+    # -- NLI contradiction threshold for integrity check
+    integrityNliContradictionThreshold: "0.7"
+    # -- Chunk sample limit for integrity check
+    integrityChunkSampleLimit: "200"
 
 # =============================================================================
 # Qdrant — Vector database (StatefulSet)

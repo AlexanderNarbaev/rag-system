@@ -248,21 +248,27 @@ def save_quality_report(reports: list[ExtractionQualityReport], output_path: str
     aggregate = {
         "generated_at": "",
         "total_documents": len(reports),
-        "average_overall_score": (
-            round(sum(r.overall_score() for r in reports) / len(reports), 2)
-            if reports else 0.0
-        ),
+        "average_overall_score": (round(sum(r.overall_score() for r in reports) / len(reports), 2) if reports else 0.0),
         "average_ocr_confidence": (
-            round(sum(r.ocr.avg_confidence for r in reports if r.ocr.page_count > 0)
-                  / max(sum(1 for r in reports if r.ocr.page_count > 0), 1), 2)
+            round(
+                sum(r.ocr.avg_confidence for r in reports if r.ocr.page_count > 0)
+                / max(sum(1 for r in reports if r.ocr.page_count > 0), 1),
+                2,
+            )
         ),
         "average_table_accuracy": (
-            round(sum(r.tables.estimated_accuracy for r in reports if r.tables.total_tables > 0)
-                  / max(sum(1 for r in reports if r.tables.total_tables > 0), 1), 2)
+            round(
+                sum(r.tables.estimated_accuracy for r in reports if r.tables.total_tables > 0)
+                / max(sum(1 for r in reports if r.tables.total_tables > 0), 1),
+                2,
+            )
         ),
         "average_caption_quality": (
-            round(sum(r.images.avg_clip_similarity for r in reports if r.images.total_images > 0)
-                  / max(sum(1 for r in reports if r.images.total_images > 0), 1), 4)
+            round(
+                sum(r.images.avg_clip_similarity for r in reports if r.images.total_images > 0)
+                / max(sum(1 for r in reports if r.images.total_images > 0), 1),
+                4,
+            )
         ),
         "documents": summaries,
     }

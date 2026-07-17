@@ -116,6 +116,24 @@ data:
   # ── Graceful Shutdown ───────────────────────────────────
   GRACEFUL_SHUTDOWN_ENABLED: {{ .Values.proxy.env.gracefulShutdownEnabled | quote }}
   SHUTDOWN_TIMEOUT: {{ .Values.proxy.env.shutdownTimeout | quote }}
+  # ── Conversation Memory ─────────────────────────────────
+  CLARIFICATION_ENABLED: {{ .Values.proxy.env.clarificationEnabled | quote }}
+  CONVERSATION_MAX_TURNS: {{ .Values.proxy.env.conversationMaxTurns | quote }}
+  CONVERSATION_SUMMARY_THRESHOLD_TOKENS: {{ .Values.proxy.env.conversationSummaryThresholdTokens | quote }}
+  # ── Stale Document Detection ────────────────────────────
+  STALE_DETECTION_ENABLED: {{ .Values.proxy.env.staleDetectionEnabled | quote }}
+  STALE_CONFLUENCE_DAYS: {{ .Values.proxy.env.staleConfluenceDays | quote }}
+  STALE_JIRA_DAYS: {{ .Values.proxy.env.staleJiraDays | quote }}
+  STALE_GITLAB_DAYS: {{ .Values.proxy.env.staleGitlabDays | quote }}
+  # ── Reindex Scheduler ───────────────────────────────────
+  REINDEX_ENABLED: {{ .Values.proxy.env.reindexEnabled | quote }}
+  REINDEX_CHECK_INTERVAL: {{ .Values.proxy.env.reindexCheckInterval | quote }}
+  REINDEX_STALENESS_THRESHOLD: {{ .Values.proxy.env.reindexStalenessThreshold | quote }}
+  REINDEX_MAX_CONCURRENT_TASKS: {{ .Values.proxy.env.reindexMaxConcurrentTasks | quote }}
+  # ── Knowledge Integrity ─────────────────────────────────
+  INTEGRITY_CHECK_ENABLED: {{ .Values.proxy.env.integrityCheckEnabled | quote }}
+  INTEGRITY_NLI_CONTRADICTION_THRESHOLD: {{ .Values.proxy.env.integrityNliContradictionThreshold | quote }}
+  INTEGRITY_CHUNK_SAMPLE_LIMIT: {{ .Values.proxy.env.integrityChunkSampleLimit | quote }}
   # ── Server ──────────────────────────────────────────────
   HOST: {{ .Values.proxy.env.host | quote }}
   PORT: {{ .Values.proxy.env.port | quote }}

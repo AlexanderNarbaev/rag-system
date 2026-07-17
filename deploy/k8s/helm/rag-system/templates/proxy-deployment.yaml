@@ -52,6 +52,8 @@ spec:
             - "{{ .Values.proxy.env.port }}"
             - --workers
             - "{{ .Values.proxy.env.workers }}"
+            - --threads
+            - "{{ .Values.proxy.env.threads | default "4" }}"
             - proxy.app.main:app
           ports:
             - name: http

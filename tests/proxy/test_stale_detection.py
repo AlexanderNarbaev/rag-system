@@ -172,9 +172,7 @@ class TestDetectStaleDocuments:
         mock_qdrant.scroll.return_value = ([mock_point], None)
         mock_kb = MagicMock()
 
-        result = detect_stale_documents(
-            "kb1", mock_kb, mock_qdrant, "test_collection", threshold=100.0
-        )
+        result = detect_stale_documents("kb1", mock_kb, mock_qdrant, "test_collection", threshold=100.0)
         assert len(result) == 1
         assert result[0]["id"] == "doc-1"
         assert result[0]["source_type"] == "confluence"
@@ -199,9 +197,7 @@ class TestDetectStaleDocuments:
         mock_qdrant.scroll.return_value = ([mock_point], None)
         mock_kb = MagicMock()
 
-        result = detect_stale_documents(
-            "kb1", mock_kb, mock_qdrant, "test_collection", threshold=70.0
-        )
+        result = detect_stale_documents("kb1", mock_kb, mock_qdrant, "test_collection", threshold=70.0)
         assert len(result) == 0
 
 

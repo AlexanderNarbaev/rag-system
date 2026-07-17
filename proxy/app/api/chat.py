@@ -255,7 +255,7 @@ async def chat_completions(
     # LangGraph orchestrator path
     if _main.USE_LANGGRAPH and _main.orchestrator:  # type: ignore[attr-defined]
         try:
-            final_response = await _main.orchestrator.ainvoke(
+            orchestrator_response = await _main.orchestrator.ainvoke(
                 {
                     "query": user_query,
                     "version": version,
@@ -282,13 +282,13 @@ async def chat_completions(
                 },
             ) from orch_err
         if request.stream:
-            return StreamingResponse(final_response, media_type="text/event-stream")
-        response_text = final_response["answer"]
-        context = final_response.get("context", "")
+            return StreamingResponse(orchestrator_response, media_type="text/event-stream")
+        response_text = orchestrator_response["answer"]
+        context = orchestrator_response.get("context", "")
         orchestrator_sources: list[dict[str, Any]] = []
         from proxy.app.core.context import compute_chunk_hash
 
-        for chunk, score in final_response.get("reranked_chunks", []):
+        for chunk, score in orchestrator_response.get("reranked_chunks", []):
             orchestrator_sources.append(
                 {
                     "chunk_id": compute_chunk_hash(chunk),
@@ -408,7 +408,7 @@ async def chat_completions(
                         context=rag_context if isinstance(rag_context, str) else "",
                     )
 
-                session_id = (user.user_id if user.is_authenticated else client_ip)
+                session_id = user.user_id if user.is_authenticated else client_ip
                 conversation = get_conversation(session_id)
                 if conversation.needs_summarization():
                     from proxy.app.shared.config import CONVERSATION_MAX_TURNS
@@ -594,7 +594,7 @@ async def chat_completions(
             final_response = uncertainty_message
 
     # Store conversation turn
-    session_id = (user.user_id if user.is_authenticated else client_ip)
+    session_id = user.user_id if user.is_authenticated else client_ip
     conversation = get_conversation(session_id)
     if conversation.needs_summarization():
         from proxy.app.shared.config import CONVERSATION_MAX_TURNS
