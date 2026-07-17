@@ -153,7 +153,12 @@ def _ensure_qdrant_collection() -> None:
         qdrant_client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config={
-                "dense": qmodels.VectorParams(size=1024, distance=qmodels.Distance.COSINE),
+                "dense": qmodels.VectorParams(size=1024, distance=qmodels.Distance.DOT),
+            },
+            sparse_vectors_config={
+                "sparse": qmodels.SparseVectorParams(
+                    index=qmodels.SparseIndexParams(on_disk=False),
+                ),
             },
             optimizers_config=qmodels.OptimizersConfigDiff(indexing_threshold=20000),
         )
