@@ -75,6 +75,10 @@ class ChatCompletionResponse(BaseModel):
     rag_confidence: float | None = None
     rag_sources: list[dict[str, Any]] | None = None
     ragas_scores: dict[str, float] | None = None
+    rag_knowledge_status: str | None = None
+    rag_source_count: int | None = None
+    rag_clarification_needed: bool | None = None
+    rag_clarifying_questions: list[str] | None = None
 
 
 class ModelInfo(BaseModel):
@@ -209,6 +213,14 @@ async def chat_completions(
             user_context=user,
             top_k_override=request.rag_top_k,
         )
+        from proxy.app.core.confidence import should_generate_answer
+        from proxy.app.core.knowledge_status import determine_knowledge_status
+
+        chunks_for_status = sources or []
+        chunks_with_score = [{"score": s.get("relevance", 0)} for s in chunks_for_status]
+        should_gen, _ = should_generate_answer(chunks_with_score)
+        knowledge_status = determine_knowledge_status(chunks_for_status, should_generate=should_gen)
+
         skip_response = ChatCompletionResponse(
             id=request_id,
             created=int(time.time()),
@@ -221,6 +233,8 @@ async def chat_completions(
                 ),
             ],
             rag_sources=sources,
+            rag_knowledge_status=knowledge_status.status,
+            rag_source_count=knowledge_status.source_count,
         )
         duration_ms = (time.time() - start_time) * 1000
         _main.request_tracker.complete(request_id, status="success", tokens=0)
@@ -287,9 +301,11 @@ async def chat_completions(
             )
         from proxy.app.core.confidence import compute_confidence
         from proxy.app.core.hitl import generate_feedback_id
+        from proxy.app.core.knowledge_status import determine_knowledge_status
 
         feedback_id = generate_feedback_id()
         confidence = compute_confidence(query=user_query, context=context, answer=response_text)
+        knowledge_status = determine_knowledge_status(orchestrator_sources, should_generate=True)
         completion = ChatCompletionResponse(
             id=request_id,
             created=int(time.time()),
@@ -304,6 +320,8 @@ async def chat_completions(
             rag_feedback_id=feedback_id,
             rag_confidence=confidence.score,
             rag_sources=orchestrator_sources,
+            rag_knowledge_status=knowledge_status.status,
+            rag_source_count=knowledge_status.source_count,
         )
         duration_ms = (time.time() - start_time) * 1000
         _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -359,7 +377,7 @@ async def chat_completions(
                         pipeline_span.set_attribute("rag.query", user_query[:200])
                         pipeline_span.set_attribute("rag.version", version or "latest")
                         pipeline_span.set_attribute("rag.stream", True)
-                    rag_context, messages_for_llm, _, _, _ = await _main.process_rag_query(
+                    rag_context, messages_for_llm, _, sources, _ = await _main.process_rag_query(
                         user_query=user_query,
                         version=version,
                         force_refresh=request.rag_force_refresh or False,
@@ -370,17 +388,67 @@ async def chat_completions(
                         user_context=user,
                         top_k_override=request.rag_top_k,
                     )
-                # If retrieval failed and we got a refusal (empty messages list), return rag_context directly
+                from proxy.app.core.clarification import build_uncertainty_response, generate_clarifying_questions
+                from proxy.app.core.confidence import should_generate_answer
+                from proxy.app.core.knowledge_status import determine_knowledge_status
+                from proxy.app.shared.config import CLARIFICATION_ENABLED
+                from proxy.app.shared.memory_manager import get_conversation
+
+                chunks_for_status = sources or []
+                chunks_with_score = [{"score": s.get("relevance", 0)} for s in chunks_for_status]
+                should_gen, _ = should_generate_answer(chunks_with_score)
+                knowledge_status = determine_knowledge_status(chunks_for_status, should_generate=should_gen)
+
+                clarification_result = None
+                if CLARIFICATION_ENABLED and knowledge_status.status in ("partial", "no_knowledge"):
+                    clarification_result = generate_clarifying_questions(
+                        query=user_query,
+                        status=knowledge_status.status,
+                        sources=chunks_for_status,
+                        context=rag_context if isinstance(rag_context, str) else "",
+                    )
+
+                session_id = (user.user_id if user.is_authenticated else client_ip)
+                conversation = get_conversation(session_id)
+                if conversation.needs_summarization():
+                    from proxy.app.shared.config import CONVERSATION_MAX_TURNS
+
+                    conversation.summarize_older_turns(keep_recent=CONVERSATION_MAX_TURNS // 2)
+
+                # If retrieval failed and we got a refusal, return structured uncertainty response
                 if not messages_for_llm:
                     add_event("rag.pipeline.refusal", {"reason": "no_messages_for_llm"})
-                    refusal_text = rag_context or (
-                        "I don't have enough relevant information to answer this question reliably."
+                    if rag_context and isinstance(rag_context, str):
+                        refusal_text = rag_context
+                    else:
+                        refusal_text = build_uncertainty_response(
+                            query=user_query,
+                            status=knowledge_status.status,
+                            sources=chunks_for_status,
+                            clarification=clarification_result,
+                        )
+                    conversation.add_turn("user", user_query)
+                    conversation.add_turn(
+                        "assistant",
+                        refusal_text,
+                        metadata={"knowledge_status": knowledge_status.status},
                     )
                     yield optimizer.format_chunk(
                         {
                             "choices": [{"delta": {"content": refusal_text}, "index": 0, "finish_reason": "stop"}],
                         },
                     )
+                    status_meta = {
+                        "rag_knowledge_status": knowledge_status.status,
+                        "rag_source_count": knowledge_status.source_count,
+                    }
+                    yield f"data: {json.dumps(status_meta)}\n\n"
+                    if clarification_result and clarification_result.clarification_needed:
+                        clar_meta = {
+                            "rag_clarification_needed": True,
+                            "rag_clarifying_questions": clarification_result.questions,
+                        }
+                        yield f"data: {json.dumps(clar_meta)}\n\n"
                     yield "data: [DONE]\n\n"
                     return
                 assert isinstance(messages_for_llm, list), "messages_for_llm must be a list after RAG query"
@@ -400,7 +468,30 @@ async def chat_completions(
 
                 feedback_id = generate_feedback_id()
                 confidence = compute_confidence(query=user_query, context=rag_context, answer=full_answer)
-                yield f"data: {json.dumps({'rag_feedback_id': feedback_id, 'rag_confidence': confidence.score})}\n\n"
+
+                conversation.add_turn("user", user_query)
+                conversation.add_turn(
+                    "assistant",
+                    full_answer,
+                    metadata={
+                        "knowledge_status": knowledge_status.status,
+                        "confidence": confidence.score,
+                    },
+                )
+
+                final_meta = {
+                    "rag_feedback_id": feedback_id,
+                    "rag_confidence": confidence.score,
+                    "rag_knowledge_status": knowledge_status.status,
+                    "rag_source_count": knowledge_status.source_count,
+                }
+                yield f"data: {json.dumps(final_meta)}\n\n"
+                if clarification_result and clarification_result.clarification_needed:
+                    clar_meta = {
+                        "rag_clarification_needed": True,
+                        "rag_clarifying_questions": clarification_result.questions,
+                    }
+                    yield f"data: {json.dumps(clar_meta)}\n\n"
                 yield "data: [DONE]\n\n"
                 duration_ms = (time.time() - start_time) * 1000
                 _main.request_tracker.complete(request_id, status="success")
@@ -464,11 +555,61 @@ async def chat_completions(
     from_cache = _rag_result[2]
     sources = _rag_result[3]
     ragas_scores = _rag_result[4]
-    from proxy.app.core.confidence import compute_confidence
+    from proxy.app.core.clarification import build_uncertainty_response, generate_clarifying_questions
+    from proxy.app.core.confidence import compute_confidence, should_generate_answer
     from proxy.app.core.hitl import generate_feedback_id
+    from proxy.app.core.knowledge_status import determine_knowledge_status
+    from proxy.app.shared.config import CLARIFICATION_ENABLED
+    from proxy.app.shared.memory_manager import get_conversation
 
     feedback_id = generate_feedback_id()
     confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text)
+
+    chunks_with_score = [{"score": s.get("relevance", 0)} for s in sources]
+    should_gen, reason = should_generate_answer(chunks_with_score)
+    knowledge_status = determine_knowledge_status(sources, should_generate=should_gen)
+
+    clarification_result = None
+    clarifying_questions = None
+    if CLARIFICATION_ENABLED and knowledge_status.status in ("partial", "no_knowledge"):
+        clarification_result = generate_clarifying_questions(
+            query=user_query,
+            status=knowledge_status.status,
+            sources=sources,
+            context=rag_ctx,
+        )
+        if clarification_result.clarification_needed:
+            clarifying_questions = clarification_result.questions
+
+    # Build structured uncertainty response when knowledge is insufficient
+    final_response = response_text
+    if knowledge_status.status == "no_knowledge" and not should_gen:
+        uncertainty_message = build_uncertainty_response(
+            query=user_query,
+            status=knowledge_status.status,
+            sources=sources,
+            clarification=clarification_result,
+        )
+        if uncertainty_message:
+            final_response = uncertainty_message
+
+    # Store conversation turn
+    session_id = (user.user_id if user.is_authenticated else client_ip)
+    conversation = get_conversation(session_id)
+    if conversation.needs_summarization():
+        from proxy.app.shared.config import CONVERSATION_MAX_TURNS
+
+        conversation.summarize_older_turns(keep_recent=CONVERSATION_MAX_TURNS // 2)
+    conversation.add_turn("user", user_query)
+    conversation.add_turn(
+        "assistant",
+        final_response,
+        metadata={
+            "knowledge_status": knowledge_status.status,
+            "confidence": confidence.score,
+        },
+    )
+
     completion = ChatCompletionResponse(
         id=request_id,
         created=int(time.time()),
@@ -476,7 +617,7 @@ async def chat_completions(
         choices=[
             ChatCompletionResponseChoice(
                 index=0,
-                message=ChatMessage(role="assistant", content=response_text),
+                message=ChatMessage(role="assistant", content=final_response),
                 finish_reason="stop",
             ),
         ],
@@ -484,6 +625,10 @@ async def chat_completions(
         rag_confidence=confidence.score,
         rag_sources=sources,
         ragas_scores=ragas_scores or None,
+        rag_knowledge_status=knowledge_status.status,
+        rag_source_count=knowledge_status.source_count,
+        rag_clarification_needed=clarification_result.clarification_needed if clarification_result else None,
+        rag_clarifying_questions=clarifying_questions,
     )
     duration_ms = (time.time() - start_time) * 1000
     _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)
@@ -491,7 +636,7 @@ async def chat_completions(
         _main.audit_logger.log_query(
             user_id=client_ip,
             query=user_query,
-            response_preview=response_text[:200],
+            response_preview=final_response[:200],
             chunks=len(sources),
             duration_ms=duration_ms,
             tokens=len(response_text) // 4,
@@ -518,7 +663,7 @@ async def chat_completions(
             request_id=request_id,
             user_query=user_query,
             context="[rag_context_omitted_for_logging]",
-            response=response_text,
+            response=final_response,
             metadata={"version": version, "model": request.model, "client_ip": client_ip, "from_cache": from_cache},
         )
     return completion

@@ -63,15 +63,48 @@ class WorkingMemoryStore:
         return len(self._store)
 
 
-class ConversationMemory:
-    """Episodic memory for conversation context."""
+class EntityTracker:
+    """Tracks entities mentioned across conversation turns."""
 
-    def __init__(self, max_turns_stored: int = 100):
+    def __init__(self) -> None:
+        self._entities: dict[str, int] = {}  # entity name -> mention count
+
+    def track(self, text: str) -> None:
+        """Track capitalized words and technical terms from text."""
+        words = text.split()
+        for word in words:
+            clean = word.strip(".,;:!?()[]{}'\"")
+            if len(clean) > 2 and (clean[0].isupper() or "_" in clean or "-" in clean):
+                self._entities[clean] = self._entities.get(clean, 0) + 1
+
+    def get_top_entities(self, top_n: int = 10) -> list[str]:
+        """Return most frequently mentioned entities."""
+        sorted_entities = sorted(self._entities.items(), key=lambda x: -x[1])
+        return [e for e, _ in sorted_entities[:top_n]]
+
+    def get_context_str(self) -> str:
+        entities = self.get_top_entities(5)
+        if not entities:
+            return ""
+        return f"Entities mentioned in conversation: {', '.join(entities)}"
+
+    def clear(self) -> None:
+        self._entities.clear()
+
+
+class ConversationMemory:
+    """Episodic memory for conversation context with entity tracking and summarization."""
+
+    def __init__(self, max_turns_stored: int = 100, summary_threshold_tokens: int = 2000):
         self._turns: list[dict[str, Any]] = []
         self._summaries: list[str] = []
         self._max_turns_stored = max_turns_stored
+        self._summary_threshold_tokens = summary_threshold_tokens
+        self._entity_tracker = EntityTracker()
+        self._total_token_estimate = 0
 
     def add_turn(self, role: str, content: str, metadata: dict[str, Any] | None = None) -> None:
+        """Add a conversation turn with entity tracking."""
         self._turns.append(
             {
                 "role": role,
@@ -80,36 +113,101 @@ class ConversationMemory:
                 "metadata": metadata or {},
             },
         )
+        self._entity_tracker.track(content)
+        self._total_token_estimate += len(content) // 4
         if len(self._turns) > self._max_turns_stored:
             self._turns = self._turns[-self._max_turns_stored :]
 
-    def get_context(self, max_turns: int = 10, max_tokens: int = 2000) -> str:
+    def get_context(
+        self,
+        max_turns: int = 10,
+        max_tokens: int = 2000,
+        include_entities: bool = True,
+    ) -> str:
+        """Get recent conversation turns as context string."""
         turns = self._turns[-max_turns:]
         lines = []
         for t in turns:
             lines.append(f"{t['role']}: {t['content']}")
+        if include_entities:
+            entities_str = self._entity_tracker.get_context_str()
+            if entities_str:
+                lines.insert(0, entities_str)
         result = "\n".join(lines)
         if len(result) > max_tokens * 4:
             result = result[: max_tokens * 4] + "..."
         return result
 
+    def get_context_as_messages(self, max_turns: int = 10) -> list[dict[str, str]]:
+        """Get recent turns as a list of message dicts for LLM prompts."""
+        turns = self._turns[-max_turns:]
+        messages = []
+        for t in turns:
+            messages.append({"role": t["role"], "content": t["content"]})
+        entities_str = self._entity_tracker.get_context_str()
+        if entities_str:
+            messages.insert(0, {"role": "system", "content": f"[Context] {entities_str}"})
+        return messages
+
+    def get_full_history_as_messages(self, max_turns: int = 10) -> list[dict[str, str]]:
+        """Get recent turns formatted for LLM, including summaries."""
+        messages: list[dict[str, str]] = []
+        if self._summaries:
+            summary_text = "\n".join(self._summaries)
+            messages.append(
+                {
+                    "role": "system",
+                    "content": f"[Previous conversation summary]\n{summary_text}",
+                },
+            )
+        turns = self._turns[-max_turns:]
+        for t in turns:
+            messages.append({"role": t["role"], "content": t["content"]})
+        entities_str = self._entity_tracker.get_context_str()
+        if entities_str:
+            messages.insert(0, {"role": "system", "content": f"[Context] {entities_str}"})
+        return messages
+
+    def estimate_tokens(self) -> int:
+        """Estimate total tokens in conversation memory."""
+        total = self._total_token_estimate
+        for s in self._summaries:
+            total += len(s) // 4
+        return total
+
+    def needs_summarization(self, threshold_tokens: int | None = None) -> bool:
+        """Check if conversation needs summarization."""
+        threshold = threshold_tokens or self._summary_threshold_tokens
+        return self.estimate_tokens() > threshold
+
     def summarize_older_turns(self, keep_recent: int = 5) -> None:
+        """Summarize older conversation turns into a compressed form."""
         if len(self._turns) <= keep_recent:
             return
         older = self._turns[:-keep_recent]
         recent = self._turns[-keep_recent:]
         summary_parts = []
         for t in older:
-            summary_parts.append(f"{t['role']}: {t['content'][:80]}...")
+            role_short = t["role"][:1].upper()
+            content_preview = t["content"][:120].replace("\n", " ")
+            summary_parts.append(f"{role_short}: {content_preview}...")
         self._summaries.append("[SUMMARY] " + " | ".join(summary_parts))
         self._turns = recent
+        self._total_token_estimate = sum(len(t["content"]) // 4 for t in recent)
+        if len(self._summaries) > 3:
+            self._summaries = self._summaries[-3:]
 
     def get_summaries(self) -> list[str]:
         return list(self._summaries)
 
+    def get_entity_tracker(self) -> EntityTracker:
+        return self._entity_tracker
+
     def clear(self) -> None:
         self._turns.clear()
         self._summaries.clear()
+        self._entity_tracker.clear()
+        self._total_token_estimate = 0
 
     def __len__(self) -> int:
         return len(self._turns)
@@ -188,3 +286,37 @@ class MemoryManager:
         if cm:
             parts.append(f"Conversation history:\n{cm}")
         return "\n\n".join(parts)
+
+
+# Process-level conversation store keyed by session_id
+_conversation_store: dict[str, ConversationMemory] = {}
+_store_max_entries = 1000
+
+
+def get_conversation(session_id: str) -> ConversationMemory:
+    """Get or create a ConversationMemory for a session."""
+    if session_id not in _conversation_store:
+        from proxy.app.shared.config import CONVERSATION_SUMMARY_THRESHOLD_TOKENS
+
+        _conversation_store[session_id] = ConversationMemory(
+            summary_threshold_tokens=CONVERSATION_SUMMARY_THRESHOLD_TOKENS,
+        )
+        _prune_store()
+    return _conversation_store[session_id]
+
+
+def _prune_store() -> None:
+    """Prune oldest sessions if store exceeds max size."""
+    global _conversation_store
+    if len(_conversation_store) > _store_max_entries:
+        keys = sorted(_conversation_store.keys())
+        to_remove = keys[: len(keys) - _store_max_entries // 2]
+        for k in to_remove:
+            del _conversation_store[k]
+
+
+def clear_conversation(session_id: str) -> None:
+    """Clear conversation memory for a session."""
+    if session_id in _conversation_store:
+        _conversation_store[session_id].clear()
+        del _conversation_store[session_id]

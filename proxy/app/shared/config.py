@@ -283,6 +283,11 @@ JIRA_API_USER = os.getenv("JIRA_API_USER", "")
 GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")
 GITLAB_API_TOKEN = os.getenv("GITLAB_API_TOKEN", "")
 
+# ============ Conversation Memory ============
+CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "10"))
+CONVERSATION_SUMMARY_THRESHOLD_TOKENS = int(os.getenv("CONVERSATION_SUMMARY_THRESHOLD_TOKENS", "2000"))
+CLARIFICATION_ENABLED = os.getenv("CLARIFICATION_ENABLED", "true").lower() == "true"
+
 # ============ I18N / Multi-Language Support ============
 I18N_ENABLED = os.getenv("I18N_ENABLED", "true").lower() == "true"
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
