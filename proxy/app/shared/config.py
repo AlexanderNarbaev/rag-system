@@ -362,6 +362,25 @@ EVAL_GATE_SLM_ACCURACY_MIN = float(os.getenv("EVAL_GATE_SLM_ACCURACY_MIN", "0.90
 EVAL_GATE_RERANKER_MRR_MIN = float(os.getenv("EVAL_GATE_RERANKER_MRR_MIN", "0.75"))
 EVAL_GATE_RERANKER_NDCG_MIN = float(os.getenv("EVAL_GATE_RERANKER_NDCG_MIN", "0.70"))
 
+# ============ Stale Document Detection ============
+STALE_DETECTION_ENABLED = os.getenv("STALE_DETECTION_ENABLED", "true").lower() == "true"
+STALE_CONFLUENCE_DAYS = int(os.getenv("STALE_CONFLUENCE_DAYS", "90"))
+STALE_JIRA_DAYS = int(os.getenv("STALE_JIRA_DAYS", "30"))
+STALE_GITLAB_DAYS = int(os.getenv("STALE_GITLAB_DAYS", "14"))
+STALE_DEFAULT_DAYS = int(os.getenv("STALE_DEFAULT_DAYS", "180"))
+STALE_DETECTION_SCAN_LIMIT = int(os.getenv("STALE_DETECTION_SCAN_LIMIT", "500"))
+
+# ============ Reindex Scheduler ============
+REINDEX_ENABLED = os.getenv("REINDEX_ENABLED", "true").lower() == "true"
+REINDEX_CHECK_INTERVAL = int(os.getenv("REINDEX_CHECK_INTERVAL", "3600"))
+REINDEX_STALENESS_THRESHOLD = int(os.getenv("REINDEX_STALENESS_THRESHOLD", "80"))
+REINDEX_MAX_CONCURRENT_TASKS = int(os.getenv("REINDEX_MAX_CONCURRENT_TASKS", "5"))
+
+# ============ Knowledge Integrity Validation ============
+INTEGRITY_CHECK_ENABLED = os.getenv("INTEGRITY_CHECK_ENABLED", "true").lower() == "true"
+INTEGRITY_NLI_CONTRADICTION_THRESHOLD = float(os.getenv("INTEGRITY_NLI_CONTRADICTION_THRESHOLD", "0.7"))
+INTEGRITY_CHUNK_SAMPLE_LIMIT = int(os.getenv("INTEGRITY_CHUNK_SAMPLE_LIMIT", "200"))
+
 # ============ Graceful Shutdown ============
 GRACEFUL_SHUTDOWN_ENABLED = os.getenv("GRACEFUL_SHUTDOWN_ENABLED", "true").lower() == "true"
 SHUTDOWN_TIMEOUT = int(os.getenv("SHUTDOWN_TIMEOUT", "30"))

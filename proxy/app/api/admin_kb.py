@@ -8,8 +8,10 @@ ETL task tracking, and statistics. Inspired by RAGFlow's dataset management.
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+
+from proxy.app.auth.rbac import Role, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -298,4 +300,262 @@ async def get_etl_task(kb_id: str, task_id: str) -> TaskResponse:
         error_message=task.error_message,
         created_at=task.created_at,
         updated_at=task.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-16: Stale Document Detection
+# ---------------------------------------------------------------------------
+
+
+class StaleDocumentItem(BaseModel):
+    """A single stale document with staleness score."""
+
+    id: str
+    source_type: str
+    source_id: str
+    title: str
+    last_updated: float | None = None
+    staleness_score: float
+    expected_refresh_days: int
+
+
+class StaleDocumentsResponse(BaseModel):
+    """Response for stale document detection."""
+
+    kb_id: str
+    stale_count: int
+    total_scanned: int
+    threshold: float
+    documents: list[StaleDocumentItem]
+
+
+@router.get("/{kb_id}/stale", response_model=StaleDocumentsResponse)
+async def get_stale_documents(
+    kb_id: str,
+    threshold: float = 100.0,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> StaleDocumentsResponse:
+    """Get stale documents for a knowledge base.
+
+    Returns documents past their freshness threshold with staleness scores (0-100).
+    Optional ?threshold=70 filter to show only highly stale documents.
+    """
+    mgr = _get_kb_manager()
+    kb = mgr.get_kb(kb_id)
+    if kb is None:
+        raise HTTPException(status_code=404, detail=f"Knowledge base {kb_id} not found")
+
+    from proxy.app.core.retrieval import qdrant_client
+    from proxy.app.core.stale_detector import detect_stale_documents, update_prometheus_metrics
+
+    stale_docs = detect_stale_documents(
+        kb_id=kb_id,
+        kb_manager=mgr,
+        qdrant_client=qdrant_client,
+        collection_name=kb.collection_name,
+        threshold=threshold,
+    )
+    update_prometheus_metrics(kb_id, len(stale_docs))
+
+    return StaleDocumentsResponse(
+        kb_id=kb_id,
+        stale_count=len(stale_docs),
+        total_scanned=len(stale_docs),
+        threshold=threshold,
+        documents=[
+            StaleDocumentItem(
+                id=d["id"],
+                source_type=d["source_type"],
+                source_id=d["source_id"],
+                title=d["title"],
+                last_updated=d.get("last_updated"),
+                staleness_score=d["staleness_score"],
+                expected_refresh_days=d["expected_refresh_days"],
+            )
+            for d in stale_docs
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-17: Reindex Scheduler
+# ---------------------------------------------------------------------------
+
+
+class ReindexResponse(BaseModel):
+    """Response for forced reindex of stale documents."""
+
+    kb_id: str
+    stale_count: int
+    tasks_created: int
+    errors: list[str]
+    documents: list[StaleDocumentItem]
+
+
+class ReindexStatusResponse(BaseModel):
+    """Response for reindex scheduler status."""
+
+    running: bool
+    last_check_time: float | None
+    total_stale_found: int
+    tasks_triggered: int
+    errors: list[str]
+    per_kb: dict[str, Any]
+
+
+@router.post("/{kb_id}/reindex/stale", response_model=ReindexResponse)
+async def force_reindex_stale_endpoint(
+    kb_id: str,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> ReindexResponse:
+    """Force reindex all stale documents in a knowledge base."""
+    mgr = _get_kb_manager()
+    kb = mgr.get_kb(kb_id)
+    if kb is None:
+        raise HTTPException(status_code=404, detail=f"Knowledge base {kb_id} not found")
+
+    from proxy.app.core.reindex_scheduler import force_reindex_stale
+    from proxy.app.core.retrieval import qdrant_client
+
+    result = await force_reindex_stale(
+        kb_id=kb_id,
+        kb_manager=mgr,
+        qdrant_client=qdrant_client,
+    )
+
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+
+    return ReindexResponse(
+        kb_id=result["kb_id"],
+        stale_count=result["stale_count"],
+        tasks_created=result["tasks_created"],
+        errors=result.get("errors", []),
+        documents=[
+            StaleDocumentItem(
+                id=d["id"],
+                source_type=d["source_type"],
+                source_id=d["source_id"],
+                title=d["title"],
+                last_updated=d.get("last_updated"),
+                staleness_score=d["staleness_score"],
+                expected_refresh_days=d["expected_refresh_days"],
+            )
+            for d in result.get("documents", [])
+        ],
+    )
+
+
+@router.get("/../reindex/status", response_model=ReindexStatusResponse)
+async def get_reindex_status(
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> ReindexStatusResponse:
+    """Get current reindex scheduler status."""
+    from proxy.app.core.reindex_scheduler import get_reindex_status
+
+    status = get_reindex_status()
+    return ReindexStatusResponse(
+        running=status.get("running", False),
+        last_check_time=status.get("last_check_time"),
+        total_stale_found=status.get("total_stale_found", 0),
+        tasks_triggered=status.get("tasks_triggered", 0),
+        errors=status.get("errors", []),
+        per_kb=status.get("per_kb", {}),
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-18: Knowledge Integrity Validation
+# ---------------------------------------------------------------------------
+
+
+class ContradictionPair(BaseModel):
+    """A pair of contradictory chunks."""
+
+    source_id: str
+    chunk_a_id: str
+    chunk_a_title: str
+    chunk_b_id: str
+    chunk_b_title: str
+    source_type: str
+    contradiction_score: float
+    entailment_score: float
+    neutral_score: float
+    text_preview_a: str
+    text_preview_b: str
+
+
+class CoverageGap(BaseModel):
+    """A coverage gap in knowledge base."""
+
+    type: str
+    message: str
+    age_days: float | None = None
+    source: str | None = None
+
+
+class IntegrityResponse(BaseModel):
+    """Response for knowledge integrity validation."""
+
+    kb_id: str
+    overall_score: float
+    contradictions: list[ContradictionPair]
+    coverage: dict[str, Any]
+    coverage_gaps: list[CoverageGap]
+
+
+@router.get("/{kb_id}/integrity", response_model=IntegrityResponse)
+async def get_integrity_check(
+    kb_id: str,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> IntegrityResponse:
+    """Get knowledge integrity report for a KB.
+
+    Returns contradiction pairs, coverage gaps, and overall integrity score.
+    """
+    mgr = _get_kb_manager()
+    kb = mgr.get_kb(kb_id)
+    if kb is None:
+        raise HTTPException(status_code=404, detail=f"Knowledge base {kb_id} not found")
+
+    from proxy.app.core.integrity_checker import compute_integrity_score
+    from proxy.app.core.retrieval import qdrant_client
+
+    result = compute_integrity_score(
+        kb_id=kb_id,
+        qdrant_client=qdrant_client,
+        collection_name=kb.collection_name,
+    )
+
+    coverage_gaps = []
+    for gap in result.get("coverage", {}).get("coverage_gaps", []):
+        coverage_gaps.append(CoverageGap(
+            type=gap.get("type", ""),
+            message=gap.get("message", ""),
+            age_days=gap.get("age_days"),
+            source=gap.get("source"),
+        ))
+
+    return IntegrityResponse(
+        kb_id=result["kb_id"],
+        overall_score=result["overall_score"],
+        contradictions=[
+            ContradictionPair(
+                source_id=c["source_id"],
+                chunk_a_id=c["chunk_a_id"],
+                chunk_a_title=c["chunk_a_title"],
+                chunk_b_id=c["chunk_b_id"],
+                chunk_b_title=c["chunk_b_title"],
+                source_type=c["source_type"],
+                contradiction_score=c["contradiction_score"],
+                entailment_score=c["entailment_score"],
+                neutral_score=c["neutral_score"],
+                text_preview_a=c["text_preview_a"],
+                text_preview_b=c["text_preview_b"],
+            )
+            for c in result.get("contradictions", [])
+        ],
+        coverage=result.get("coverage", {}),
+        coverage_gaps=coverage_gaps,
     )

@@ -256,6 +256,32 @@ RAG_FILE_PRESIGNED_TOTAL: Any = _reuse_metric("rag_file_presigned_total", Counte
     ["status"],
 )
 
+# ── Stale Document Detection ──
+
+rag_stale_documents: Any = _reuse_metric("rag_stale_documents", Gauge) or Gauge(
+    "rag_stale_documents",
+    "Number of stale documents per KB",
+    ["kb_id"],
+)
+
+rag_knowledge_integrity_score: Any = _reuse_metric("rag_knowledge_integrity_score", Gauge) or Gauge(
+    "rag_knowledge_integrity_score",
+    "Knowledge integrity score per KB (0-100)",
+    ["kb_id"],
+)
+
+rag_reindex_tasks_total: Any = _reuse_metric("rag_reindex_tasks_total", Counter) or Counter(
+    "rag_reindex_tasks_total",
+    "Total reindex tasks triggered",
+    ["kb_id", "status"],
+)
+
+rag_reindex_last_run_seconds: Any = _reuse_metric("rag_reindex_last_run_seconds", Gauge) or Gauge(
+    "rag_reindex_last_run_seconds",
+    "Timestamp of last reindex check",
+    ["kb_id"],
+)
+
 # ── Admin operation metrics ──
 
 RAG_ADMIN_OPERATIONS_TOTAL: Any = _reuse_metric("rag_admin_operations_total", Counter) or Counter(

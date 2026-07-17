@@ -293,6 +293,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as e:
             logger.warning(f"Model warm-up failed (non-blocking): {e}")
 
+    # Start reindex scheduler (background task for stale document detection)
+    try:
+        from proxy.app.core.reindex_scheduler import start_reindex_scheduler
+        from proxy.app.core.retrieval import qdrant_client as _rc
+
+        if kb_manager is not None and _rc is not None:
+            await start_reindex_scheduler(kb_manager, _rc)
+    except Exception as e:
+        logger.warning("Reindex scheduler start failed (non-blocking): %s", e)
+
     if GRACEFUL_SHUTDOWN_ENABLED:
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -307,6 +317,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Cleanup
     global shutting_down
     shutting_down = True
+    # Stop reindex scheduler
+    try:
+        from proxy.app.core.reindex_scheduler import stop_reindex_scheduler
+
+        await stop_reindex_scheduler()
+    except Exception as e:
+        logger.warning("Reindex scheduler stop failed: %s", e)
     logger.info("Draining in-flight requests...")
     if _active_requests:
         done, pending = await asyncio.wait(_active_requests, timeout=SHUTDOWN_TIMEOUT)
@@ -724,6 +741,7 @@ from proxy.app.api import (  # noqa: E402
     tools_router,
     widget_router,
 )
+from proxy.app.api.admin_feedback import router as admin_feedback_router  # noqa: E402
 from proxy.app.api.admin_kb import router as admin_kb_router  # noqa: E402
 
 app.include_router(metrics_router)
@@ -735,6 +753,7 @@ app.include_router(tools_router)
 app.include_router(feedback_router)
 app.include_router(widget_router)
 app.include_router(admin_router)
+app.include_router(admin_feedback_router)
 app.include_router(admin_kb_router)
 
 # ---------------------------------------------------------------------------
