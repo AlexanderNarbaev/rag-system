@@ -596,9 +596,20 @@ async def verify_etl_secret(request: Request) -> None:
             raise HTTPException(status_code=403, detail="Invalid ETL secret")
         return
 
-    # Fallback: require admin role
-    _check = require_role(Role.ADMIN)
-    await _check(request)
+    # Fallback: require admin role via RBAC
+    from proxy.app.auth.jwt import get_auth_context
+    from proxy.app.auth.rbac import RBAC_ENABLED, get_user_role
+
+    if not RBAC_ENABLED:
+        return
+
+    user = await get_auth_context(request)
+    user_role = get_user_role(user)
+    if user_role != Role.ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user_role.value}' is not sufficient. Required: 'admin'",
+        )
 
 
 class ETLWALCheckpoint(BaseModel):

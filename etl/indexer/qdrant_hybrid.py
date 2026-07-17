@@ -214,6 +214,7 @@ class QdrantHybridIndexer:
             "summary": chunk.get("summary", ""),
             "position": chunk.get("position", 0),
             "semantic_key": chunk.get("semantic_key", ""),
+            "chunk_hash": point_id_raw,
             "created_at": chunk.get("created_at", ""),
             "updated_at": chunk.get("updated_at", ""),
         }
@@ -256,13 +257,17 @@ class QdrantHybridIndexer:
         return total
 
     def delete_chunks(self, chunk_ids: list[str]) -> int:
-        """Удаляет чанки по списку ID (хешей)."""
+        """Удаляет чанки по списку ID (SHA-256 хешей).
+
+        Chunk hashes are converted to UUID v5 for lookup (same as _chunk_to_point).
+        """
         if not chunk_ids:
             return 0
+        uuid_ids = [str(uuid.uuid5(uuid.NAMESPACE_OID, cid)) for cid in chunk_ids]
         try:
             self.client.delete(
                 collection_name=self.collection_name,
-                points_selector=models.PointIdsList(points=chunk_ids),  # type: ignore[arg-type]
+                points_selector=models.PointIdsList(points=uuid_ids),  # type: ignore[arg-type]
             )
             logger.info(f"Deleted {len(chunk_ids)} chunks")
             return len(chunk_ids)

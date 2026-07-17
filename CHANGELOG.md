@@ -42,20 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v2.2.0] - 2026-07-17
 
-### Added
+### Changed
 
-- **Ungrounded generation** — LLM generates answers even when no relevant knowledge is found,
-  with a configurable notice prepended to warn users (`ALLOW_UNGROUNDED_GENERATION`,
-  `UNGOUNDED_NOTICE`). Prevents empty responses when the knowledge base lacks coverage.
-- **Incremental Confluence extraction** — ETL now tracks last extraction state per space,
-  enabling delta-only ingestion of new and modified pages without re-processing the entire space.
-- **WAL checkpoint WAL backend** — `WAL_BACKEND` supports `file` (local JSON), `redis`, and
-  `proxy` (POST to proxy API for centralized checkpoint management).
+- **WAL backend extensibility** — `WAL_BACKEND` now supports `file` (local JSON, default),
+  `redis` (per-key checkpoints via Redis), and `proxy` (POST to proxy API). Factory
+  function `create_wal_manager()` auto-selects the backend from config or env var.
 
 ### Fixed
 
 - **ETL WAL lock fix** — resolved race condition in WAL file locking that caused checkpoint
-  corruption under concurrent ETL worker access.
+  corruption under concurrent ETL worker access. Added stale lock recovery (auto-release
+  locks older than 10 minutes).
 
 ## [v2.1.0] - 2026-07-17
 

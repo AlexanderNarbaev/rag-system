@@ -257,7 +257,11 @@ async def delete_knowledge_base(
 
 
 @router.post("/{kb_id}/tasks", response_model=TaskResponse, status_code=201)
-async def create_etl_task(kb_id: str, req: TaskCreateRequest) -> TaskResponse:
+async def create_etl_task(
+    kb_id: str,
+    req: TaskCreateRequest,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> TaskResponse:
     """Create an ETL task for a knowledge base."""
     mgr = _get_kb_manager()
     kb = mgr.get_kb(kb_id)
@@ -278,7 +282,11 @@ async def create_etl_task(kb_id: str, req: TaskCreateRequest) -> TaskResponse:
 
 
 @router.get("/{kb_id}/tasks", response_model=TaskListResponse)
-async def list_etl_tasks(kb_id: str, status: str | None = None) -> TaskListResponse:
+async def list_etl_tasks(
+    kb_id: str,
+    status: str | None = None,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> TaskListResponse:
     """List ETL tasks for a knowledge base."""
     mgr = _get_kb_manager()
     tasks = mgr.list_tasks(kb_id=kb_id, status=status)
@@ -302,7 +310,11 @@ async def list_etl_tasks(kb_id: str, status: str | None = None) -> TaskListRespo
 
 
 @router.get("/{kb_id}/tasks/{task_id}", response_model=TaskResponse)
-async def get_etl_task(kb_id: str, task_id: str) -> TaskResponse:
+async def get_etl_task(
+    kb_id: str,
+    task_id: str,
+    _user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
+) -> TaskResponse:
     """Get an ETL task by ID."""
     mgr = _get_kb_manager()
     task = mgr.get_task(task_id)

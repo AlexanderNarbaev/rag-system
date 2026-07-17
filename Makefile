@@ -6,8 +6,9 @@
         test-performance test-e2e test-resilience benchmark \
         benchmark-baselines benchmark-compare \
         lint helm-lint format format-check typecheck clean \
-        docker-build docker-up docker-down docker-logs run docs all \
-        etl etl-confluence etl-jira etl-gitlab \
+        docker-build docker-up docker-down docker-logs run run-dev docs all \
+        etl etl-run-streaming etl-run-batch etl-test-connection etl-cleanup \
+        etl-confluence etl-jira etl-gitlab \
         backup restore dashboard tui mcp-server \
         deploy deploy-prod verify-backups \
         health-check status \
