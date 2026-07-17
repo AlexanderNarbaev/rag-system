@@ -163,7 +163,7 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - NEO4J_URI=bolt://neo4j:7687
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://redis:6379/0
       - LLM_ENDPOINT=http://vllm:8000/v1
       - USE_REDIS=true
       - USE_LANGGRAPH=true
@@ -218,6 +218,7 @@ services:
       --port 8000
       --max-model-len ${LLM_MAX_MODEL_LEN:-65536}
       --tensor-parallel-size ${LLM_TP_SIZE:-1}
+      --enable-prefix-caching
     deploy:
       resources:
         reservations:

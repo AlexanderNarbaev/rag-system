@@ -426,7 +426,12 @@ async def process_rag_query(
 
     # 3. Hybrid search
     try:
-        search_results = hybrid_search(query=user_query, version=version, top_k=top_k_override or MAX_CHUNKS_RETRIEVAL)
+        search_results = hybrid_search(
+            query=user_query,
+            version=version,
+            top_k=top_k_override or MAX_CHUNKS_RETRIEVAL,
+            access_filter=_access_filter,
+        )
     except Exception as e:
         logger.warning(f"Hybrid search failed (degraded mode): {e}")
         search_results = None
@@ -510,6 +515,7 @@ async def process_rag_query(
                         query=rewritten_query,
                         version=version,
                         top_k=top_k_override or MAX_CHUNKS_RETRIEVAL,
+                        access_filter=_access_filter,
                     )
                     if additional_results:
                         # Merge with original results
@@ -526,6 +532,7 @@ async def process_rag_query(
                         query=user_query,
                         version=None,  # Remove version filter
                         top_k=(top_k_override or MAX_CHUNKS_RETRIEVAL) * 2,
+                        access_filter=_access_filter,
                     )
                     if expanded_results:
                         search_results = list(search_results) + list(expanded_results)
@@ -731,9 +738,12 @@ async def list_models() -> ModelsResponse:
 # ---------------------------------------------------------------------------
 
 from proxy.app.api import (  # noqa: E402
+    admin_analytics_router,
+    admin_config_router,
     admin_router,
     auth_router,
     chat_router,
+    expert_kb_router,
     feedback_router,
     files_router,
     health_router,
@@ -754,8 +764,11 @@ app.include_router(tools_router)
 app.include_router(feedback_router)
 app.include_router(widget_router)
 app.include_router(admin_router)
+app.include_router(admin_config_router)
+app.include_router(admin_analytics_router)
 app.include_router(admin_feedback_router)
 app.include_router(admin_kb_router)
+app.include_router(expert_kb_router)
 app.include_router(reindex_router)
 
 # ---------------------------------------------------------------------------

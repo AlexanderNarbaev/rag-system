@@ -40,6 +40,8 @@ from proxy.app.shared.config import (
     NEO4J_PASSWORD,
     NEO4J_URI,
     NEO4J_USER,
+    QDRANT_GRPC_ENABLED,
+    QDRANT_GRPC_PORT,
     QDRANT_HOST,
     QDRANT_PORT,
     REDIS_URL,
@@ -222,7 +224,15 @@ def initialize_retrieval() -> None:
     from proxy.app.shared.retry import RetryConfig, sync_retry
 
     def _connect_qdrant() -> Any:
-        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
+        client_kwargs: dict[str, Any] = {
+            "host": QDRANT_HOST,
+            "port": QDRANT_PORT,
+            "check_compatibility": False,
+            "prefer_grpc": QDRANT_GRPC_ENABLED,
+        }
+        if QDRANT_GRPC_ENABLED:
+            client_kwargs["grpc_port"] = QDRANT_GRPC_PORT
+        client = QdrantClient(**client_kwargs)
         client.get_collections()
         return client
 
@@ -432,6 +442,7 @@ def hybrid_search(
     top_k: int = 50,
     namespace: str | None = None,
     lang: str | None = None,
+    access_filter: list[dict[str, Any]] | None = None,
 ) -> list[Any]:
     """Гибридный поиск в Qdrant: dense + sparse.
     Фильтрация по версии и namespace (для мультитенантности).
@@ -446,6 +457,8 @@ def hybrid_search(
         lang: Optional detected language code (for logging/metrics).
               bge-m3 supports cross-lingual retrieval natively —
               a query in German can find chunks in English.
+        access_filter: Optional ACL filter conditions from build_access_filter().
+                       Pushed down to Qdrant for server-side filtering.
 
     """
     with tracer.start_as_current_span("rag.retrieval.hybrid_search") as span:
@@ -476,6 +489,15 @@ def hybrid_search(
         filter_conditions.append(models.FieldCondition(key="version", match=models.MatchValue(value=version)))
     if namespace:
         filter_conditions.append(models.FieldCondition(key="namespace", match=models.MatchValue(value=namespace)))
+
+    # ACL pushdown: merge access_filter conditions into Qdrant query filter
+    if access_filter:
+        for cond in access_filter:
+            if "key" in cond and "match" in cond:
+                filter_conditions.append(
+                    models.FieldCondition(key=cond["key"], match=models.MatchAny(**cond["match"])
+                    if "any" in cond["match"] else models.MatchValue(**cond["match"]))
+                )
 
     q_filter = models.Filter(must=list(filter_conditions)) if filter_conditions else None
 

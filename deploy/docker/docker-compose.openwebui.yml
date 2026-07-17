@@ -25,8 +25,8 @@ services:
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
       # База данных PostgreSQL
       - DATABASE_URL=postgresql://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
-      # Redis для сессий WebSocket
-      - REDIS_URL=redis://redis:6379/0
+      # Redis для сессий WebSocket (DB 1, shared with proxy's Redis at DB 0)
+      - REDIS_URL=redis://rag-redis:6379/1
       # Подключение к RAG Proxy как OpenAI-совместимому бэкенду
       - OPENAI_API_BASE_URLS=${OPENAI_API_BASE_URLS:-http://rag-proxy:8080/v1}
       - OPENAI_API_KEYS=${OPENAI_API_KEYS:-sk-rag-proxy}
@@ -48,8 +48,6 @@ services:
       - openwebui_tmp:/tmp
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       tika:
         condition: service_healthy
@@ -145,56 +143,6 @@ services:
       - openwebui-network
 
   # ═══════════════════════════════════════════════════════════════════════════════
-  # Redis 7 — управление сессиями WebSocket и кэширование
-  # ═══════════════════════════════════════════════════════════════════════════════
-  redis:
-    image: redis:7-alpine
-    container_name: rag-openwebui-redis
-    expose:
-      - "6379"
-    volumes:
-      - redis_data:/data
-    # Конфигурация Redis для сессий
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory ${REDIS_MAXMEMORY:-256mb}
-      --maxmemory-policy allkeys-lru
-      --save 900 1
-      --save 300 10
-      --save 60 10000
-      --tcp-keepalive 60
-      --timeout 300
-      --lazyfree-lazy-eviction yes
-      --lazyfree-lazy-expire yes
-    healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "ping" ]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "${REDIS_CPU_LIMIT:-1}"
-          memory: "${REDIS_MEM_LIMIT:-512M}"
-        reservations:
-          cpus: "${REDIS_CPU_RESERVE:-0.1}"
-          memory: "${REDIS_MEM_RESERVE:-64M}"
-    security_opt:
-      - no-new-privileges=true
-    cap_drop:
-      - ALL
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
-    networks:
-      - openwebui-network
-
-  # ═══════════════════════════════════════════════════════════════════════════════
   # Apache Tika — извлечение текста из офисных документов, PDF, изображений
   # ═══════════════════════════════════════════════════════════════════════════════
   tika:
@@ -251,9 +199,6 @@ volumes:
   postgres_data:
     driver: local
     name: rag-openwebui-postgres
-  redis_data:
-    driver: local
-    name: rag-openwebui-redis
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Сети

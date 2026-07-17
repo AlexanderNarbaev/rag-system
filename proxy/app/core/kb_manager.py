@@ -27,6 +27,21 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DB_PATH = "data/knowledge_bases.db"
 
 
+def _get_qdrant_hnsw_m() -> int:
+    from proxy.app.shared.config import QDRANT_HNSW_M
+    return QDRANT_HNSW_M
+
+
+def _get_qdrant_hnsw_ef_construct() -> int:
+    from proxy.app.shared.config import QDRANT_HNSW_EF_CONSTRUCT
+    return QDRANT_HNSW_EF_CONSTRUCT
+
+
+def _get_qdrant_quantization_enabled() -> bool:
+    from proxy.app.shared.config import QDRANT_QUANTIZATION_ENABLED
+    return QDRANT_QUANTIZATION_ENABLED
+
+
 @dataclass
 class KnowledgeBase:
     """Represents a single knowledge base."""
@@ -377,13 +392,29 @@ class KnowledgeBaseManager:
             if collection_name in existing:
                 logger.info("Qdrant collection '%s' already exists", collection_name)
                 return
-            self.qdrant_client.create_collection(
-                collection_name=collection_name,
-                vectors_config={
+
+            create_kwargs: dict[str, Any] = {
+                "collection_name": collection_name,
+                "vectors_config": {
                     "dense": qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
                 },
-                optimizers_config=qmodels.OptimizersConfigDiff(indexing_threshold=20000),
-            )
+                "optimizers_config": qmodels.OptimizersConfigDiff(indexing_threshold=20000),
+                "hnsw_config": qmodels.HnswConfigDiff(
+                    m=_get_qdrant_hnsw_m(),
+                    ef_construct=_get_qdrant_hnsw_ef_construct(),
+                ),
+            }
+
+            if _get_qdrant_quantization_enabled():
+                create_kwargs["quantization_config"] = qmodels.ScalarQuantization(
+                    scalar=qmodels.ScalarQuantizationConfig(
+                        type=qmodels.ScalarType.INT8,
+                        quantile=0.99,
+                        always_ram=True,
+                    ),
+                )
+
+            self.qdrant_client.create_collection(**create_kwargs)
             # Create payload indexes
             for field_name in ["source_type", "source_id", "version", "doc_title", "kb_id"]:
                 self.qdrant_client.create_payload_index(

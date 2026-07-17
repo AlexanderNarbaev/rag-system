@@ -146,6 +146,16 @@ proxy:
     qdrantHost: ""
     # -- Qdrant port
     qdrantPort: "6333"
+    # -- Enable Qdrant gRPC (3-5x higher throughput)
+    qdrantGrpcEnabled: "false"
+    # -- Qdrant gRPC port
+    qdrantGrpcPort: "6334"
+    # -- Enable Qdrant scalar quantization (~4x memory reduction)
+    qdrantQuantizationEnabled: "false"
+    # -- HNSW M parameter (higher = better recall, more build time memory)
+    qdrantHnswM: "16"
+    # -- HNSW ef_construct (higher = better index quality)
+    qdrantHnswEfConstruct: "100"
     # -- Qdrant collection name
     collectionName: "knowledge_base"
     # -- Embedder model name (e.g. BAAI/bge-m3)
@@ -349,6 +359,10 @@ proxy:
     integrityNliContradictionThreshold: "0.7"
     # -- Chunk sample limit for integrity check
     integrityChunkSampleLimit: "200"
+    # -- MinIO endpoint for model artifacts
+    minioEndpoint: ""
+    # -- PostgreSQL connection string (DSN) for proxy system database
+    postgresqlDsn: ""
 
 # =============================================================================
 # Qdrant — Vector database (StatefulSet)
@@ -614,6 +628,269 @@ redis:
     type: soft
 
 # =============================================================================
+# ETL — Incremental data ingestion pipeline (CronJob)
+# =============================================================================
+etl:
+  # -- Enable ETL CronJob
+  enabled: false
+  # -- Cron schedule (standard cron syntax)
+  schedule: "0 */6 * * *"
+  # -- Concurrency policy (Allow, Forbid, Replace)
+  concurrencyPolicy: Forbid
+  # -- Number of successful jobs to keep
+  successfulJobsHistoryLimit: 3
+  # -- Number of failed jobs to keep
+  failedJobsHistoryLimit: 1
+  # -- Backoff limit for job retries
+  backoffLimit: 2
+  # -- Restart policy for the CronJob pod
+  restartPolicy: OnFailure
+
+  image:
+    repository: rag-system/etl
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  imagePullSecrets: []
+
+  # -- Override command for the ETL container
+  command:
+    - python
+    - scheduler/run_etl.py
+    - --config
+    - /app/etl/config/etl_config.yaml
+
+  # -- Environment variables injected into the ETL container
+  env: []
+    # - name: ETL_SECRET
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: rag-system-proxy-secrets
+    #       key: etlSecret
+
+  config:
+    # -- Qdrant host (defaults to in-cluster Qdrant service)
+    qdrantHost: ""
+    # -- Qdrant HTTP port
+    qdrantPort: "6333"
+    # -- Neo4j bolt URI
+    neo4jUri: ""
+    # -- Neo4j user
+    neo4jUser: "neo4j"
+    # -- Data sources configuration (Confluence, Jira, GitLab)
+    sources: {}
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+  extraVolumeMounts: []
+  extraVolumes: []
+
+# =============================================================================
+# MinIO — S3-compatible object storage for model artifacts and documents
+# =============================================================================
+minio:
+  # -- Enable MinIO deployment
+  enabled: false
+
+  image:
+    # -- MinIO image repository
+    repository: minio/minio
+    # -- MinIO image tag
+    tag: "RELEASE.2024-11-07T00-52-20Z"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  service:
+    # -- MinIO API port
+    port: 9000
+    # -- MinIO console port
+    consolePort: 9001
+
+  auth:
+    # -- MinIO root username
+    rootUser: "minioadmin"
+    # -- MinIO root password (override with --set or sealed-secrets)
+    rootPassword: "minioadmin"
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size
+    size: 100Gi
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+  # -- Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /minio/health/live
+      port: 9000
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /minio/health/ready
+      port: 9000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  extraEnv: []
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
+# PostgreSQL — Proxy system database (replaces SQLite for production)
+# =============================================================================
+postgresql:
+  # -- Enable PostgreSQL deployment
+  enabled: false
+
+  image:
+    # -- PostgreSQL image repository
+    repository: postgres
+    # -- Image tag
+    tag: "16-alpine"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 999
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+
+  service:
+    # -- PostgreSQL port
+    port: 5432
+
+  auth:
+    # -- Database username
+    username: "ragproxy"
+    # -- Database password (override with --set or sealed-secrets)
+    password: ""
+    # -- Database name
+    database: "ragproxy"
+
+  args:
+    - postgres
+    - -c
+    - shared_buffers=256MB
+    - -c
+    - effective_cache_size=768MB
+    - -c
+    - maintenance_work_mem=64MB
+    - -c
+    - max_connections=50
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size
+    size: 20Gi
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: "250m"
+      memory: 512Mi
+
+  # -- Liveness probe
+  livenessProbe:
+    exec:
+      command:
+        - pg_isready
+        - -U
+        - ragproxy
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  # -- Readiness probe
+  readinessProbe:
+    exec:
+      command:
+        - pg_isready
+        - -U
+        - ragproxy
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  extraEnv: []
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
 # Ingress
 # =============================================================================
 ingress:
@@ -675,6 +952,12 @@ secrets:
   jiraApiToken: ""
   # -- GitLab API token
   gitlabApiToken: ""
+  # -- MinIO root password
+  minioRootPassword: ""
+  # -- PostgreSQL password
+  postgresqlPassword: ""
+  # -- ETL secret for IPC between proxy and ETL
+  etlSecret: ""
 
 # =============================================================================
 # Service account

@@ -6,7 +6,13 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from proxy.app.shared.config import COLLECTION_NAME, QDRANT_HOST, QDRANT_PORT
+from proxy.app.shared.config import (
+    COLLECTION_NAME,
+    QDRANT_GRPC_ENABLED,
+    QDRANT_GRPC_PORT,
+    QDRANT_HOST,
+    QDRANT_PORT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +84,15 @@ async def _index_chunk(chunk: dict[str, Any]) -> bool:
 
         model = create_embedder()
 
-        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, check_compatibility=False)
+        client_kwargs: dict[str, Any] = {
+            "host": QDRANT_HOST,
+            "port": QDRANT_PORT,
+            "check_compatibility": False,
+            "prefer_grpc": QDRANT_GRPC_ENABLED,
+        }
+        if QDRANT_GRPC_ENABLED:
+            client_kwargs["grpc_port"] = QDRANT_GRPC_PORT
+        client = QdrantClient(**client_kwargs)
 
         embedding = model.encode(chunk["text"]).tolist()
 

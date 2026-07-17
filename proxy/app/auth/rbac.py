@@ -16,7 +16,7 @@ from fastapi import Depends, HTTPException
 
 from proxy.app.auth.jwt import UserContext, get_auth_context
 
-RBAC_ENABLED = os.getenv("RBAC_ENABLED", "false").lower() == "true"
+RBAC_ENABLED = os.getenv("RBAC_ENABLED", "true").lower() == "true"
 
 
 class Role(StrEnum):
@@ -30,10 +30,15 @@ ROLE_RANK = {Role.ADMIN: 4, Role.EXPERT: 3, Role.USER: 2, Role.READ_ONLY: 1}
 
 _PERMISSION_MAP: dict[str, Role] = {
     "admin:config": Role.ADMIN,
+    "admin:analytics": Role.ADMIN,
     "admin:users": Role.ADMIN,
     "admin:stats": Role.ADMIN,
     "admin:metrics": Role.ADMIN,
     "admin:warmup": Role.ADMIN,
+    "expert:kb:review": Role.EXPERT,
+    "expert:kb:flag": Role.EXPERT,
+    "expert:kb:flags": Role.EXPERT,
+    "expert:kb:reindex": Role.EXPERT,
     "feedback": Role.EXPERT,
     "feedback:submit": Role.EXPERT,
     "feedback:review": Role.EXPERT,

@@ -9,6 +9,11 @@ data:
   # ── Qdrant ──────────────────────────────────────────────
   QDRANT_HOST: {{ .Values.proxy.env.qdrantHost | default (printf "%s-qdrant" (include "rag-system.fullname" .)) | quote }}
   QDRANT_PORT: {{ .Values.proxy.env.qdrantPort | quote }}
+  QDRANT_GRPC_ENABLED: {{ .Values.proxy.env.qdrantGrpcEnabled | default "false" | quote }}
+  QDRANT_GRPC_PORT: {{ .Values.proxy.env.qdrantGrpcPort | default "6334" | quote }}
+  QDRANT_QUANTIZATION_ENABLED: {{ .Values.proxy.env.qdrantQuantizationEnabled | default "false" | quote }}
+  QDRANT_HNSW_M: {{ .Values.proxy.env.qdrantHnswM | default "16" | quote }}
+  QDRANT_HNSW_EF_CONSTRUCT: {{ .Values.proxy.env.qdrantHnswEfConstruct | default "100" | quote }}
   COLLECTION_NAME: {{ .Values.proxy.env.collectionName | quote }}
   # ── Embedder ────────────────────────────────────────────
   EMBEDDER_MODEL: {{ .Values.proxy.env.embedderModel | quote }}
@@ -138,3 +143,7 @@ data:
   HOST: {{ .Values.proxy.env.host | quote }}
   PORT: {{ .Values.proxy.env.port | quote }}
   WORKERS: {{ .Values.proxy.env.workers | quote }}
+  # ── Object Storage (MinIO) ──────────────────────────────
+  MINIO_ENDPOINT: {{ .Values.proxy.env.minioEndpoint | default (include "rag-system.minioEndpoint" .) | quote }}
+  # ── System Database (PostgreSQL) ────────────────────────
+  DATABASE_URL: {{ .Values.proxy.env.postgresqlDsn | default (include "rag-system.postgresqlDsn" .) | quote }}

@@ -144,3 +144,65 @@ Create the Redis URL
 {{- define "rag-system.redisUrl" -}}
 {{- printf "redis://%s-redis:%d" (include "rag-system.fullname" .) (int .Values.redis.service.port) }}
 {{- end }}
+
+{{/*
+ETL labels
+*/}}
+{{- define "rag-system.etlLabels" -}}
+{{ include "rag-system.labels" . }}
+app.kubernetes.io/component: etl
+{{- end }}
+
+{{/*
+ETL selector
+*/}}
+{{- define "rag-system.etlSelector" -}}
+{{ include "rag-system.selectorLabels" . }}
+app.kubernetes.io/component: etl
+{{- end }}
+
+{{/*
+MinIO labels
+*/}}
+{{- define "rag-system.minioLabels" -}}
+{{ include "rag-system.labels" . }}
+app.kubernetes.io/component: minio
+{{- end }}
+
+{{/*
+MinIO selector
+*/}}
+{{- define "rag-system.minioSelector" -}}
+{{ include "rag-system.selectorLabels" . }}
+app.kubernetes.io/component: minio
+{{- end }}
+
+{{/*
+PostgreSQL labels
+*/}}
+{{- define "rag-system.postgresqlLabels" -}}
+{{ include "rag-system.labels" . }}
+app.kubernetes.io/component: postgresql
+{{- end }}
+
+{{/*
+PostgreSQL selector
+*/}}
+{{- define "rag-system.postgresqlSelector" -}}
+{{ include "rag-system.selectorLabels" . }}
+app.kubernetes.io/component: postgresql
+{{- end }}
+
+{{/*
+Create the PostgreSQL connection string (libpq)
+*/}}
+{{- define "rag-system.postgresqlDsn" -}}
+{{- printf "postgresql://%s:%s@%s-postgresql:%d/%s" .Values.postgresql.auth.username .Values.postgresql.auth.password (include "rag-system.fullname" .) (int .Values.postgresql.service.port) .Values.postgresql.auth.database }}
+{{- end }}
+
+{{/*
+Create the MinIO endpoint URL
+*/}}
+{{- define "rag-system.minioEndpoint" -}}
+{{- printf "http://%s-minio:%d" (include "rag-system.fullname" .) (int .Values.minio.service.port) }}
+{{- end }}

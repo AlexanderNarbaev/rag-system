@@ -20,11 +20,15 @@ def _isolate_env(monkeypatch):
     # Default: disable auth for tests that don't test auth specifically.
     # Tests that need auth should monkeypatch AUTH_ENABLED back to True.
     monkeypatch.setenv("AUTH_ENABLED", "false")
+    monkeypatch.setenv("RBAC_ENABLED", "false")
     try:
         import proxy.app.auth.jwt as _jwt
+        import proxy.app.auth.rbac as _rbac
         import proxy.app.shared.config as _cfg
 
         monkeypatch.setattr(_cfg, "AUTH_ENABLED", False)
         monkeypatch.setattr(_jwt, "AUTH_ENABLED", False)
+        monkeypatch.setattr(_cfg, "RBAC_ENABLED", False)
+        monkeypatch.setattr(_rbac, "RBAC_ENABLED", False)
     except ImportError:
         pass

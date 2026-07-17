@@ -198,7 +198,7 @@ AD_USER_DN_TEMPLATE = os.getenv("AD_USER_DN_TEMPLATE", "cn={username},{base_dn}"
 AD_GROUP_DN = os.getenv("AD_GROUP_DN", "")
 
 # ============ RBAC ============
-RBAC_ENABLED = os.getenv("RBAC_ENABLED", "false").lower() == "true"
+RBAC_ENABLED = os.getenv("RBAC_ENABLED", "true").lower() == "true"
 
 # ============ Keycloak OIDC ============
 KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "")
@@ -257,6 +257,24 @@ TOKEN_OPTIMIZER_ENABLED = os.getenv("TOKEN_OPTIMIZER_ENABLED", "true").lower() =
 # This reduces prefill latency by caching KV-cache from common prefixes.
 # See: https://docs.vllm.ai/en/latest/features/prefix_caching.html
 PREFIX_CACHING_ENABLED = os.getenv("PREFIX_CACHING_ENABLED", "false").lower() == "true"
+
+# ============ Qdrant Performance Tuning ============
+# Scalar quantization reduces memory usage ~4x for 1024-dim vectors.
+# Enables int8 quantization for all vectors in the collection.
+# See: https://qdrant.tech/documentation/guides/quantization/
+QDRANT_QUANTIZATION_ENABLED = os.getenv("QDRANT_QUANTIZATION_ENABLED", "false").lower() == "true"
+
+# gRPC gives ~3-5x higher throughput than HTTP for Qdrant operations.
+# Requires Qdrant gRPC port to be accessible (default: 6334).
+QDRANT_GRPC_ENABLED = os.getenv("QDRANT_GRPC_ENABLED", "false").lower() == "true"
+QDRANT_GRPC_PORT = int(os.getenv("QDRANT_GRPC_PORT", "6334"))
+
+# HNSW tuning for better recall/speed tradeoff in production workloads.
+# m=16: higher m improves recall at cost of build time and memory.
+# ef_construct=100: larger build-time search depth improves index quality.
+# See: https://qdrant.tech/documentation/guides/optimize/
+QDRANT_HNSW_M = int(os.getenv("QDRANT_HNSW_M", "16"))
+QDRANT_HNSW_EF_CONSTRUCT = int(os.getenv("QDRANT_HNSW_EF_CONSTRUCT", "100"))
 
 # ============ Retrieval Evaluation ============
 EVAL_DATASET_PATH = os.getenv("EVAL_DATASET_PATH", "./data/eval_dataset.json")
