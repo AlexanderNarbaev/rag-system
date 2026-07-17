@@ -433,6 +433,15 @@ def filter_results_by_score(results: list[Any]) -> tuple[list[Any], str]:
         # Only borderline sources
         return borderline[:3], "borderline"
     # No relevant sources
+    max_score = max((r.score for r in results), default=0.0)
+    logger.warning(
+        "All %d results below threshold (max_score=%.4f, strong_threshold=%.2f, borderline_threshold=%.2f). "
+        "If Qdrant uses Distance.COSINE, scores are inverted (0=perfect). Recreate collection with Distance.DOT.",
+        len(results),
+        max_score,
+        STRONG_SCORE_THRESHOLD,
+        BORDERLINE_SCORE_THRESHOLD,
+    )
     return [], "insufficient"
 
 

@@ -131,7 +131,7 @@ class QdrantHybridIndexer:
 
         if not exists:
             # Конфигурация dense вектора
-            dense_config = models.VectorParams(size=self.dense_vector_size, distance=Distance.COSINE)
+            dense_config = models.VectorParams(size=self.dense_vector_size, distance=Distance.DOT)
             # Конфигурация sparse вектора (с использованием SparseVectorParams)
             sparse_config = models.SparseVectorParams(index=models.SparseIndexParams(on_disk=self.sparse_index_on_disk))
             self.client.create_collection(
