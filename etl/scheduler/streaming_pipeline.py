@@ -147,7 +147,7 @@ class StreamingETLPipeline:
 
     def _create_extractors(self) -> dict[str, Any]:
         """Create extractors for configured sources."""
-        extractors = {}
+        extractors: dict[str, Any] = {}
 
         for source in ["confluence", "jira", "gitlab"]:
             if source in self.config:
@@ -325,14 +325,16 @@ class StreamingETLPipeline:
                     {"state": "all", "per_page": 100},
                 )
                 for mr in mrs:
+                    if not isinstance(mr, dict):
+                        continue
                     text = f"MR: {mr.get('title', '')}\n\n{mr.get('description', '')}"
                     metadata = {
                         "source": "gitlab_mr",
                         "source_id": f"{project_id}_mr_{mr.get('iid', '')}",
-                        "title": mr.get("title", ""),
+                        "title": str(mr.get("title", "")),
                         "project": project_name,
-                        "url": mr.get("web_url", ""),
-                        "state": mr.get("state", ""),
+                        "url": str(mr.get("web_url", "")),
+                        "state": str(mr.get("state", "")),
                         "extracted_at": datetime.now(UTC).isoformat(),
                     }
                     chunks_count += self._chunk_and_index(text, metadata, "gitlab")

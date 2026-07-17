@@ -127,7 +127,7 @@ class LiveVectorLake:
 
         if deleted_hashes:  # noqa: SIM108
             # Удаляем устаревшие чанки из Qdrant
-            deleted_count = self.qdrant.delete_chunks(deleted_hashes)
+            deleted_count = self.qdrant.delete_chunks(deleted_hashes)  # type: ignore[arg-type]
         else:
             deleted_count = 0
 

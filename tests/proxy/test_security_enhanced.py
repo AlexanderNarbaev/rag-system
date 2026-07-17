@@ -633,9 +633,9 @@ class TestJWTEdgeCases:
     """Edge case tests for JWT token handling."""
 
     def test_create_token_with_custom_expiry(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret-edge")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-edge")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-edge")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
 
@@ -647,9 +647,9 @@ class TestJWTEdgeCases:
         assert len(token) > 20
 
     def test_token_contains_all_claims(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret-claims")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-claims")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-claims")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
 
@@ -675,9 +675,9 @@ class TestJWTEdgeCases:
         assert ctx.namespace == "engineering"
 
     def test_verify_invalid_token_format(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret-invalid")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-invalid")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-invalid")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
 
@@ -690,9 +690,9 @@ class TestJWTEdgeCases:
         assert exc_info.value.status_code == 401
 
     def test_verify_empty_token(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret-empty")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-empty")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-empty")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
 
         from fastapi import HTTPException
 
@@ -703,9 +703,9 @@ class TestJWTEdgeCases:
         assert exc_info.value.status_code == 401
 
     def test_get_user_from_token_expired(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret-expired-gentle")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-expired-gentle")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-expired-gentle")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
 

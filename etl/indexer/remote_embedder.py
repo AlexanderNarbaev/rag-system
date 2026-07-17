@@ -116,7 +116,10 @@ class RemoteEmbedder:
         :return: numpy array of shape (n_texts, embedding_dim) or (embedding_dim,) for single text.
         """
         single = isinstance(texts, str)
-        input_list = [texts] if single else list(texts)
+        if single:
+            input_list: list[str] = [texts]
+        else:
+            input_list = list(texts)
         if not input_list:
             return np.array([])
 
@@ -124,7 +127,7 @@ class RemoteEmbedder:
 
         # Process in batches
         for i in range(0, len(input_list), self._max_batch_size):
-            batch = input_list[i : i + self._max_batch_size]
+            batch: list[str] = input_list[i : i + self._max_batch_size]
             try:
                 batch_vecs = self._call_api(batch)
                 all_vecs.extend(batch_vecs)

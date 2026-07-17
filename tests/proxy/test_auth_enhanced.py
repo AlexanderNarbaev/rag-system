@@ -23,9 +23,9 @@ from proxy.app.auth.jwt import (
 
 @pytest.fixture(autouse=True)
 def _set_jwt_secret(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
     monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
     monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
     monkeypatch.setattr("proxy.app.shared.config.AUTH_ENABLED", False)
@@ -113,7 +113,7 @@ class TestCreateMockToken:
         assert isinstance(token, str)
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -125,7 +125,7 @@ class TestCreateMockToken:
         token = create_mock_token()
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )

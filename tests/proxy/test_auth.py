@@ -20,9 +20,9 @@ from proxy.app.auth.jwt import get_user_from_token
 # Override JWT_SECRET for reproducible tests
 @pytest.fixture(autouse=True)
 def _set_jwt_secret(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
     monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
     monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
     monkeypatch.setattr("proxy.app.shared.config.AUTH_ENABLED", False)
@@ -83,7 +83,7 @@ class TestCreateToken:
 
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -103,7 +103,7 @@ class TestCreateToken:
         )
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -114,7 +114,7 @@ class TestCreateToken:
         token = create_token(user_id="u1", username="bob")
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -126,11 +126,11 @@ class TestCreateToken:
         token = create_token(
             user_id="u1",
             username="alice",
-            secret="custom-secret-key",
+            secret="custom-secret-key-for-testing-ok",
         )
         decoded = jwt.decode(
             token,
-            key="custom-secret-key",
+            key="custom-secret-key-for-testing-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -192,8 +192,8 @@ class TestVerifyToken:
 
     def test_wrong_secret_raises_401(self, monkeypatch):
         token = create_token(user_id="u1", username="alice")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "different-key")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "different-key")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "different-key-for-testing-ok-32b")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "different-key-for-testing-ok-32b")
         with pytest.raises(HTTPException) as exc_info:
             verify_token(token)
         assert exc_info.value.status_code == 401
@@ -211,7 +211,7 @@ class TestVerifyToken:
         }
         token = jwt.encode(
             payload,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithm="HS256",
         )
         ctx = verify_token(token)

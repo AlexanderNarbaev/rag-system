@@ -22,9 +22,9 @@ from proxy.app.auth.jwt import (
 
 @pytest.fixture(autouse=True)
 def _set_jwt_secret(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests")
-    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests")
+    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+    monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+    monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
     monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
     monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
     monkeypatch.setattr("proxy.app.shared.config.AUTH_ENABLED", False)
@@ -47,9 +47,9 @@ def _set_jwt_secret(monkeypatch):
 class TestGetVerifyKey:
     def test_returns_secret_for_hs256(self, monkeypatch):
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "my-secret")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "my-long-enough-secret-for-testing")
         key = _get_verify_key()
-        assert key == "my-secret"
+        assert key == "my-long-enough-secret-for-testing"
 
     def test_returns_public_key_for_rs256(self, monkeypatch):
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "RS256")
@@ -95,7 +95,7 @@ class TestCreateTokenPair:
 
             decoded = jwt.decode(
                 result["access_token"],
-                key="test-secret-key-for-unit-tests",
+                key="test-secret-key-for-unit-tests-ok",
                 algorithms=["HS256"],
                 options={"verify_exp": False},
             )
@@ -189,7 +189,7 @@ class TestBlacklistAccessToken:
             "jti": "unique-jti-123",
             "type": "access",
         }
-        token = jwt.encode(payload, key="test-secret-key-for-unit-tests", algorithm="HS256")
+        token = jwt.encode(payload, key="test-secret-key-for-unit-tests-ok", algorithm="HS256")
 
         with patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db):
             await blacklist_access_token(token)
@@ -238,7 +238,7 @@ class TestBlacklistAccessToken:
             "jti": "expired-jti-456",
             "type": "access",
         }
-        token = jwt.encode(payload, key="test-secret-key-for-unit-tests", algorithm="HS256")
+        token = jwt.encode(payload, key="test-secret-key-for-unit-tests-ok", algorithm="HS256")
 
         with patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db):
             await blacklist_access_token(token)
@@ -274,7 +274,7 @@ class TestCreateMockToken:
         token = create_mock_token(user_id="mock-1", username="mockuser", roles=["admin"])
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -286,7 +286,7 @@ class TestCreateMockToken:
         token = create_mock_token()
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -296,10 +296,10 @@ class TestCreateMockToken:
         assert decoded["groups"] == ["everyone"]
 
     def test_custom_secret(self):
-        token = create_mock_token(secret="custom-key")
+        token = create_mock_token(secret="custom-key-for-testing-32chars-ok")
         decoded = jwt.decode(
             token,
-            key="custom-key",
+            key="custom-key-for-testing-32chars-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )
@@ -309,7 +309,7 @@ class TestCreateMockToken:
         token = create_mock_token(namespace="engineering")
         decoded = jwt.decode(
             token,
-            key="test-secret-key-for-unit-tests",
+            key="test-secret-key-for-unit-tests-ok",
             algorithms=["HS256"],
             options={"verify_exp": False},
         )

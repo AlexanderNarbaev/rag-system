@@ -1,0 +1,44 @@
+# docker-compose.openwebui.dev.yml
+# Development override for lightweight local OpenWebUI testing.
+# Использование:
+#   docker compose -f docker-compose.openwebui.yml -f docker-compose.openwebui.dev.yml up -d
+#   или через Makefile: make openwebui-dev
+
+services:
+  openwebui:
+    environment:
+      - ENABLE_SIGNUP=true
+      - CONTENT_EXTRACTION_ENGINE=
+      - TIKA_SERVER_URL=
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: "1G"
+        reservations:
+          cpus: "0.25"
+          memory: "256M"
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256M"
+        reservations:
+          cpus: "0.1"
+          memory: "32M"
+
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: "512M"
+        reservations:
+          cpus: "0.25"
+          memory: "128M"
+
+  tika:
+    profiles:
+      - disabled

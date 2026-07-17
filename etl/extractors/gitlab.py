@@ -196,7 +196,7 @@ class GitLabExtractor:
 
     def get_commits(self, project_id: int, since: str | None = None) -> list[dict[str, Any]]:
         """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
-        params = {"with_stats": True}
+        params: dict[str, Any] = {"with_stats": True}
         if since:
             params["since"] = since
         commits = []

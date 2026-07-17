@@ -115,7 +115,7 @@ def _is_retryable(exc: Exception, config: RetryConfig) -> bool:
     return isinstance(exc, config.retryable_exceptions)
 
 
-async def async_retry(
+async def async_retry[T](
     fn: Callable[..., Awaitable[T]],
     *args: Any,
     config: RetryConfig | None = None,
@@ -208,7 +208,7 @@ async def async_retry(
     raise RetryExhaustedError(config.max_attempts, last_error or RuntimeError("unknown"))
 
 
-def sync_retry(
+def sync_retry[T](
     fn: Callable[..., T],
     *args: Any,
     config: RetryConfig | None = None,

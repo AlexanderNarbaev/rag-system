@@ -115,7 +115,7 @@ class EventPipeline:
         self._consumer_task: asyncio.Task | None = None
 
         # Stats
-        self.stats = {
+        self.stats: dict[str, Any] = {
             "events_produced": 0,
             "events_consumed": 0,
             "events_failed": 0,

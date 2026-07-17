@@ -389,7 +389,7 @@ if __name__ == "__main__":
         {"source": "abc123", "target": "def456", "type": "WORKS_ON", "properties": {"since": "2025-01-01"}},
     ]
 
-    with Neo4jLoader(**config) as loader:
+    with Neo4jLoader(**config) as loader:  # type: ignore[arg-type]
         batch_load_from_extractor(loader, sample_entities, sample_relations, clear_old=False)
         stats = loader.get_graph_statistics()
         print("Final stats:", stats)

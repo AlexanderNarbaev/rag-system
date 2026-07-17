@@ -25,7 +25,7 @@ def _create_test_token(
     username="testuser",
     roles=None,
     groups=None,
-    secret="test-secret-key-for-integration",
+    secret="test-secret-key-for-integration-tests",
 ):
     """Create a valid JWT token for testing."""
     from proxy.app.auth.jwt import create_token
@@ -40,7 +40,7 @@ def _create_test_token(
     )
 
 
-def _create_admin_token(secret="test-secret-key-for-integration"):
+def _create_admin_token(secret="test-secret-key-for-integration-tests"):
     """Create a JWT token with admin role."""
     return _create_test_token(
         user_id="admin-001",
@@ -78,9 +78,11 @@ def auth_enabled_client():
         patch("proxy.app.main.LOG_REQUESTS", False),
         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
         patch("proxy.app.shared.config.AUTH_ENABLED", True),
-        patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-integration"),
+        patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-integration-tests"),
+        patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"),
         patch("proxy.app.auth.jwt.AUTH_ENABLED", True),
-        patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration"),
+        patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration-tests"),
+        patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
     ):
         from fastapi.testclient import TestClient
 
@@ -236,7 +238,8 @@ class TestLoginFlow:
         with (
             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_user_db),
             patch("proxy.app.auth.user_db.get_user_db", return_value=mock_user_db),
-            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration"),
+            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-integration-tests"),
+            patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
         ):
             response = auth_disabled_client.post(
                 "/v1/auth/login",
@@ -389,18 +392,22 @@ class TestTokenValidation:
         """create_token produces a token that verify_token can decode."""
         from proxy.app.auth.jwt import create_token, verify_token
 
-        secret = "test-secret-validation"
-        token = create_token(
-            user_id="u1",
-            username="alice",
-            roles=["admin", "user"],
-            groups=["engineering"],
-            access_level="confidential",
-            namespace="eng",
-            secret=secret,
-        )
+        secret = "test-secret-validation-key-32bytes"
+        with patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"):
+            token = create_token(
+                user_id="u1",
+                username="alice",
+                roles=["admin", "user"],
+                groups=["engineering"],
+                access_level="confidential",
+                namespace="eng",
+                secret=secret,
+            )
 
-        with patch("proxy.app.auth.jwt._get_verify_key", return_value=secret):
+        with (
+            patch("proxy.app.auth.jwt._get_verify_key", return_value=secret),
+            patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
+        ):
             ctx = verify_token(token)
 
         assert ctx.user_id == "u1"
@@ -414,10 +421,12 @@ class TestTokenValidation:
         """verify_token raises HTTPException for token signed with wrong secret."""
         from proxy.app.auth.jwt import create_token, verify_token
 
-        token = create_token(user_id="u1", username="alice", secret="correct-secret")
+        with patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"):
+            token = create_token(user_id="u1", username="alice", secret="correct-secret-key-for-testing-ok32")
 
         with (
-            patch("proxy.app.auth.jwt._get_verify_key", return_value="wrong-secret"),
+            patch("proxy.app.auth.jwt._get_verify_key", return_value="wrong-secret-key-for-testing-ok32"),
+            patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
             pytest.raises(Exception, match="Invalid token"),
         ):
             verify_token(token)

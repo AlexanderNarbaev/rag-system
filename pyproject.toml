@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
@@ -28,7 +28,7 @@ disallow_untyped_defs = false
 warn_return_any = false
 disallow_any_generics = false
 no_implicit_optional = false
-disable_error_code = ["no-untyped-def", "no-untyped-call", "var-annotated", "return", "override", "misc", "assignment", "arg-type", "attr-defined", "name-defined", "index", "list-item", "dict-item", "union-attr", "return-value", "operator"]
+disable_error_code = ["no-untyped-def", "no-untyped-call", "var-annotated", "return", "override", "misc", "name-defined", "index", "list-item", "dict-item", "union-attr", "return-value", "operator"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -47,14 +47,20 @@ markers = [
 [tool.coverage.run]
 source = ["proxy", "etl"]
 omit = [
-    "proxy/app/static/*",
-    "etl/scheduler/streaming_pipeline.py",
+    # NOTE: Keep tests/ and __pycache__ excluded
     "*/__pycache__/*",
     "*/tests/*",
+    # Streaming pipeline (webhook + consumer) not yet tested
+    "etl/scheduler/streaming_pipeline.py",
+    # FLARE adaptive retrieval — not yet tested
     "proxy/app/core/flare.py",
+    # RAGAS evaluation — requires running models
     "proxy/app/core/ragas_eval.py",
+    # Query router — not yet tested
     "proxy/app/core/query_router.py",
+    # RAPTOR tree builder — not yet tested
     "etl/indexer/tree_builder.py",
+    # GraphRAG community detection — not yet tested
     "etl/graph_builder/community.py",
 ]
 

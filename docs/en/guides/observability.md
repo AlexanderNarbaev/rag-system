@@ -175,5 +175,5 @@ Structured log fields: `request_id`, `correlation_id`, `trace_id`, `span_id`, `c
 
 ## Related ADRs
 
-- [ADR-001: Architecture Overview](../adr/ADR-001.md)
+- [ADR-001: BAAI/bge-m3 Embedding Model](../adr/ADR-001-bge-m3-embedding-model.md)
 - [Monitoring Guide](monitoring-guide.md)

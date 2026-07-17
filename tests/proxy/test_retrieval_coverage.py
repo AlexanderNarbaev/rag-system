@@ -112,7 +112,6 @@ class TestHybridSearchEdgeCases:
             result = hybrid_search("query")
             assert result == []
 
-    @pytest.mark.xfail(reason="May fail due to global state interference in full test suite runs", strict=False)
     def test_dense_with_circuit_breaker_open(self):
         """Cover lines 474-479 - CircuitBreakerOpenError for dense search."""
         import proxy.app.core.retrieval as ret_mod
@@ -147,7 +146,6 @@ class TestHybridSearchEdgeCases:
         finally:
             ret_mod._get_cb = stored_cb
 
-    @pytest.mark.xfail(reason="May fail due to global state interference in full test suite runs", strict=False)
     def test_sparse_with_circuit_breaker_open(self):
         """Cover lines 498-499 - CircuitBreakerOpenError for sparse."""
         import proxy.app.core.retrieval as ret_mod

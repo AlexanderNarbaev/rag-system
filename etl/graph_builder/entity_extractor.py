@@ -174,10 +174,15 @@ class EntityRelationExtractor:
 
         try:
             # Вызов SLM (ожидаем OpenAI-совместимый endpoint)
-            payload = {"prompt": prompt, "max_tokens": 1000, "temperature": 0.2, "stop": ["\n\n", "```"]}
-            if self.slm_endpoint.endswith("/completions"):
+            payload: dict[str, Any] = {
+                "prompt": prompt,
+                "max_tokens": 1000,
+                "temperature": 0.2,
+                "stop": ["\n\n", "```"],
+            }
+            if self.slm_endpoint and self.slm_endpoint.endswith("/completions"):
                 response = requests.post(self.slm_endpoint, json=payload, timeout=30)
-            else:
+            elif self.slm_endpoint:
                 # Предполагаем chat completions API
                 payload["messages"] = [{"role": "user", "content": prompt}]
                 del payload["prompt"]

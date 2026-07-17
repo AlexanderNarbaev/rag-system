@@ -1,8 +1,13 @@
 # ruff: noqa: E501, N803
 """Tests for etl/scheduler/run_etl.py — ETL orchestrator coverage."""
 
+import atexit
+import contextlib
 import json
+import signal
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestRunExtractConfluence:
@@ -504,3 +509,296 @@ class TestMainFunction:
 
         result = load_config(config_file)
         assert "confluence" in result
+
+
+class TestArgumentParsing:
+    def test_default_config_path(self) -> None:
+        from etl.scheduler.run_etl import (
+            main,
+        )
+
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py"]) as _argv,
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.WALManager") as mock_wal,
+            patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
+            patch("etl.scheduler.run_etl.run_chunking") as mock_chunk,
+            patch("etl.scheduler.run_etl.QdrantHybridIndexer"),
+            patch("etl.scheduler.run_etl.LiveVectorLake"),
+            patch("etl.scheduler.run_etl.ChunkVersionStore"),
+        ):
+            mock_load.return_value = {}
+            mock_wal.return_value = MagicMock()
+            mock_collect.return_value = []
+            mock_chunk.return_value = []
+            main()
+
+    def test_custom_config_path(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py", "--config", "/custom/path.yaml"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.WALManager") as mock_wal,
+            patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
+            patch("etl.scheduler.run_etl.run_chunking") as mock_chunk,
+            patch("etl.scheduler.run_etl.QdrantHybridIndexer"),
+            patch("etl.scheduler.run_etl.LiveVectorLake"),
+            patch("etl.scheduler.run_etl.ChunkVersionStore"),
+        ):
+            mock_load.return_value = {}
+            mock_wal.return_value = MagicMock()
+            mock_collect.return_value = []
+            mock_chunk.return_value = []
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            main()
+            mock_load.assert_called_once()
+            call_arg = mock_load.call_args[0][0]
+            assert str(call_arg) == "/custom/path.yaml"
+
+    def test_test_connection_flag(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py", "--test-connection"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.extractors.confluence.ConfluenceExtractor") as mock_extractor_cls,
+        ):
+            mock_load.return_value = {"confluence": {"url": "http://confluence", "token": "test-token"}}
+            mock_extractor = MagicMock()
+            mock_extractor.test_connection.return_value = True
+            mock_extractor_cls.return_value = mock_extractor
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            main()
+            mock_extractor.test_connection.assert_called_once()
+
+    def test_test_connection_all_fail_gracefully(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py", "--test-connection"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.ConfluenceExtractor") as mock_conflu,
+            patch("etl.scheduler.run_etl.JiraExtractor") as mock_jira,
+            patch("etl.scheduler.run_etl.GitLabExtractor") as mock_gitlab,
+        ):
+            mock_load.return_value = {
+                "confluence": {"url": "http://confluence"},
+                "jira": {"url": "http://jira"},
+                "gitlab": {"url": "http://gitlab"},
+            }
+            mock_conflu.side_effect = OSError("No route to host")
+            mock_jira.side_effect = OSError("No route to host")
+            mock_gitlab.side_effect = OSError("No route to host")
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            main()
+
+    def test_skip_extract_flag(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py", "--skip-extract"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.WALManager") as mock_wal,
+            patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
+            patch("etl.scheduler.run_etl.run_chunking") as mock_chunk,
+            patch("etl.scheduler.run_etl.QdrantHybridIndexer"),
+            patch("etl.scheduler.run_etl.LiveVectorLake"),
+            patch("etl.scheduler.run_etl.ChunkVersionStore"),
+        ):
+            mock_load.return_value = {"confluence": {"output_dir": "/tmp/conflu"}}
+            mock_wal.return_value = MagicMock()
+            mock_collect.return_value = [{"id": "d1"}]
+            mock_chunk.return_value = []
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            main()
+            mock_chunk.assert_called_once()
+
+    def test_timeout_override(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py", "--timeout", "30"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.WALManager") as mock_wal,
+            patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
+            patch("etl.scheduler.run_etl.run_chunking") as mock_chunk,
+            patch("etl.scheduler.run_etl.QdrantHybridIndexer"),
+            patch("etl.scheduler.run_etl.LiveVectorLake"),
+            patch("etl.scheduler.run_etl.ChunkVersionStore"),
+            patch("etl.scheduler.run_etl.run_extract_confluence") as mock_x,
+        ):
+            mock_load.return_value = {
+                "confluence": {"url": "http://test", "output_dir": "/tmp/out", "token": "tk"},
+                "chunking": {},
+            }
+            mock_wal.return_value = MagicMock()
+            mock_collect.return_value = []
+            mock_chunk.return_value = []
+            mock_x.return_value = MagicMock()
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            main()
+            assert mock_load.return_value["confluence"]["timeout"] == 30
+
+    def test_reset_wal_flag(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py", "--reset-wal"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.WALManager") as mock_wal_cls,
+            patch("etl.scheduler.run_etl.collect_all_documents") as mock_collect,
+            patch("etl.scheduler.run_etl.run_chunking") as mock_chunk,
+            patch("etl.scheduler.run_etl.QdrantHybridIndexer"),
+            patch("etl.scheduler.run_etl.LiveVectorLake"),
+            patch("etl.scheduler.run_etl.ChunkVersionStore"),
+        ):
+            mock_load.return_value = {"chunking": {}}
+            mock_wal = MagicMock()
+            mock_wal_cls.return_value = mock_wal
+            mock_collect.return_value = []
+            mock_chunk.return_value = []
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            main()
+            mock_wal.reset_all.assert_called_once()
+
+    def test_all_extractors_fail_exits(self) -> None:
+        with (  # noqa: SIM117
+            patch("sys.argv", ["run_etl.py"]),
+            patch("etl.scheduler.run_etl.load_config") as mock_load,
+            patch("etl.scheduler.run_etl.WALManager") as mock_wal,
+            patch("etl.scheduler.run_etl._run_extractor_safe") as mock_safe,
+            patch("etl.scheduler.run_etl.QdrantHybridIndexer"),
+            patch("etl.scheduler.run_etl.LiveVectorLake"),
+        ):
+            mock_load.return_value = {
+                "confluence": {"url": "http://test", "output_dir": "/tmp/out"},
+                "jira": {"url": "http://test", "output_dir": "/tmp/out"},
+            }
+            mock_wal.return_value = MagicMock()
+            mock_safe.return_value = ("confluence", None, "Error")
+            from etl.scheduler.run_etl import main  # noqa: PLC0415
+
+            with pytest.raises(SystemExit):
+                main()
+
+
+class TestSignalHandler:
+    def test_single_signal_sets_event(self) -> None:
+        import etl.scheduler.run_etl as run_etl_mod
+
+        run_etl_mod._shutdown_event.clear()
+        assert not run_etl_mod._shutdown_event.is_set()
+        run_etl_mod._signal_handler(signal.SIGINT, None)
+        assert run_etl_mod._shutdown_event.is_set()
+        run_etl_mod._shutdown_event.clear()
+
+    def test_double_signal_exits(self) -> None:
+        import signal as sig_mod
+
+        import etl.scheduler.run_etl as run_etl_mod
+
+        run_etl_mod._shutdown_event.clear()
+        # First signal
+        run_etl_mod._signal_handler(sig_mod.SIGINT, None)
+        assert run_etl_mod._shutdown_event.is_set()
+        # Second signal should raise SystemExit
+        with pytest.raises(SystemExit):
+            run_etl_mod._signal_handler(sig_mod.SIGINT, None)
+        run_etl_mod._shutdown_event.clear()
+
+
+class TestWalCheckpointOnExit:
+    def test_save_wal_on_exit(self) -> None:
+        import etl.scheduler.run_etl as run_etl_mod
+
+        mock_wal = MagicMock()
+
+        def _save_on_exit() -> None:
+            with contextlib.suppress(Exception):
+                mock_wal.set_checkpoint("pipeline", {"shutdown": True})
+
+        with patch.object(run_etl_mod.atexit, "register", return_value=None):
+            atexit.register(_save_on_exit)
+        _save_on_exit()
+        mock_wal.set_checkpoint.assert_called_once()
+        call_args = mock_wal.set_checkpoint.call_args[0]
+        assert call_args[0] == "pipeline"
+        assert call_args[1]["shutdown"] is True
+
+    def test_save_wal_on_exit_handles_error(self) -> None:
+        mock_wal = MagicMock()
+        mock_wal.set_checkpoint.side_effect = RuntimeError("WAL write failed")
+
+        def _save_on_exit() -> None:
+            with contextlib.suppress(Exception):
+                mock_wal.set_checkpoint("pipeline", {"shutdown": True})
+
+        _save_on_exit()  # Should not raise
+
+
+class TestEmptyCollectDocuments:
+    def test_missing_dirs(self, tmp_path) -> None:
+        from etl.scheduler.run_etl import collect_all_documents
+
+        docs = collect_all_documents([tmp_path / "nope1", tmp_path / "nope2", tmp_path / "nope3"])
+        assert docs == []
+
+    def test_gitlab_with_project_info(self, tmp_path) -> None:
+        gitlab_dir = tmp_path / "gitlab"
+        proj_dir = gitlab_dir / "myproject"
+        proj_dir.mkdir(parents=True)
+        project_data = {"id": 1, "namespace": {"full_path": "myorg/myproject"}, "visibility": "private"}
+        (proj_dir / "project.json").write_text(json.dumps(project_data))
+        commits_data = [
+            {
+                "id": "abc123def456",
+                "title": "Fix bug",
+                "message": "Fixed",
+                "author_name": "dev1",
+                "created_at": "2025-01-01",
+                "diff": [],
+            },
+        ]
+        (proj_dir / "commits.json").write_text(json.dumps(commits_data))
+
+        conflu_dir = tmp_path / "confluence"
+        jira_dir = tmp_path / "jira"
+        conflu_dir.mkdir()
+        jira_dir.mkdir()
+
+        from etl.scheduler.run_etl import collect_all_documents
+
+        docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
+        assert len(docs) == 1
+        assert docs[0]["metadata"]["namespace"] == "myorg/myproject"
+        assert docs[0]["metadata"]["visibility"] == "private"
+
+    def test_jira_with_all_metadata(self, tmp_path) -> None:
+        jira_dir = tmp_path / "jira"
+        issue_dir = jira_dir / "PROJ-456"
+        issue_dir.mkdir(parents=True)
+        issue_data = {
+            "key": "PROJ-456",
+            "summary": "Feature request",
+            "description": "Add dark mode",
+            "status": "In Progress",
+            "priority": "Medium",
+            "assignee": "dev2",
+            "reporter": "pm1",
+            "project_key": "PROJ",
+            "issue_type": "Story",
+            "labels": ["frontend", "ux"],
+            "components": ["UI"],
+            "created": "2025-06-01",
+            "updated": "2025-06-15",
+            "comments": [],
+        }
+        (issue_dir / "issue.json").write_text(json.dumps(issue_data))
+
+        conflu_dir = tmp_path / "confluence"
+        gitlab_dir = tmp_path / "gitlab"
+        conflu_dir.mkdir()
+        gitlab_dir.mkdir()
+
+        from etl.scheduler.run_etl import collect_all_documents
+
+        docs = collect_all_documents([conflu_dir, jira_dir, gitlab_dir])
+        assert len(docs) == 1
+        assert docs[0]["source_type"] == "jira"
+        assert docs[0]["metadata"]["issue_type"] == "Story"
+        assert "frontend" in docs[0]["metadata"]["labels"]

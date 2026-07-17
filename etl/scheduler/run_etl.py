@@ -433,8 +433,8 @@ def main():
             try:
                 from etl.extractors.confluence import ConfluenceExtractor
 
-                extractor = ConfluenceExtractor(confluence_config)
-                results["confluence"] = extractor.test_connection()
+                conflu_extractor = ConfluenceExtractor(confluence_config)
+                results["confluence"] = conflu_extractor.test_connection()
             except Exception as e:
                 logger.error(f"Confluence: {e}")
                 results["confluence"] = False
@@ -445,9 +445,9 @@ def main():
             try:
                 from etl.extractors.jira import JiraExtractor
 
-                extractor = JiraExtractor(jira_config)
+                jira_extractor = JiraExtractor(jira_config)
                 logger.info(f"Testing Jira connection to {jira_config['url']}...")
-                resp = extractor._request("/rest/api/2/myself")
+                resp = jira_extractor._request("/rest/api/2/myself")
                 logger.info(f"✅ Jira: {resp.get('displayName', 'OK')}")
                 results["jira"] = True
             except Exception as e:
@@ -460,9 +460,9 @@ def main():
             try:
                 from etl.extractors.gitlab import GitLabExtractor
 
-                extractor = GitLabExtractor(gitlab_config)
+                gitlab_extractor = GitLabExtractor(gitlab_config)
                 logger.info(f"Testing GitLab connection to {gitlab_config['url']}...")
-                resp = extractor._request("/api/v4/user")
+                resp = gitlab_extractor._request("/api/v4/user")
                 logger.info(f"✅ GitLab: {resp.get('name', 'OK')}")
                 results["gitlab"] = True
             except Exception as e:
@@ -500,7 +500,8 @@ def main():
                     "forced": _force_exit,
                 },
             )
-            logger.info("WAL checkpoint saved on exit")
+            # Use print() instead of logger — logging stream may already be closed during shutdown
+            print("WAL checkpoint saved on exit", file=sys.stderr)
         except Exception as e:
             logger.error(f"Failed to save WAL on exit: {e}")
 
@@ -544,7 +545,7 @@ def main():
                         failed_extractors.append((name, error))
                         logger.warning(f"Extractor '{name}' failed — continuing with other extractors")
                         extract_dirs.append(default_dirs[name])
-                    else:
+                    elif output_dir is not None:
                         extract_dirs.append(output_dir)
 
             if failed_extractors:

@@ -16,7 +16,7 @@ from typing import Any
 try:
     from bs4 import BeautifulSoup
 except ImportError:
-    BeautifulSoup = None
+    BeautifulSoup = None  # type: ignore[assignment]
 try:
     import markdown
 except ImportError:

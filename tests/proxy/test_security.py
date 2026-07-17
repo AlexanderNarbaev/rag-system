@@ -576,9 +576,9 @@ class TestJwtSecurity:
             create_token(user_id="u1", username="alice")
 
     def test_none_algorithm_rejected(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
         import jwt as pyjwt
@@ -592,9 +592,9 @@ class TestJwtSecurity:
         assert exc_info.value.status_code == 401
 
     def test_expired_token_rejected(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
         from fastapi import HTTPException
@@ -608,9 +608,9 @@ class TestJwtSecurity:
 
     @pytest.mark.asyncio
     async def test_token_blacklist_works(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
 
@@ -627,9 +627,9 @@ class TestJwtSecurity:
             mock_db.add_to_blacklist.assert_called_once()
 
     def test_token_without_jti_set(self, monkeypatch):
-        monkeypatch.setenv("JWT_SECRET", "test-secret")
-        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret")
-        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret")
+        monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
+        monkeypatch.setattr("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-ok")
         monkeypatch.setattr("proxy.app.shared.config.JWT_ALGORITHM", "HS256")
         monkeypatch.setattr("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256")
         from proxy.app.auth.jwt import create_token, verify_token

@@ -80,14 +80,16 @@ class QdrantHybridIndexer:
             raise ImportError("qdrant-client is required. Install: pip install qdrant-client")
 
         # Подключение к Qdrant
-        self.client = QdrantClient(
-            host=host,
-            port=port,
-            grpc_port=grpc_port,
-            prefer_grpc=prefer_grpc,
-            https=https,
-            api_key=api_key,
-        )
+        client_kwargs: dict[str, Any] = {
+            "host": host,
+            "port": port,
+            "prefer_grpc": prefer_grpc,
+            "https": https,
+            "api_key": api_key,
+        }
+        if grpc_port is not None:
+            client_kwargs["grpc_port"] = grpc_port
+        self.client = QdrantClient(**client_kwargs)
         self.collection_name = collection_name
         self.embedder_model_name = embedder_model_name
         self.embedder_device = embedder_device
@@ -213,7 +215,7 @@ class QdrantHybridIndexer:
         # Очищаем None значения
         payload = {k: v for k, v in payload.items() if v is not None}
 
-        vectors = {"dense": dense_vec}
+        vectors: dict[str, Any] = {"dense": dense_vec}
         if sparse_vec is not None:
             vectors["sparse"] = sparse_vec
 
@@ -255,7 +257,7 @@ class QdrantHybridIndexer:
         try:
             self.client.delete(
                 collection_name=self.collection_name,
-                points_selector=models.PointIdsList(points=chunk_ids),
+                points_selector=models.PointIdsList(points=chunk_ids),  # type: ignore[arg-type]
             )
             logger.info(f"Deleted {len(chunk_ids)} chunks")
             return len(chunk_ids)
@@ -396,7 +398,7 @@ class QdrantHybridIndexer:
         query_vectors = self._compute_colbert_vectors(query)
 
         try:
-            results = self.client.search(
+            results = self.client.search(  # type: ignore[attr-defined]
                 collection_name=self.collection_name,
                 query_vector=("colbert", query_vectors),
                 limit=limit,

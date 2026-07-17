@@ -10,9 +10,10 @@
 #   ./scripts/init-openwebui.sh              # Interactive mode
 #   ./scripts/init-openwebui.sh --auto       # Automatic mode (no prompts)
 #   ./scripts/init-openwebui.sh --recreate   # Full reinstall (delete all data)
+#   ./scripts/init-openwebui.sh --dev        # Use dev override (no PostgreSQL/Tika, enable signup)
 #
 # Requirements:
-#   - Docker 24+ and Docker Compose v2
+#   - Docker 24+ and Docker Compose v2.22+
 #   - Running RAG Proxy in rag-network
 #   - Access to MinIO (minio:9000 in rag-network)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -32,6 +33,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly COMPOSE_DIR="$PROJECT_ROOT/deploy/docker"
 readonly COMPOSE_FILE="$COMPOSE_DIR/docker-compose.openwebui.yml"
+readonly COMPOSE_DEV_OVERRIDE="$COMPOSE_DIR/docker-compose.openwebui.dev.yml"
 readonly ENV_FILE="$COMPOSE_DIR/.env.openwebui"
 readonly MINIO_ENDPOINT="http://minio:9000"
 readonly MINIO_BUCKET="openwebui-files"
@@ -42,6 +44,8 @@ readonly SECRET_KEY_LENGTH=32
 AUTO_MODE=false
 RECREATE_MODE=false
 SKIP_CHECKS=false
+DEV_MODE=false
+HAS_DOCKER_WAIT=false
 
 # ── Functions ──────────────────────────────────────────────────────────────────
 
@@ -107,12 +111,16 @@ parse_args() {
             --skip-checks|-s)
                 SKIP_CHECKS=true
                 ;;
+            --dev|-d)
+                DEV_MODE=true
+                ;;
             --help|-h)
-                echo "Usage: $0 [--auto] [--recreate] [--skip-checks]"
+                echo "Usage: $0 [--auto] [--recreate] [--skip-checks] [--dev]"
                 echo ""
                 echo "  --auto, -a        Automatic mode (no interactive prompts)"
                 echo "  --recreate, -r    Full reinstall (delete all volumes and data)"
                 echo "  --skip-checks, -s Skip dependency checks"
+                echo "  --dev, -d         Use dev override (no PostgreSQL/Tika, enable signup)"
                 echo "  --help, -h        Show this help"
                 exit 0
                 ;;
@@ -146,6 +154,19 @@ check_prerequisites() {
     # Docker Compose v2
     if docker compose version &> /dev/null; then
         log_success "Docker Compose: $(docker compose version --short)"
+
+        # Проверка поддержки флага --wait (добавлен в Docker Compose v2.22+)
+        local compose_version
+        compose_version=$(docker compose version --short | grep -oP '\d+\.\d+' || echo "0.0")
+        if printf '%s\n' "2.22" "$compose_version" | sort -V -C 2>/dev/null; then
+            HAS_DOCKER_WAIT=true
+            log_info "Docker Compose supports --wait (v${compose_version})"
+        elif [ "$(printf '%s\n' "2.22" "$compose_version" | sort -V | head -1)" = "2.22" ]; then
+            HAS_DOCKER_WAIT=true
+            log_info "Docker Compose supports --wait (v${compose_version})"
+        else
+            log_warning "Docker Compose ${compose_version} does not support --wait. Upgrade to v2.22+ or expect health-check fallback."
+        fi
     elif docker-compose version &> /dev/null; then
         log_warning "Found legacy docker-compose v1. Docker Compose v2 (plugin) is recommended"
     else
@@ -183,6 +204,26 @@ check_rag_network() {
 
     if docker network inspect rag-network &> /dev/null; then
         log_success "rag-network exists"
+
+        # Проверка ожидаемых контейнеров в сети
+        local containers
+        containers=$(docker network inspect rag-network --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || echo "")
+
+        local missing_containers=()
+        if ! echo "$containers" | grep -q 'rag-proxy'; then
+            missing_containers+=("rag-proxy")
+        fi
+        if ! echo "$containers" | grep -q 'rag-minio'; then
+            missing_containers+=("minio")
+        fi
+
+        if [ ${#missing_containers[@]} -gt 0 ]; then
+            log_warning "Missing expected containers in rag-network: ${missing_containers[*]}"
+            log_info "Found containers: ${containers:-none}"
+            log_info "Ensure RAG Proxy and MinIO are running in rag-network"
+        else
+            log_success "Expected containers found: rag-proxy, minio"
+        fi
     else
         log_warning "rag-network not found. It will be created when proxy starts."
         log_info "Ensure RAG Proxy is running with rag-network:"
@@ -286,6 +327,72 @@ generate_secrets() {
     fi
 }
 
+# ── Validate secrets for placeholder values ────────────────────────────────────
+validate_secrets() {
+    log_section "Validate Secrets"
+
+    local errors=0
+
+    # Check WEBUI_SECRET_KEY
+    local webui_key
+    webui_key=$(grep -E '^WEBUI_SECRET_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+    if [ -z "$webui_key" ] || [ "$webui_key" = "REQUIRED_GENERATE_VIA_INIT_SCRIPT" ] || [ "$webui_key" = "placeholder" ] || [ "$webui_key" = "changeme" ]; then
+        log_error "WEBUI_SECRET_KEY is still a placeholder or empty in $ENV_FILE"
+        log_info "Run: ./scripts/init-openwebui.sh to generate it, or set it manually"
+        errors=$((errors + 1))
+    else
+        log_success "WEBUI_SECRET_KEY is set"
+    fi
+
+    # Check POSTGRES_PASSWORD (unless --dev mode which uses SQLite)
+    if [ "$DEV_MODE" = false ]; then
+        local pg_pass
+        pg_pass=$(grep -E '^POSTGRES_PASSWORD=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+        if [ -z "$pg_pass" ] || [ "$pg_pass" = "REQUIRED_GENERATE_VIA_INIT_SCRIPT" ] || [ "$pg_pass" = "placeholder" ] || [ "$pg_pass" = "changeme" ]; then
+            log_error "POSTGRES_PASSWORD is still a placeholder or empty in $ENV_FILE"
+            log_info "Run: ./scripts/init-openwebui.sh to generate it, or set it manually"
+            errors=$((errors + 1))
+        else
+            log_success "POSTGRES_PASSWORD is set"
+        fi
+    fi
+
+    # Check S3 credentials
+    local s3_key
+    s3_key=$(grep -E '^S3_ACCESS_KEY_ID=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+    if [ -z "$s3_key" ] || [ "$s3_key" = "REQUIRED_GENERATE_VIA_INIT_SCRIPT" ] || [ "$s3_key" = "placeholder" ] || [ "$s3_key" = "changeme" ]; then
+        log_error "S3_ACCESS_KEY_ID is still a placeholder or empty in $ENV_FILE"
+        errors=$((errors + 1))
+    else
+        log_success "S3_ACCESS_KEY_ID is set"
+    fi
+
+    local s3_secret
+    s3_secret=$(grep -E '^S3_SECRET_ACCESS_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+    if [ -z "$s3_secret" ] || [ "$s3_secret" = "REQUIRED_GENERATE_VIA_INIT_SCRIPT" ] || [ "$s3_secret" = "placeholder" ] || [ "$s3_secret" = "changeme" ]; then
+        log_error "S3_SECRET_ACCESS_KEY is still a placeholder or empty in $ENV_FILE"
+        errors=$((errors + 1))
+    else
+        log_success "S3_SECRET_ACCESS_KEY is set"
+    fi
+
+    local api_keys
+    api_keys=$(grep -E '^OPENAI_API_KEYS=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || echo "")
+    if [ -z "$api_keys" ] || [ "$api_keys" = "REQUIRED_GENERATE_VIA_INIT_SCRIPT" ] || [ "$api_keys" = "placeholder" ] || [ "$api_keys" = "changeme" ]; then
+        log_warning "OPENAI_API_KEYS is still a placeholder or empty in $ENV_FILE"
+        log_info "Using default: sk-rag-proxy"
+    else
+        log_success "OPENAI_API_KEYS is set"
+    fi
+
+    if [ "$errors" -gt 0 ]; then
+        log_error "Found $errors placeholder secret(s). Fix them in $ENV_FILE before starting."
+        exit 1
+    fi
+
+    log_success "All secrets validated"
+}
+
 # ── Full reinstall ────────────────────────────────────────────────────────────
 recreate_deployment() {
     log_section "Reinstall (delete all data)"
@@ -312,7 +419,11 @@ recreate_deployment() {
     fi
 
     log_step "Stopping containers..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down -v --timeout 30 2>/dev/null || true
+    local compose_files=("-f" "$COMPOSE_FILE")
+    if [ "$DEV_MODE" = true ] && [ -f "$COMPOSE_DEV_OVERRIDE" ]; then
+        compose_files+=("-f" "$COMPOSE_DEV_OVERRIDE")
+    fi
+    docker compose "${compose_files[@]}" --env-file "$ENV_FILE" down -v --timeout 30 2>/dev/null || true
 
     log_step "Removing volumes..."
     docker volume rm rag-openwebui-data rag-openwebui-tmp rag-openwebui-postgres rag-openwebui-redis 2>/dev/null || true
@@ -327,15 +438,29 @@ recreate_deployment() {
 deploy_services() {
     log_section "Deploy OpenWebUI Services"
 
+    local compose_files=("-f" "$COMPOSE_FILE")
+    if [ "$DEV_MODE" = true ] && [ -f "$COMPOSE_DEV_OVERRIDE" ]; then
+        compose_files+=("-f" "$COMPOSE_DEV_OVERRIDE")
+        log_info "Using dev override: $COMPOSE_DEV_OVERRIDE"
+    fi
+
     log_step "Pulling images (this may take a while)..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" pull 2>&1 | grep -v "Pulling from\|Digest:\|Status:" || true
+    docker compose "${compose_files[@]}" --env-file "$ENV_FILE" pull 2>&1 | grep -v "Pulling from\|Digest:\|Status:" || true
 
     log_step "Starting containers..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --wait --wait-timeout 120 2>&1 || {
-        log_error "Failed to start services. Check logs:"
-        echo "       docker compose -f $COMPOSE_FILE --env-file $ENV_FILE logs"
-        exit 1
-    }
+    if [ "$HAS_DOCKER_WAIT" = true ]; then
+        docker compose "${compose_files[@]}" --env-file "$ENV_FILE" up -d --wait --wait-timeout 120 2>&1 || {
+            log_error "Failed to start services. Check logs:"
+            echo "       docker compose ${compose_files[*]} --env-file $ENV_FILE logs"
+            exit 1
+        }
+    else
+        docker compose "${compose_files[@]}" --env-file "$ENV_FILE" up -d 2>&1 || {
+            log_error "Failed to start services. Check logs:"
+            echo "       docker compose ${compose_files[*]} --env-file $ENV_FILE logs"
+            exit 1
+        }
+    fi
 
     log_success "Services started"
 }
@@ -406,6 +531,9 @@ print_admin_instructions() {
     echo -e "     ${BLUE}$openwebui_url${NC}"
     echo ""
     echo -e "  ${BOLD}2. Create admin account:${NC}"
+    if [ "$DEV_MODE" = true ]; then
+        echo "     • Self-registration is ENABLED (dev mode)"
+    fi
     echo "     • Click \"Sign up\" on the login page"
     echo "     • Enter name, email, and password"
     echo "     • This will be the only account with admin privileges"
@@ -446,9 +574,15 @@ print_summary() {
     echo ""
     echo -e "  ${BOLD}Services:${NC}"
     echo "  ├── OpenWebUI       → http://localhost:${OPENWEBUI_HOST_PORT:-3000}"
-    echo "  ├── PostgreSQL      → postgres:5432 (internal network)"
-    echo "  ├── Redis           → redis:6379 (internal network)"
-    echo "  └── Apache Tika     → tika:9998 (internal network)"
+    if [ "$DEV_MODE" = true ]; then
+        echo "  ├── Redis           → redis:6379 (internal network)"
+        echo "  ├── PostgreSQL      → DISABLED (using SQLite for dev)"
+        echo "  └── Apache Tika     → DISABLED (dev mode)"
+    else
+        echo "  ├── PostgreSQL      → postgres:5432 (internal network)"
+        echo "  ├── Redis           → redis:6379 (internal network)"
+        echo "  └── Apache Tika     → tika:9998 (internal network)"
+    fi
     echo ""
     echo -e "  ${BOLD}External dependencies (rag-network):${NC}"
     echo "  ├── RAG Proxy       → http://rag-proxy:8080/v1"
@@ -456,6 +590,9 @@ print_summary() {
     echo ""
     echo -e "  ${BOLD}Configuration files:${NC}"
     echo "  ├── Compose:        $COMPOSE_FILE"
+    if [ "$DEV_MODE" = true ]; then
+        echo "  ├── Dev override:   $COMPOSE_DEV_OVERRIDE"
+    fi
     echo "  └── Env vars:       $ENV_FILE"
     echo ""
 }
@@ -470,6 +607,9 @@ main() {
     echo -e "${BLUE}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════╗"
     echo "║   OpenWebUI Initialization for Corporate RAG System      ║"
+    if [ "$DEV_MODE" = true ]; then
+        echo "║   MODE: DEVELOPMENT (no PostgreSQL/Tika, signup enabled)  ║"
+    fi
     echo "║   Version 2.1.0                                           ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -498,19 +638,22 @@ main() {
     # 4. Generate secrets
     generate_secrets
 
-    # 5. Reinstall (if requested)
+    # 5. Validate secrets (no placeholders)
+    validate_secrets
+
+    # 6. Reinstall (if requested)
     recreate_deployment
 
-    # 6. Create MinIO bucket
+    # 7. Create MinIO bucket
     create_minio_bucket
 
-    # 7. Deploy services
+    # 8. Deploy services
     deploy_services
 
-    # 8. Health-check
+    # 9. Health-check
     health_check
 
-    # 9. Summary and instructions
+    # 10. Summary and instructions
     print_summary
     print_admin_instructions
 

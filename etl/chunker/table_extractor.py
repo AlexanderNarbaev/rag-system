@@ -10,7 +10,7 @@ try:
 
     BS4_AVAILABLE = True
 except ImportError:
-    _BS4 = None
+    _BS4 = None  # type: ignore[assignment]
     BS4_AVAILABLE = False
 
 logger = logging.getLogger(__name__)

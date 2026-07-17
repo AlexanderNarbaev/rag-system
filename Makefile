@@ -12,7 +12,8 @@
         deploy deploy-prod verify-backups \
         health-check status \
         maturity-review maturity-review-json maturity-review-save \
-        export-openapi
+        export-openapi \
+        openwebui-up openwebui-down openwebui-logs openwebui-dev
 
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
@@ -124,6 +125,19 @@ docker-down: ## Stop docker-compose services
 
 docker-logs: ## Tail docker-compose logs
 	@cd $(ROOT)/proxy && docker-compose logs -f
+
+# ── OpenWebUI ─────────────────────────────────────────────────────────────────
+openwebui-up: ## Start OpenWebUI with production config
+	@bash $(ROOT)/scripts/init-openwebui.sh --auto
+
+openwebui-down: ## Stop OpenWebUI
+	@docker compose -f $(ROOT)/deploy/docker/docker-compose.openwebui.yml --env-file $(ROOT)/deploy/docker/.env.openwebui down --timeout 30
+
+openwebui-logs: ## Tail OpenWebUI logs
+	@docker compose -f $(ROOT)/deploy/docker/docker-compose.openwebui.yml --env-file $(ROOT)/deploy/docker/.env.openwebui logs -f
+
+openwebui-dev: ## Start OpenWebUI with dev override (SQLite, no Tika, signup enabled)
+	@bash $(ROOT)/scripts/init-openwebui.sh --auto --dev
 
 # ── Backup & Restore ─────────────────────────────────────────────────────────
 backup: ## Run all backups (Qdrant, Neo4j, Redis)

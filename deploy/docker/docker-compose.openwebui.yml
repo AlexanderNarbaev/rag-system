@@ -33,8 +33,8 @@ services:
       # Хранилище файлов — MinIO (общий с прокси)
       - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
       - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://minio:9000}
-      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:?"REQUIRED: set S3_ACCESS_KEY_ID in .env.openwebui"}
-      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:?"REQUIRED: set S3_SECRET_ACCESS_KEY in .env.openwebui"}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
       - S3_BUCKET_NAME=${S3_BUCKET_NAME:-openwebui-files}
       - S3_REGION_NAME=${S3_REGION_NAME:-us-east-1}
       - S3_ADDRESSING_STYLE=${S3_ADDRESSING_STYLE:-path}

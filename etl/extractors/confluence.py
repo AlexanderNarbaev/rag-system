@@ -282,7 +282,7 @@ class ConfluenceExtractor:
         internal = []
         external = []
         for a in soup.find_all("a", href=True):
-            href = a["href"]
+            href = str(a["href"])
             if href.startswith("/") or self.url in href:
                 internal.append(href)
             else:
