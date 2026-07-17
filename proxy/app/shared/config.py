@@ -123,7 +123,7 @@ SENSITIVE_SECRETS = os.getenv("SENSITIVE_SECRETS", "").split(",") if os.getenv("
 
 # ============ Observability ============
 METRICS_ENABLED = os.getenv("METRICS_ENABLED", "true").lower() == "true"
-LOG_FORMAT = os.getenv("LOG_FORMAT", "text")  # "json" or "text"
+LOG_FORMAT = os.getenv("LOG_FORMAT", "json")  # "json" or "text"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 # ── OpenTelemetry Tracing ──
