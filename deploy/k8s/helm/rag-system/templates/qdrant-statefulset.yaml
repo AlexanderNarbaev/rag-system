@@ -40,18 +40,14 @@ spec:
               mountPath: /qdrant/storage
           resources:
             {{- toYaml .Values.qdrant.resources | nindent 12 }}
+          {{- with .Values.qdrant.livenessProbe }}
           livenessProbe:
-            httpGet:
-              path: /health
-              port: {{ .Values.qdrant.service.port }}
-            initialDelaySeconds: 30
-            periodSeconds: 15
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.qdrant.readinessProbe }}
           readinessProbe:
-            httpGet:
-              path: /health
-              port: {{ .Values.qdrant.service.port }}
-            initialDelaySeconds: 15
-            periodSeconds: 10
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- if .Values.qdrant.podAntiAffinity.enabled }}
       affinity:
         podAntiAffinity:

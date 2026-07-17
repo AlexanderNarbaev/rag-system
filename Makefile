@@ -5,7 +5,7 @@
         test test-proxy test-etl test-integration \
         test-performance test-e2e test-resilience benchmark \
         benchmark-baselines benchmark-compare \
-        lint format format-check typecheck clean \
+        lint helm-lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run docs all \
         etl etl-confluence etl-jira etl-gitlab \
         backup restore dashboard tui mcp-server \
@@ -85,6 +85,9 @@ benchmark-compare: ## Run benchmarks and compare against saved baseline
 # ── Code quality ──────────────────────────────────────────────────────────────
 lint: ## Lint with ruff
 	@cd $(ROOT) && ruff check .
+
+helm-lint: ## Lint Helm chart (requires helm CLI)
+	@if ! command -v helm >/dev/null 2>&1; then echo "helm not found - skipping Helm lint"; exit 0; fi && cd $(ROOT) && helm lint deploy/k8s/helm/rag-system/
 
 format: ## Format with ruff
 	@cd $(ROOT) && ruff format .

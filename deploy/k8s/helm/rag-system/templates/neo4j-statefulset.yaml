@@ -52,16 +52,14 @@ spec:
               mountPath: /data
           resources:
             {{- toYaml .Values.neo4j.resources | nindent 12 }}
+          {{- with .Values.neo4j.livenessProbe }}
           livenessProbe:
-            tcpSocket:
-              port: {{ .Values.neo4j.service.boltPort }}
-            initialDelaySeconds: 60
-            periodSeconds: 30
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.neo4j.readinessProbe }}
           readinessProbe:
-            tcpSocket:
-              port: {{ .Values.neo4j.service.boltPort }}
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- if .Values.neo4j.podAntiAffinity.enabled }}
       affinity:
         podAntiAffinity:

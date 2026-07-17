@@ -27,6 +27,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      terminationGracePeriodSeconds: {{ .Values.proxy.terminationGracePeriodSeconds }}
       {{- with .Values.proxy.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -64,8 +65,16 @@ spec:
           volumeMounts:
             - name: logs
               mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /app/cache
       volumes:
         - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: cache
           emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:

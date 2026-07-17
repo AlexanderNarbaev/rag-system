@@ -59,8 +59,14 @@ proxy:
     capabilities:
       drop:
         - ALL
-    readOnlyRootFilesystem: false
+    readOnlyRootFilesystem: true
     allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  # -- Termination grace period for graceful shutdown (seconds)
+  terminationGracePeriodSeconds: 60
 
   service:
     # -- Service type (ClusterIP for internal, LoadBalancer for external)
@@ -291,7 +297,7 @@ proxy:
     host: "0.0.0.0"
     # -- Server port
     port: "8080"
-    # -- Number of uvicorn workers (keep at 1)
+    # -- Number of granian workers (keep at 1 per ADR-008)
     workers: "1"
     # -- Enable tools / function calling
     toolsEnabled: "false"
@@ -331,6 +337,9 @@ qdrant:
   # Pod security context
   podSecurityContext:
     fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
 
   # Container security context
   securityContext:
@@ -338,6 +347,10 @@ qdrant:
       drop:
         - ALL
     readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
 
   service:
     # -- HTTP API port
@@ -362,6 +375,26 @@ qdrant:
     requests:
       cpu: "500m"
       memory: 1Gi
+
+  # -- Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 6333
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 6333
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
   # -- Pod anti-affinity
   podAntiAffinity:
@@ -389,6 +422,9 @@ neo4j:
   # Pod security context
   podSecurityContext:
     fsGroup: 7474
+    runAsNonRoot: true
+    runAsUser: 7474
+    runAsGroup: 7474
 
   # Container security context
   securityContext:
@@ -396,6 +432,10 @@ neo4j:
       drop:
         - ALL
     readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 7474
+    runAsGroup: 7474
 
   service:
     # -- HTTP browser port
@@ -420,6 +460,24 @@ neo4j:
     requests:
       cpu: "500m"
       memory: 2Gi
+
+  # -- Liveness probe
+  livenessProbe:
+    tcpSocket:
+      port: 7687
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  # -- Readiness probe
+  readinessProbe:
+    tcpSocket:
+      port: 7687
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
   # -- Accept Neo4j enterprise license
   acceptLicenseAgreement: "yes"
@@ -456,6 +514,9 @@ redis:
   # Pod security context
   podSecurityContext:
     fsGroup: 999
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
 
   # Container security context
   securityContext:
@@ -463,6 +524,10 @@ redis:
       drop:
         - ALL
     readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
 
   service:
     # -- Redis port
@@ -485,6 +550,26 @@ redis:
     requests:
       cpu: "100m"
       memory: 256Mi
+
+  # -- Liveness probe
+  livenessProbe:
+    tcpSocket:
+      port: 6379
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe
+  readinessProbe:
+    exec:
+      command:
+        - redis-cli
+        - ping
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
   # -- Redis command arguments
   args: "--appendonly yes --maxmemory-policy allkeys-lru"
@@ -575,7 +660,7 @@ serviceAccount:
 # =============================================================================
 podDisruptionBudget:
   # -- Enable PDB for proxy
-  enabled: false
+  enabled: true
   # -- Min available pods (mutually exclusive with maxUnavailable)
   minAvailable: 1
   # -- Max unavailable pods
@@ -586,7 +671,7 @@ podDisruptionBudget:
 # =============================================================================
 networkPolicy:
   # -- Enable NetworkPolicy for proxy pods
-  enabled: false
+  enabled: true
   # -- Allow ingress from these namespace labels
   ingressNamespaceSelector:
     - kubernetes.io/metadata.name: ingress-nginx
