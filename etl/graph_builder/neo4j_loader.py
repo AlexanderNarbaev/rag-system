@@ -99,6 +99,7 @@ class Neo4jLoader:
         for attempt in range(self.max_retries):
             try:
                 with self.driver.session(database=self.database) as session:
+                    logger.warning(f"Query: {query}\n Parameters: {parameters}")
                     result = session.run(query, parameters or {})
                     summary = result.consume()
                     return summary.counters.contains_updates

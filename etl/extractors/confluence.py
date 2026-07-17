@@ -23,6 +23,7 @@ from urllib.parse import urljoin
 import requests
 import urllib3
 from bs4 import BeautifulSoup
+from pyarrow.lib import null
 from requests.auth import HTTPBasicAuth
 
 # Подавление SSL warnings для самоподписанных сертификатов
@@ -199,7 +200,7 @@ class ConfluenceExtractor:
 
     def _get_page_versions(self, page_id: str) -> list[dict[str, Any]]:
         """Возвращает историю версий страницы."""
-        endpoint = f"/rest/api/content/{page_id}/version"
+        endpoint = f"/rest/experimental/content/{page_id}/version"
         data = self._request(endpoint)
         versions = data.get("results", [])
         if self.max_versions > 0 and len(versions) > self.max_versions:
@@ -218,10 +219,9 @@ class ConfluenceExtractor:
         data = self._request(endpoint, params={"expand": "version"})
         return data.get("results", [])
 
-    def _download_attachment(self, page_id: str, attachment_id: str, filename: str, output_dir: Path) -> str | None:
+    def _download_attachment(self, page_id: str, attachment_id: str, filename: str, output_dir: Path, att_download_link: str) -> str | None:
         """Скачивает файл вложения и возвращает путь к сохранённому файлу."""
-        download_url = f"/rest/api/content/{page_id}/child/attachment/{attachment_id}/download"
-        url = urljoin(self.url, download_url)
+        url = urljoin(self.url, att_download_link)
         max_retries = 3
         for attempt in range(max_retries + 1):
             try:
@@ -277,14 +277,25 @@ class ConfluenceExtractor:
         modified = page.get("version", {}).get("when", "")
         content = f"{body}|{version}|{modified}"
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
+    
     def _should_process_page(self, page_id: str, new_hash: str) -> bool:
-        """Определяет, нужно ли обрабатывать страницу заново (инкрементальный режим)."""
-        if not self.incremental:
-            return True
-        old_hash = self.wal_data["pages_hash"].get(page_id)
-        return old_hash != new_hash
-
+      # """Определяет, нужно ли обрабатывать страницу заново (инкрементальный режим)."""
+      # 1. Если инкрементальный режим выключен, всегда обрабатываем
+      if not self.incremental:
+        return True
+      
+      # 2. Безопасно берем pages_hash. Если wal_data нет или в нем нет этого ключа,
+      # .get() вернет None, и мы вернем True (надо обрабатывать)
+      pages_hash = self.wal_data.get("pages_hash") if hasattr(self, "wal_data") else None
+      if pages_hash is None:
+        return True
+      
+      # 3. Получаем старый хеш. Если его нет, old_hash будет None
+      old_hash = pages_hash.get(page_id)
+      
+      # 4. Если хеши не совпадают (или старого хеша нет), возвращаем True
+      return old_hash != new_hash
+      
     def _save_page_data(self, page_data: dict, page_id: str):
         """Сохраняет структурированные данные страницы в JSON."""
         page_dir = self.output_dir / page_id
@@ -297,7 +308,7 @@ class ConfluenceExtractor:
             with open(page_dir / "content_storage.html", "w", encoding="utf-8") as f:
                 f.write(page_data["body_storage_raw"])
         logger.info(f"Saved page {page_id} to {page_dir}")
-
+    
     def extract_page(self, page: dict) -> dict[str, Any]:
         """Извлекает полные данные одной страницы:
         - Метаданные (id, title, space, версии, даты)
@@ -309,18 +320,49 @@ class ConfluenceExtractor:
         page_id = str(page["id"])
         title = page["title"]
         space = page.get("space", {}).get("key", "UNKNOWN")
-        version_number = page.get("version", {}).get("number", 1)
-        created = page.get("version", {}).get("when", "")
-        updated = page.get("version", {}).get("when", "")
-
-        # Получение тела в storage и view
-        body_storage = page.get("body", {}).get("storage", {}).get("value", "")
-        body_view = page.get("body", {}).get("view", {}).get("value", "")
-
-        # Дополнительно: экспорт в PDF/Word через API (опционально, требует времени)
-        # Можно вызвать /rest/api/content/{id}/export?type=pdf – но это асинхронно, не будем усложнять.
-
-        # Извлечение ссылок из HTML тела
+        
+        # 1. Запрашиваем полные данные страницы
+        page_detail = self._request(
+            f"/rest/api/content/{page_id}",
+            params={"expand": "body.storage,body.view,metadata.labels,metadata.properties,version"}
+        )
+        body_storage = page_detail.get("body", {}).get("storage", {}).get("value", "")
+        body_view = page_detail.get("body", {}).get("view", {}).get("value", "")
+        page.update(page_detail)
+        
+        # 2. Очистка от шума и конвертация в Markdown
+        body_markdown = ""
+        headings = []
+        if body_view:
+          soup = BeautifulSoup(body_view, "html.parser")
+          # Вырезаем только основной контент, игнорируя сайдбары
+          main_content = (
+              soup.find("div", class_="wiki-content") or
+              soup.find("div", id="main-content") or
+              soup
+          )
+          
+          # Извлекаем заголовки для будущего title_boost в поиске
+          headings = [h.get_text(strip=True) for h in main_content.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])]
+          
+          # Конвертируем в Markdown с сохранением структуры
+          try:
+            from markdownify import markdownify as md
+            body_markdown = md(str(main_content), heading_style="ATX", bullets="-")
+          except ImportError:
+            logger.warning("markdownify not installed, falling back to plain text")
+            body_markdown = main_content.get_text(separator="\n", strip=True)
+        
+        # 3. Обработка макросов в storage (замена XML на текстовые маркеры)
+        import re
+        body_storage_clean = re.sub(
+            r'<ac:structured-macro ac:name="([^"]+)".*?>(.*?)</ac:structured-macro>',
+            r'[Макрос \1]',
+            body_storage,
+            flags=re.DOTALL
+        )
+        
+        # Извлечение ссылок, версий, комментариев и вложений из HTML тела
         links = self._extract_links_from_html(body_view or body_storage)
 
         # Версии (история)
@@ -355,7 +397,7 @@ class ConfluenceExtractor:
         attachment_data = []
         att_dir = self.output_dir / page_id / "attachments"
         if self.download_attachments:
-            att_dir.mkdir(exist_ok=True)
+            att_dir.mkdir(parents=True, exist_ok=True)
         for att in attachments_meta:
             att_id = att["id"]
             att_filename = att.get("title", "unnamed")
@@ -367,8 +409,9 @@ class ConfluenceExtractor:
                 "version": att.get("version", {}).get("number", 1),
                 "comment": att.get("version", {}).get("message", ""),
             }
+            att_download_link = att.get("_links", {}).get("download", {})
             if self.download_attachments:
-                local_path = self._download_attachment(page_id, att_id, att_filename, att_dir)
+                local_path = self._download_attachment(page_id, att_id, att_filename, att_dir, att_download_link)
                 att_info["local_path"] = local_path
             attachment_data.append(att_info)
 
@@ -386,7 +429,7 @@ class ConfluenceExtractor:
                     if key:
                         macro_params[key] = value
                 macros.append({"name": macro_name, "parameters": macro_params, "raw_html": str(macro)})
-
+        
         # Итоговый объект
         # RBAC metadata: author from current version, contributors from all versions
         author = page.get("version", {}).get("by", {}).get("displayName", "")
@@ -398,21 +441,27 @@ class ConfluenceExtractor:
         # Labels and restrictions (may not be available in all Confluence versions)
         labels = page.get("metadata", {}).get("labels", [])
         restrictions = page.get("metadata", {}).get("restrictions", {})
-
+        
+        # Хеш контента для инкрементальных обновлений на этапе эмбеддингов
+        content_hash = hashlib.sha256(body_markdown.encode("utf-8")).hexdigest()
+        
         page_data = {
             "id": page_id,
             "title": title,
             "space": space,
             "space_key": space_key,
-            "version": version_number,
+            "version": page.get("version", {}).get("number", 1),
             "author": author,
             "contributors": contributors,
             "labels": labels,
             "restrictions": restrictions,
-            "created_at": created,
-            "updated_at": updated,
-            "body_storage_raw": body_storage,
+            "created_at": page.get("version", {}).get("when", ""),
+            "updated_at": page.get("version", {}).get("when", ""),
+            "body_storage_raw": body_storage_clean,
             "body_view_html": body_view,
+            "body_markdown": body_markdown,
+            "headings": headings,
+            "content_hash": content_hash,
             "links": links,
             "versions": version_list,
             "comments": comment_data,
@@ -439,7 +488,7 @@ class ConfluenceExtractor:
                     full_data = self.extract_page(page)
                     self._save_page_data(full_data, page_id)
                     # Обновляем WAL
-                    self.wal_data["pages_hash"][page_id] = new_hash
+                    self.wal_data.setdefault("pages_hash", {})[page_id] = new_hash
                     self.wal_data["last_run"] = datetime.now(UTC).isoformat()
                     self._save_wal()
                 except Exception as e:
