@@ -59,6 +59,8 @@ from etl.extractors.gitlab import GitLabExtractor  # noqa: E402
 from etl.extractors.jira import JiraExtractor  # noqa: E402
 from etl.graph_builder.entity_extractor import EntityRelationExtractor  # noqa: E402
 from etl.graph_builder.neo4j_loader import Neo4jLoader  # noqa: E402
+from etl.indexer.chunk_enricher import build_chunk_enricher_from_config  # noqa: E402
+from etl.indexer.chunk_quality import build_chunk_quality_filter_from_config  # noqa: E402
 from etl.indexer.live_vector_lake import LiveVectorLake  # noqa: E402
 from etl.indexer.qdrant_hybrid import QdrantHybridIndexer  # noqa: E402
 from etl.indexer.remote_embedder import _resolve_max_tokens, build_remote_embedder_from_config  # noqa: E402
@@ -350,7 +352,12 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
     return documents
 
 
-def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path):
+def run_chunking(
+    documents: list[dict],
+    chunker: MDKeyChunker,
+    output_dir: Path,
+    quality_filter: Any = None,
+):
     """Выполняет семантический чанкинг всех документов и сохраняет чанки в JSON.
     Также создаёт heading-level и document-level чанки для Confluence-страниц.
     """
@@ -358,6 +365,7 @@ def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path)
     all_chunks = []
     heading_chunks = []
     document_chunks = []
+    total_filtered_out = 0
     for i, doc in enumerate(documents):
         if _shutdown_event.is_set():
             logger.warning(f"Shutdown requested, stopping chunking at document {i}/{len(documents)}")
@@ -371,6 +379,25 @@ def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path)
         try:
             chunks = chunker.process_document(doc["content"], doc["content_type"], source_metadata)
             chunk_dicts = [ch.__dict__ for ch in chunks]
+
+            # Apply quality filter after chunking, before saving
+            if quality_filter and chunk_dicts:
+                original_count = len(chunk_dicts)
+                chunk_dicts, _stats = quality_filter.filter(
+                    doc_title=doc.get("title", ""),
+                    chunks=chunk_dicts,
+                )
+                filtered_out = original_count - len(chunk_dicts)
+                total_filtered_out += filtered_out
+                if filtered_out:
+                    logger.info(
+                        "Quality filter: %d/%d chunks kept for '%s' (%d filtered out)",
+                        len(chunk_dicts),
+                        original_count,
+                        doc["title"][:80],
+                        filtered_out,
+                    )
+
             doc_chunk_file = output_dir / f"{doc['id'].replace('/', '_')}.json"
             with open(doc_chunk_file, "w", encoding="utf-8") as f:
                 json.dump(chunk_dicts, f, ensure_ascii=False, indent=2)
@@ -427,6 +454,50 @@ def run_chunking(documents: list[dict], chunker: MDKeyChunker, output_dir: Path)
         len(heading_chunks),
         len(document_chunks),
     )
+    return all_chunks
+
+
+def run_enrichment(all_chunks: list[dict], config: dict) -> list[dict]:
+    """Обогащает чанки через SLM: keywords, entities, hyde_questions, summary.
+
+    Enrichment is non-blocking — if SLM is unavailable, falls back to heuristics.
+    Each chunk dict gets enriched fields merged in-place.
+    """
+    enricher = build_chunk_enricher_from_config(config)
+    if enricher is None:
+        logger.info("Chunk enrichment is disabled — skipping")
+        return all_chunks
+
+    enrich_cfg = config.get("enrichment", {})
+    max_concurrent = enrich_cfg.get("max_concurrent", 5)
+    logger.info(
+        "Starting chunk enrichment: %d chunks, %d concurrent, SLM=%s",
+        len(all_chunks),
+        max_concurrent,
+        enricher._model if enricher.is_enabled else "heuristic-only",
+    )
+
+    enriched_count = 0
+    for i, ch in enumerate(all_chunks):
+        if _shutdown_event.is_set():
+            logger.warning(f"Shutdown requested, stopping enrichment at chunk {i}/{len(all_chunks)}")
+            break
+
+        try:
+            result = enricher.enrich(ch.get("text", ""), ch.get("metadata", {}))
+            ch["keywords"] = result.get("keywords", [])
+            ch["entities"] = result.get("entities", [])
+            ch["hypothetical_questions"] = result.get("hyde_questions", [])
+            if result.get("summary"):
+                ch["summary"] = result["summary"]
+            enriched_count += 1
+        except Exception as e:
+            logger.warning("Enrichment failed for chunk %s: %s", ch.get("hash", "?"), e)
+
+        if (i + 1) % 100 == 0:
+            logger.info("Enrichment progress: %d/%d chunks", i + 1, len(all_chunks))
+
+    logger.info("Chunk enrichment complete: %d/%d chunks enriched", enriched_count, len(all_chunks))
     return all_chunks
 
 
@@ -824,7 +895,8 @@ def main():
         )
         md_chunker = MDKeyChunker(base_chunker, enricher)
         chunks_output_dir = Path(chunker_config.get("output_dir", "./chunks"))
-        all_chunks = run_chunking(documents, md_chunker, chunks_output_dir)
+        quality_filter = build_chunk_quality_filter_from_config(config)
+        all_chunks = run_chunking(documents, md_chunker, chunks_output_dir, quality_filter=quality_filter)
     else:
         # Загружаем уже существующие чанки
         chunks_output_dir = Path(config.get("chunking", {}).get("output_dir", "./chunks"))
@@ -835,6 +907,11 @@ def main():
         else:
             logger.error("No chunks found and --skip-chunk is set. Exiting.")
             sys.exit(1)
+
+    # 3.5. SLM-обогащение чанков (keywords, entities, hyde_questions, summary)
+    enrichment_cfg = config.get("enrichment", {})
+    if enrichment_cfg.get("enabled", False):
+        all_chunks = run_enrichment(all_chunks, config)
 
     # 4. Граф знаний (опционально)
     if not args.skip_graph and config.get("graph", {}).get("enabled", False):

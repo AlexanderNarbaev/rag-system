@@ -87,7 +87,10 @@ class StreamingPipeline:
         self._embedder: Any = None
         self._indexer: Any = None
         self._chunker: Any = None
+        self._quality_filter: Any = None
+        self._enricher: Any = None
         self._semaphore: asyncio.Semaphore | None = None
+        self._enrich_semaphore: asyncio.Semaphore | None = None
         self._progress_interval: int = config.get("streaming", {}).get("progress_interval", 50)
         self._max_concurrent: int = config.get("streaming", {}).get("max_concurrent_api_calls", 10)
 
@@ -99,8 +102,16 @@ class StreamingPipeline:
             self._indexer = self._create_indexer()
         if self._chunker is None:
             self._chunker = self._create_chunker()
+        if self._enricher is None:
+            self._enricher = self._create_enricher()
+        if self._quality_filter is None:
+            self._quality_filter = self._create_quality_filter()
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self._max_concurrent)
+        if self._enrich_semaphore is None:
+            enrich_cfg = self._config.get("enrichment", {})
+            enrich_concurrent = enrich_cfg.get("max_concurrent", 5)
+            self._enrich_semaphore = asyncio.Semaphore(enrich_concurrent)
 
     def _create_embedder(self) -> Any:
         remote_cfg = self._config.get("remote_services", {})
@@ -158,6 +169,18 @@ class StreamingPipeline:
         )
         return MDKeyChunker(base_chunker, enricher)
 
+    def _create_enricher(self) -> Any:
+        """Create ChunkEnricher from config."""
+        from etl.indexer.chunk_enricher import build_chunk_enricher_from_config
+
+        return build_chunk_enricher_from_config(self._config)
+
+    def _create_quality_filter(self) -> Any:
+        """Create ChunkQualityFilter from config (returns None if disabled)."""
+        from etl.indexer.chunk_quality import build_chunk_quality_filter_from_config
+
+        return build_chunk_quality_filter_from_config(self._config)
+
     def _resolve_chunk_max_tokens(self, chunker_cfg: dict) -> int:
         """Resolve chunking max_tokens, supporting 'auto' detection from embedder model."""
         raw_value = chunker_cfg.get("max_tokens", 1500)
@@ -201,6 +224,39 @@ class StreamingPipeline:
                 return False
 
         return True
+
+    async def _enrich_chunks(self, chunk_dicts: list[dict[str, Any]]) -> None:
+        """Enrich chunks with SLM-generated metadata (keywords, entities, hyde_questions, summary).
+
+        Runs concurrently with semaphore backpressure. Updates chunk dicts in-place.
+        On failure, chunk keeps its existing fields from MDKeyChunker enrichment.
+        """
+        sem = self._enrich_semaphore
+        if sem is None or self._enricher is None:
+            return
+
+        async def _enrich_one(ch: dict[str, Any]) -> None:
+            async with sem:
+                try:
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(
+                        None,
+                        self._enricher.enrich,
+                        ch.get("text", ""),
+                        ch.get("metadata", {}),
+                    )
+                    if result.get("keywords"):
+                        ch["keywords"] = result["keywords"]
+                    if result.get("entities"):
+                        ch["entities"] = result["entities"]
+                    if result.get("hyde_questions"):
+                        ch["hypothetical_questions"] = result["hyde_questions"]
+                    if result.get("summary"):
+                        ch["summary"] = result["summary"]
+                except Exception as e:
+                    logger.debug("Chunk enrichment failed for %s: %s", ch.get("hash", "?"), e)
+
+        await asyncio.gather(*(_enrich_one(ch) for ch in chunk_dicts), return_exceptions=True)
 
     async def _index_chunk(self, chunk_dict: dict[str, Any]) -> bool:
         """Index a single embedded chunk to Qdrant via live_upsert."""
@@ -261,6 +317,28 @@ class StreamingPipeline:
 
         all_chunk_dicts = [ch.__dict__ for ch in chunks]
         result.chunks_count = len(all_chunk_dicts)
+
+        # SLM-based chunk enrichment: keywords, entities, hyde_questions, summary
+        if self._enricher is not None:
+            await self._enrich_chunks(all_chunk_dicts)
+
+        # Chunk quality filter: reranker-based relevance scoring
+        if self._quality_filter is not None and all_chunk_dicts:
+            original_count = len(all_chunk_dicts)
+            all_chunk_dicts, _stats = self._quality_filter.filter(
+                doc_title=doc.get("title", ""),
+                chunks=all_chunk_dicts,
+            )
+            filtered_out = original_count - len(all_chunk_dicts)
+            if filtered_out:
+                logger.info(
+                    "Quality filter: %d/%d chunks kept for '%s' (%d filtered out)",
+                    len(all_chunk_dicts),
+                    original_count,
+                    doc["title"][:80],
+                    filtered_out,
+                )
+            result.chunks_count = len(all_chunk_dicts)
 
         # Heading-level and document-level chunks for Confluence
         if doc.get("source_type") == "confluence" and doc.get("content_type") == "html":

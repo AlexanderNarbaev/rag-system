@@ -130,6 +130,16 @@ remote_services:
     api_key: "${SLM_API_KEY:-}"
     timeout: 30
 
+# SLM-based chunk enrichment: keywords, entities, HyDE questions, summary
+enrichment:
+  enabled: true                                                    # Enable SLM-based chunk enrichment
+  slm_endpoint: "${SLM_ENRICHMENT_ENDPOINT:-${SLM_ENDPOINT:-http://rag-proxy:8080/v1}}"
+  slm_model: "${SLM_ENRICHMENT_MODEL:-${SLM_MODEL:-qwen2.5-3b}}"
+  slm_api_key: "${SLM_API_KEY:-}"
+  max_concurrent: 5                                                # Max parallel SLM calls (backpressure)
+  fallback_to_heuristic: true                                      # Use spaCy/regex when SLM fails
+  timeout: 30
+
 # Настройки режима пайплайна
 pipeline:
   mode: streaming                # "streaming" — extract→chunk→embed→index в один проход
@@ -183,6 +193,16 @@ streaming:
   # Streaming pipeline settings (--mode streaming)
   progress_interval: 50                     # Log progress every N documents
   max_concurrent_api_calls: 10              # Max concurrent embedder API calls (backpressure)
+
+# Chunk quality filter — reranker-based filtering of low-quality chunks
+quality_filter:
+  enabled: false
+  reranker_endpoint: "${RERANKER_ENDPOINT:-http://rag-proxy:8080/v1/rerank}"
+  reranker_model: "${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
+  relevance_threshold: 0.3
+  detect_boilerplate: true
+  max_chunks_per_doc: 500
+  timeout: 30
 
 # ETL-level settings
 etl:
