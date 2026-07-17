@@ -1,11 +1,24 @@
-"""Documentation extractor for Markdown, RST, and AsciiDoc formats."""
+"""Documentation extractor for Markdown, RST, AsciiDoc, and PDF formats.
+
+FR-11: PDF embedded image extraction with OCR integration.
+FR-12: Quality metrics in chunk payloads.
+"""
 
 import logging
+import os
 import re
 from collections.abc import Generator
 from pathlib import Path
 
 from etl.extractors.base_extractor import BaseExtractor, ExtractedDocument, ExtractorConfig
+from etl.extractors.quality_metrics import (
+    ExtractionQualityReport,
+    build_quality_payload,
+    compute_ocr_quality,
+    compute_table_quality,
+)
+
+PDF_IMAGE_EXTRACTION_ENABLED = os.getenv("PDF_IMAGE_EXTRACTION_ENABLED", "false").lower() == "true"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -423,3 +436,111 @@ class DocExtractor(BaseExtractor):
         if not last_hash:
             return True
         return self.compute_hash(doc.content) != last_hash
+
+    # ── FR-11: PDF embedded image extraction ──────────────────────────────────
+
+    def extract_pdf_images(
+        self,
+        pdf_path: str,
+        output_dir: str = "",
+    ) -> list[dict[str, object]]:
+        """Extract embedded images from PDF and run OCR. Returns metadata list."""
+        if not PDF_IMAGE_EXTRACTION_ENABLED:
+            return []
+
+        try:
+            from etl.extractors.image_extractor import (
+                process_pdf_with_ocr as _process_pdf,
+            )
+        except ImportError:
+            logger.warning("image_extractor not available for PDF image extraction")
+            return []
+
+        extracted = _process_pdf(pdf_path, output_dir=output_dir)
+        results = []
+        for img in extracted:
+            results.append({
+                "path": img.path,
+                "page_number": img.page_number,
+                "width": img.width,
+                "height": img.height,
+                "format": img.format,
+                "ocr_text": img.ocr_text,
+                "ocr_confidence": img.ocr_confidence,
+            })
+        return results
+
+    def extract_pdf_with_ocr(self, pdf_path: str | Path) -> str:
+        """Extract text from a PDF including embedded image OCR text.
+
+        Returns enriched text content with OCR results appended.
+        """
+        pdf_path = Path(pdf_path)
+        logger.info("Processing PDF: %s", pdf_path)
+
+        text_content = ""
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(str(pdf_path)) as pdf_doc:
+                for page in pdf_doc.pages:
+                    page_text = page.extract_text() or ""
+                    text_content += page_text + "\n"
+        except ImportError:
+            logger.debug("pdfplumber not available, reading raw text")
+            text_content = pdf_path.read_text(encoding="utf-8", errors="ignore")
+
+        # Extract and OCR embedded images
+        if PDF_IMAGE_EXTRACTION_ENABLED:
+            image_results = self.extract_pdf_images(str(pdf_path))
+            ocr_texts = [img["ocr_text"] for img in image_results if img.get("ocr_text")]
+            if ocr_texts:
+                text_content += "\n\n[OCR from embedded images]\n"
+                for i, ocr_text in enumerate(ocr_texts, 1):
+                    text_content += f"\n--- Image {i} ---\n{ocr_text}\n"
+
+        return text_content
+
+    def build_quality_report(
+        self,
+        doc_id: str,
+        source_type: str,
+        tables: list[str],
+        ocr_results: list[dict[str, object]] | None = None,
+    ) -> ExtractionQualityReport:
+        """Build quality metrics report for a document.
+
+        FR-12: quality scoring with OCR confidence, table accuracy.
+        """
+        report = ExtractionQualityReport(
+            document_id=doc_id,
+            source_type=source_type,
+        )
+
+        report.tables = compute_table_quality(tables)
+
+        if ocr_results:
+            ocr_dicts = [
+                {"text": r.get("ocr_text", ""), "confidence": r.get("ocr_confidence", 0.0)}
+                for r in ocr_results
+            ]
+            report.ocr = compute_ocr_quality(ocr_dicts)
+
+        return report
+
+    def enrich_metadata_with_quality(
+        self,
+        metadata: dict[str, object],
+        tables: list[str],
+        ocr_results: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        """Add quality metrics to chunk/document metadata (FR-12)."""
+        report = self.build_quality_report(
+            doc_id=str(metadata.get("source_id", "")),
+            source_type=str(metadata.get("format", "unknown")),
+            tables=tables,
+            ocr_results=ocr_results,
+        )
+        quality_payload = build_quality_payload(report)
+        metadata.update(quality_payload)
+        return metadata

@@ -14,6 +14,10 @@ wal:
   wal_file: "./wal/etl_wal.json"        # путь к файлу WAL
   use_lock: true                         # использовать файловую блокировку
   lock_timeout: 30                       # таймаут блокировки (сек)
+  wal_backend: "file"                    # backend: "file" (default), "redis", "proxy"
+  redis_host: "localhost"                # Redis host (when wal_backend=redis)
+  redis_port: 6379                       # Redis port
+  proxy_url: "http://localhost:8080"     # proxy URL (when wal_backend=proxy)
 
 # Confluence (Self-Hosted)
 confluence:
@@ -155,6 +159,13 @@ streaming:
   redis_stream_key: "etl:events"
   redis_consumer_group: "etl-workers"
 
+# ETL-level settings
+etl:
+  data_retention:
+    raw_data_days: 7         # auto-delete raw extracts after N days (0 = keep forever)
+    cleanup_after_run: false  # clean immediately after indexing
+    keep_cold_storage: true   # preserve cold storage for versioning
+
 # Schedule settings (for cron-based or periodic ETL runs)
 schedule:
   enabled: false                            # Enable scheduled ETL runs
@@ -178,6 +189,26 @@ graph:
     user: "neo4j"
     password: "your_password_here"       # CHANGE THIS to your Neo4j password
     database: "neo4j"
+
+# Multimodal extraction (FR-09, FR-10, FR-11)
+multimodal:
+  # OCR pipeline (FR-09)
+  ocr_enabled: true                          # Enable Tesseract+EasyOCR pipeline
+  ocr_languages: "rus+eng"                   # Language codes for Tesseract
+  ocr_confidence_threshold: 60               # Min confidence (0-100) to include OCR text
+  ocr_primary_engine: "tesseract"            # "tesseract" or "easyocr"
+
+  # Image embedding (FR-10)
+  image_extraction_enabled: false            # Enable CLIP/BLIP models
+  clip_model: "openai/clip-vit-base-patch32"
+  blip_model: "Salesforce/blip-image-captioning-base"
+  image_collection_suffix: "_images"         # Qdrant collection suffix for image vectors
+
+  # PDF embedded image extraction (FR-11)
+  pdf_image_extraction_enabled: false        # Extract images from PDFs and run OCR
+
+  # Quality metrics (FR-12)
+  quality_report_enabled: false              # Generate extraction quality reports
 
 # SSL / TLS — корпоративные сертификаты
 # В корпоративных средах часто используются самоподписанные сертификаты

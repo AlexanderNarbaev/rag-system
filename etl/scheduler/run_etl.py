@@ -392,6 +392,118 @@ def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager)
     logger.info(f"Indexing completed: added {total_added}, deleted {total_deleted}")
 
 
+def _cleanup_path(path: Path, dry_run: bool) -> bool:
+    """Remove a directory if it exists. Returns True if action was taken."""
+    if not path.exists():
+        logger.info(f"[cleanup] {path} does not exist — skipping")
+        return False
+    if dry_run:
+        logger.info(f"[dry-run] Would remove: {path}")
+        return True
+    import shutil
+
+    shutil.rmtree(path)
+    logger.info(f"[cleanup] Removed: {path}")
+    return True
+
+
+def _strip_chunk_full_text(hot_dir: Path, dry_run: bool) -> tuple[int, int]:
+    """Strip full text from hot_chunks JSON files, keeping only hashes and metadata.
+
+    Returns (files_processed, bytes_freed).
+    """
+    if not hot_dir.exists():
+        return (0, 0)
+    files_processed = 0
+    bytes_freed = 0
+    for json_file in hot_dir.glob("*.json"):
+        try:
+            original_text = json_file.read_text(encoding="utf-8")
+            original_size = len(original_text.encode("utf-8"))
+            chunks = json.loads(original_text)
+            stripped: list[dict[str, Any]] = []
+            for ch in chunks:
+                keep_fields = {
+                    "hash": ch.get("hash", ""),
+                    "source_id": ch.get("source_id", "unknown"),
+                    "version": ch.get("version", "latest"),
+                    "doc_title": ch.get("doc_title", ""),
+                    "source_type": ch.get("source_type", ""),
+                }
+                stripped.append(keep_fields)
+            if dry_run:
+                logger.info(f"[dry-run] Would strip {json_file.name}: {len(chunks)} chunks")
+            else:
+                json.dump(stripped, json_file.open("w", encoding="utf-8"), ensure_ascii=False, indent=2)
+                bytes_freed += original_size - len(json.dumps(stripped, ensure_ascii=False, indent=2).encode("utf-8"))
+            files_processed += 1
+        except Exception as e:
+            logger.warning(f"Failed to strip {json_file}: {e}")
+    return (files_processed, bytes_freed)
+
+
+def run_cleanup(
+    config: dict[str, Any],
+    cleanup_after_index: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Clean up raw data and chunk files after successful indexing.
+
+    Respects config settings:
+      etl.data_retention.raw_data_days: auto-delete raw extracts after N days (0 = keep forever)
+      etl.data_retention.cleanup_after_run: clean immediately after indexing
+      etl.data_retention.keep_cold_storage: preserve cold storage for versioning
+
+    Returns dict with cleanup summary.
+    """
+    retention_cfg = config.get("etl", {}).get("data_retention", {})
+
+    if not cleanup_after_index and not retention_cfg.get("cleanup_after_run"):
+        logger.info("Cleanup not requested — skipping")
+        return {"ran": False, "reason": "not requested"}
+
+    logger.info(f"=== Starting post-indexing cleanup {'(dry-run)' if dry_run else ''} ===")
+    summary: dict[str, Any] = {
+        "ran": True,
+        "dry_run": dry_run,
+        "directories_removed": [],
+        "hot_chunks_stripped": 0,
+        "bytes_freed": 0,
+    }
+
+    raw_data_dirs = [
+        Path(config.get("confluence", {}).get("output_dir", "./raw_data/confluence")),
+        Path(config.get("jira", {}).get("output_dir", "./raw_data/jira")),
+        Path(config.get("gitlab", {}).get("output_dir", "./raw_data/gitlab")),
+    ]
+    for d in raw_data_dirs:
+        if _cleanup_path(d, dry_run=dry_run):
+            summary["directories_removed"].append(str(d))
+
+    chunks_dir = Path(config.get("chunking", {}).get("output_dir", "./chunks"))
+    if _cleanup_path(chunks_dir, dry_run=dry_run):
+        summary["directories_removed"].append(str(chunks_dir))
+
+    keep_cold = retention_cfg.get("keep_cold_storage", True)
+    if keep_cold:
+        logger.info("Keeping cold storage (keep_cold_storage=true)")
+    else:
+        cold_dir = Path(config.get("indexing", {}).get("cold_dir", "./cold_chunks"))
+        if _cleanup_path(cold_dir, dry_run=dry_run):
+            summary["directories_removed"].append(str(cold_dir))
+        lake_dir = Path(config.get("indexing", {}).get("lake_dir", "./cold_lake"))
+        if _cleanup_path(lake_dir, dry_run=dry_run):
+            summary["directories_removed"].append(str(lake_dir))
+
+    hot_dir = Path(config.get("indexing", {}).get("hot_dir", "./hot_chunks"))
+    files_stripped, bytes_freed = _strip_chunk_full_text(hot_dir, dry_run=dry_run)
+    summary["hot_chunks_stripped"] = files_stripped
+    summary["bytes_freed"] = bytes_freed
+
+    logger.info(f"Cleanup complete: {summary}")
+    return summary
+
+
 def main():
     parser = argparse.ArgumentParser(description="RAG ETL Pipeline Orchestrator")
     parser.add_argument("--config", type=Path, default=Path("etl_config.yaml"), help="Path to YAML config")
@@ -404,12 +516,28 @@ def main():
     parser.add_argument("--force-reindex", action="store_true", help="Force reindex all documents (ignore WAL)")
     parser.add_argument("--reset-wal", action="store_true", help="Reset all WAL checkpoints before run")
     parser.add_argument(
+        "--cleanup-after-index",
+        action="store_true",
+        help="Clean up raw data and chunk files after indexing",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be cleaned (use with --cleanup-after-index)",
+    )
+    parser.add_argument(
         "--streaming",
         action="store_true",
         help="Start streaming ETL (webhook + consumer) alongside batch",
     )
     parser.add_argument("--webhook-only", action="store_true", help="Start only webhook server")
     parser.add_argument("--consumer-only", action="store_true", help="Start only stream consumer")
+    parser.add_argument(
+        "--quality-report",
+        type=Path,
+        default=None,
+        help="Generate extraction quality report (JSON) and save to path",
+    )
     args = parser.parse_args()
 
     # Загрузка конфигурации
@@ -664,7 +792,16 @@ def main():
         )
         run_indexing(all_chunks, live_lake, wal)
 
-    # 6. Streaming mode (optional)
+    # 6. Post-indexing cleanup (FR-07)
+    if args.cleanup_after_index:
+        cleanup_result = run_cleanup(
+            config,
+            cleanup_after_index=True,
+            dry_run=args.dry_run,
+        )
+        logger.info(f"Cleanup result: {cleanup_result}")
+
+    # 7. Streaming mode (optional)
     streaming_cfg = config.get("streaming", {})
     streaming_enabled = (
         args.streaming or args.webhook_only or args.consumer_only or streaming_cfg.get("streaming_enabled", False)
@@ -732,6 +869,45 @@ def main():
                 if args.consumer_only:
                     consumer.run_forever()
                     return
+
+    # 7. Quality report generation (FR-12)
+    if args.quality_report:
+        logger.info("=== Generating quality report ===")
+        try:
+            from etl.extractors.quality_metrics import (
+                ExtractionQualityReport,
+                compute_ocr_quality,
+                compute_table_quality,
+                save_quality_report,
+            )
+
+            reports = []
+            for doc in documents:
+                tables = doc.get("metadata", {}).get("tables", [])
+                ocr_results = doc.get("metadata", {}).get("ocr_results", [])
+
+                report = ExtractionQualityReport(
+                    document_id=doc.get("id", ""),
+                    source_type=doc.get("source_type", ""),
+                )
+                report.tables = compute_table_quality(tables if isinstance(tables, list) else [])
+                if ocr_results:
+                    report.ocr = compute_ocr_quality(ocr_results if isinstance(ocr_results, list) else [])
+
+                if report.ocr.page_count > 0 or report.tables.total_tables > 0:
+                    reports.append(report)
+
+            if reports:
+                save_quality_report(reports, str(args.quality_report))
+                logger.info(
+                    "Quality report: %d documents, avg score %.1f",
+                    len(reports),
+                    round(sum(r.overall_score() for r in reports) / len(reports), 1),
+                )
+            else:
+                logger.info("No quality-sensitive content found for report")
+        except Exception as e:
+            logger.error("Failed to generate quality report: %s", e)
 
     logger.info("ETL pipeline completed successfully")
 

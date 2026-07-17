@@ -573,3 +573,70 @@ async def admin_models_canary_status(
     with tracer.start_as_current_span("admin.canary_status"):
         status = _canary_state.get_status()
         return JSONResponse(status_code=200, content=status)
+
+
+# ---------------------------------------------------------------------------
+# ETL WAL endpoints (FR-08) — remote WAL checkpoint storage for ETL pipelines
+# ---------------------------------------------------------------------------
+
+# Thread-safe in-memory store for ETL WAL checkpoints
+_etl_wal_store: dict[str, dict[str, Any]] = {}
+_etl_wal_lock = threading.RLock()
+
+
+class ETLWALCheckpoint(BaseModel):
+    data: dict[str, Any] = Field(default_factory=dict, description="Checkpoint data")
+
+
+class ETLWALResponse(BaseModel):
+    checkpoint_name: str
+    data: dict[str, Any]
+    updated_at: str | None = None
+
+
+@router.post("/v1/admin/etl/wal/{checkpoint_name}", status_code=201)
+async def admin_etl_wal_set(
+    checkpoint_name: str,
+    checkpoint: ETLWALCheckpoint,
+) -> JSONResponse:
+    """Store an ETL WAL checkpoint (used by ETL scheduler with WAL_BACKEND=proxy).
+
+    No auth required — this is an internal endpoint called by the ETL process.
+    """
+    with _etl_wal_lock:
+        _etl_wal_store[checkpoint_name] = {
+            "data": checkpoint.data,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    logger.info(f"ETL WAL checkpoint '{checkpoint_name}' stored")
+    return JSONResponse(
+        status_code=201,
+        content={"status": "ok", "checkpoint_name": checkpoint_name},
+    )
+
+
+@router.get("/v1/admin/etl/wal/{checkpoint_name}")
+async def admin_etl_wal_get(
+    checkpoint_name: str,
+) -> ETLWALResponse:
+    """Retrieve an ETL WAL checkpoint by name."""
+    with _etl_wal_lock:
+        entry = _etl_wal_store.get(checkpoint_name)
+    if entry is None:
+        return ETLWALResponse(checkpoint_name=checkpoint_name, data={}, updated_at=None)
+    return ETLWALResponse(
+        checkpoint_name=checkpoint_name,
+        data=entry["data"],
+        updated_at=entry.get("updated_at"),
+    )
+
+
+@router.get("/v1/admin/etl/wal")
+async def admin_etl_wal_list() -> JSONResponse:
+    """List all ETL WAL checkpoints."""
+    with _etl_wal_lock:
+        result = {
+            "checkpoints": {name: entry["data"] for name, entry in _etl_wal_store.items()},
+            "count": len(_etl_wal_store),
+        }
+    return JSONResponse(status_code=200, content=result)

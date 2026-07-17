@@ -7,10 +7,17 @@
 
 Формат WAL: JSON-файл с секциями для разных pipeline.
 Поддерживает конкурентный доступ через filelock (опционально).
+
+Remote backends:
+- WAL_BACKEND="file" (default): local JSON file
+- WAL_BACKEND="redis": store checkpoints in Redis
+- WAL_BACKEND="proxy": POST checkpoints to proxy API
 """
 
 import json
 import logging
+import os
+from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,34 +33,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class WALManager:
-    """Менеджер WAL для ETL-процессов.
-    Каждый pipeline (например, 'confluence_extractor', 'jira_extractor', 'indexing') имеет свою секцию.
-    """
+class BaseWALBackend(ABC):
+    """Abstract backend for WAL storage."""
+
+    @abstractmethod
+    def read(self) -> dict[str, Any]:
+        """Read the complete WAL state."""
+
+    @abstractmethod
+    def write(self, data: dict[str, Any]) -> None:
+        """Write the complete WAL state."""
+
+
+class FileWALBackend(BaseWALBackend):
+    """Local JSON file backend (default)."""
 
     def __init__(self, wal_path: Path, use_lock: bool = True, lock_timeout: int = 30):
-        """:param wal_path: путь к JSON-файлу WAL
-        :param use_lock: использовать ли файловую блокировку (требуется pip install filelock)
-        :param lock_timeout: таймаут ожидания блокировки (секунды)
-        """
         self.wal_path = Path(wal_path)
         self.use_lock = use_lock and FILELOCK_AVAILABLE
         self.lock_timeout = lock_timeout
         self.wal_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Инициализация пустого WAL, если файл не существует
         if not self.wal_path.exists():
-            self._write_wal({})
+            self._write_raw({})
 
     def _get_lock(self) -> Any:
-        """Возвращает объект блокировки, если используется."""
-        if self.use_lock:
+        if self.use_lock and FILELOCK_AVAILABLE:
             lock_path = self.wal_path.with_suffix(".lock")
             return FileLock(lock_path, timeout=self.lock_timeout)
         return None
 
-    def _read_wal(self) -> dict[str, Any]:
-        """Читает текущий WAL (без блокировки, только чтение)."""
+    def _read_raw(self) -> dict[str, Any]:
         try:
             with open(self.wal_path, encoding="utf-8") as f:
                 return json.load(f)
@@ -61,8 +70,7 @@ class WALManager:
             logger.warning(f"WAL file {self.wal_path} corrupted or missing, reinitializing")
             return {}
 
-    def _write_wal(self, data: dict[str, Any]) -> None:
-        """Записывает WAL (без блокировки). Raises OSError on disk full."""
+    def _write_raw(self, data: dict[str, Any]) -> None:
         try:
             with open(self.wal_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -70,20 +78,175 @@ class WALManager:
             logger.error(f"Failed to write WAL file {self.wal_path}: {e}")
             raise
 
+    def read(self) -> dict[str, Any]:
+        return self._read_raw()
+
+    def write(self, data: dict[str, Any]) -> None:
+        lock = self._get_lock()
+        if lock:
+            with lock:
+                self._write_raw(data)
+        else:
+            self._write_raw(data)
+
+
+class RedisWALBackend(BaseWALBackend):
+    """Redis-backed WAL storage. Stores each checkpoint under `etl:wal:{checkpoint_name}`."""
+
+    def __init__(self, redis_host: str = "localhost", redis_port: int = 6379, key_prefix: str = "etl:wal"):
+        self.redis_host = redis_host
+        self.redis_port = redis_port
+        self.key_prefix = key_prefix
+        self._redis = None
+
+    def _get_redis(self):
+        if self._redis is None:
+            import redis as redis_lib
+
+            self._redis = redis_lib.Redis(
+                host=self.redis_host,
+                port=self.redis_port,
+                socket_connect_timeout=5,
+                decode_responses=True,
+            )
+        return self._redis
+
+    def read(self) -> dict[str, Any]:
+        try:
+            r = self._get_redis()
+            keys = r.keys(f"{self.key_prefix}:*")
+            result: dict[str, Any] = {}
+            for key in keys:
+                key_str: str = key if isinstance(key, str) else key.decode("utf-8")
+                checkpoint_name = key_str[len(self.key_prefix) + 1:]
+                try:
+                    result[checkpoint_name] = json.loads(r.get(key_str) or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    result[checkpoint_name] = {}
+            return result
+        except Exception as e:
+            logger.warning(f"Redis WAL read failed: {e}")
+            return {}
+
+    def write(self, data: dict[str, Any]) -> None:
+        try:
+            r = self._get_redis()
+            pipe = r.pipeline()
+            for checkpoint_name, checkpoint_data in data.items():
+                key = f"{self.key_prefix}:{checkpoint_name}"
+                pipe.set(key, json.dumps(checkpoint_data))
+            pipe.execute()
+        except Exception as e:
+            logger.error(f"Redis WAL write failed: {e}")
+            raise
+
+
+class ProxyWALBackend(BaseWALBackend):
+    """Proxy API-backed WAL storage. POSTs/GETs checkpoints via HTTP."""
+
+    def __init__(self, proxy_url: str, api_key: str | None = None):
+        self.proxy_url = proxy_url.rstrip("/")
+        self.api_key = api_key
+
+    def _get_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+
+    def read(self) -> dict[str, Any]:
+        import urllib.request
+
+        try:
+            req = urllib.request.Request(
+                f"{self.proxy_url}/v1/admin/etl/wal",
+                headers={k: v for k, v in self._get_headers().items() if k != "Content-Type"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read().decode())
+                return result.get("checkpoints", {})
+        except Exception as e:
+            logger.warning(f"Proxy WAL read failed: {e}")
+            return {}
+
+    def write(self, data: dict[str, Any]) -> None:
+        import urllib.request
+
+        for checkpoint_name, checkpoint_data in data.items():
+            try:
+                body = json.dumps(checkpoint_data).encode("utf-8")
+                req = urllib.request.Request(
+                    f"{self.proxy_url}/v1/admin/etl/wal/{checkpoint_name}",
+                    data=body,
+                    headers=self._get_headers(),
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status not in (200, 201):
+                        logger.warning(f"Proxy WAL write returned {resp.status} for {checkpoint_name}")
+            except Exception as e:
+                logger.error(f"Proxy WAL write failed for {checkpoint_name}: {e}")
+                raise
+
+
+
+class WALManager:
+    """Менеджер WAL для ETL-процессов.
+    Каждый pipeline (например, 'confluence_extractor', 'jira_extractor', 'indexing') имеет свою секцию.
+
+    Supports pluggable backends: FileWALBackend (default), RedisWALBackend, ProxyWALBackend.
+    """
+
+    def __init__(
+        self,
+        wal_path: Path | None = None,
+        use_lock: bool = True,
+        lock_timeout: int = 30,
+        backend: BaseWALBackend | None = None,
+    ):
+        """:param wal_path: путь к JSON-файлу WAL (used with file backend)
+        :param use_lock: использовать ли файловую блокировку (требуется pip install filelock)
+        :param lock_timeout: таймаут ожидания блокировки (секунды)
+        :param backend: WAL backend instance. If None, creates FileWALBackend from wal_path.
+        """
+        if backend is not None:
+            self._backend = backend
+            self.wal_path = wal_path or Path("./wal/etl_wal.json")
+        elif wal_path is not None:
+            self._backend = FileWALBackend(Path(wal_path), use_lock=use_lock, lock_timeout=lock_timeout)
+            self.wal_path = Path(wal_path)
+        else:
+            raise ValueError("Either wal_path or backend must be provided")
+        self.use_lock = use_lock
+        self.lock_timeout = lock_timeout
+
+    def _read_wal(self) -> dict[str, Any]:
+        """Читает текущий WAL (без блокировки, только чтение)."""
+        try:
+            return self._backend.read()
+        except Exception:
+            logger.warning("WAL read failed, returning empty state")
+            return {}
+
+    def _write_wal(self, data: dict[str, Any]) -> None:
+        """Записывает WAL (без блокировки). Raises OSError on disk full."""
+        self._backend.write(data)
+
     def _update_wal(self, update_func: Any) -> None:
         """Безопасное обновление WAL с блокировкой.
         update_func принимает текущие данные и возвращает обновлённые.
         """
-        lock = self._get_lock()
-        if lock:
-            with lock:
-                data = self._read_wal()
-                new_data = update_func(data)
-                self._write_wal(new_data)
-        else:
-            data = self._read_wal()
-            new_data = update_func(data)
-            self._write_wal(new_data)
+        if self.use_lock and isinstance(self._backend, FileWALBackend):
+            lock = self._backend._get_lock()
+            if lock:
+                with lock:
+                    data = self._read_wal()
+                    new_data = update_func(data)
+                    self._write_wal(new_data)
+                return
+        data = self._read_wal()
+        new_data = update_func(data)
+        self._write_wal(new_data)
 
     def get_checkpoint(self, pipeline: str, key: str | None = None) -> Any:
         """Получает чекпоинт для указанного pipeline.
@@ -205,6 +368,44 @@ class WALManager:
             return data
 
         self._update_wal(update)
+
+
+def create_wal_manager(config: dict[str, Any]) -> WALManager:
+    """Factory function: creates WALManager with the appropriate backend based on config.
+
+    Config keys used:
+      wal.wal_backend: "file" (default), "redis", "proxy"
+      wal.wal_file: path to WAL file (file backend)
+      wal.use_lock: enable file locking (file backend)
+      wal.lock_timeout: lock timeout (file backend)
+      wal.redis_host: Redis host (redis backend)
+      wal.redis_port: Redis port (redis backend)
+      wal.proxy_url: proxy URL (proxy backend)
+
+    Falls back to "file" if backend is unrecognized.
+    """
+    wal_cfg = config.get("wal", {})
+    backend_name = wal_cfg.get("wal_backend") or os.environ.get("WAL_BACKEND", "file")
+    use_lock = wal_cfg.get("use_lock", True) if isinstance(wal_cfg.get("use_lock"), bool) else True
+    lock_timeout = int(wal_cfg.get("lock_timeout", 30))
+
+    if backend_name == "redis":
+        redis_host = wal_cfg.get("redis_host") or os.environ.get("REDIS_HOST", "localhost")
+        redis_port = int(wal_cfg.get("redis_port") or os.environ.get("REDIS_PORT", 6379))
+        backend: BaseWALBackend = RedisWALBackend(redis_host=redis_host, redis_port=redis_port)
+        logger.info("WAL backend: redis (%s:%d)", redis_host, redis_port)
+        return WALManager(wal_path=Path("./wal/etl_wal.json"), backend=backend, use_lock=False)
+    elif backend_name == "proxy":
+        proxy_url = wal_cfg.get("proxy_url") or os.environ.get("PROXY_URL", "http://localhost:8080")
+        api_key = wal_cfg.get("proxy_api_key") or os.environ.get("PROXY_API_KEY", "")
+        backend = ProxyWALBackend(proxy_url=proxy_url, api_key=api_key)
+        logger.info("WAL backend: proxy (%s)", proxy_url)
+        return WALManager(wal_path=Path("./wal/etl_wal.json"), backend=backend, use_lock=False)
+    else:
+        wal_file = wal_cfg.get("wal_file", "./wal/etl_wal.json")
+        wal_path = Path(wal_file)
+        logger.info("WAL backend: file (%s)", wal_path)
+        return WALManager(wal_path=wal_path, use_lock=use_lock, lock_timeout=lock_timeout)
 
 
 # Предустановленные константы для имён pipeline

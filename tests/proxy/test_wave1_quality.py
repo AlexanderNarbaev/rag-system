@@ -12,8 +12,6 @@ Covers:
 import sys
 from unittest.mock import MagicMock
 
-import pytest
-
 # Mock modules that may not be installed
 for _mod in ("qdrant_client", "qdrant_client.http", "sentence_transformers", "neo4j"):
     if _mod not in sys.modules:
@@ -168,7 +166,7 @@ class TestConversationMemory:
         assert any("SUMMARY" in m["content"] for m in msgs)
 
     def test_session_store(self):
-        from proxy.app.shared.memory_manager import get_conversation, clear_conversation
+        from proxy.app.shared.memory_manager import clear_conversation, get_conversation
 
         cm = get_conversation("test-session")
         cm.add_turn("user", "test")
@@ -297,7 +295,7 @@ class TestUncertaintyResponse:
         assert "partial matches" in response.lower()
 
     def test_build_uncertainty_with_clarification(self):
-        from proxy.app.core.clarification import build_uncertainty_response, ClarificationResult
+        from proxy.app.core.clarification import ClarificationResult, build_uncertainty_response
 
         clarification = ClarificationResult(
             questions=["Are you looking for the setup on Ubuntu or CentOS?"],

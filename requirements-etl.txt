@@ -27,3 +27,14 @@ neo4j>=5.14.0
 filelock>=3.29.5
 
 markdownify>=1.2.3
+
+# ── Multimodal: OCR, image embedding, PDF images (FR-09–FR-11) ───────────────
+pytesseract>=0.3.10                      # Tesseract OCR — primary OCR engine
+easyocr>=1.7.0                           # EasyOCR — fallback for non-Latin scripts
+pillow>=10.0.0                           # Image loading (PIL)
+pdfplumber>=0.11.0                       # PDF text + image extraction (primary)
+PyMuPDF>=1.24.0                          # PDF image extraction (fallback, fitz)
+
+# ── Vision models: CLIP + BLIP (FR-10) — optional, heavy dependencies ────────
+# transformers>=4.40.0                   # HuggingFace Transformers (CLIP, BLIP)
+# torch>=2.0.0                           # PyTorch (CLIP, BLIP inference)
