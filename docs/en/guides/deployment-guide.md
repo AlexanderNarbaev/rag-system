@@ -1066,11 +1066,214 @@ Qdrant startup probe uses the native `:6333/health` endpoint. vLLM startup probe
 
 ---
 
-## 6. Air-Gapped Deployment
+## 6. OpenWebUI Standalone Deployment
+
+OpenWebUI provides a ChatGPT-style web interface that connects to the RAG Proxy as an OpenAI-compatible backend.
+This deployment is **fully standalone** — it uses its own PostgreSQL database, Redis for sessions, and Apache Tika
+for document extraction, sharing only the Docker network with the RAG infrastructure.
+
+### 6.1 Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  rag-network (EXTERNAL — shared with RAG Proxy)          │
+│                                                          │
+│  ┌───────────────┐  ┌───────────┐                       │
+│  │  RAG Proxy    │  │  MinIO    │                       │
+│  │  :8080        │  │  :9000    │                       │
+│  │ (OpenAI API)  │  │ (S3 API)  │                       │
+│  └───────┬───────┘  └─────┬─────┘                       │
+└──────────┼─────────────────┼────────────────────────────┘
+           │                 │
+┌──────────┼─────────────────┼────────────────────────────┐
+│  openwebui-network (INTERNAL — isolated)                 │
+│          │                 │                             │
+│  ┌───────┴─────────────────┴───────┐                     │
+│  │         OpenWebUI :3000        │                     │
+│  │  (Users access via browser)    │                     │
+│  └───────┬─────────────┬──────────┘                     │
+│          │             │                                 │
+│  ┌───────┴───┐ ┌───────┴────┐ ┌──────────┐             │
+│  │PostgreSQL │ │   Redis    │ │   Tika   │             │
+│  │  :5432    │ │   :6379    │ │  :9998   │             │
+│  │(users,    │ │ (sessions, │ │(document │             │
+│  │ chats,    │ │  WS cache) │ │ extract) │             │
+│  │ configs)  │ │            │ │          │             │
+│  └───────────┘ └────────────┘ └──────────┘             │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key design decisions:**
+
+| Decision | Rationale |
+|----------|-----------|
+| Separate PostgreSQL (not SQLite) | Production durability, independent backups |
+| Dedicated Redis instance | Session isolation from proxy's cache Redis |
+| External `rag-network` | Clear ownership boundary; proxy updates don't affect OpenWebUI data |
+| Apache Tika as sidecar | Full offline document extraction (PDF, DOCX, XLSX, images) |
+| Built-in RAG disabled | Proxy handles all retrieval, reranking, and graph expansion |
+| No Ollama | All models served through the RAG Proxy only |
+
+### 6.2 Quick Start
+
+```bash
+# 1. Run the initialization script (generates secrets, creates MinIO bucket, starts services)
+cd /opt/rag-system
+./scripts/init-openwebui.sh
+
+# Or with automatic mode (no interactive prompts):
+./scripts/init-openwebui.sh --auto
+```
+
+The script will:
+1. Check Docker and Docker Compose are available
+2. Verify the `rag-network` exists (RAG Proxy must be running)
+3. Generate `WEBUI_SECRET_KEY` and `POSTGRES_PASSWORD` (stored in `.env.openwebui`)
+4. Create the `openwebui-files` bucket in MinIO
+5. Pull images and start all services
+6. Run health checks on all components
+7. Print admin account setup instructions
+
+### 6.3 Manual Start
+
+```bash
+cd deploy/docker
+
+# Generate secrets first
+openssl rand -hex 32  # → WEBUI_SECRET_KEY
+openssl rand -hex 24  # → POSTGRES_PASSWORD
+
+# Edit .env.openwebui with the generated secrets
+vim .env.openwebui
+
+# Start services
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui up -d
+
+# Watch logs
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui logs -f
+
+# Check status
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui ps
+```
+
+### 6.4 First-Time Admin Setup
+
+Since `ENABLE_SIGNUP=false` (corporate policy), only the first visitor can create an admin account:
+
+1. Open `http://<host>:3000` in your browser
+2. Click **Sign up** and create the admin account
+3. After admin creation, the signup page is disabled for all other users
+4. Go to **Admin Panel → Users** to create accounts for your team
+
+For Keycloak SSO integration:
+
+1. Go to **Admin Panel → Settings → General → OAuth**
+2. Enable OAuth and configure the Keycloak provider:
+   - **Provider:** `openid`
+   - **Client ID:** your-keycloak-client-id
+   - **Client Secret:** your-keycloak-client-secret
+   - **OpenID Configuration URL:** `https://keycloak.example.com/realms/your-realm/.well-known/openid-configuration`
+   - **Scopes:** `openid profile email`
+3. Set `ENABLE_SIGNUP=false` to prevent local account creation
+
+### 6.5 Service Overview
+
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| **OpenWebUI** | `rag-openwebui` | 3000 → 8080 | Web interface |
+| **PostgreSQL** | `rag-openwebui-postgres` | 5432 (internal) | Users, chats, configs |
+| **Redis** | `rag-openwebui-redis` | 6379 (internal) | WebSocket sessions, cache |
+| **Tika** | `rag-openwebui-tika` | 9998 (internal) | Document text extraction |
+
+### 6.6 Connecting Multiple LLM Backends
+
+OpenWebUI supports multiple OpenAI-compatible connections simultaneously. Beyond the RAG Proxy,
+you can add GPUStack or vLLM endpoints:
+
+```bash
+# In .env.openwebui — multiple URLs separated by semicolons:
+OPENAI_API_BASE_URLS=http://rag-proxy:8080/v1;https://gpustack.internal/v1;https://vllm-openshift.internal/v1
+OPENAI_API_KEYS=sk-rag-proxy;gpustack_YOUR_KEY;vllm-openshift-key
+```
+
+Or configure via the Admin Panel UI after startup:
+1. **Admin Panel → Settings → Connections → OpenAI API**
+2. Add each endpoint URL with its API key
+3. Models from all connections appear in the model selector
+
+### 6.7 Operations
+
+```bash
+# Status
+cd deploy/docker
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui ps
+
+# Logs
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui logs -f openwebui
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui logs -f postgres
+
+# Restart a specific service
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui restart openwebui
+
+# Stop everything (data preserved in volumes)
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui down
+
+# Stop and delete all data (⚠ destructive)
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui down -v
+
+# Backup PostgreSQL
+docker exec rag-openwebui-postgres pg_dump -U openwebui openwebui > openwebui_backup_$(date +%Y%m%d).sql
+
+# Restore PostgreSQL
+docker exec -i rag-openwebui-postgres psql -U openwebui openwebui < openwebui_backup_20260717.sql
+```
+
+### 6.8 Resource Requirements
+
+| Service | CPU (min/limit) | RAM (min/limit) | Disk |
+|---------|-----------------|-----------------|------|
+| OpenWebUI | 0.5 / 2 cores | 512 MB / 2 GB | 10 GB |
+| PostgreSQL | 0.25 / 2 cores | 256 MB / 1 GB | 20 GB |
+| Redis | 0.1 / 1 core | 64 MB / 512 MB | 5 GB |
+| Tika | 0.25 / 2 cores | 256 MB / 1 GB | — (tmpfs) |
+| **Total** | **1.1 / 7 cores** | **1.1 / 4.5 GB** | **35 GB** |
+
+### 6.9 Troubleshooting
+
+**OpenWebUI can't connect to RAG Proxy:**
+```bash
+# Check rag-network connectivity
+docker exec rag-openwebui curl -sf http://rag-proxy:8080/v1/health
+# Should return: {"status":"healthy",...}
+
+# Check if rag-network is attached
+docker network inspect rag-network | grep openwebui
+```
+
+**"Service Unavailable" on file upload:**
+```bash
+# Verify MinIO bucket exists
+docker exec rag-minio mc ls local/openwebui-files
+
+# Create bucket if missing
+docker exec rag-minio mc mb local/openwebui-files
+```
+
+**Tika fails on large documents:**
+```bash
+# Increase Tika heap size in .env.openwebui:
+TIKA_HEAP_SIZE=1024m
+# Then restart Tika:
+docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui restart tika
+```
+
+---
+
+## 7. Air-Gapped Deployment
 
 For environments without internet access, pre-download all assets on a connected machine, then transfer.
 
-### 5.1 Download Models Offline
+### 7.1 Download Models Offline
 
 ```bash
 # On the internet-connected machine:

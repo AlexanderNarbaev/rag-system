@@ -1,140 +1,271 @@
 # docker-compose.openwebui.yml
-# OpenWebUI + RAG Proxy + MinIO
-# Start:   docker compose -f docker-compose.openwebui.yml up -d
-# Stop:    docker compose -f docker-compose.openwebui.yml down
+# Автономное развертывание OpenWebUI для корпоративной RAG-системы
+# Запуск:   docker compose -f docker-compose.openwebui.yml --env-file .env.openwebui up -d
+# Останов:  docker compose -f docker-compose.openwebui.yml down
+# Статус:   docker compose -f docker-compose.openwebui.yml ps
+#
+# Требуется: уже запущенный RAG Proxy в сети rag-network (proxy/docker-compose.yml)
+# Сеть:      rag-network (внешняя, для доступа к прокси и MinIO)
+#            openwebui-network (внутренняя, для изоляции БД и сервисов)
 
 services:
-  # ── OpenWebUI ───────────────────────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # OpenWebUI — корпоративный интерфейс RAG-ассистента
+  # ═══════════════════════════════════════════════════════════════════════════════
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: rag-openwebui
+    # Порт 3000 — доступ с хоста; замените на 127.0.0.1:3000:8080 для продакшена
     ports:
-      - "3000:8080"
-    volumes:
-      - openwebui_data:/app/backend/data
-    environment:
-      # Подключение к RAG Proxy как к OpenAI-compatible backend
-      - OPENAI_API_BASE_URLS=http://rag-proxy:8080/v1
-      - OPENAI_API_KEYS=${OPENWEBUI_API_KEY:-sk-rag-proxy}
-      - DEFAULT_MODELS=rag
-      # Отключаем встроенный RAG (используем наш)
-      - RAG_ENABLED=false
-      # MinIO для файлов
-      - S3_ENDPOINT_URL=http://minio:9000
-      - S3_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-      - S3_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
-      - S3_BUCKET_NAME=${MINIO_DOCS_BUCKET:-open-webui}
-      # Auth
-      - ENABLE_SIGNUP=true
-      - DEFAULT_USER_ROLE=user
-    depends_on:
-      rag-proxy:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/api/v1/auths" ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    restart: unless-stopped
-    networks:
-      - rag-network
-
-  # ── RAG Proxy ───────────────────────────────────────────────────────────────
-  rag-proxy:
-    image: rag-proxy:latest
-    container_name: rag-proxy
-    ports:
-      - "8080:8080"
-    volumes:
-      - ../../proxy/logs:/app/logs
-      - ../../proxy/.env:/app/.env:ro
+      - "${OPENWEBUI_HOST_PORT:-3000}:8080"
     env_file:
-      - ../../proxy/.env
+      - .env.openwebui
     environment:
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
-      - NEO4J_URI=bolt://neo4j:7687
-      - REDIS_URL=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
+      # Динамическая генерация (если не задан в .env.openwebui)
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      # База данных PostgreSQL
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
+      # Redis для сессий WebSocket
+      - REDIS_URL=redis://redis:6379/0
+      # Подключение к RAG Proxy как OpenAI-совместимому бэкенду
+      - OPENAI_API_BASE_URLS=${OPENAI_API_BASE_URLS:-http://rag-proxy:8080/v1}
+      - OPENAI_API_KEYS=${OPENAI_API_KEYS:-sk-rag-proxy}
+      # Хранилище файлов — MinIO (общий с прокси)
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER:-s3}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://minio:9000}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-minioadmin}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-minioadmin}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-openwebui-files}
+      - S3_REGION_NAME=${S3_REGION_NAME:-us-east-1}
+      - S3_ADDRESSING_STYLE=${S3_ADDRESSING_STYLE:-path}
+      # Извлечение содержимого документов через Apache Tika
+      - CONTENT_EXTRACTION_ENGINE=${CONTENT_EXTRACTION_ENGINE:-tika}
+      - TIKA_SERVER_URL=${TIKA_SERVER_URL:-http://tika:9998}
+    volumes:
+      # Постоянное хранилище данных OpenWebUI (загруженные файлы, кэш, настройки)
+      - openwebui_data:/app/backend/data
+      # Временная директория (для загрузки/обработки файлов)
+      - openwebui_tmp:/tmp
     depends_on:
-      qdrant:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      tika:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080/v1/health/live" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
     restart: unless-stopped
+    stop_grace_period: 30s
+    # Ограничения ресурсов — OpenWebUI легковесен, но обрабатывает загрузки
+    deploy:
+      resources:
+        limits:
+          cpus: "${OPENWEBUI_CPU_LIMIT:-2}"
+          memory: "${OPENWEBUI_MEM_LIMIT:-2G}"
+        reservations:
+          cpus: "${OPENWEBUI_CPU_RESERVE:-0.5}"
+          memory: "${OPENWEBUI_MEM_RESERVE:-512M}"
+    # Безопасность — непривилегированный режим
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
+      - openwebui-network
       - rag-network
 
-  # ── Qdrant ──────────────────────────────────────────────────────────────────
-  qdrant:
-    image: qdrant/qdrant:v1.12.1
-    container_name: rag-qdrant
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # PostgreSQL 16 — хранение пользователей, чатов, конфигураций
+  # ═══════════════════════════════════════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag-openwebui-postgres
+    # Порт только внутри сети openwebui-network (не exposed на хост)
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-openwebui}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-openwebui}
+      - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      - qdrant_data:/qdrant/storage
-    ports:
-      - "6333:6333"
+      - postgres_data:/var/lib/postgresql/data
+    # Переопределение конфигурации PostgreSQL для производительности
+    command: >
+      postgres
+      -c shared_buffers=${PG_SHARED_BUFFERS:-256MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE:-768MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-64MB}
+      -c wal_buffers=${PG_WAL_BUFFERS:-16MB}
+      -c max_connections=${PG_MAX_CONNS:-100}
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_wal_size=${PG_MAX_WAL_SIZE:-2GB}
+      -c min_wal_size=${PG_MIN_WAL_SIZE:-80MB}
+      -c checkpoint_completion_target=0.9
+      -c default_statistics_target=100
+      -c log_min_duration_statement=1000
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
     healthcheck:
-      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null || exit 1" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openwebui} -d ${POSTGRES_DB:-openwebui}" ]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "${POSTGRES_CPU_LIMIT:-2}"
+          memory: "${POSTGRES_MEM_LIMIT:-1G}"
+        reservations:
+          cpus: "${POSTGRES_CPU_RESERVE:-0.25}"
+          memory: "${POSTGRES_MEM_RESERVE:-256M}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
-      - rag-network
+      - openwebui-network
 
-  # ── Redis ───────────────────────────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Redis 7 — управление сессиями WebSocket и кэширование
+  # ═══════════════════════════════════════════════════════════════════════════════
   redis:
     image: redis:7-alpine
-    container_name: rag-redis
-    ports:
-      - "6379:6379"
+    container_name: rag-openwebui-redis
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    # Конфигурация Redis для сессий
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --tcp-keepalive 60
+      --timeout 300
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: [ "CMD", "redis-cli", "--raw", "ping" ]
       interval: 10s
       timeout: 3s
-      retries: 3
-      start_period: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${REDIS_CPU_LIMIT:-1}"
+          memory: "${REDIS_MEM_LIMIT:-512M}"
+        reservations:
+          cpus: "${REDIS_CPU_RESERVE:-0.1}"
+          memory: "${REDIS_MEM_RESERVE:-64M}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
-      - rag-network
+      - openwebui-network
 
-  # ── MinIO ───────────────────────────────────────────────────────────────────
-  minio:
-    image: minio/minio:latest
-    container_name: rag-minio
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Apache Tika — извлечение текста из офисных документов, PDF, изображений
+  # ═══════════════════════════════════════════════════════════════════════════════
+  tika:
+    image: apache/tika:latest
+    container_name: rag-openwebui-tika
+    expose:
+      - "9998"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
-    volumes:
-      - minio_data:/data
+      # Настройки производительности Tika
+      - TIKA_CHILD_JAVA_OPTS=-Xmx${TIKA_HEAP_SIZE:-512m}
+      - JAVA_TOOL_OPTIONS=-Xmx${TIKA_HEAP_SIZE:-512m}
+      # Отключаем загрузку внешних ресурсов (air-gapped безопасность)
+      - TIKA_CONFIG=/dev/null
+    # Временная директория для обработки больших файлов
+    tmpfs:
+      - /tmp:size=512M,mode=1777
     healthcheck:
-      test: [ "CMD", "mc", "ready", "local" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:9998/tika" ]
       interval: 30s
-      timeout: 20s
+      timeout: 15s
       retries: 3
+      start_period: 45s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "${TIKA_CPU_LIMIT:-2}"
+          memory: "${TIKA_MEM_LIMIT:-1G}"
+        reservations:
+          cpus: "${TIKA_CPU_RESERVE:-0.25}"
+          memory: "${TIKA_MEM_RESERVE:-256M}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
     networks:
-      - rag-network
+      - openwebui-network
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Тома (именованные, persist при перезапуске)
+# ═════════════════════════════════════════════════════════════════════════════
 volumes:
-  qdrant_data:
-  redis_data:
-  minio_data:
   openwebui_data:
+    driver: local
+    name: rag-openwebui-data
+  openwebui_tmp:
+    driver: local
+    name: rag-openwebui-tmp
+  postgres_data:
+    driver: local
+    name: rag-openwebui-postgres
+  redis_data:
+    driver: local
+    name: rag-openwebui-redis
 
+# ═════════════════════════════════════════════════════════════════════════════
+# Сети
+# ═════════════════════════════════════════════════════════════════════════════
 networks:
-  rag-network:
+  # Внутренняя сеть — изоляция PostgreSQL, Redis, Tika от внешнего доступа
+  openwebui-network:
     driver: bridge
+    name: rag-openwebui-network
+    internal: false   # доступ к хосту для Keycloak (если на хосте)
+
+  # Внешняя сеть — доступ к RAG Proxy и MinIO из основной инфраструктуры
+  rag-network:
+    name: rag-network
+    external: true

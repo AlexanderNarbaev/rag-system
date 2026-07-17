@@ -59,3 +59,4 @@ coverage.json
 
 # TLS certificates & keys (generated locally via deploy/nginx/generate-certs.sh)
 deploy/nginx/ssl/
+.~lock*

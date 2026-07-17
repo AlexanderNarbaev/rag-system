@@ -1,5 +1,10 @@
 # OpenCode Integration Guide
 
+> **Web UI alternative:** If you need a ChatGPT-style web interface for non-developer users,
+> see the [OpenWebUI Standalone Deployment](deployment-guide.md#6-openwebui-standalone-deployment) guide.
+> OpenWebUI connects to the same RAG Proxy API and provides a browser-based chat experience
+> with file uploads, multi-model support, and Keycloak SSO.
+
 ## Architecture Overview
 
 The RAG system exposes an OpenAI-compatible API at `http://localhost:8080/v1`. OpenCode connects to it as a drop-in LLM
