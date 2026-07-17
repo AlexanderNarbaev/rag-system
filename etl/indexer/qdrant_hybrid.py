@@ -9,9 +9,9 @@ Supports:
 - Compatible with Qdrant 1.10+
 """
 
-import uuid
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -180,7 +180,7 @@ class QdrantHybridIndexer:
         """Преобразует чанк (словарь) в PointStruct для Qdrant.
         Ожидаемые поля: hash (id), text, title, source_type, source_id, version, doc_title, keywords, entities, summary.
         """
-        point_id = str(uuid.uuid4()) # chunk.get("hash")
+        point_id = chunk.get("hash")
         if not point_id:
             logger.warning("Chunk missing 'hash' field, skipping")
             return None
@@ -328,7 +328,7 @@ class QdrantHybridIndexer:
                 collection_name=self.collection_name,
                 points=[
                     PointStruct(
-                        id= str(uuid.uuid4()), # chunk_id,
+                        id=str(uuid.uuid4()),  # chunk_id,
                         vector={"colbert": colbert_vectors},
                         payload={"text": chunk_text},
                     ),
