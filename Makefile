@@ -36,7 +36,7 @@ setup: ## Create .env from .env.example if missing
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 run: ## Start proxy locally (requires .env and venv)
-	@cd $(ROOT) && uvicorn proxy.app.main:app --host 0.0.0.0 --port 8080 --workers 1
+	@cd $(ROOT) && granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 proxy.app.main:app
 
 # ── ETL ───────────────────────────────────────────────────────────────────────
 etl: ## Run full ETL pipeline

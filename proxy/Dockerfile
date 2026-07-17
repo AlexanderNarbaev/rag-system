@@ -48,5 +48,5 @@ STOPSIGNAL SIGTERM
 # Health check for orchestration
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 CMD curl -f http://localhost:8080/v1/health/live || exit 1
 
-# Команда запуска через uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+# Команда запуска через granian (производительный ASGI-сервер на Rust — ADR-008)
+CMD ["granian", "--interface", "asgi", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "app.main:app"]
