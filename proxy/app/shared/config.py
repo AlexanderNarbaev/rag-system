@@ -144,7 +144,7 @@ TRUSTED_PROXY_COUNT = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080")
 
 # ============ Authentication & RBAC ============
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
@@ -157,10 +157,13 @@ BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 
 # ── Auth startup validation ──
 if AUTH_ENABLED and not JWT_SECRET:
+    import secrets
     import warnings
 
+    JWT_SECRET = secrets.token_hex(32)
     warnings.warn(
-        "AUTH_ENABLED is true but JWT_SECRET is empty — token signing will fail. Set JWT_SECRET in your environment.",
+        "AUTH_ENABLED is true but JWT_SECRET is empty — auto-generated a random secret. "
+        "Tokens will not survive restarts. Set JWT_SECRET in your environment for persistence.",
         stacklevel=2,
     )
 
