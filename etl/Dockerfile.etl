@@ -16,14 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Копирование файла зависимостей
-COPY requirements_etl.txt .
+COPY etl/requirements_etl.txt .
 
 # Установка Python-пакетов
 RUN pip install --no-cache-dir -r requirements_etl.txt
 
 # Копирование исходного кода ETL
 COPY etl/ /app/etl/
-COPY scripts/ /app/scripts/  # если есть вспомогательные скрипты
+COPY scripts/ /app/scripts/
 
 # Создание директорий для данных
 RUN mkdir -p /data/raw /data/chunks /data/hot_chunks /data/cold_chunks /data/cold_lake /data/entity_cache /wal

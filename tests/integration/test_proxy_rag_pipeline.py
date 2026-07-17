@@ -5,14 +5,14 @@ Tests the full /v1/chat/completions flow with mocked external services
 (Qdrant, LLM, Redis). Uses FastAPI TestClient.
 """
 
+# Disable progressive retrieval — these tests mock hybrid_search directly
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Disable progressive retrieval — these tests mock hybrid_search directly
-import os
 os.environ["PROGRESSIVE_RETRIEVAL_ENABLED"] = "false"
 
 # Ensure proxy module is importable

@@ -9,14 +9,15 @@ Tests the SSE streaming flow:
 """
 
 import json
+
+# Disable progressive retrieval — these tests mock hybrid_search directly
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Disable progressive retrieval — these tests mock hybrid_search directly
-import os
 os.environ["PROGRESSIVE_RETRIEVAL_ENABLED"] = "false"
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))

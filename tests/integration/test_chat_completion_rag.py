@@ -7,14 +7,14 @@ Tests the end-to-end flow from chat request to response:
 - Graceful degradation when components fail
 """
 
+# Disable progressive retrieval — these tests mock hybrid_search directly
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Disable progressive retrieval — these tests mock hybrid_search directly
-import os
 os.environ["PROGRESSIVE_RETRIEVAL_ENABLED"] = "false"
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "proxy"))
@@ -295,6 +295,7 @@ class TestChatCompletionRAGPipeline:
             return "Version-specific answer."
 
         with (
+            patch("proxy.app.main.PROGRESSIVE_RETRIEVAL_ENABLED", False),
             patch("proxy.app.main.hybrid_search") as mock_search,
             patch("proxy.app.main.rerank_chunks", return_value=[0]),
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
