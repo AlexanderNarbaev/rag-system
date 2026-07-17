@@ -133,7 +133,7 @@ graph TB
 
     # Запуск прокси (без Docker)
     pip install -r requirements_proxy.txt
-    uvicorn app.main:app --host 0.0.0.0 --port 8080
+    granian --interface asgi --host 0.0.0.0 --port 8080 app.main:app
 
     # Запуск ETL-пайплайна
     cd ../etl

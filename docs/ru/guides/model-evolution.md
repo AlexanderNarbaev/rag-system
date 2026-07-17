@@ -1078,7 +1078,7 @@ setup_signal_handlers()  # Registers SIGHUP → manager.reload_all()
 Отправка SIGHUP процессу прокси запускает полное повторное сканирование всех зарегистрированных адаптеров:
 
 ```bash
-kill -HUP $(pgrep -f "uvicorn main:app")
+kill -HUP $(pgrep -f "granian")
 ```
 
 ### 12.7 Освобождение и вывод из эксплуатации

@@ -1072,7 +1072,7 @@ setup_signal_handlers()  # Registers SIGHUP → manager.reload_all()
 Sending SIGHUP to the proxy process triggers a full re-scan of all registered adapters:
 
 ```bash
-kill -HUP $(pgrep -f "uvicorn main:app")
+kill -HUP $(pgrep -f "granian")
 ```
 
 ### 12.7 Drain-and-Retire

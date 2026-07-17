@@ -127,7 +127,7 @@ rag-proxy:
   deploy:
     replicas: 3
   environment:
-    - WORKERS=2  # uvicorn воркеров на реплику
+    - WORKERS=2  # granian воркеров на реплику
 
 # Добавить балансировщик nginx:
 nginx:

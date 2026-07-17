@@ -225,7 +225,7 @@ docker exec rag-redis redis-cli INFO stats | grep -E 'keyspace_hits|keyspace_mis
 # LLM backend handles concurrent sequences (example for vLLM):
 --max-num-seqs 16
 
-# Proxy uvicorn workers (docker-compose):
+# Proxy granian workers (docker-compose):
 WORKERS=2  # per replica
 
 # Scale horizontally for more throughput:

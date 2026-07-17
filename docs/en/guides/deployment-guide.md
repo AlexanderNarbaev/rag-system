@@ -1,6 +1,6 @@
 # Deployment Guide
 
-**Version:** v2.0.0 | **Last Updated:** 2026-07-06
+**Version:** v2.1.0 | **Last Updated:** 2026-07-17
 
 Comprehensive deployment reference for the RAG Knowledge Assistant. Covers single-server Docker Compose, production
 multi-node, Kubernetes with Helm, air-gapped environments, LLM backend configuration, federation, model evolution
@@ -215,8 +215,8 @@ RERANK_TOP_K=20
 WORKERS=1         # Keep at 1 per replica for production
 
 # ── AUTH (optional) ─────────────────────────────────────
-AUTH_ENABLED=false
-JWT_SECRET=       # Generate: openssl rand -hex 32
+AUTH_ENABLED=true
+JWT_SECRET=       # Auto-generated if empty; set for persistence
 RBAC_ENABLED=false
 ```
 
@@ -416,7 +416,7 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=5s --timeout=3s --retries=3 \
     CMD curl -f http://localhost:8080/v1/health/live || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+CMD ["granian", "--interface", "asgi", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "app.main:app"]
 ```
 
 **Build and push:**

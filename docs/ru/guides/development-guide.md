@@ -154,7 +154,7 @@ docker run -d -p 6379:6379 redis:7-alpine
 
 # Затем запустите прокси локально
 make run
-# Или: uvicorn proxy.app.main:app --host 0.0.0.0 --port 8080 --workers 1
+# Или: granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 proxy.app.main:app
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Operations Guide
 
-**Version:** v2.0.0 | **Last Updated:** 2026-07-16
+**Version:** v2.1.0 | **Last Updated:** 2026-07-17
 
 Definitive operations reference for the RAG Knowledge Assistant. Covers monitoring, health checks, performance tuning,
 scaling, backup/restore, maintenance, upgrades, disaster recovery, day-to-day commands, and SLI/SLO management.
@@ -1062,7 +1062,7 @@ HOT_RELOAD_SIGNAL_ENABLED=true         # Accept SIGHUP for manual reload
 # After placing new model files in the adapter directory:
 # Method 1: Wait for automatic discovery (within 5s)
 # Method 2: Signal manual reload
-pkill -HUP -f "uvicorn.*main:app"
+pkill -HUP -f "granian"
 
 # Verify model is loaded
 curl http://localhost:8080/v1/admin/models \
