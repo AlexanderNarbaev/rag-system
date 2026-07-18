@@ -1,5 +1,9 @@
 # tests/etl/test_extractors.py
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+import requests
 
 from etl.extractors.confluence import ConfluenceExtractor
 from etl.extractors.gitlab import GitLabExtractor
@@ -149,6 +153,262 @@ class TestConfluenceExtractLinks:
         links = ex._extract_links_from_html("<p>No links here</p>")
         assert links["internal_links"] == []
         assert links["external_links"] == []
+
+
+class TestConfluenceGetAllPages:
+    def _make_extractor(self, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        return ConfluenceExtractor(config)
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_all_pages_without_since(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {
+            "results": [
+                {"id": "1", "title": "Page 1", "version": {"number": 1}, "space": {"key": "DEV"}},
+                {"id": "2", "title": "Page 2", "version": {"number": 1}, "space": {"key": "DEV"}},
+            ],
+        }
+        pages = ex._get_all_pages(space_key="DEV")
+        assert len(pages) == 2
+        assert pages[0]["id"] == "1"
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_all_pages_pagination_no_since(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        page1 = {"id": "1", "title": "P1", "version": {"number": 1}, "space": {"key": "DEV"}}
+        page2 = {"id": "2", "title": "P2", "version": {"number": 1}, "space": {"key": "DEV"}}
+        mock_request.side_effect = [
+            {"results": [page1]},
+            {"results": [page2]},
+            {"results": []},
+        ]
+        pages = ex._get_all_pages(space_key="DEV", limit=1)
+        assert len(pages) == 2
+
+    @patch.object(ConfluenceExtractor, "_request")
+    def test_get_all_pages_all_spaces(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {"results": [{"id": "1", "title": "P1", "version": {"number": 1}, "space": {"key": "OPS"}}]}
+        pages = ex._get_all_pages()
+        assert len(pages) == 1
+        call_kwargs = mock_request.call_args[0]
+        params_dict = call_kwargs[2] if len(call_kwargs) >= 3 else {}
+        assert "spaceKey" not in params_dict
+
+
+class TestConfluenceRequestErrors:
+    def _make_extractor(self, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        return ConfluenceExtractor(config)
+
+    @patch("etl.extractors.confluence.requests.Session.get")
+    def test_request_http_error_raises(self, mock_get, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("Not Found")
+        ex.session.get = mock_get
+        mock_get.return_value = mock_resp
+        with pytest.raises(requests.exceptions.HTTPError):
+            ex._request("/rest/api/content", params={"limit": 1})
+
+    @patch("etl.extractors.confluence.requests.Session.get")
+    def test_request_timeout_retries(self, mock_get, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        config["max_retries"] = 2
+        config["retry_delay"] = 0.01
+        ex = ConfluenceExtractor(config)
+        mock_get.side_effect = requests.exceptions.Timeout("timed out")
+        ex.session.get = mock_get
+        with pytest.raises(requests.exceptions.Timeout):
+            ex._request("/rest/api/content")
+        assert mock_get.call_count == 3
+
+    @patch("etl.extractors.confluence.requests.Session.get")
+    def test_request_connection_error_retries(self, mock_get, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        config["max_retries"] = 1
+        config["retry_delay"] = 0.01
+        ex = ConfluenceExtractor(config)
+        mock_get.side_effect = requests.exceptions.ConnectionError("refused")
+        ex.session.get = mock_get
+        with pytest.raises(requests.exceptions.ConnectionError):
+            ex._request("/rest/api/content")
+        assert mock_get.call_count == 2
+
+    @patch("etl.extractors.confluence.requests.Session.get")
+    def test_request_ssl_error_raises_immediately(self, mock_get, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_get.side_effect = requests.exceptions.SSLError("cert verify failed")
+        ex.session.get = mock_get
+        with pytest.raises(requests.exceptions.SSLError):
+            ex._request("/rest/api/content")
+
+    @patch("etl.extractors.confluence.requests.Session.get")
+    def test_request_success_after_retry(self, mock_get, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        config["max_retries"] = 3
+        config["retry_delay"] = 0.01
+        ex = ConfluenceExtractor(config)
+        mock_resp_success = MagicMock()
+        mock_resp_success.json.return_value = {"results": []}
+        mock_resp_success.raise_for_status.return_value = None
+        mock_get.side_effect = [
+            requests.exceptions.Timeout("timeout"),
+            requests.exceptions.ConnectionError("refused"),
+            mock_resp_success,
+        ]
+        ex.session.get = mock_get
+        result = ex._request("/rest/api/content")
+        assert result == {"results": []}
+        assert mock_get.call_count == 3
+
+
+class TestConfluenceDownloadAttachment:
+    def _make_extractor(self, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        return ConfluenceExtractor(config)
+
+    def test_download_attachment_success(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        att_dir = tmp_path / "attachments"
+        att_dir.mkdir()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.iter_content.return_value = [b"file content"]
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            path = ex._download_attachment("p1", "a1", "readme.txt", att_dir, "/download/att/1")
+        assert path is not None
+        assert Path(path).exists()
+        saved_content = Path(path).read_text()
+        assert "file content" in saved_content
+
+    def test_download_attachment_bad_filename(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        att_dir = tmp_path / "attachments"
+        att_dir.mkdir()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.iter_content.return_value = [b"data"]
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            path = ex._download_attachment("p1", "a1", "!@#$%^", att_dir, "/download")
+        assert path is not None
+        assert "attachment_a1" in path
+
+    def test_download_attachment_connection_retry(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        att_dir = tmp_path / "attachments"
+        att_dir.mkdir()
+        mock_fail = MagicMock()
+        mock_fail.raise_for_status.side_effect = requests.exceptions.ConnectionError("refused")
+        mock_ok = MagicMock()
+        mock_ok.raise_for_status.return_value = None
+        mock_ok.iter_content.return_value = [b"ok"]
+        with patch.object(ex.session, "get", side_effect=[mock_fail, mock_ok]) as mock_get:
+            with patch("time.sleep", return_value=None):
+                path = ex._download_attachment("p1", "a1", "file.txt", att_dir, "/download")
+        assert path is not None
+        assert mock_get.call_count == 2
+
+    def test_download_attachment_timeout_retry(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        att_dir = tmp_path / "attachments"
+        att_dir.mkdir()
+        mock_fail = MagicMock()
+        mock_fail.raise_for_status.side_effect = requests.exceptions.Timeout("timed out")
+        mock_ok = MagicMock()
+        mock_ok.raise_for_status.return_value = None
+        mock_ok.iter_content.return_value = [b"ok"]
+        with patch.object(ex.session, "get", side_effect=[mock_fail, mock_ok]) as mock_get:
+            with patch("time.sleep", return_value=None):
+                path = ex._download_attachment("p1", "a1", "file.txt", att_dir, "/download")
+        assert path is not None
+        assert mock_get.call_count == 2
+
+    def test_download_attachment_max_retries_exceeded(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        att_dir = tmp_path / "attachments"
+        att_dir.mkdir()
+        mock_fail = MagicMock()
+        mock_fail.raise_for_status.side_effect = requests.exceptions.ConnectionError("refused")
+        with patch.object(ex.session, "get", return_value=mock_fail) as mock_get:
+            with patch("time.sleep", return_value=None):
+                path = ex._download_attachment("p1", "a1", "file.txt", att_dir, "/download")
+        assert path is None
+        assert mock_get.call_count == 4  # 3 retries + initial
+
+
+class TestConfluenceInputValidation:
+    def test_missing_url_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="url"):
+            ConfluenceExtractor({"token": "tok", "output_dir": str(tmp_path)})
+
+    def test_empty_url_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="url"):
+            ConfluenceExtractor({"url": "", "token": "tok", "output_dir": str(tmp_path)})
+
+    def test_invalid_url_scheme_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="http"):
+            ConfluenceExtractor({"url": "ftp://bad.scheme", "token": "tok", "output_dir": str(tmp_path)})
+
+    def test_missing_token_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="token"):
+            ConfluenceExtractor({"url": "https://cf.test", "output_dir": str(tmp_path)})
+
+    def test_empty_token_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="token"):
+            ConfluenceExtractor({"url": "https://cf.test", "token": "", "output_dir": str(tmp_path)})
+
+    def test_api_key_as_alternative(self, tmp_path):
+        config = {
+            "url": "https://cf.test",
+            "username": "bot",
+            "api_key": "api-token-123",
+            "output_dir": str(tmp_path / "out"),
+            "wal_file": str(tmp_path / "wal" / "w.json"),
+        }
+        ex = ConfluenceExtractor(config)
+        assert ex.config["api_key"] == "api-token-123"
+
+
+class TestConfluenceTestConnection:
+    def _make_extractor(self, tmp_path):
+        config = dict(CONFLUENCE_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "output")
+        config["wal_file"] = str(tmp_path / "wal" / "wal.json")
+        return ConfluenceExtractor(config)
+
+    def test_connection_success(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            assert ex.test_connection() is True
+
+    def test_connection_auth_failure(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 401
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            assert ex.test_connection() is False
+
+    def test_connection_exception(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        with patch.object(ex.session, "get", side_effect=requests.exceptions.ConnectionError("no route")):
+            assert ex.test_connection() is False
 
 
 class TestConfluenceGetPageVersions:
@@ -548,6 +808,265 @@ class TestJiraRun:
             ex.run()
             assert mock_process.call_count <= 1
 
+    @patch.object(JiraExtractor, "_paginated_issues")
+    @patch.object(JiraExtractor, "_process_issue")
+    def test_run_skips_processed_issues(self, mock_process, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.wal_data["processed_issues"] = ["PROJ-1"]
+        mock_paginated.return_value = iter([{"key": "PROJ-1", "fields": {}}])
+        ex.run()
+        mock_process.assert_not_called()
+
+    @patch.object(JiraExtractor, "_paginated_issues")
+    @patch.object(JiraExtractor, "_process_issue")
+    def test_run_handles_process_error(self, mock_process, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_paginated.return_value = iter([
+            {"key": "PROJ-1", "fields": {}},
+            {"key": "PROJ-2", "fields": {}},
+        ])
+        mock_process.side_effect = [RuntimeError("boom"), {"key": "PROJ-2"}]
+        ex.run()
+
+
+class TestJiraPaginatedIssues:
+    def _make_extractor(self, tmp_path):
+        config = dict(JIRA_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return JiraExtractor(config)
+
+    @patch.object(JiraExtractor, "_request")
+    def test_paginated_issues_single_page(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {
+            "issues": [
+                {"key": "PROJ-1", "fields": {"summary": "Issue 1"}},
+                {"key": "PROJ-2", "fields": {"summary": "Issue 2"}},
+            ],
+            "total": 2,
+        }
+        issues = list(ex._paginated_issues("project = DEV"))
+        assert len(issues) == 2
+        assert issues[0]["key"] == "PROJ-1"
+
+    @patch.object(JiraExtractor, "_request")
+    def test_paginated_issues_multiple_pages(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.side_effect = [
+            {"issues": [{"key": "PROJ-1"}], "total": 2},
+            {"issues": [{"key": "PROJ-2"}], "total": 2},
+        ]
+        issues = list(ex._paginated_issues("project = DEV", max_results=1))
+        assert len(issues) == 2
+
+    @patch.object(JiraExtractor, "_request")
+    def test_paginated_issues_empty(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {"issues": [], "total": 0}
+        issues = list(ex._paginated_issues("project = EMPTY"))
+        assert len(issues) == 0
+
+
+class TestJiraDownloadAttachment:
+    def _make_extractor(self, tmp_path):
+        config = dict(JIRA_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return JiraExtractor(config)
+
+    def test_download_attachment_success(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.iter_content.return_value = [b"attachment data"]
+        attachment = {"id": "att1", "filename": "report.pdf", "content": "https://jira.test/secure/attachment/1"}
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            path = ex._download_attachment(attachment, "PROJ-1")
+        assert path is not None
+        assert Path(path).exists()
+        saved_content = Path(path).read_text()
+        assert "attachment data" in saved_content
+
+    def test_download_attachment_empty_filename(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.iter_content.return_value = [b"data"]
+        attachment = {"id": "att2", "filename": "!@#", "content": "https://jira.test/att/2"}
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            path = ex._download_attachment(attachment, "PROJ-2")
+        assert path is not None
+        assert "attachment_att2" in path
+
+    def test_download_attachment_retry_on_connection_error(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_fail = MagicMock()
+        mock_fail.raise_for_status.side_effect = requests.exceptions.ConnectionError("refused")
+        mock_ok = MagicMock()
+        mock_ok.raise_for_status.return_value = None
+        mock_ok.iter_content.return_value = [b"ok"]
+        attachment = {"id": "att3", "filename": "file.txt", "content": "https://jira.test/att/3"}
+        with patch.object(ex.session, "get", side_effect=[mock_fail, mock_ok]) as mock_get:
+            with patch("time.sleep", return_value=None):
+                path = ex._download_attachment(attachment, "PROJ-3")
+        assert path is not None
+        assert mock_get.call_count == 2
+
+    def test_download_attachment_max_retries_fails(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_fail = MagicMock()
+        mock_fail.raise_for_status.side_effect = requests.exceptions.Timeout("timeout")
+        attachment = {"id": "att4", "filename": "file.txt", "content": "https://jira.test/att/4"}
+        with patch.object(ex.session, "get", return_value=mock_fail) as mock_get:
+            with patch("time.sleep", return_value=None):
+                path = ex._download_attachment(attachment, "PROJ-4")
+        assert path is None
+        assert mock_get.call_count == 4
+
+
+class TestJiraRequestErrors:
+    def _make_extractor(self, tmp_path):
+        config = dict(JIRA_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return JiraExtractor(config)
+
+    def test_request_http_error_raises(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
+        with patch.object(ex.session, "get", return_value=mock_resp):
+            with pytest.raises(requests.exceptions.HTTPError):
+                ex._request("/rest/api/2/search")
+
+    def test_request_connection_error_retries_then_raises(self, tmp_path):
+        config = dict(JIRA_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        config["max_retries"] = 1
+        config["retry_delay"] = 0.01
+        ex = JiraExtractor(config)
+        with patch.object(ex.session, "get", side_effect=requests.exceptions.ConnectionError("refused")) as mock_get:
+            with pytest.raises(requests.exceptions.ConnectionError):
+                ex._request("/rest/api/2/search")
+        assert mock_get.call_count == 2
+
+    def test_request_ssl_error_raises_immediately(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        with patch.object(ex.session, "get", side_effect=requests.exceptions.SSLError("cert error")):
+            with pytest.raises(requests.exceptions.SSLError):
+                ex._request("/rest/api/2/search")
+
+
+class TestJiraInputValidation:
+    def test_missing_url_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="url"):
+            JiraExtractor({"token": "tok", "output_dir": str(tmp_path)})
+
+    def test_invalid_url_scheme_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="http"):
+            JiraExtractor({"url": "ftp://bad", "token": "tok", "output_dir": str(tmp_path)})
+
+    def test_missing_token_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="token"):
+            JiraExtractor({"url": "https://jira.test", "output_dir": str(tmp_path)})
+
+    def test_api_key_as_alternative(self, tmp_path):
+        config = {
+            "url": "https://jira.test",
+            "username": "bot",
+            "api_key": "api-token-jira",
+            "output_dir": str(tmp_path / "out"),
+            "wal_file": str(tmp_path / "wal" / "w.json"),
+        }
+        ex = JiraExtractor(config)
+        assert ex.config["api_key"] == "api-token-jira"
+
+
+class TestJiraProcessIssueWithAttachments:
+    def _make_extractor(self, tmp_path):
+        config = dict(JIRA_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return JiraExtractor(config)
+
+    @patch.object(JiraExtractor, "_get_sprints_for_issue")
+    @patch.object(JiraExtractor, "_download_attachment")
+    def test_process_issue_with_attachments(self, mock_download, mock_sprints, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_sprints.return_value = []
+        mock_download.return_value = "/tmp/att/file.txt"
+        issue = {
+            "key": "PROJ-789",
+            "fields": {
+                "summary": "With attachments",
+                "description": "desc",
+                "attachment": [
+                    {"id": "att1", "filename": "file.txt", "size": 100, "mimeType": "text/plain", "created": "2025-01-01", "author": {"displayName": "Dev"}},
+                ],
+                "comment": {"comments": []},
+            },
+        }
+        result = ex._process_issue(issue)
+        assert len(result["attachments"]) == 1
+        assert result["attachments"][0]["local_path"] == "/tmp/att/file.txt"
+        assert result["attachments"][0]["filename"] == "file.txt"
+
+    @patch.object(JiraExtractor, "_get_sprints_for_issue")
+    def test_process_issue_attachments_disabled(self, mock_sprints, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.download_attachments = False
+        mock_sprints.return_value = []
+        issue = {
+            "key": "PROJ-790",
+            "fields": {
+                "summary": "No download",
+                "attachment": [
+                    {"id": "att1", "filename": "file.txt", "size": 100, "mimeType": "text/plain", "created": "2025-01-01"},
+                ],
+                "comment": {"comments": []},
+            },
+        }
+        result = ex._process_issue(issue)
+        assert len(result["attachments"]) == 1
+        assert "local_path" not in result["attachments"][0]
+
+
+class TestJiraGetTransitions:
+    def _make_extractor(self, tmp_path):
+        config = dict(JIRA_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return JiraExtractor(config)
+
+    @patch.object(JiraExtractor, "_request")
+    def test_get_issue_transitions(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {
+            "transitions": [
+                {"id": "1", "name": "In Progress"},
+                {"id": "2", "name": "Done"},
+            ],
+        }
+        transitions = ex._get_issue_transitions("PROJ-1")
+        assert len(transitions) == 2
+        assert transitions[0]["name"] == "In Progress"
+
+    @patch.object(JiraExtractor, "_request")
+    def test_get_sprints_for_issue(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.return_value = {"fields": {"sprint": [{"id": 1, "name": "Sprint 1"}]}}
+        sprints = ex._get_sprints_for_issue("PROJ-1")
+        assert len(sprints) == 1
+
+    @patch.object(JiraExtractor, "_request")
+    def test_get_sprints_for_issue_error(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_request.side_effect = Exception("API error")
+        sprints = ex._get_sprints_for_issue("PROJ-1")
+        assert sprints == []
+
 
 # ---------------------------------------------------------------------------
 # GitLabExtractor tests
@@ -651,6 +1170,154 @@ class TestGitLabShouldProcessCommit:
         assert ex._should_process_commit(1, "sha2", "2025-01-02") is True
 
 
+class TestGitLabGetProjects:
+    def _make_extractor(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return GitLabExtractor(config)
+
+    @patch.object(GitLabExtractor, "_request")
+    def test_get_projects_with_ids(self, mock_request, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.project_ids = [1, 2]
+        mock_request.side_effect = [
+            {"id": 1, "name": "Project 1"},
+            {"id": 2, "name": "Project 2"},
+        ]
+        projects = ex.get_projects()
+        assert len(projects) == 2
+        assert projects[0]["id"] == 1
+        assert projects[1]["id"] == 2
+
+    @patch.object(GitLabExtractor, "_paginated_get")
+    def test_get_projects_all(self, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_paginated.return_value = iter([
+            {"id": 1, "name": "Project 1"},
+            {"id": 2, "name": "Project 2"},
+        ])
+        projects = ex.get_projects()
+        assert len(projects) == 2
+
+    @patch.object(GitLabExtractor, "_paginated_get")
+    def test_get_projects_empty(self, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_paginated.return_value = iter([])
+        projects = ex.get_projects()
+        assert projects == []
+
+
+class TestGitLabGetFileContent:
+    def _make_extractor(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return GitLabExtractor(config)
+
+    @patch("etl.extractors.gitlab.requests.Session.get")
+    def test_get_file_content_success(self, mock_get, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.text = "print('hello world')"
+        mock_get.return_value = mock_resp
+        ex.session.get = mock_get
+        content = ex.get_file_content(1, "src/main.py", ref="main")
+        assert content == "print('hello world')"
+
+    @patch("etl.extractors.gitlab.requests.Session.get")
+    def test_get_file_content_failure(self, mock_get, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("404 Not Found")
+        mock_get.return_value = mock_resp
+        ex.session.get = mock_get
+        content = ex.get_file_content(1, "missing/file.py")
+        assert content is None
+
+
+class TestGitLabGetMergeRequests:
+    def _make_extractor(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return GitLabExtractor(config)
+
+    @patch.object(GitLabExtractor, "_paginated_get")
+    @patch.object(GitLabExtractor, "_request")
+    def test_get_merge_requests(self, mock_request, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mr = {"iid": 1, "title": "Feature X"}
+        mock_paginated.return_value = iter([mr])
+        mock_request.return_value = {"changes": []}
+        mrs = ex.get_merge_requests(1)
+        assert len(mrs) == 1
+        assert mrs[0]["title"] == "Feature X"
+        assert "discussions" in mrs[0]
+        assert "changes" in mrs[0]
+
+    @patch.object(GitLabExtractor, "_paginated_get")
+    @patch.object(GitLabExtractor, "_request")
+    def test_get_merge_requests_with_since_date(self, mock_request, mock_paginated, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        config["since_date"] = "2025-01-01T00:00:00Z"
+        ex = GitLabExtractor(config)
+        mock_paginated.return_value = iter([])
+        mock_request.return_value = {"changes": []}
+        mrs = ex.get_merge_requests(1)
+        assert mrs == []
+        assert mock_paginated.call_count == 1
+        call_args = mock_paginated.call_args[0]
+        params_arg = call_args[1] if len(call_args) > 1 else {}
+        assert "updated_after" in params_arg
+        assert params_arg["updated_after"] == "2025-01-01T00:00:00Z"
+
+    @patch.object(GitLabExtractor, "_paginated_get")
+    def test_get_mr_discussions(self, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_paginated.return_value = iter([
+            {
+                "id": "disc1",
+                "notes": [
+                    {
+                        "id": 10,
+                        "author": {"username": "dev1"},
+                        "created_at": "2025-01-01",
+                        "body": "Looks good",
+                        "type": "DiffNote",
+                    },
+                ],
+            },
+        ])
+        discussions = ex.get_mr_discussions(1, 1)
+        assert len(discussions) == 1
+        assert discussions[0]["id"] == "disc1"
+        assert len(discussions[0]["notes"]) == 1
+        assert discussions[0]["notes"][0]["author"] == "dev1"
+
+
+class TestGitLabGetBranches:
+    def _make_extractor(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return GitLabExtractor(config)
+
+    @patch.object(GitLabExtractor, "_paginated_get")
+    def test_get_branches(self, mock_paginated, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        mock_paginated.return_value = iter([
+            {"name": "main", "commit": {"id": "sha1"}},
+            {"name": "develop", "commit": {"id": "sha2"}},
+        ])
+        branches = ex.get_branches(1)
+        assert len(branches) == 2
+        assert branches[0]["name"] == "main"
+
+
 class TestGitLabRun:
     def _make_extractor(self, tmp_path):
         config = dict(GITLAB_BASE_CONFIG)
@@ -677,3 +1344,108 @@ class TestGitLabRun:
         mock_branches.return_value = []
         ex.run()
         mock_save.assert_called_once()
+
+    @patch.object(GitLabExtractor, "get_projects")
+    def test_run_respects_max_projects(self, mock_projects, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.max_projects = 1
+        mock_projects.return_value = [
+            {"id": 1, "path_with_namespace": "a/b"},
+            {"id": 2, "path_with_namespace": "c/d"},
+        ]
+        with patch.object(ex, "get_commits", return_value=[]):
+            with patch.object(ex, "get_branches", return_value=[]):
+                with patch.object(ex, "_save_project_data"):
+                    ex.run()
+
+
+class TestGitLabRequestErrors:
+    def _make_extractor(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return GitLabExtractor(config)
+
+    def test_request_connection_error_retries(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        config["max_retries"] = 1
+        config["retry_delay"] = 0.01
+        ex = GitLabExtractor(config)
+        with patch.object(ex.session, "request", side_effect=requests.exceptions.ConnectionError("refused")) as mock_req:
+            with pytest.raises(requests.exceptions.ConnectionError):
+                ex._request("/api/v4/projects")
+        assert mock_req.call_count == 2
+
+    def test_request_timeout_retries(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        config["max_retries"] = 1
+        config["retry_delay"] = 0.01
+        ex = GitLabExtractor(config)
+        with patch.object(ex.session, "request", side_effect=requests.exceptions.Timeout("timed out")) as mock_req:
+            with pytest.raises(requests.exceptions.Timeout):
+                ex._request("/api/v4/projects")
+        assert mock_req.call_count == 2
+
+    def test_request_ssl_error_raises(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        with patch.object(ex.session, "request", side_effect=requests.exceptions.SSLError("cert error")):
+            with pytest.raises(requests.exceptions.SSLError):
+                ex._request("/api/v4/projects")
+
+
+class TestGitLabInputValidation:
+    def test_missing_url_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="url"):
+            GitLabExtractor({"token": "tok", "output_dir": str(tmp_path)})
+
+    def test_invalid_url_scheme_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="http"):
+            GitLabExtractor({"url": "ftp://bad", "token": "tok", "output_dir": str(tmp_path)})
+
+    def test_missing_token_raises(self, tmp_path):
+        with pytest.raises(ValueError, match="token"):
+            GitLabExtractor({"url": "https://gl.test", "output_dir": str(tmp_path)})
+
+    def test_api_key_as_alternative(self, tmp_path):
+        config = {
+            "url": "https://gl.test",
+            "api_key": "gl-pat-123",
+            "output_dir": str(tmp_path / "out"),
+            "wal_file": str(tmp_path / "wal" / "w.json"),
+        }
+        ex = GitLabExtractor(config)
+        assert ex.token == "gl-pat-123"
+
+
+class TestGitLabExclusionFilter:
+    def _make_extractor(self, tmp_path):
+        config = dict(GITLAB_BASE_CONFIG)
+        config["output_dir"] = str(tmp_path / "out")
+        config["wal_file"] = str(tmp_path / "wal" / "w.json")
+        return GitLabExtractor(config)
+
+    def test_exclude_extension(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.file_paths_exclude = ["*.java"]
+        assert ex._matches_filter("src/Main.java") is False
+
+    def test_exclude_directory(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.file_paths_exclude = ["node_modules/*"]
+        assert ex._matches_filter("node_modules/package.json") is False
+
+    def test_include_overrides_exclude_not_applied(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.file_paths_filter = ["*.py"]
+        ex.file_paths_exclude = ["*.java"]
+        assert ex._matches_filter("main.py") is True
+        assert ex._matches_filter("Main.java") is False
+
+    def test_exclude_specific_path_pattern(self, tmp_path):
+        ex = self._make_extractor(tmp_path)
+        ex.file_paths_exclude = ["*.class"]
+        assert ex._matches_filter("build/classes/Foo.class") is False

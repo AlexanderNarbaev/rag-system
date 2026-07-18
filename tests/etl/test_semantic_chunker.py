@@ -1070,3 +1070,153 @@ class TestFindAnchorId:
         elem = soup.find("h2")
         anchor = chunker._find_anchor_id(elem)
         assert anchor == ""
+
+
+class TestSemanticChunkerEdgeCases:
+    """Edge case tests for SemanticChunker."""
+
+    def test_html_empty_content(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = ""
+        metadata = {"source_type": "confluence", "doc_title": "Empty Page"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert chunks == []
+
+    def test_html_whitespace_only(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = "   \n  \n   "
+        metadata = {"source_type": "confluence"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert chunks == []
+
+    def test_html_only_scripts_and_styles(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = "<script>console.log('xss')</script><style>body{color:red}</style>"
+        metadata = {"source_type": "confluence", "doc_title": "Script Only"}
+        chunks = chunker.chunk_html(html, metadata)
+        for c in chunks:
+            assert "<script" not in c.text
+            assert "<style" not in c.text
+
+    def test_html_deeply_nested_tables(self):
+        chunker = SemanticChunker(max_tokens=5000)
+        html = """
+        <h1>Nested Tables</h1>
+        <table>
+            <tr><th>Outer</th></tr>
+            <tr><td>
+                <table>
+                    <tr><th>Inner A</th><th>Inner B</th></tr>
+                    <tr><td>Val 1</td><td>Val 2</td></tr>
+                    <tr><td>
+                        <table>
+                            <tr><th>Deep Head</th></tr>
+                            <tr><td>Deep Value</td></tr>
+                        </table>
+                    </td></tr>
+                </table>
+            </td></tr>
+        </table>
+        """
+        metadata = {"source_type": "confluence", "doc_title": "Deep Tables"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+        all_text = " ".join(c.text for c in chunks)
+        assert "Outer" in all_text
+        assert "Inner A" in all_text
+        assert "Deep Value" in all_text
+
+    def test_html_non_latin_content_cyrillic(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = "<h1>Быстродействие системы</h1><p>Техническая документация по оптимизации производительности.</p><h2>Кэширование</h2><p>Использование Redis для кэширования запросов.</p>"
+        metadata = {"source_type": "confluence", "doc_title": "Техническая документация"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+        all_text = " ".join(c.text for c in chunks)
+        assert "Быстродействие" in all_text
+        assert "Кэширование" in all_text
+        for c in chunks:
+            assert c.tokens_approx > 0
+
+    def test_html_non_latin_content_cjk(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = "<h1>システム概要</h1><p>このドキュメントでは、システムの全体的なアーキテクチャについて説明します。</p>"
+        metadata = {"source_type": "confluence", "doc_title": "システム概要"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+        all_text = " ".join(c.text for c in chunks)
+        assert "システム概要" in all_text
+        for c in chunks:
+            assert c.tokens_approx > 0
+
+    def test_html_mixed_latin_and_non_latin(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = "<h1>RAG System / RAG система</h1><p>This document describes RAG for English and русский text.</p>"
+        metadata = {"source_type": "confluence", "doc_title": "Mixed Content"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+        all_text = " ".join(c.text for c in chunks)
+        assert "RAG" in all_text
+        assert "русский" in all_text
+
+    def test_boundary_max_tokens_one_token(self):
+        chunker = SemanticChunker(max_tokens=1, overlap_tokens=0)
+        html = "<h1>Title</h1><p>word1 word2 word3 word4 word5</p>"
+        metadata = {"source_type": "confluence"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+
+    def test_boundary_max_tokens_very_large(self):
+        chunker = SemanticChunker(max_tokens=100000)
+        html = "<h1>Huge Limit</h1><p>This should all fit in one chunk.</p>"
+        metadata = {"source_type": "confluence"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) == 1
+
+    def test_chunk_markdown_empty_string(self):
+        chunker = SemanticChunker()
+        chunks = chunker.chunk_markdown_with_overlap("")
+        assert len(chunks) == 0
+
+    def test_chunk_html_empty_source_metadata(self):
+        chunker = SemanticChunker(max_tokens=1500)
+        html = "<h1>Test</h1><p>Content.</p>"
+        chunks = chunker.chunk_html(html, {})
+        assert len(chunks) >= 1
+
+    def test_prepend_context_with_all_fields(self):
+        chunker = SemanticChunker()
+        metadata = {
+            "doc_title": "My Doc",
+            "source_type": "confluence",
+        }
+        text = "Some chunk content."
+        result = chunker._prepend_context(text, metadata)
+        assert "Document: My Doc" in result
+        assert "Source: confluence" in result
+        assert "Some chunk content." in result
+
+    def test_prepend_context_with_section_title(self):
+        chunker = SemanticChunker()
+        metadata = {
+            "doc_title": "Doc",
+            "section_title": "Section 1",
+            "source_type": "wiki",
+        }
+        result = chunker._prepend_context("Content", metadata)
+        assert "Section: Section 1" in result
+
+    def test_prepend_context_empty_metadata(self):
+        chunker = SemanticChunker()
+        result = chunker._prepend_context("Just content", {})
+        assert result == "Just content"
+
+    def test_estimate_tokens_non_latin_cyrillic(self):
+        chunker = SemanticChunker()
+        tokens = chunker._estimate_tokens("Привет мир это тест")
+        assert tokens >= 1
+
+    def test_estimate_tokens_non_latin_cjk(self):
+        chunker = SemanticChunker()
+        tokens = chunker._estimate_tokens("こんにちは世界")
+        assert tokens >= 1
