@@ -440,15 +440,26 @@ if not ETL_SECRET and os.getenv("REINDEX_ENABLED", "true").lower() != "false":
     import secrets as _etl_secrets
     import warnings as _etl_warnings
 
-    ETL_SECRET = _etl_secrets.token_hex(32)
-    _ETL_SECRET_IS_EPHEMERAL = True
-    _etl_warnings.warn(
-        "ETL_SECRET is empty but REINDEX_ENABLED is not false — auto-generated an ephemeral key. "
-        "ETL will be unable to authenticate to the proxy across restarts. "
-        "Set ETL_SECRET in your environment for persistence. "
-        "Generate with: openssl rand -hex 32",
-        stacklevel=2,
-    )
+    _ETL_SECRET_FILE = Path(__file__).parent.parent / "data" / ".etl_secret"
+    try:
+        if _ETL_SECRET_FILE.exists():
+            ETL_SECRET = _ETL_SECRET_FILE.read_text().strip()
+        else:
+            ETL_SECRET = _etl_secrets.token_hex(32)
+            _ETL_SECRET_IS_EPHEMERAL = False
+            _ETL_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _ETL_SECRET_FILE.write_text(ETL_SECRET)
+    except OSError as _etl_fs_err:
+        ETL_SECRET = _etl_secrets.token_hex(32)
+        _ETL_SECRET_IS_EPHEMERAL = True
+        _etl_warnings.warn(
+            f"ETL_SECRET is empty but REINDEX_ENABLED is not false — auto-generated an ephemeral key. "
+            f"ETL will be unable to authenticate to the proxy across restarts. "
+            f"Could not persist to file ({_etl_fs_err}). "
+            f"Set ETL_SECRET in your environment for persistence. "
+            f"Generate with: openssl rand -hex 32",
+            stacklevel=2,
+        )
 
 
 # ============ Вспомогательная функция для отладки ============

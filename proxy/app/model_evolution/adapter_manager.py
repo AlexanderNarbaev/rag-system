@@ -15,7 +15,6 @@ import logging
 import os
 import signal
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -515,7 +514,7 @@ class AdapterManager:
                     logger.info("Old adapter %s@%s retired", name, old_version)
                     return
 
-            time.sleep(0.5)
+            threading.Event().wait(0.5)
             drain_attempts += 1
 
         logger.warning(

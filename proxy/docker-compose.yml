@@ -76,6 +76,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8081" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     networks:
       - rag-network
@@ -121,6 +127,12 @@ services:
       - MINIO_ENDPOINT=minio:9000
     depends_on:
       qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/v1/health/live" ]

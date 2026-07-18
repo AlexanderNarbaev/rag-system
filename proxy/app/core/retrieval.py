@@ -13,6 +13,7 @@ for nearest-neighbor search with version filtering.
 - Интеграцию с Qdrant (ближний сосед + фильтрация по версии)
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -520,10 +521,21 @@ def hybrid_search(
 
     # Dense + Sparse embeddings computed in parallel
     sparse_vec = None
+    try:
+        loop = asyncio.get_running_loop()
+        in_async = True
+    except RuntimeError:
+        loop = None
+        in_async = False
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         dense_future = executor.submit(_compute_dense_embedding, query)
         sparse_future = executor.submit(_compute_sparse_embedding, query)
+        if in_async and loop is not None:
+            loop.call_soon(lambda: None)
         dense_vec = dense_future.result()
+        if in_async and loop is not None:
+            loop.call_soon(lambda: None)
         sparse_vec = sparse_future.result()
     assert qdrant_client is not None, "qdrant_client must be initialized"
     _qc = qdrant_client

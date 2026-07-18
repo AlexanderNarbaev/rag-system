@@ -157,7 +157,11 @@ class LocalSLMClient:
                 while time.monotonic() < deadline:
                     if self._is_server_ready():
                         return
-                    time.sleep(0.5)
+                    self._lock.release()
+                    try:
+                        threading.Event().wait(0.5)
+                    finally:
+                        self._lock.acquire()
                 raise RuntimeError(f"Local SLM server did not become ready within {self._startup_timeout}s")
 
             logger.info(
@@ -196,7 +200,11 @@ class LocalSLMClient:
                 if self._is_server_ready():
                     logger.info("Local SLM server ready on port %s", self._port)
                     return
-                time.sleep(0.5)
+                self._lock.release()
+                try:
+                    threading.Event().wait(0.5)
+                finally:
+                    self._lock.acquire()
 
             # Timed out — kill the process and raise.
             self._shutdown()
