@@ -1,7 +1,7 @@
 # proxy/Dockerfile
 # Docker-образ для RAG-прокси (OpenAI-совместимый сервер с Qdrant, реранкингом, LangGraph)
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Установка системных зависимостей (необходимы для некоторых Python-пакетов)
 RUN apt-get update && apt-get install -y --no-install-recommends \
