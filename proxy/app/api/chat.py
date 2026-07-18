@@ -307,7 +307,9 @@ async def chat_completions(
         from proxy.app.core.knowledge_status import determine_knowledge_status
 
         feedback_id = generate_feedback_id()
-        confidence = compute_confidence(query=user_query, context=context, answer=response_text)
+        confidence = compute_confidence(
+            query=user_query, context=context, answer=response_text, sources=orchestrator_sources,
+        )
         knowledge_status = determine_knowledge_status(orchestrator_sources, should_generate=True)
         completion = ChatCompletionResponse(
             id=request_id,
@@ -477,7 +479,9 @@ async def chat_completions(
                 from proxy.app.core.hitl import generate_feedback_id
 
                 feedback_id = generate_feedback_id()
-                confidence = compute_confidence(query=user_query, context=rag_context, answer=full_answer)
+                confidence = compute_confidence(
+                    query=user_query, context=rag_context, answer=full_answer, sources=chunks_for_status,
+                )
 
                 conversation.add_turn("user", user_query)
                 conversation.add_turn(
@@ -579,7 +583,7 @@ async def chat_completions(
     from proxy.app.shared.config import ALLOW_UNGROUNDED_GENERATION, CLARIFICATION_ENABLED, UNGROUNDED_NOTICE
 
     feedback_id = generate_feedback_id()
-    confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text)
+    confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text, sources=sources)
 
     chunks_with_score = [{"score": s.get("relevance", 0)} for s in sources]
     should_gen, reason = should_generate_answer(chunks_with_score)

@@ -1,5 +1,6 @@
 """Confidence scoring for RAG answers. Uses heuristics + NLI grounding + calibration."""
 
+import json
 import logging
 import math
 import re
@@ -7,6 +8,73 @@ from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _dispatch_low_confidence_alert_sync(
+    query: str,
+    confidence_score: float,
+    answer: str | None = None,
+    sources: list[dict[str, Any]] | None = None,
+) -> None:
+    """Dispatch an admin alert when answer confidence falls below threshold.
+
+    Synchronous version — does logging + metrics inline, HTTP POST via background thread.
+    """
+    from proxy.app.shared.config import ADMIN_ALERT_ENDPOINT, ALERT_CONFIDENCE_THRESHOLD
+
+    if confidence_score >= ALERT_CONFIDENCE_THRESHOLD:
+        return
+
+    source_summary = []
+    if sources:
+        for s in sources[:5]:
+            source_summary.append(
+                {
+                    "title": s.get("title", "") or s.get("doc_title", ""),
+                    "source_type": s.get("source_type", "unknown"),
+                    "relevance": s.get("relevance", 0),
+                }
+            )
+
+    alert = {
+        "event": "low_confidence_answer",
+        "query": query[:500],
+        "confidence_score": confidence_score,
+        "threshold": ALERT_CONFIDENCE_THRESHOLD,
+        "answer_preview": (answer or "")[:300],
+        "sources": source_summary,
+    }
+    logger.warning("Low confidence alert: %s", json.dumps(alert, ensure_ascii=False))
+
+    try:
+        from proxy.app.shared.metrics import rag_low_confidence_alerts
+
+        rag_low_confidence_alerts.labels(action="logged").inc()
+    except Exception:
+        pass
+
+    if ADMIN_ALERT_ENDPOINT:
+        _alert_payload = json.dumps(alert, ensure_ascii=False)
+        _alert_url = ADMIN_ALERT_ENDPOINT
+
+        def _post_alert() -> None:
+            try:
+                import urllib.request
+
+                req = urllib.request.Request(
+                    _alert_url,
+                    data=_alert_payload.encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=5)
+                rag_low_confidence_alerts.labels(action="dispatched").inc()
+            except Exception as e:
+                logger.warning("Failed to dispatch admin alert: %s", e)
+
+        import threading
+
+        threading.Thread(target=_post_alert, daemon=True).start()
 
 
 @dataclass
@@ -215,6 +283,7 @@ def compute_confidence(
     context: str,
     answer: str,
     slm_available: bool = False,
+    sources: list[dict[str, Any]] | None = None,
 ) -> ConfidenceReport:
     uncertainties: list[str] = []
     score = 0.7
@@ -280,12 +349,21 @@ def compute_confidence(
     if needs_review:
         recommendation = "Consider rewording query, expanding retrieved context, or flagging for human review."
 
-    return ConfidenceReport(
+    report = ConfidenceReport(
         score=round(score, 2),
         needs_review=needs_review,
         uncertainties=uncertainties,
         recommendation=recommendation,
     )
+
+    _dispatch_low_confidence_alert_sync(
+        query=query,
+        confidence_score=report.score,
+        answer=answer,
+        sources=sources,
+    )
+
+    return report
 
 
 # ── F2: CRAG Retrieval Quality Evaluator ──

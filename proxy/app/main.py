@@ -88,6 +88,7 @@ from proxy.app.shared.config import (
     TOOLS_ENABLED,
     TOOLS_OPENAPI_SPECS,
     UNGROUNDED_NOTICE,
+    USE_BROTLI,
     USE_LANGGRAPH,
     USE_REDIS,
     USER_DB_PATH,
@@ -746,6 +747,21 @@ if RATE_LIMIT_ENABLED:
     add_rate_limit_middleware(app, rate_per_minute=RATE_LIMIT_PER_MINUTE, burst=RATE_LIMIT_BURST)
 if COMPRESSION_ENABLED:
     app.add_middleware(GZipMiddleware, minimum_size=COMPRESSION_MIN_SIZE, compresslevel=COMPRESSION_LEVEL)
+if USE_BROTLI:
+    try:
+        from brotli_asgi import BrotliMiddleware
+        app.add_middleware(BrotliMiddleware, minimum_size=COMPRESSION_MIN_SIZE)
+        logger.info("Brotli compression enabled")
+    except ImportError:
+        try:
+            from brotlipy import BrotliMiddleware
+            app.add_middleware(BrotliMiddleware, minimum_size=COMPRESSION_MIN_SIZE)
+            logger.info("Brotli compression enabled (via brotlipy)")
+        except ImportError:
+            logger.warning(
+                "USE_BROTLI=true but neither brotli_asgi nor brotlipy is installed — "
+                "Brotli compression skipped"
+            )
 
 # OpenTelemetry FastAPI instrumentation
 if OTEL_ENABLED:

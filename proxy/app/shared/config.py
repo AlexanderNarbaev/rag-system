@@ -297,6 +297,7 @@ EVAL_DATASET_PATH = os.getenv("EVAL_DATASET_PATH", "./data/eval_dataset.json")
 # ============ Admin Alerts ============
 ADMIN_ALERT_ENABLED = os.getenv("ADMIN_ALERT_ENABLED", "false").lower() == "true"
 ADMIN_ALERT_ENDPOINT = os.getenv("ADMIN_ALERT_ENDPOINT", "")
+ALERT_CONFIDENCE_THRESHOLD = float(os.getenv("ALERT_CONFIDENCE_THRESHOLD", "0.5"))
 
 # ============ Ungrounded Generation ============
 # When enabled, the LLM will generate answers even when no relevant knowledge is found.
@@ -345,6 +346,7 @@ CROSS_LINGUAL_ENABLED = os.getenv("CROSS_LINGUAL_ENABLED", "true").lower() == "t
 COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() == "true"
 COMPRESSION_MIN_SIZE = int(os.getenv("COMPRESSION_MIN_SIZE", "500"))
 COMPRESSION_LEVEL = int(os.getenv("COMPRESSION_LEVEL", "6"))
+USE_BROTLI = os.getenv("USE_BROTLI", "false").lower() == "true"
 
 # ============ SSE Streaming Optimization ============
 SSE_CHUNK_SIZE = int(os.getenv("SSE_CHUNK_SIZE", "4"))

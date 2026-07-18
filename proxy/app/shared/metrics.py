@@ -168,6 +168,12 @@ RAG_NEGATIVE_REJECTION: Any = _reuse_metric("rag_negative_rejection_total", Coun
     "Negative rejection events (refused to answer)",
 )
 
+rag_low_confidence_alerts: Any = _reuse_metric("rag_low_confidence_alerts", Counter) or Counter(
+    "rag_low_confidence_alerts",
+    "Low confidence answer alerts dispatched",
+    ["action"],
+)
+
 # ── Auth metrics ──
 
 RAG_AUTH_LOGIN_TOTAL: Any = _reuse_metric("rag_auth_login_total", Counter) or Counter(

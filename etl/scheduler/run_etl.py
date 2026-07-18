@@ -1048,46 +1048,147 @@ def main():
                     consumer.run_forever()
                     return
 
-    # 7. Quality report generation (FR-12)
+    # 7. Quality report generation (FR-12/FR-60)
     if args.quality_report:
         logger.info("=== Generating quality report ===")
-        try:
-            from etl.extractors.quality_metrics import (
-                ExtractionQualityReport,
-                compute_ocr_quality,
-                compute_table_quality,
-                save_quality_report,
-            )
-
-            reports = []
-            for doc in documents:
-                tables = doc.get("metadata", {}).get("tables", [])
-                ocr_results = doc.get("metadata", {}).get("ocr_results", [])
-
-                report = ExtractionQualityReport(
-                    document_id=doc.get("id", ""),
-                    source_type=doc.get("source_type", ""),
-                )
-                report.tables = compute_table_quality(tables if isinstance(tables, list) else [])
-                if ocr_results:
-                    report.ocr = compute_ocr_quality(ocr_results if isinstance(ocr_results, list) else [])
-
-                if report.ocr.page_count > 0 or report.tables.total_tables > 0:
-                    reports.append(report)
-
-            if reports:
-                save_quality_report(reports, str(args.quality_report))
-                logger.info(
-                    "Quality report: %d documents, avg score %.1f",
-                    len(reports),
-                    round(sum(r.overall_score() for r in reports) / len(reports), 1),
-                )
-            else:
-                logger.info("No quality-sensitive content found for report")
-        except Exception as e:
-            logger.error("Failed to generate quality report: %s", e)
+        _generate_quality_report(documents, all_chunks, config, args.quality_report)
 
     logger.info("ETL pipeline completed successfully")
+
+
+def _generate_quality_report(
+    documents: list[dict],
+    all_chunks: list[dict],
+    config: dict,
+    output_path: Path,
+) -> None:
+    """Generate a structured JSON quality report with per-source breakdown.
+
+    Aggregates:
+      - OCR confidence (from quality_metrics)
+      - Chunk coherence (avg/min/max tokens, chunk counts)
+      - Embedding quality (model info, dimension, endpoint)
+      - Per-source document and chunk counts
+    """
+    report: dict[str, Any] = {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "pipeline_summary": {},
+        "per_source": {},
+        "chunk_coherence": {},
+        "embedding_quality": {},
+    }
+
+    # --- Per-source document counts ---
+    source_doc_counts: dict[str, int] = {}
+    source_chunk_counts: dict[str, int] = {}
+    for doc in documents:
+        st = doc.get("source_type", "unknown")
+        source_doc_counts[st] = source_doc_counts.get(st, 0) + 1
+    for ch in all_chunks:
+        st = ch.get("source_type", ch.get("metadata", {}).get("source_type", "unknown"))
+        source_chunk_counts[st] = source_chunk_counts.get(st, 0) + 1
+
+    report["pipeline_summary"] = {
+        "total_documents": len(documents),
+        "total_chunks": len(all_chunks),
+        "sources": sorted(source_doc_counts.keys()),
+    }
+
+    for st in sorted(set(source_doc_counts) | set(source_chunk_counts)):
+        report["per_source"][st] = {
+            "documents": source_doc_counts.get(st, 0),
+            "chunks": source_chunk_counts.get(st, 0),
+        }
+
+    # --- Chunk coherence stats ---
+    chunk_token_lengths: list[int] = []
+    for ch in all_chunks:
+        text = ch.get("text", "")
+        if text:
+            chunk_token_lengths.append(len(text.split()))
+    if chunk_token_lengths:
+        report["chunk_coherence"] = {
+            "avg_tokens": round(sum(chunk_token_lengths) / len(chunk_token_lengths), 1),
+            "min_tokens": min(chunk_token_lengths),
+            "max_tokens": max(chunk_token_lengths),
+            "total_chunks_with_text": len(chunk_token_lengths),
+            "empty_chunks": len(all_chunks) - len(chunk_token_lengths),
+        }
+
+    # --- Embedding quality info ---
+    embedder_cfg = config.get("remote_services", {}).get("embedder", {})
+    if embedder_cfg:
+        report["embedding_quality"] = {
+            "model": embedder_cfg.get("model", "unknown"),
+            "endpoint": embedder_cfg.get("endpoint", "local"),
+            "dimensions": embedder_cfg.get("dimensions", 1024),
+        }
+    else:
+        report["embedding_quality"] = {
+            "model": config.get("indexing", {}).get("embedder_model", "BAAI/bge-m3"),
+            "endpoint": "local",
+            "dimensions": 1024,
+        }
+
+    # --- OCR and table quality (from quality_metrics module) ---
+    try:
+        from etl.extractors.quality_metrics import (
+            compute_ocr_quality,
+            compute_table_quality,
+        )
+
+        ocr_per_source: dict[str, dict] = {}
+        table_per_source: dict[str, dict] = {}
+        for doc in documents:
+            st = doc.get("source_type", "unknown")
+            tables = doc.get("metadata", {}).get("tables", [])
+            ocr_results = doc.get("metadata", {}).get("ocr_results", [])
+
+            if tables or ocr_results:
+                ocr = compute_ocr_quality(ocr_results if isinstance(ocr_results, list) else [])
+                tbl = compute_table_quality(tables if isinstance(tables, list) else [])
+
+                if st not in ocr_per_source:
+                    ocr_per_source[st] = {"page_count": 0, "total_chars": 0, "confidences": []}
+                if st not in table_per_source:
+                    table_per_source[st] = {"total_tables": 0, "tables_with_rows": 0, "accuracy": []}
+
+                if ocr.page_count > 0:
+                    ocr_per_source[st]["page_count"] += ocr.page_count
+                    ocr_per_source[st]["total_chars"] += ocr.total_chars
+                    ocr_per_source[st]["confidences"].append(ocr.avg_confidence)
+                if tbl.total_tables > 0:
+                    table_per_source[st]["total_tables"] += tbl.total_tables
+                    table_per_source[st]["tables_with_rows"] += tbl.tables_with_rows
+                    table_per_source[st]["accuracy"].append(tbl.estimated_accuracy)
+
+        if ocr_per_source:
+            report["ocr_quality"] = {}
+            for st, data in ocr_per_source.items():
+                confs = data["confidences"]
+                report["ocr_quality"][st] = {
+                    "pages": data["page_count"],
+                    "avg_confidence": round(sum(confs) / len(confs), 2) if confs else 0.0,
+                    "total_chars": data["total_chars"],
+                }
+
+        if table_per_source:
+            report["table_quality"] = {}
+            for st, data in table_per_source.items():
+                accs = data["accuracy"]
+                report["table_quality"][st] = {
+                    "total_tables": data["total_tables"],
+                    "tables_with_rows": data["tables_with_rows"],
+                    "avg_accuracy": round(sum(accs) / len(accs), 2) if accs else 0.0,
+                }
+    except ImportError:
+        logger.debug("quality_metrics module not available, skipping OCR/table quality in report")
+
+    # --- Write the report ---
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+    logger.info("Quality report saved: %s", output_path)
 
 
 if __name__ == "__main__":
