@@ -71,17 +71,25 @@ class SemanticChunker:
     заголовки (h1-h3), абзацы, списки, таблицы. Поддерживает HTML и Markdown.
     """
 
-    def __init__(self, max_tokens: int = 1500, overlap_tokens: int = 200, min_chunk_tokens: int = 100):
+    def __init__(
+        self,
+        max_tokens: int = 1500,
+        overlap_tokens: int = 200,
+        min_chunk_tokens: int = 100,
+        contextual_enrichment: bool = True,
+    ):
         """:param max_tokens: максимальное количество токенов в чанке (для эмбеддера)
                            Research-backed optimal: 1500 tokens (~6000 chars) for retrieval quality.
                            See: https://habr.com/ru/articles/1029740/
         :param overlap_tokens: перекрытие между чанками (токены)
-                               200 tokens (~800 chars, ~13% overlap) for context continuity.
+                                200 tokens (~800 chars, ~13% overlap) for context continuity.
         :param min_chunk_tokens: минимальный размер чанка, иначе объединяется со следующим
+        :param contextual_enrichment: enable ContextualEnricher for each chunk
         """
         self.max_tokens = max_tokens
         self.overlap_tokens = overlap_tokens
         self.min_chunk_tokens = min_chunk_tokens
+        self.contextual_enricher = ContextualEnricher(enabled=contextual_enrichment)
 
     def _estimate_tokens(self, text: str) -> int:
         """Language-aware token estimation.
@@ -278,6 +286,9 @@ class SemanticChunker:
                 position += 1
         chunks = self._apply_overlap(chunks)
         chunks = self._merge_short_chunks(chunks)
+        if self.contextual_enricher.enabled and source_metadata:
+            doc_text = self._html_to_markdown(html) if MARKDOWNIFY_AVAILABLE else html
+            chunks = self.contextual_enricher.enrich_chunks(chunks, doc_text, source_metadata)
         return chunks
 
     def chunk_markdown_with_overlap(
@@ -327,6 +338,8 @@ class SemanticChunker:
                 position += 1
         chunks = self._apply_overlap(chunks)
         chunks = self._merge_short_chunks(chunks)
+        if self.contextual_enricher.enabled and source_metadata:
+            chunks = self.contextual_enricher.enrich_chunks(chunks, md_text, source_metadata)
         return chunks
 
     def extract_headings(self, html: str) -> list[dict[str, Any]]:
@@ -698,59 +711,67 @@ class MDKeyChunker:
         :param content_type: "html" или "markdown"
         :param source_metadata: словарь с source_type, doc_title, version, source_id
         """
-        # Before chunking, prepend context to the content
+        chunks = self._do_chunking(content, content_type, source_metadata)
+        self._enrich_chunks(chunks, source_metadata)
+        self._apply_rolling_key_propagation(chunks)
+        return self._pack_by_semantic_key(chunks)
+
+    def _do_chunking(
+        self, content: str, content_type: str, source_metadata: dict[str, Any]
+    ) -> list[Chunk]:
+        """Prepare and chunk the content based on its type."""
         enriched_content = self.base._prepend_context(content, source_metadata)
         if content_type == "markdown":
-            chunks = self.base.chunk_markdown(enriched_content, source_metadata)
-        else:
-            chunks = self.base.chunk_html(enriched_content, source_metadata)
+            return self.base.chunk_markdown(enriched_content, source_metadata)
+        return self.base.chunk_html(enriched_content, source_metadata)
 
-        # Обогащение метаданными (NLP + SLM)
-        for _idx, chunk in enumerate(chunks):
-            # Базовые метаданные от источника
+    def _enrich_chunks(self, chunks: list[Chunk], source_metadata: dict[str, Any]) -> None:
+        """Enrich each chunk with NLP metadata and optional SLM data."""
+        for chunk in chunks:
             chunk.source_type = source_metadata.get("source_type", "")
             chunk.source_id = source_metadata.get("source_id", "")
             chunk.version = source_metadata.get("version", "")
             chunk.doc_title = source_metadata.get("doc_title", "")
 
-            # Извлечение сущностей
-            if self.enricher:
-                chunk.entities = self.enricher.extract_entities_spacy(chunk.text)
-                chunk.keywords = self.enricher.extract_keywords_tfidf(chunk.text)
-                chunk.summary = self.enricher.generate_summary(chunk.text)
-                chunk.hypothetical_questions = self.enricher.generate_hypothetical_questions(chunk.text)
-                # SLM обогащение (опционально)
-                if self.enricher.use_slm:
-                    slm_data = self.enricher.enrich_with_slm(chunk.text)
-                    if slm_data.get("summary"):
-                        chunk.summary = slm_data["summary"]
-                    if slm_data.get("keywords"):
-                        chunk.keywords = slm_data["keywords"]
-                    if slm_data.get("hypothetical_questions"):
-                        chunk.hypothetical_questions = slm_data["hypothetical_questions"]
+            if not self.enricher:
+                continue
 
-        # Save original text before context prefix is added in Rolling Key Propagation
+            chunk.entities = self.enricher.extract_entities_spacy(chunk.text)
+            chunk.keywords = self.enricher.extract_keywords_tfidf(chunk.text)
+            chunk.summary = self.enricher.generate_summary(chunk.text)
+            chunk.hypothetical_questions = self.enricher.generate_hypothetical_questions(chunk.text)
+
+            if self.enricher.use_slm:
+                self._apply_slm_enrichment(chunk)
+
+    def _apply_slm_enrichment(self, chunk: Chunk) -> None:
+        """Apply SLM-based enrichment to a single chunk."""
+        slm_data = self.enricher.enrich_with_slm(chunk.text)
+        if slm_data.get("summary"):
+            chunk.summary = slm_data["summary"]
+        if slm_data.get("keywords"):
+            chunk.keywords = slm_data["keywords"]
+        if slm_data.get("hypothetical_questions"):
+            chunk.hypothetical_questions = slm_data["hypothetical_questions"]
+
+    def _apply_rolling_key_propagation(self, chunks: list[Chunk]) -> None:
+        """Save original text and propagate metadata across chunks."""
         for chunk in chunks:
             chunk.original_text = chunk.text
             chunk.enriched = True
 
-        # Rolling Key Propagation: передаём метаданные предыдущего чанка следующему, если semantic_key не задан
-        prev_metadata = {}
+        prev_metadata: dict[str, Any] = {}
         for chunk in chunks:
             if chunk.semantic_key == "":
                 chunk.parent_metadata = prev_metadata.copy()
             else:
                 prev_metadata = {"title": chunk.title, "keywords": chunk.keywords, "entities": chunk.entities}
-            # Сохраняем в тексте чанка заголовок и ключевые слова для контекста
+
             meta_prefix = f"Context: {chunk.doc_title}"
             if chunk.parent_metadata.get("title"):
                 meta_prefix += f" > {chunk.parent_metadata['title']}"
             chunk.text = f"[{meta_prefix}]\n{chunk.text}"
             chunk.hash = hashlib.sha256(chunk.text.encode()).hexdigest()
-
-        # Биновая упаковка: группируем чанки с одинаковым semantic_key (если есть)
-        packed_chunks = self._pack_by_semantic_key(chunks)
-        return packed_chunks
 
     def _pack_by_semantic_key(self, chunks: list[Chunk]) -> list[Chunk]:
         """Объединяет чанки с одинаковым semantic_key в один, сохраняя порядок."""
@@ -793,6 +814,159 @@ class MDKeyChunker:
                 )
                 packed.append(packed_chunk)
         return packed
+
+
+class ContextualEnricher:
+    """Contextual chunk enrichment without LLM calls.
+
+    Implements Anthropic's contextual retrieval pattern:
+    prepends document context to each chunk before embedding,
+    reducing retrieval failures by up to 49%.
+
+    Uses document structure heuristics (headings, adjacent paragraphs)
+    to generate a 50-100 token contextual prefix — no LLM required.
+    """
+
+    TARGET_CONTEXT_TOKENS = 75
+    MAX_CONTEXT_TOKENS = 100
+
+    def __init__(self, enabled: bool = True):
+        self.enabled = enabled
+
+    def enrich_chunks(
+        self,
+        chunks: list[Chunk],
+        full_document_text: str,
+        source_metadata: dict[str, Any],
+    ) -> list[Chunk]:
+        """Enrich each chunk with a contextual prefix from the document structure.
+
+        For each chunk:
+        1. Find the nearest heading before the chunk in the document
+        2. Grab surrounding sentences from adjacent paragraphs
+        3. Prepend context prefix: "Document: {title}\\nSection: {heading}\\nContext: {surrounding}\\n\\n{chunk_text}"
+        """
+        if not self.enabled or not chunks:
+            return chunks
+
+        doc_title = source_metadata.get("doc_title", "")
+        sections = self._parse_document_sections(full_document_text)
+
+        for chunk in chunks:
+            if chunk.original_text:
+                continue
+            chunk.original_text = chunk.text
+            chunk.enriched = True
+
+            context = self._build_context(chunk, sections, doc_title, full_document_text)
+            if context:
+                chunk.text = f"{context}\n\n{chunk.text}"
+                chunk.hash = hashlib.sha256(chunk.text.encode()).hexdigest()
+                chunk.tokens_approx = max(1, int(len(chunk.text) / 4))
+
+        return chunks
+
+    def _parse_document_sections(self, text: str) -> list[dict[str, Any]]:
+        """Parse document into sections by headings.
+
+        Returns list of {heading: str, level: int, start: int, end: int}
+        """
+        heading_re = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
+        matches = list(heading_re.finditer(text))
+
+        if not matches:
+            return [{"heading": "", "level": 0, "start": 0, "end": len(text)}]
+
+        sections = []
+        for i, match in enumerate(matches):
+            level = len(match.group(1))
+            heading = match.group(2).strip()
+            start = match.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            sections.append({"heading": heading, "level": level, "start": start, "end": end})
+
+        return sections
+
+    def _build_context(
+        self,
+        chunk: Chunk,
+        sections: list[dict[str, Any]],
+        doc_title: str,
+        full_text: str,
+    ) -> str:
+        """Build contextual prefix for a chunk."""
+        parts: list[str] = []
+
+        if doc_title:
+            parts.append(f"Document: {doc_title}")
+
+        section_heading = self._find_section_for_chunk(chunk, sections, full_text)
+        if section_heading:
+            parts.append(f"Section: {section_heading}")
+
+        surrounding = self._extract_surrounding_context(chunk, full_text)
+        if surrounding:
+            parts.append(f"Context: {surrounding}")
+
+        if not parts:
+            return ""
+
+        return "\n".join(parts)
+
+    def _find_section_for_chunk(
+        self,
+        chunk: Chunk,
+        sections: list[dict[str, Any]],
+        full_text: str,
+    ) -> str:
+        """Find which section a chunk belongs to by position."""
+        chunk_pos = full_text.find(chunk.original_text or chunk.text)
+        if chunk_pos < 0:
+            return ""
+
+        for section in reversed(sections):
+            if section["start"] <= chunk_pos:
+                return section["heading"]
+
+        return ""
+
+    def _extract_surrounding_context(self, chunk: Chunk, full_text: str) -> str:
+        """Extract surrounding sentences for contextual grounding.
+
+        Takes ~1-2 sentences before the chunk start and ~1-2 after the chunk end.
+        """
+        chunk_text = chunk.original_text or chunk.text
+        chunk_pos = full_text.find(chunk_text)
+        if chunk_pos < 0:
+            return ""
+
+        chunk_end = chunk_pos + len(chunk_text)
+
+        before = full_text[max(0, chunk_pos - 300): chunk_pos].strip()
+        after = full_text[chunk_end: chunk_end + 300].strip()
+
+        sentences_before = re.split(r"(?<=[.!?])\s+", before)
+        sentences_after = re.split(r"(?<=[.!?])\s+", after)
+
+        context_chars = 0
+        max_context_chars = self.MAX_CONTEXT_TOKENS * 4
+        parts: list[str] = []
+
+        for sentence in reversed(sentences_before):
+            if context_chars + len(sentence) > max_context_chars:
+                break
+            if sentence.strip():
+                parts.insert(0, sentence.strip())
+                context_chars += len(sentence)
+
+        for sentence in sentences_after:
+            if context_chars + len(sentence) > max_context_chars:
+                break
+            if sentence.strip():
+                parts.append(sentence.strip())
+                context_chars += len(sentence)
+
+        return " ".join(parts)
 
 
 class AdaptiveChunker:

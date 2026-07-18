@@ -109,7 +109,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     client_ip=client_ip,
                     endpoint=request.url.path,
                 )
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 pass
 
         return response

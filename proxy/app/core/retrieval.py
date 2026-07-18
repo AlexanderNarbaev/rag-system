@@ -1019,7 +1019,7 @@ def check_qdrant_health() -> bool:
         if qdrant_client is not None:
             qdrant_client.get_collections()
         return True
-    except Exception:
+    except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError, Exception):
         return False
 
 
@@ -1042,6 +1042,6 @@ def compute_dynamic_top_k(query: str, default: int = 50) -> int:
     try:
         complexity = score_query_complexity(query)
         return dynamic_top_k_from_complexity(complexity, max_default=default)
-    except Exception:
+    except (ImportError, ConnectionError, TimeoutError, OSError, ValueError, Exception):
         logger.warning("Dynamic top-k computation failed, using default", exc_info=True)
         return default

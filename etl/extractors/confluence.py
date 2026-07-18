@@ -14,7 +14,6 @@ import hashlib
 import json
 import logging
 import os
-import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +25,8 @@ import urllib3
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
 
+from etl.extractors.base_extractor import SyncExtractor
+
 # Подавление SSL warnings для самоподписанных сертификатов
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -34,7 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class ConfluenceExtractor:
+class ConfluenceExtractor(SyncExtractor):
     def __init__(self, config: dict[str, Any]):
         """config: {
             "url": "https://confluence.internal/",
@@ -52,8 +53,7 @@ class ConfluenceExtractor:
             "since_date": null                  # ISO 8601 — выгружать только страницы, изменённые после этой даты
         }
         """
-        # Graceful shutdown event (injected by orchestrator)
-        self._shutdown_event: threading.Event | None = None
+        self._init_sync_extractor(config)
         # Input validation
         url = config.get("url", "")
         if not url or not url.strip():
@@ -68,7 +68,6 @@ class ConfluenceExtractor:
         self.config = config  # Store full config for retry logic
         self.space_keys = config.get("space_keys")
         self.output_dir = Path(config.get("output_dir", "./raw_data/confluence"))
-        self.wal_path = Path(config.get("wal_file", "./wal/confluence_wal.json"))
         self.incremental = config.get("incremental", True)
         self.download_attachments = config.get("download_attachments", True)
         self.max_versions = config.get("max_versions", 0)
@@ -101,19 +100,6 @@ class ConfluenceExtractor:
         self.session.headers.update({"Accept": "application/json"})
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.wal_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self.wal_data = self._load_wal()
-
-    def _check_shutdown(self) -> None:
-        """Проверяет, запрошена ли остановка. Вызывает InterruptedError если да."""
-        if self._shutdown_event and self._shutdown_event.is_set():
-            raise InterruptedError("Shutdown requested")
-
-    def _interruptible_sleep(self, seconds: float) -> None:
-        """Sleep, который прерывается при shutdown."""
-        if self._shutdown_event and self._shutdown_event.wait(timeout=seconds):
-            raise InterruptedError("Shutdown during sleep")
 
     def test_connection(self) -> bool:
         """Тестирует подключение к Confluence API."""
@@ -136,20 +122,17 @@ class ConfluenceExtractor:
             logger.error(f"❌ Ошибка подключения: {e}")
             return False
 
-    def _load_wal(self) -> dict[str, Any]:
+    def _load_wal(self, config: dict[str, Any]) -> dict[str, Any]:
         """Загружает WAL (последние успешные метки времени и хеши страниц)."""
+        default = {"last_run": None, "pages_hash": {}}
         if self.wal_path.exists():
             try:
                 with open(self.wal_path) as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
-                return {"last_run": None, "pages_hash": {}}
-        return {"last_run": None, "pages_hash": {}}
-
-    def _save_wal(self) -> None:
-        with open(self.wal_path, "w") as f:
-            json.dump(self.wal_data, f, indent=2)
+                return default
+        return default
 
     def _request(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Выполняет GET запрос к Confluence API с retry логикой и экспоненциальной задержкой."""

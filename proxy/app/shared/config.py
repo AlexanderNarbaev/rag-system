@@ -35,9 +35,9 @@ EMBEDDER_API_KEY = os.getenv("EMBEDDER_API_KEY", "")
 EMBEDDER_FALLBACK_LOCAL = os.getenv("EMBEDDER_FALLBACK_LOCAL", "true").lower() == "true"
 
 # ============ Reranker / Cross-Encoder ============
-# Examples: cross-encoder/ms-marco-MiniLM-L-6-v2, BAAI/bge-reranker-v2-m3, mixedbread-ai/mxbai-rerank-large-v1
-RERANKER_MODEL = os.getenv("RERANKER_MODEL", "")
-RERANKER_MAX_LENGTH = int(os.getenv("RERANKER_MAX_LENGTH", "512"))
+# Examples: cross-encoder/ms-marco-MiniLM-L-6-v2 (fallback), BAAI/bge-reranker-v2-m3 (default)
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
+RERANKER_MAX_LENGTH = int(os.getenv("RERANKER_MAX_LENGTH", "8192"))
 RERANKER_BATCH_SIZE = int(os.getenv("RERANKER_BATCH_SIZE", "32"))
 # Remote reranker service (Cohere /v1/rerank or compatible). Leave empty for local model.
 # Examples: http://localhost:8082/v1, https://api.cohere.com/v1

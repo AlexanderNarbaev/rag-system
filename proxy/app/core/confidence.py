@@ -50,7 +50,7 @@ def _dispatch_low_confidence_alert_sync(
         from proxy.app.shared.metrics import rag_low_confidence_alerts
 
         rag_low_confidence_alerts.labels(action="logged").inc()
-    except Exception:
+    except (ImportError, AttributeError, KeyError, TypeError):
         pass
 
     if ADMIN_ALERT_ENDPOINT:
@@ -169,7 +169,7 @@ def compute_nli_grounding(answer: str, context: str) -> GroundingReport:
 
         if is_nli_model_available():
             return _compute_nli_with_real_model(answer, claims, context)
-    except Exception:
+    except (ImportError, ModuleNotFoundError, OSError):
         logger.debug("NLI model not available, using lightweight proxy")
 
     return _compute_nli_lightweight(claims, context)

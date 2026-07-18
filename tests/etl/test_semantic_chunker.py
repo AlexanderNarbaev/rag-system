@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 from etl.chunker.semantic_chunker import (
     AdaptiveChunker,
     Chunk,
+    ContextualEnricher,
     MDKeyChunker,
     MetadataEnricher,
     SemanticChunker,
@@ -1224,3 +1225,153 @@ class TestSemanticChunkerEdgeCases:
         chunker = SemanticChunker()
         tokens = chunker._estimate_tokens("こんにちは世界")
         assert tokens >= 1
+
+
+class TestContextualEnricher:
+    """Tests for ContextualEnricher — Anthropic-style contextual chunk enrichment."""
+
+    def test_disabled_passes_through(self):
+        enricher = ContextualEnricher(enabled=False)
+        chunks = [Chunk(text="original", hash="abc")]
+        result = enricher.enrich_chunks(chunks, "full document", {"doc_title": "Test"})
+        assert result[0].text == "original"
+
+    def test_empty_chunks(self):
+        enricher = ContextualEnricher(enabled=True)
+        result = enricher.enrich_chunks([], "text", {"doc_title": "Test"})
+        assert result == []
+
+    def test_enrich_adds_document_title(self):
+        enricher = ContextualEnricher(enabled=True)
+        full_text = "# Test Doc\n\nThis is the chunk content.\n\nMore text."
+        chunks = [Chunk(text="This is the chunk content.", hash="h1")]
+        result = enricher.enrich_chunks(chunks, full_text, {"doc_title": "Test Doc"})
+        assert "Document: Test Doc" in result[0].text
+        assert "This is the chunk content." in result[0].text
+        assert result[0].original_text == "This is the chunk content."
+        assert result[0].enriched is True
+
+    def test_enrich_adds_section_heading(self):
+        enricher = ContextualEnricher(enabled=True)
+        full_text = "# Architecture\n\nOur system uses microservices.\n\n## Details\n\nMore info here."
+        chunks = [Chunk(text="More info here.", hash="h1")]
+        result = enricher.enrich_chunks(chunks, full_text, {"doc_title": "System Design"})
+        assert "Section: Details" in result[0].text
+
+    def test_enrich_adds_surrounding_context(self):
+        enricher = ContextualEnricher(enabled=True)
+        full_text = (
+            "Before sentence one. Before sentence two.\n\n"
+            "# Section\n\n"
+            "This is the chunk content.\n\n"
+            "After sentence one. After sentence two."
+        )
+        chunks = [Chunk(text="This is the chunk content.", hash="h1")]
+        result = enricher.enrich_chunks(chunks, full_text, {"doc_title": "Doc"})
+        assert "Context:" in result[0].text
+
+    def test_enrich_preserves_original_text(self):
+        enricher = ContextualEnricher(enabled=True)
+        full_text = "# Doc\n\nChunk content here."
+        chunks = [Chunk(text="Chunk content here.", hash="h1")]
+        result = enricher.enrich_chunks(chunks, full_text, {"doc_title": "Doc"})
+        assert result[0].original_text == "Chunk content here."
+
+    def test_enrich_skips_already_enriched(self):
+        enricher = ContextualEnricher(enabled=True)
+        full_text = "# Doc\n\nSome content."
+        chunks = [Chunk(
+            text="Already enriched.", hash="h1",
+            original_text="Original text.", enriched=True
+        )]
+        result = enricher.enrich_chunks(chunks, full_text, {"doc_title": "Doc"})
+        assert result[0].text == "Already enriched."
+
+    def test_enrich_with_separator_newlines(self):
+        enricher = ContextualEnricher(enabled=True)
+        full_text = "# Title\n\nChunk body text."
+        chunks = [Chunk(text="Chunk body text.", hash="h1")]
+        result = enricher.enrich_chunks(chunks, full_text, {"doc_title": "Title"})
+        assert "\n\nChunk body text." in result[0].text
+
+    def test_parse_document_sections(self):
+        enricher = ContextualEnricher()
+        text = "# H1\n\nContent 1.\n\n## H2\n\nContent 2.\n\n### H3\n\nContent 3."
+        sections = enricher._parse_document_sections(text)
+        assert len(sections) == 3
+        assert sections[0]["heading"] == "H1"
+        assert sections[0]["level"] == 1
+        assert sections[1]["heading"] == "H2"
+        assert sections[2]["heading"] == "H3"
+
+    def test_parse_document_sections_no_headings(self):
+        enricher = ContextualEnricher()
+        text = "Plain text without any headings."
+        sections = enricher._parse_document_sections(text)
+        assert len(sections) == 1
+        assert sections[0]["heading"] == ""
+
+    def test_find_section_for_chunk(self):
+        enricher = ContextualEnricher()
+        full_text = "# Intro\n\nIntro content.\n\n## Setup\n\nSetup content."
+        sections = enricher._parse_document_sections(full_text)
+        chunk = Chunk(text="Setup content.", hash="h1")
+        section = enricher._find_section_for_chunk(chunk, sections, full_text)
+        assert section == "Setup"
+
+    def test_find_section_for_chunk_not_found(self):
+        enricher = ContextualEnricher()
+        sections = [{"heading": "Root", "level": 1, "start": 0, "end": 100}]
+        chunk = Chunk(text="Not in document", hash="h1")
+        section = enricher._find_section_for_chunk(chunk, sections, "completely different text")
+        assert section == ""
+
+    def test_extract_surrounding_context(self):
+        enricher = ContextualEnricher()
+        full_text = "First sentence. Second sentence. CHUNK TEXT HERE. After first. After second."
+        chunk = Chunk(text="CHUNK TEXT HERE.", hash="h1")
+        context = enricher._extract_surrounding_context(chunk, full_text)
+        assert "Second sentence" in context
+        assert "After first" in context
+
+    def test_extract_surrounding_context_not_found(self):
+        enricher = ContextualEnricher()
+        context = enricher._extract_surrounding_context(
+            Chunk(text="missing", hash="h1"), "different text"
+        )
+        assert context == ""
+
+
+class TestSemanticChunkerContextualEnrichment:
+    """Integration tests for contextual enrichment in chunking pipeline."""
+
+    def test_chunk_html_with_enrichment(self):
+        chunker = SemanticChunker(max_tokens=1500, contextual_enrichment=True)
+        html = "<h1>RAG Overview</h1><p>RAG combines retrieval with generation.</p><p>It improves accuracy.</p>"
+        metadata = {"source_type": "confluence", "doc_title": "RAG Overview"}
+        chunks = chunker.chunk_html(html, metadata)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.original_text
+            assert c.enriched
+            assert "Document:" in c.text
+
+    def test_chunk_markdown_with_enrichment(self):
+        chunker = SemanticChunker(max_tokens=1500, contextual_enrichment=True)
+        md = "# Auth System\n\nAuthentication uses JWT tokens.\n\n## OAuth\n\nOAuth2 flow described here."
+        metadata = {"source_type": "wiki", "doc_title": "Auth System"}
+        chunks = chunker.chunk_markdown_with_overlap(md, metadata)
+        assert len(chunks) >= 1
+        for c in chunks:
+            assert c.original_text
+            assert c.enriched
+            assert "Document:" in c.text
+
+    def test_chunk_markdown_enrichment_disabled(self):
+        chunker = SemanticChunker(max_tokens=1500, contextual_enrichment=False)
+        md = "# Doc\n\nContent."
+        metadata = {"source_type": "wiki", "doc_title": "Doc"}
+        chunks = chunker.chunk_markdown_with_overlap(md, metadata)
+        assert len(chunks) >= 1
+        assert chunks[0].enriched is False
+        assert chunks[0].original_text == ""

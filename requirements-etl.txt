@@ -10,8 +10,8 @@ python-dotenv>=1.0.0
 pyyaml>=6.0
 
 # ── Vector database & embeddings ──────────────────────────────────────────────
-qdrant-client>=1.18.0
-sentence-transformers>=5.6.0
+qdrant-client>=1.18.0,<2.0.0
+sentence-transformers>=5.6.0,<6.0.0
 
 # ── NLP & entity extraction ───────────────────────────────────────────────────
 spacy>=3.8.13
@@ -21,7 +21,7 @@ pandas>=2.0.0
 pyarrow>=24.0.0
 
 # ── Graph database (optional) ─────────────────────────────────────────────────
-neo4j>=5.14.0
+neo4j>=5.14.0,<6.0.0
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 filelock>=3.29.5

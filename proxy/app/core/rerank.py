@@ -293,15 +293,32 @@ class TwoStageReranker:
     Stage 1: Fast embedding-based scoring (30-50ms)
     Stage 2: Cross-encoder scoring (150-400ms) on top-K from stage 1
 
+    Default cross-encoder: BAAI/bge-reranker-v2-m3 (state-of-the-art multilingual).
+    Fallback: cross-encoder/ms-marco-MiniLM-L-6-v2 (smaller, faster).
+
     Based on: https://habr.com/ru/articles/1024696/
 
     Usage:
         reranker = TwoStageReranker(
             fast_model="BAAI/bge-small-en-v1.5",
-            cross_encoder_model="cross-encoder/ms-marco-MiniLM-L-6-v2"
+            cross_encoder_model="BAAI/bge-reranker-v2-m3"
         )
         results = reranker.rerank(query, documents, final_top_k=5)
     """
+
+    # Known model max_lengths for automatic dimension detection
+    MODEL_MAX_LENGTHS: dict[str, int] = {
+        "BAAI/bge-reranker-v2-m3": 8192,
+        "BAAI/bge-reranker-large": 512,
+        "BAAI/bge-reranker-base": 512,
+        "cross-encoder/ms-marco-MiniLM-L-6-v2": 512,
+        "cross-encoder/ms-marco-MiniLM-L-12-v2": 512,
+        "cross-encoder/ms-marco-MiniLM-L-4-v2": 512,
+        "mixedbread-ai/mxbai-rerank-large-v1": 512,
+    }
+
+    DEFAULT_CROSS_ENCODER = "BAAI/bge-reranker-v2-m3"
+    DEFAULT_FAST_MODEL = "BAAI/bge-small-en-v1.5"
 
     def __init__(
         self,
@@ -310,14 +327,31 @@ class TwoStageReranker:
         fast_top_k: int = 20,
         final_top_k: int = 5,
     ):
-        self.fast_model = fast_model
-        self.cross_encoder_model = cross_encoder_model
+        from proxy.app.shared.config import RERANKER_MAX_LENGTH, RERANKER_MODEL
+
+        self.fast_model: str | None = fast_model if fast_model is not None else self.DEFAULT_FAST_MODEL
+        self.cross_encoder_model: str | None = (
+            cross_encoder_model if cross_encoder_model is not None
+            else (RERANKER_MODEL or self.DEFAULT_CROSS_ENCODER)
+        )
         self.fast_top_k = fast_top_k
         self.final_top_k = final_top_k
         self._fast_encoder: Any = None
         self._cross_encoder: Any = None
         self._query_embed_cache: dict[str, Any] = {}
         self._doc_embed_cache: dict[str, Any] = {}
+        self._max_length = RERANKER_MAX_LENGTH or self._detect_max_length()
+
+    def _detect_max_length(self) -> int:
+        """Detect the appropriate max_length for the configured cross-encoder model."""
+        model_name = self.cross_encoder_model or ""
+        if model_name in self.MODEL_MAX_LENGTHS:
+            return self.MODEL_MAX_LENGTHS[model_name]
+
+        if "v2" in model_name and "reranker" in model_name.lower():
+            return 8192
+
+        return 512
 
     def _get_fast_encoder(self) -> Any:
         """Lazy-load fast embedding model."""
@@ -585,8 +619,8 @@ def _fine_tune_full(pairs: list[tuple[str, str, float]], epochs: int = 3) -> Any
         return None
 
 
-RERANKER_LORA_R = 4
-RERANKER_LORA_ALPHA = 8
+RERANKER_LORA_R = 16
+RERANKER_LORA_ALPHA = 32
 
 # Пример использования (для тестирования)
 if __name__ == "__main__":

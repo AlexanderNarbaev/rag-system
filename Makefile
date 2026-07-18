@@ -13,7 +13,7 @@
         deploy deploy-prod verify-backups \
         health-check status \
         maturity-review maturity-review-json maturity-review-save \
-        export-openapi \
+        export-openapi audit \
         openwebui-up openwebui-down openwebui-logs openwebui-dev
 
 SHELL := /bin/bash
@@ -100,6 +100,16 @@ benchmark-compare: ## Run benchmarks and compare against saved baseline
 	@cd $(ROOT) && python scripts/run_benchmarks.py --compare tests/performance/latency_benchmarks.json
 
 # ── Code quality ──────────────────────────────────────────────────────────────
+audit: ## Run pip-audit on all requirements files
+	@echo "Auditing proxy dependencies..."
+	@pip-audit --requirement requirements-proxy.txt --desc --format columns --vulnerability-service osv
+	@echo ""
+	@echo "Auditing ETL dependencies..."
+	@pip-audit --requirement requirements-etl.txt --desc --format columns --vulnerability-service osv
+	@echo ""
+	@echo "Auditing dev dependencies..."
+	@pip-audit --requirement requirements-dev.txt --desc --format columns --vulnerability-service osv
+
 lint: ## Lint with ruff
 	@cd $(ROOT) && ruff check .
 

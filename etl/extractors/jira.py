@@ -13,7 +13,6 @@
 import json
 import logging
 import os
-import threading
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -25,6 +24,8 @@ import requests
 import urllib3
 from requests.auth import HTTPBasicAuth
 
+from etl.extractors.base_extractor import SyncExtractor
+
 # Подавление SSL warnings для самоподписанных сертификатов
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -32,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class JiraExtractor:
+class JiraExtractor(SyncExtractor):
     def __init__(self, config: dict[str, Any]):
         """config: {
             "url": "https://jira.internal.company.com",
@@ -51,8 +52,7 @@ class JiraExtractor:
             "expand": "changelog,renderedBody"
         }
         """
-        # Graceful shutdown event (injected by orchestrator)
-        self._shutdown_event: threading.Event | None = None
+        self._init_sync_extractor(config)
         # Input validation
         url = config.get("url", "")
         if not url or not url.strip():
@@ -67,7 +67,6 @@ class JiraExtractor:
         self.config = config  # Store full config for retry logic
         self.base_jql = config.get("jql", "ORDER BY updated DESC")
         self.output_dir = Path(config.get("output_dir", "./raw_data/jira"))
-        self.wal_path = Path(config.get("wal_file", "./wal/jira_wal.json"))
         self.incremental = config.get("incremental", True)
         self.download_attachments = config.get("download_attachments", True)
         self.max_issues_per_run = config.get("max_issues_per_run", 0)
@@ -100,32 +99,17 @@ class JiraExtractor:
         self.session.headers.update({"Accept": "application/json"})
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.wal_path.parent.mkdir(parents=True, exist_ok=True)
-        self.wal_data = self._load_wal()
 
-    def _check_shutdown(self) -> None:
-        """Проверяет, запрошена ли остановка. Вызывает InterruptedError если да."""
-        if self._shutdown_event and self._shutdown_event.is_set():
-            raise InterruptedError("Shutdown requested")
-
-    def _interruptible_sleep(self, seconds: float) -> None:
-        """Sleep, который прерывается при shutdown."""
-        if self._shutdown_event and self._shutdown_event.wait(timeout=seconds):
-            raise InterruptedError("Shutdown during sleep")
-
-    def _load_wal(self) -> dict[str, Any]:
+    def _load_wal(self, config: dict[str, Any]) -> dict[str, Any]:
+        default = {"last_run": None, "last_issue_id": None, "processed_issues": []}
         if self.wal_path.exists():
             try:
                 with open(self.wal_path) as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
-                return {"last_run": None, "last_issue_id": None, "processed_issues": []}
-        return {"last_run": None, "last_issue_id": None, "processed_issues": []}
-
-    def _save_wal(self) -> None:
-        with open(self.wal_path, "w") as f:
-            json.dump(self.wal_data, f, indent=2)
+                return default
+        return default
 
     def _request(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Выполняет GET запрос к Jira API с retry логикой и экспоненциальной задержкой."""

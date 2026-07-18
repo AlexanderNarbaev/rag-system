@@ -163,6 +163,9 @@ chunking:
   output_dir: "./chunks"                 # директория для сохранения чанков (JSON)
   index_headings: true                   # создавать heading-level чанки с source_type="heading"
   index_documents: true                  # создавать document-level чанки с source_type="document"
+  contextual_enrichment: true            # prepend document context to each chunk before embedding
+                                         #   Heuristic-based (no LLM), uses headings + adjacent paragraphs
+                                         #   Reduces retrieval failures by up to 49% (Anthropic 2024)
 
 # Гибридная индексация Qdrant
 indexing:

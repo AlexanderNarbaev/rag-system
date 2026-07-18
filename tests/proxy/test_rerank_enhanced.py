@@ -173,7 +173,7 @@ class TestTwoStageReranker:
         assert r.final_top_k == 3
 
     def test_fast_score_no_encoder(self):
-        r = TwoStageReranker()
+        r = TwoStageReranker(fast_model="")
         scores = r.fast_score("test", ["doc1", "doc2"])
         assert scores == [0.5, 0.5]
 

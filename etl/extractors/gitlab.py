@@ -13,7 +13,6 @@
 import json
 import logging
 import os
-import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +22,8 @@ from urllib.parse import urljoin
 import requests
 import urllib3
 
+from etl.extractors.base_extractor import SyncExtractor
+
 # Подавление SSL warnings для самоподписанных сертификатов
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -30,7 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-class GitLabExtractor:
+class GitLabExtractor(SyncExtractor):
     def __init__(self, config: dict[str, Any]):
         """config: {
             "url": "https://gitlab.internal.company.com",
@@ -52,8 +53,7 @@ class GitLabExtractor:
             "file_paths_exclude": ["*.java", "*.kt", "*.class", "node_modules/*"],
         }
         """
-        # Graceful shutdown event (injected by orchestrator)
-        self._shutdown_event: threading.Event | None = None
+        self._init_sync_extractor(config)
         # Input validation
         url = config.get("url", "")
         if not url or not url.strip():
@@ -70,7 +70,6 @@ class GitLabExtractor:
         self.token = token
         self.project_ids = config.get("project_ids")
         self.output_dir = Path(config.get("output_dir", "./raw_data/gitlab"))
-        self.wal_path = Path(config.get("wal_file", "./wal/gitlab_wal.json"))
         self.incremental = config.get("incremental", True)
         self.fetch_commits = config.get("fetch_commits", True)
         self.fetch_files = config.get("fetch_files", True)
@@ -102,32 +101,17 @@ class GitLabExtractor:
         self.session.headers.update({"PRIVATE-TOKEN": self.token, "Accept": "application/json"})
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.wal_path.parent.mkdir(parents=True, exist_ok=True)
-        self.wal_data = self._load_wal()
 
-    def _check_shutdown(self) -> None:
-        """Проверяет, запрошена ли остановка. Вызывает InterruptedError если да."""
-        if self._shutdown_event and self._shutdown_event.is_set():
-            raise InterruptedError("Shutdown requested")
-
-    def _interruptible_sleep(self, seconds: float) -> None:
-        """Sleep, который прерывается при shutdown."""
-        if self._shutdown_event and self._shutdown_event.wait(timeout=seconds):
-            raise InterruptedError("Shutdown during sleep")
-
-    def _load_wal(self) -> dict[str, Any]:
+    def _load_wal(self, config: dict[str, Any]) -> dict[str, Any]:
+        default = {"last_run": None, "projects": {}}
         if self.wal_path.exists():
             try:
                 with open(self.wal_path) as f:
                     return json.load(f)
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"WAL file {self.wal_path} corrupted or unreadable: {e}. Reinitializing.")
-                return {"last_run": None, "projects": {}}
-        return {"last_run": None, "projects": {}}
-
-    def _save_wal(self) -> None:
-        with open(self.wal_path, "w") as f:
-            json.dump(self.wal_data, f, indent=2)
+                return default
+        return default
 
     def _request(self, endpoint: str, params: dict[str, Any] | None = None, method: str = "GET") -> dict[str, Any]:
         """Выполняет запрос к GitLab API с retry логикой и экспоненциальной задержкой."""

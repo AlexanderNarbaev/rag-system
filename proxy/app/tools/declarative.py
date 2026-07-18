@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import subprocess
 from glob import glob
 from typing import Any
@@ -190,9 +191,8 @@ def _make_shell_handler(
 
         try:
             result = subprocess.run(
-                resolved_cmd,
-                shell=True,
-                # nosec B602 — mitigated by allowed_commands whitelist + metacharacter check
+                shlex.split(resolved_cmd),
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=30,

@@ -318,7 +318,7 @@ async def auth_refresh(request: RefreshRequest, raw_request: Request) -> Refresh
                     "namespace": user_ctx.namespace,
                 }
                 add_event("auth.refresh.fallback_to_access_token", {})
-            except Exception:
+            except (ValueError, KeyError, TypeError, AttributeError):
                 record_auth_refresh("failure")
                 _audit.log_auth(
                     user_id=None,
