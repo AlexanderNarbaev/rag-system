@@ -28,6 +28,7 @@ def generate_clarifying_questions(
     sources: list[dict[str, Any]] | None = None,
     context: str = "",
     use_slm: bool = True,
+    lang: str | None = None,
 ) -> ClarificationResult:
     """Generate clarifying questions when knowledge is insufficient.
 
@@ -38,6 +39,7 @@ def generate_clarifying_questions(
         sources: Retrieved sources (used to understand what was found).
         context: Retrieved context text.
         use_slm: Whether to attempt SLM-based generation.
+        lang: ISO 639-1 language code to generate questions in. Defaults to auto-detect.
 
     Returns:
         ClarificationResult with questions and metadata.
@@ -49,7 +51,7 @@ def generate_clarifying_questions(
 
     if use_slm:
         try:
-            slm_result = _generate_with_slm(query, status, sources, context)
+            slm_result = _generate_with_slm(query, status, sources, context, lang)
             if slm_result.questions:
                 return slm_result
         except Exception:
@@ -70,6 +72,7 @@ def _generate_with_slm(
     status: str,
     sources: list[dict[str, Any]] | None,
     context: str,
+    lang: str | None = None,
 ) -> ClarificationResult:
     """Use SLM to generate clarifying questions."""
     if not _is_slm_available():
@@ -81,11 +84,13 @@ def _generate_with_slm(
         if titles:
             sources_preview = f"Found documents: {', '.join(titles)}."
 
+    target_lang = lang or "the same language as the query"
+
     prompt = (
         f'The user asked: "{query}"\n'
         f"Knowledge base status: {status}\n"
         f"{sources_preview}\n"
-        "Generate 1-2 short clarifying questions (in the same language as the query) "
+        f"Generate 1-2 short clarifying questions in {target_lang} "
         "that would help refine the search to find better information. "
         "Output ONLY the questions, one per line, starting with '- '."
     )

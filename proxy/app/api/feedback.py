@@ -67,11 +67,11 @@ class FeedbackResponse(BaseModel):
 async def submit_feedback(
     request: FeedbackRequest,
     raw_request: Request,
-    user: UserContext = Depends(require_role(Role.USER)),  # noqa: B008
+    user: UserContext = Depends(require_role(Role.READ_ONLY)),  # noqa: B008
 ) -> FeedbackResponse:
     """Submit feedback on a RAG response.
 
-    Role.USER and above can submit simple feedback (rating + comment).
+    Role.READ_ONLY and above can submit basic feedback (rating + comment).
     Corrections (corrected_answer) are restricted to Role.EXPERT and above.
 
     Rate limited per user: FEEDBACK_RATE_LIMIT submissions per hour (default 100).

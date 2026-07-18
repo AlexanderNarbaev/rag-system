@@ -94,6 +94,7 @@ PROGRESSIVE_RETRIEVAL_STAGES = os.getenv("PROGRESSIVE_RETRIEVAL_STAGES", "5,10,2
 # ============ Кэш ============
 USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_KEY_PREFIX = os.getenv("REDIS_KEY_PREFIX", "proxy:")
 
 # ============ Агентная оркестрация (LangGraph) ============
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
@@ -251,6 +252,7 @@ NLI_MODEL_ENABLED = os.getenv("NLI_MODEL_ENABLED", "false").lower() == "true"
 
 # ============ Level 5: Self-Correcting RAG ============
 HYDE_ENABLED = os.getenv("HYDE_ENABLED", "true").lower() == "true"
+HYDE_ENABLED_IN_PROGRESSIVE = os.getenv("HYDE_ENABLED_IN_PROGRESSIVE", "true").lower() == "true"
 REFLECTION_ENABLED = os.getenv("REFLECTION_ENABLED", "true").lower() == "true"
 REFLECTION_DEPTH = int(os.getenv("REFLECTION_DEPTH", "2"))
 # HALLUCINATION_CHECK_ENABLED gates the full hallucination detection pipeline

@@ -36,7 +36,7 @@ except ImportError:
     CROSS_ENCODER_AVAILABLE = False
 
 from proxy.app.shared.cache import CacheManager
-from proxy.app.shared.config import REDIS_URL, RERANKER_MAX_LENGTH, RERANKER_MODEL, USE_REDIS
+from proxy.app.shared.config import REDIS_KEY_PREFIX, REDIS_URL, RERANKER_MAX_LENGTH, RERANKER_MODEL, USE_REDIS
 from proxy.app.shared.tracing import add_event, tracer
 
 logger = logging.getLogger(__name__)
@@ -66,9 +66,9 @@ def initialize_reranker() -> None:
 
     # Инициализация кэша (если используется Redis)
     if USE_REDIS and REDIS_URL:  # noqa: SIM108
-        cache_manager = CacheManager(redis_url=REDIS_URL)
+        cache_manager = CacheManager(redis_url=REDIS_URL, key_prefix=REDIS_KEY_PREFIX)
     else:
-        cache_manager = CacheManager(use_redis=False)
+        cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
 
 def _truncate_text(text: str, max_tokens: int | None = None) -> str:
@@ -425,7 +425,7 @@ class TwoStageReranker:
 
 # Если кэш-менеджер не был инициализирован, создаём заглушку
 if cache_manager is None:
-    cache_manager = CacheManager(use_redis=False)
+    cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
 
 def collect_training_pairs() -> list[tuple[str, str, float]]:

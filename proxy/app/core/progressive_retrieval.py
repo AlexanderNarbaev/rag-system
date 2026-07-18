@@ -1,6 +1,7 @@
-"""Progressive Retrieval (FR-25).
+"""Progressive Retrieval (FR-25, FR-143).
 
 When initial retrieval returns insufficient results, progressively expand:
+0. (FR-143) HyDE: generate hypothetical document, search with it
 1. Try top_k=5 first
 2. If <2 strong sources (score >= 0.32), try top_k=10
 3. If still insufficient, try top_k=20 + graph expansion
@@ -21,10 +22,12 @@ from proxy.app.core.retrieval import (
     graph_expand_query,
     hybrid_search,
 )
+from proxy.app.shared.config import HYDE_ENABLED_IN_PROGRESSIVE
+from proxy.app.shared.utils import estimate_tokens
 
 logger = logging.getLogger(__name__)
 
-PROGRESSIVE_STAGE_NAMES = ["direct", "expanded", "graph_expanded", "insufficient"]
+PROGRESSIVE_STAGE_NAMES = ["hyde", "direct", "expanded", "graph_expanded", "insufficient"]
 
 
 def _get_score(result: Any) -> float:
@@ -94,6 +97,7 @@ async def progressive_retrieve(
     """Progressive retrieval: expand top_k until quality is sufficient or stages exhausted.
 
     Stage order:
+        0. HyDE expansion (FR-143) — generate hypothetical document, search with it
         1. top_k=5  -> "direct"
         2. top_k=10 -> "expanded"
         3. top_k=20 + graph expansion -> "graph_expanded"
@@ -119,19 +123,70 @@ async def progressive_retrieve(
     all_results: list[Any] = []
     seen_ids: set[str] = set()
 
+    search_query = query
+
+    # Stage 0 (FR-143): HyDE expansion — generate hypothetical document, search with it
+    if HYDE_ENABLED_IN_PROGRESSIVE:
+        try:
+            from proxy.app.core.hyde import generate_hypothetical_answer
+
+            hypothetical_doc = generate_hypothetical_answer(query)
+            token_count = estimate_tokens(hypothetical_doc)
+            logger.info(
+                "Progressive retrieval: stage 'hyde' — generated hypothetical doc of %d tokens",
+                token_count,
+            )
+
+            hyde_results = hybrid_search(
+                query=hypothetical_doc,
+                version=version,
+                top_k=stages[0] if stages else 5,
+                access_filter=access_filter,
+                namespace=namespace,
+                lang=lang,
+            )
+
+            if hyde_results:
+                for r in hyde_results:
+                    seen_ids.add(_get_id(r))
+                all_results.extend(hyde_results)
+                search_query = hypothetical_doc
+
+                if quality_sufficient(all_results):
+                    logger.info(
+                        "Progressive retrieval: stage 'hyde' sufficient (%d results)",
+                        len(all_results),
+                    )
+                    return all_results, "hyde"
+                logger.info(
+                    "Progressive retrieval: stage 'hyde' returned %d results, "
+                    "quality insufficient, proceeding to direct retrieval",
+                    len(hyde_results),
+                )
+            else:
+                logger.info(
+                    "Progressive retrieval: stage 'hyde' returned no results, "
+                    "falling back to standard search"
+                )
+        except Exception as e:
+            logger.warning(
+                "Progressive retrieval: HyDE expansion failed (%s), "
+                "falling back to standard search",
+                e,
+            )
+
     # Stage 1: top_k = stages[0] (default 5)
     stage_top_k = stages[0] if stages else 5
     results = hybrid_search(
-        query=query,
+        query=search_query,
         version=version,
         top_k=stage_top_k,
         access_filter=access_filter,
         namespace=namespace,
         lang=lang,
     )
-    for r in results:
-        seen_ids.add(_get_id(r))
-    all_results.extend(results)
+    new_only = _dedup_new_only(seen_ids, results)
+    all_results.extend(new_only)
 
     if quality_sufficient(all_results):
         logger.info(
@@ -145,7 +200,7 @@ async def progressive_retrieve(
     if len(stages) > 1:
         stage_top_k = stages[1]
         expanded_results = hybrid_search(
-            query=query,
+            query=search_query,
             version=version,
             top_k=stage_top_k,
             access_filter=access_filter,
@@ -167,7 +222,7 @@ async def progressive_retrieve(
     if len(stages) > 2:
         stage_top_k = stages[2]
         expanded_results = hybrid_search(
-            query=query,
+            query=search_query,
             version=version,
             top_k=stage_top_k,
             access_filter=access_filter,

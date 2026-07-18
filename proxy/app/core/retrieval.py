@@ -44,6 +44,7 @@ from proxy.app.shared.config import (
     QDRANT_GRPC_PORT,
     QDRANT_HOST,
     QDRANT_PORT,
+    REDIS_KEY_PREFIX,
     REDIS_URL,
     USE_REDIS,
 )
@@ -260,9 +261,12 @@ def initialize_retrieval() -> None:
 
     # Кэш (если используется Redis)
     if USE_REDIS and REDIS_URL:  # noqa: SIM108
-        cache_manager = CacheManager(redis_url=REDIS_URL)  # Асинхронная инициализация будет вызвана в main.py
+        cache_manager = CacheManager(
+            redis_url=REDIS_URL,
+            key_prefix=REDIS_KEY_PREFIX,
+        )  # Async init will be called in main.py
     else:
-        cache_manager = CacheManager(use_redis=False)
+        cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
     # Граф Neo4j
     if _GRAPH_ENABLED:
@@ -947,7 +951,7 @@ _global_search = GlobalSearch()
 # Если нужен синхронный доступ к кэшу, добавим методы в CacheManager
 # Для совместимости с уже написанным кодом, добавим синхронные обёртки
 if cache_manager is None:
-    cache_manager = CacheManager(use_redis=False)
+    cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
 
 def _parse_timestamp(value: str | float | None) -> float | None:

@@ -81,6 +81,7 @@ from proxy.app.shared.config import (
     RATE_LIMIT_BURST,
     RATE_LIMIT_ENABLED,
     RATE_LIMIT_PER_MINUTE,
+    REDIS_KEY_PREFIX,
     REDIS_URL,
     SHUTDOWN_TIMEOUT,
     TOOLS_DECLARATIVE_DIR,
@@ -230,11 +231,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Initialize cache
     if USE_REDIS and REDIS_URL:
-        cache_manager = CacheManager(redis_url=REDIS_URL)
+        cache_manager = CacheManager(redis_url=REDIS_URL, key_prefix=REDIS_KEY_PREFIX)
         await cache_manager.initialize()
         logger.info("Redis cache initialized")
     else:
-        cache_manager = CacheManager(use_redis=False)
+        cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
         logger.info("In-memory cache initialized (no Redis)")
     # Auto-initialize Qdrant collections on startup
     try:
@@ -393,6 +394,7 @@ async def process_rag_query(
     other_messages: list[dict[str, Any]] | None = None,
     user_context: UserContext | None = None,
     top_k_override: int | None = None,
+    lang: str | None = None,
 ) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]], dict[str, float]]:
     """Core RAG pipeline: search → filter → rerank → dedup → context → LLM.
 
@@ -418,6 +420,13 @@ async def process_rag_query(
         user_context = UserContext.anonymous()
 
     _access_filter = build_access_filter(user_context)
+
+    # Resolve language: use explicitly provided lang or auto-detect from query
+    resolved_lang = lang
+    if not resolved_lang:
+        from proxy.app.shared.i18n import detect_language
+
+        resolved_lang = detect_language(user_query)
 
     # 1. Cache check
     cache_key = f"rag:{user_context.user_id}:{user_query}:{version or 'latest'}"
@@ -618,21 +627,20 @@ async def process_rag_query(
         return refusal, "", False, sources, {}
 
     # 10. Build system prompt
+    from proxy.app.shared.i18n import get_system_prompt
+
+    base_prompt = get_system_prompt(resolved_lang)
     if generate_without_knowledge:
-        # Prepend the ungrounded notice so the model knows to qualify its answer
         system_prompt = (
             f"{UNGROUNDED_NOTICE}\n\n"
-            "Ты – технический ассистент. Если в базе знаний нет информации, "
-            "честно укажи это в начале ответа, но всё равно дай полезный ответ, "
-            "основываясь на своих знаниях.\n\n"
-            f"Контекст:\n{context}"
+            f"{base_prompt}\n\n"
+            f"Context:\n{context}"
         )
         logger.info("Allowing ungrounded generation (ALLOW_UNGROUNDED_GENERATION=true)")
     else:
         system_prompt = (
-            "Ты – технический ассистент. Используй предоставленный контекст для ответа. "
-            "Если контекст противоречив, укажи на противоречия. Если не знаешь, скажи честно.\n\n"
-            f"Контекст:\n{context}"
+            f"{base_prompt}\n\n"
+            f"Context:\n{context}"
         )
     messages_for_llm = [{"role": "system", "content": system_prompt}]
     if other_messages:

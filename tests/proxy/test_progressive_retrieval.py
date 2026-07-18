@@ -142,7 +142,11 @@ class TestProgressiveRetrieve:
     """Tests for progressive_retrieve() — the main function."""
 
     @pytest.fixture(autouse=True)
-    def _mock_deps(self):
+    def _mock_deps(self, monkeypatch):
+        monkeypatch.setattr(
+            "proxy.app.core.progressive_retrieval.HYDE_ENABLED_IN_PROGRESSIVE",
+            False,
+        )
         with (
             patch(
                 "proxy.app.core.progressive_retrieval.hybrid_search",
@@ -310,3 +314,122 @@ class TestProgressiveRetrieve:
         assert stage == "insufficient"
         assert len(final) == 0
         assert self.mock_search.call_count == 3
+
+
+class TestProgressiveRetrieveHyde:
+    """FR-143: Tests for HyDE stage in progressive retrieval."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_deps(self, monkeypatch):
+        monkeypatch.setattr(
+            "proxy.app.core.progressive_retrieval.HYDE_ENABLED_IN_PROGRESSIVE",
+            True,
+        )
+        with (
+            patch(
+                "proxy.app.core.progressive_retrieval.hybrid_search",
+                new_callable=MagicMock,
+            ) as self.mock_search,
+            patch(
+                "proxy.app.core.progressive_retrieval.graph_expand_query",
+                new_callable=MagicMock,
+            ) as self.mock_graph,
+        ):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_hyde_stage_sufficient(self):
+        hypothetical_doc = "A hypothetical paragraph answering the query."
+        hyde_results = [
+            _make_scored_point("hyde_a", 0.5),
+            _make_scored_point("hyde_b", 0.4),
+        ]
+        self.mock_search.return_value = hyde_results
+
+        with patch(
+            "proxy.app.core.hyde.generate_hypothetical_answer",
+            return_value=hypothetical_doc,
+        ):
+            final, stage = await progressive_retrieve("test query")
+
+        assert stage == "hyde"
+        assert len(final) == 2
+        self.mock_search.assert_called_once()
+        assert self.mock_search.call_args[1]["query"] == hypothetical_doc
+
+    @pytest.mark.asyncio
+    async def test_hyde_insufficient_falls_through(self):
+        hypothetical_doc = "A hypothetical paragraph answering the query."
+        hyde_results = [_make_scored_point("hyde_a", 0.1)]
+        direct_results = [
+            _make_scored_point("hyde_a", 0.1),
+            _make_scored_point("a", 0.5),
+            _make_scored_point("b", 0.4),
+        ]
+        self.mock_search.side_effect = [hyde_results, direct_results]
+
+        with patch(
+            "proxy.app.core.hyde.generate_hypothetical_answer",
+            return_value=hypothetical_doc,
+        ):
+            final, stage = await progressive_retrieve("test query")
+
+        assert stage == "direct"
+        assert self.mock_search.call_count == 2
+        ids = {r.id for r in final}
+        assert ids == {"hyde_a", "a", "b"}
+
+    @pytest.mark.asyncio
+    async def test_hyde_no_results_falls_back_to_direct(self):
+        hypothetical_doc = "A hypothetical paragraph answering the query."
+        direct_results = [
+            _make_scored_point("a", 0.5),
+            _make_scored_point("b", 0.4),
+        ]
+        self.mock_search.side_effect = [[], direct_results]
+
+        with patch(
+            "proxy.app.core.hyde.generate_hypothetical_answer",
+            return_value=hypothetical_doc,
+        ):
+            final, stage = await progressive_retrieve("test query")
+
+        assert stage == "direct"
+        assert self.mock_search.call_count == 2
+        assert len(final) == 2
+
+    @pytest.mark.asyncio
+    async def test_hyde_generation_fails_gracefully(self):
+        results = [
+            _make_scored_point("a", 0.5),
+            _make_scored_point("b", 0.4),
+        ]
+        self.mock_search.return_value = results
+
+        with patch(
+            "proxy.app.core.hyde.generate_hypothetical_answer",
+            side_effect=RuntimeError("SLM unavailable"),
+        ):
+            final, stage = await progressive_retrieve("test query")
+
+        assert stage == "direct"
+        self.mock_search.assert_called_once()
+        assert self.mock_search.call_args[1]["query"] == "test query"
+
+    @pytest.mark.asyncio
+    async def test_hyde_disabled_skips_stage(self, monkeypatch):
+        monkeypatch.setattr(
+            "proxy.app.core.progressive_retrieval.HYDE_ENABLED_IN_PROGRESSIVE",
+            False,
+        )
+        results = [
+            _make_scored_point("a", 0.5),
+            _make_scored_point("b", 0.4),
+        ]
+        self.mock_search.return_value = results
+
+        final, stage = await progressive_retrieve("test query")
+
+        assert stage == "direct"
+        self.mock_search.assert_called_once()
+        assert self.mock_search.call_args[1]["query"] == "test query"

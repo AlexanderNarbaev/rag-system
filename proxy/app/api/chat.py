@@ -52,6 +52,8 @@ class ChatCompletionRequest(BaseModel):
     rag_skip_generation: bool | None = False
     rag_return_chunks: bool | None = False
     rag_top_k: int | None = None
+    # Language override (FR-146): ISO 639-1 code. If set, overrides auto-detection.
+    lang: str | None = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -212,6 +214,7 @@ async def chat_completions(
             other_messages=other_messages,
             user_context=user,
             top_k_override=request.rag_top_k,
+            lang=request.lang,
         )
         from proxy.app.core.confidence import should_generate_answer
         from proxy.app.core.knowledge_status import determine_knowledge_status
@@ -394,6 +397,7 @@ async def chat_completions(
                         other_messages=other_messages,
                         user_context=user,
                         top_k_override=request.rag_top_k,
+                        lang=request.lang,
                     )
                 from proxy.app.core.clarification import build_uncertainty_response, generate_clarifying_questions
                 from proxy.app.core.confidence import should_generate_answer
@@ -412,6 +416,7 @@ async def chat_completions(
                         status=knowledge_status.status,
                         sources=chunks_for_status,
                         context=rag_context if isinstance(rag_context, str) else "",
+                        lang=request.lang,
                     )
 
                 conversation = stream_conversation
@@ -543,6 +548,7 @@ async def chat_completions(
             other_messages=other_messages,
             user_context=user,
             top_k_override=request.rag_top_k,
+            lang=request.lang,
         )
     except Exception as rag_err:
         logger.error("Non-streaming RAG query failed: %s", rag_err, exc_info=True)
@@ -587,6 +593,7 @@ async def chat_completions(
             status=knowledge_status.status,
             sources=sources,
             context=rag_ctx,
+            lang=request.lang,
         )
         if clarification_result.clarification_needed:
             clarifying_questions = clarification_result.questions

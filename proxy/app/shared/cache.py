@@ -222,17 +222,27 @@ class RedisCache:
 class CacheManager:
     """Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory."""
 
-    def __init__(self, redis_url: str | None = None, use_redis: bool = True) -> None:
+    def __init__(
+        self,
+        redis_url: str | None = None,
+        use_redis: bool = True,
+        key_prefix: str = "",
+    ) -> None:
         self.use_redis = use_redis and redis_url is not None
         self._cache: RedisCache | InMemoryCache
         self._cache_type: str
+        self._key_prefix = key_prefix
         if self.use_redis and redis_url is not None:
             self._cache = RedisCache(redis_url)
             self._cache_type = "redis"
         else:
             self._cache = InMemoryCache()
             self._cache_type = "memory"
-        logger.info(f"CacheManager initialized with {type(self._cache).__name__}")
+        logger.info(f"CacheManager initialized with {type(self._cache).__name__}, prefix='{self._key_prefix}'")
+
+    def _full_key(self, key: str) -> str:
+        """Prefix all cache keys for namespace isolation."""
+        return f"{self._key_prefix}{key}" if self._key_prefix else key
 
     async def initialize(self) -> None:
         """Для Redis: проверка подключения при старте."""
@@ -240,7 +250,7 @@ class CacheManager:
             await self._cache._get_client()
 
     async def get(self, key: str) -> Any | None:
-        result = await self._cache.get(key)
+        result = await self._cache.get(self._full_key(key))
         if result is not None:
             from proxy.app.shared.metrics import record_cache_hit
 
@@ -252,10 +262,10 @@ class CacheManager:
         return result
 
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        return await self._cache.set(key, value, ttl)
+        return await self._cache.set(self._full_key(key), value, ttl)
 
     async def delete(self, key: str) -> bool:
-        return await self._cache.delete(key)
+        return await self._cache.delete(self._full_key(key))
 
     async def clear(self) -> None:
         await self._cache.clear()
@@ -266,7 +276,7 @@ class CacheManager:
 
     # Синхронные методы для обратной совместимости (используются в retrieval и rerank)
     def get_sync(self, key: str) -> Any | None:
-        result = self._cache.get_sync(key)
+        result = self._cache.get_sync(self._full_key(key))
         if result is not None:
             from proxy.app.shared.metrics import record_cache_hit
 
@@ -278,10 +288,10 @@ class CacheManager:
         return result
 
     def set_sync(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        return self._cache.set_sync(key, value, ttl)
+        return self._cache.set_sync(self._full_key(key), value, ttl)
 
     def delete_sync(self, key: str) -> bool:
-        return self._cache.delete_sync(key)
+        return self._cache.delete_sync(self._full_key(key))
 
 
 # Пример использования
