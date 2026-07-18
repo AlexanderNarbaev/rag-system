@@ -1128,7 +1128,11 @@ class TestSemanticChunkerEdgeCases:
 
     def test_html_non_latin_content_cyrillic(self):
         chunker = SemanticChunker(max_tokens=1500)
-        html = "<h1>Быстродействие системы</h1><p>Техническая документация по оптимизации производительности.</p><h2>Кэширование</h2><p>Использование Redis для кэширования запросов.</p>"
+        html = (
+            "<h1>Быстродействие системы</h1>"
+            "<p>Техническая документация по оптимизации производительности.</p>"
+            "<h2>Кэширование</h2><p>Использование Redis для кэширования запросов.</p>"
+        )
         metadata = {"source_type": "confluence", "doc_title": "Техническая документация"}
         chunks = chunker.chunk_html(html, metadata)
         assert len(chunks) >= 1

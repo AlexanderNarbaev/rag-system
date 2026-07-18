@@ -79,10 +79,7 @@ class TestHeuristicKeywords:
             "Система гибридного поиска использует dense и sparse эмбеддеры для поиска документов"
         )
         assert len(keywords) > 0
-        assert any(
-            w in keywords
-            for w in ["гибридного", "поиска", "эмбеддеры", "документов"]
-        )
+        assert any(w in keywords for w in ["гибридного", "поиска", "эмбеддеры", "документов"])
 
     def test_filters_short_words(self):
         keywords = ChunkEnricher._heuristic_keywords("a b c the and or is")
@@ -92,9 +89,7 @@ class TestHeuristicKeywords:
         assert ChunkEnricher._heuristic_keywords("") == []
 
     def test_returns_capped_list(self):
-        keywords = ChunkEnricher._heuristic_keywords(
-            " ".join([f"term{i}" for i in range(20)])
-        )
+        keywords = ChunkEnricher._heuristic_keywords(" ".join([f"term{i}" for i in range(20)]))
         assert len(keywords) <= 8
 
 
@@ -173,9 +168,7 @@ class TestHeuristicSummary:
         assert summary == "Short text."
 
     def test_long_text(self):
-        summary = ChunkEnricher._heuristic_summary(
-            "First sentence. Second sentence. Third sentence. Fourth sentence."
-        )
+        summary = ChunkEnricher._heuristic_summary("First sentence. Second sentence. Third sentence. Fourth sentence.")
         assert len(summary) <= 150
         assert "First sentence." in summary
 
@@ -189,9 +182,7 @@ class TestHeuristicSummary:
         assert summary.startswith("Actual content")
 
     def test_strips_heading_markers(self):
-        summary = ChunkEnricher._heuristic_summary(
-            "## Section Title\n\nThe actual content of the section."
-        )
+        summary = ChunkEnricher._heuristic_summary("## Section Title\n\nThe actual content of the section.")
         assert summary.startswith("Section Title") or summary.startswith("The actual")
 
 
@@ -205,12 +196,14 @@ class TestSLMEnrichment:
             "choices": [
                 {
                     "message": {
-                        "content": json.dumps({
-                            "keywords": ["RAG", "retrieval", "embedding"],
-                            "entities": ["Qdrant", "Transformer"],
-                            "hyde_questions": ["Как работает RAG?", "Что такое Qdrant?"],
-                            "summary": "Обзор компонентов RAG системы.",
-                        })
+                        "content": json.dumps(
+                            {
+                                "keywords": ["RAG", "retrieval", "embedding"],
+                                "entities": ["Qdrant", "Transformer"],
+                                "hyde_questions": ["Как работает RAG?", "Что такое Qdrant?"],
+                                "summary": "Обзор компонентов RAG системы.",
+                            }
+                        )
                     }
                 }
             ]
@@ -296,9 +289,7 @@ class TestSLMEnrichment:
             slm_endpoint="http://localhost:8080/v1",
             model="qwen2.5-3b",
         )
-        slm_response = {
-            "choices": [{"message": {"content": "not valid json at all"}}]
-        }
+        slm_response = {"choices": [{"message": {"content": "not valid json at all"}}]}
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = slm_response

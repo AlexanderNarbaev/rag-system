@@ -256,10 +256,7 @@ class TestFilter:
     def test_max_chunks_safety_limit(self) -> None:
         """Test that chunks beyond max limit are truncated."""
         qf = ChunkQualityFilter(reranker_endpoint="http://host:8080", max_chunks_per_doc=2)
-        chunks = [
-            {"text": f"Chunk number {i} with enough text to pass boilerplate check."}
-            for i in range(10)
-        ]
+        chunks = [{"text": f"Chunk number {i} with enough text to pass boilerplate check."} for i in range(10)]
 
         mock_response = {
             "results": [

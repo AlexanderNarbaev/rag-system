@@ -324,7 +324,9 @@ def get_conversation(session_id: str) -> ConversationMemory:
         if ttl > 0 and (now - created_at) > ttl:
             logger.info(
                 "Session %s expired (age=%.0fs, ttl=%ds), creating fresh session",
-                session_id[:12], now - created_at, ttl,
+                session_id[:12],
+                now - created_at,
+                ttl,
             )
             del _conversation_store[session_id]
         else:
@@ -358,17 +360,15 @@ def prune_expired_sessions() -> int:
     if ttl <= 0:
         return 0
     now = time.time()
-    expired = [
-        sid
-        for sid, (_, created_at) in _conversation_store.items()
-        if (now - created_at) > ttl
-    ]
+    expired = [sid for sid, (_, created_at) in _conversation_store.items() if (now - created_at) > ttl]
     for sid in expired:
         del _conversation_store[sid]
     if expired:
         logger.info(
             "Pruned %d expired session(s) (ttl=%ds, remaining=%d)",
-            len(expired), ttl, len(_conversation_store),
+            len(expired),
+            ttl,
+            len(_conversation_store),
         )
     return len(expired)
 

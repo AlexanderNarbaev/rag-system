@@ -164,14 +164,10 @@ async def progressive_retrieve(
                     len(hyde_results),
                 )
             else:
-                logger.info(
-                    "Progressive retrieval: stage 'hyde' returned no results, "
-                    "falling back to standard search"
-                )
+                logger.info("Progressive retrieval: stage 'hyde' returned no results, falling back to standard search")
         except Exception as e:
             logger.warning(
-                "Progressive retrieval: HyDE expansion failed (%s), "
-                "falling back to standard search",
+                "Progressive retrieval: HyDE expansion failed (%s), falling back to standard search",
                 e,
             )
 

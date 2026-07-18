@@ -113,10 +113,7 @@ def determine_knowledge_status(
             source_count=len(sources),
             strong_source_count=strong_count,
             max_score=max_score,
-            reason=(
-                f"Only {strong_count} strong source(s) from {len(sources)} "
-                f"— answer may be unreliable."
-            ),
+            reason=(f"Only {strong_count} strong source(s) from {len(sources)} — answer may be unreliable."),
         )
 
     # 0 strong sources, but sources exist
@@ -125,8 +122,5 @@ def determine_knowledge_status(
         source_count=len(sources),
         strong_source_count=0,
         max_score=max_score,
-        reason=(
-            f"No strong sources from {len(sources)} — "
-            f"answer may be incomplete or uncertain."
-        ),
+        reason=(f"No strong sources from {len(sources)} — answer may be incomplete or uncertain."),
     )

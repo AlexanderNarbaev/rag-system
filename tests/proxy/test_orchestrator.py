@@ -107,9 +107,10 @@ def test_check_confidence_empty_answer():
 
 
 def test_build_rag_graph_returns_valid_graph():
-    with patch(
-        "proxy.app.core.orchestrator.graph.LANGGRAPH_AVAILABLE", True
-    ), patch("proxy.app.core.orchestrator.graph.StateGraph") as mock_sg:
+    with (
+        patch("proxy.app.core.orchestrator.graph.LANGGRAPH_AVAILABLE", True),
+        patch("proxy.app.core.orchestrator.graph.StateGraph") as mock_sg,
+    ):
         from proxy.app.core.orchestrator.graph import build_rag_graph
 
         graph = build_rag_graph()
@@ -118,9 +119,10 @@ def test_build_rag_graph_returns_valid_graph():
 
 
 def test_build_rag_graph_registers_all_nodes():
-    with patch(
-        "proxy.app.core.orchestrator.graph.LANGGRAPH_AVAILABLE", True
-    ), patch("proxy.app.core.orchestrator.graph.StateGraph") as mock_sg_class:
+    with (
+        patch("proxy.app.core.orchestrator.graph.LANGGRAPH_AVAILABLE", True),
+        patch("proxy.app.core.orchestrator.graph.StateGraph") as mock_sg_class,
+    ):
         from proxy.app.core.orchestrator.graph import build_rag_graph
 
         mock_builder = MagicMock()
@@ -128,9 +130,17 @@ def test_build_rag_graph_registers_all_nodes():
         build_rag_graph()
 
         expected_nodes = {
-            "rewrite", "retrieve", "graph_expand", "rerank", "build_context",
-            "generate", "check_sufficiency", "self_reflection", "check_confidence",
-            "self_critique", "call_tools",
+            "rewrite",
+            "retrieve",
+            "graph_expand",
+            "rerank",
+            "build_context",
+            "generate",
+            "check_sufficiency",
+            "self_reflection",
+            "check_confidence",
+            "self_critique",
+            "call_tools",
         }
         added_nodes = set()
         for call_args in mock_builder.add_node.call_args_list:
@@ -139,9 +149,10 @@ def test_build_rag_graph_registers_all_nodes():
 
 
 def test_build_rag_graph_entry_point():
-    with patch(
-        "proxy.app.core.orchestrator.graph.LANGGRAPH_AVAILABLE", True
-    ), patch("proxy.app.core.orchestrator.graph.StateGraph") as mock_sg_class:
+    with (
+        patch("proxy.app.core.orchestrator.graph.LANGGRAPH_AVAILABLE", True),
+        patch("proxy.app.core.orchestrator.graph.StateGraph") as mock_sg_class,
+    ):
         from proxy.app.core.orchestrator.graph import build_rag_graph
 
         mock_builder = MagicMock()
@@ -173,9 +184,7 @@ def test_rewrite_query_basic():
 
 
 def test_rewrite_query_max_loops_exceeded():
-    with patch(
-        "proxy.app.core.orchestrator.nodes.MAX_RETRIEVAL_LOOPS", 3
-    ):
+    with patch("proxy.app.core.orchestrator.nodes.MAX_RETRIEVAL_LOOPS", 3):
         state = {"query": "How to deploy Docker?", "rewrite_count": 3}
         result = rewrite_query(state)
         assert result["rewritten_query"] == state["query"]
@@ -198,11 +207,12 @@ def test_rewrite_query_llm_failure_fallback():
 
 def test_retrieve_returns_chunks():
     mock_hit = _make_chunk("Docker deployment guide")
-    with patch(
-        "proxy.app.core.orchestrator.hybrid_search",
-        return_value=[mock_hit],
-    ), patch(
-        "proxy.app.core.retrieval.apply_time_decay", side_effect=lambda c: c
+    with (
+        patch(
+            "proxy.app.core.orchestrator.hybrid_search",
+            return_value=[mock_hit],
+        ),
+        patch("proxy.app.core.retrieval.apply_time_decay", side_effect=lambda c: c),
     ):
         state = {"query": "Docker deployment", "rewritten_query": None}
         result = retrieve(state)
@@ -212,11 +222,12 @@ def test_retrieve_returns_chunks():
 
 def test_retrieve_uses_rewritten_query():
     mock_hit = _make_chunk("Rewritten result")
-    with patch(
-        "proxy.app.core.orchestrator.hybrid_search",
-        return_value=[mock_hit],
-    ) as mock_search, patch(
-        "proxy.app.core.retrieval.apply_time_decay", side_effect=lambda c: c
+    with (
+        patch(
+            "proxy.app.core.orchestrator.hybrid_search",
+            return_value=[mock_hit],
+        ) as mock_search,
+        patch("proxy.app.core.retrieval.apply_time_decay", side_effect=lambda c: c),
     ):
         state = {"query": "Original", "rewritten_query": "Rewritten", "version": None}
         retrieve(state)
@@ -238,20 +249,19 @@ def test_retrieve_graceful_degradation():
 
 
 def test_graph_expand_disabled():
-    with patch(
-        "proxy.app.core.orchestrator.nodes.USE_GRAPH_EXPANSION", False
-    ):
+    with patch("proxy.app.core.orchestrator.nodes.USE_GRAPH_EXPANSION", False):
         state = {"query": "Test", "rewritten_query": None}
         result = graph_expand(state)
         assert result["graph_context"] == ""
 
 
 def test_graph_expand_enabled_with_results():
-    with patch(
-        "proxy.app.core.orchestrator.nodes.USE_GRAPH_EXPANSION", True
-    ), patch(
-        "proxy.app.core.retrieval.graph_expand_query",
-        return_value="Entity: Docker, Type: Technology",
+    with (
+        patch("proxy.app.core.orchestrator.nodes.USE_GRAPH_EXPANSION", True),
+        patch(
+            "proxy.app.core.retrieval.graph_expand_query",
+            return_value="Entity: Docker, Type: Technology",
+        ),
     ):
         state = {"query": "Docker overview", "rewritten_query": None}
         result = graph_expand(state)
@@ -259,11 +269,12 @@ def test_graph_expand_enabled_with_results():
 
 
 def test_graph_expand_failure_returns_empty():
-    with patch(
-        "proxy.app.core.orchestrator.nodes.USE_GRAPH_EXPANSION", True
-    ), patch(
-        "proxy.app.core.retrieval.graph_expand_query",
-        side_effect=RuntimeError("Neo4j down"),
+    with (
+        patch("proxy.app.core.orchestrator.nodes.USE_GRAPH_EXPANSION", True),
+        patch(
+            "proxy.app.core.retrieval.graph_expand_query",
+            side_effect=RuntimeError("Neo4j down"),
+        ),
     ):
         state = {"query": "Docker", "rewritten_query": None}
         result = graph_expand(state)
@@ -280,9 +291,7 @@ def test_check_sufficiency_empty_chunks_rewrite():
 
 
 def test_check_sufficiency_low_score_rewrite():
-    with patch(
-        "proxy.app.core.orchestrator.nodes.MAX_RETRIEVAL_LOOPS", 3
-    ):
+    with patch("proxy.app.core.orchestrator.nodes.MAX_RETRIEVAL_LOOPS", 3):
         chunks = [{"score": 0.2}, {"score": 0.3}]
         state = {"retrieved_chunks": chunks, "rewrite_count": 0}
         result = check_sufficiency(state)
@@ -297,9 +306,7 @@ def test_check_sufficiency_high_score_rerank():
 
 
 def test_check_sufficiency_max_loops_rerank():
-    with patch(
-        "proxy.app.core.orchestrator.nodes.MAX_RETRIEVAL_LOOPS", 1
-    ):
+    with patch("proxy.app.core.orchestrator.nodes.MAX_RETRIEVAL_LOOPS", 1):
         chunks = [{"score": 0.3}]
         state = {"retrieved_chunks": chunks, "rewrite_count": 1}
         result = check_sufficiency(state)
@@ -314,12 +321,15 @@ def test_rerank_basic():
         {"id": 1, "text": "Chunk A", "score": 0.5, "payload": {}},
         {"id": 2, "text": "Chunk B", "score": 0.9, "payload": {}},
     ]
-    with patch(
-        "proxy.app.core.orchestrator.rerank_chunks",
-        return_value=[1, 0],
-    ), patch(
-        "proxy.app.core.context.deduplicate_chunks",
-        side_effect=lambda x: x,
+    with (
+        patch(
+            "proxy.app.core.orchestrator.rerank_chunks",
+            return_value=[1, 0],
+        ),
+        patch(
+            "proxy.app.core.context.deduplicate_chunks",
+            side_effect=lambda x: x,
+        ),
     ):
         state = {"query": "Test", "retrieved_chunks": chunks}
         result = rerank(state)
@@ -340,12 +350,13 @@ def test_build_context_node_basic():
         ({"text": "Context A", "payload": {}}, 0.9),
         ({"text": "Context B", "payload": {}}, 0.7),
     ]
-    with patch(
-        "proxy.app.core.context.build_context",
-        return_value="Built context",
-    ), patch(
-        "proxy.app.core.orchestrator.nodes.TokenOptimizer"
-    ) as mock_optimizer_class:
+    with (
+        patch(
+            "proxy.app.core.context.build_context",
+            return_value="Built context",
+        ),
+        patch("proxy.app.core.orchestrator.nodes.TokenOptimizer") as mock_optimizer_class,
+    ):
         mock_optimizer = MagicMock()
         mock_optimizer.estimate_token_cost.return_value = 100
         mock_optimizer_class.return_value = mock_optimizer
@@ -362,12 +373,13 @@ def test_build_context_node_basic():
 
 def test_build_context_node_with_graph_context():
     chunks_with_scores = [({"text": "A", "payload": {}}, 0.9)]
-    with patch(
-        "proxy.app.core.context.build_context",
-        return_value="Base context",
-    ), patch(
-        "proxy.app.core.orchestrator.nodes.TokenOptimizer"
-    ) as mock_optimizer_class:
+    with (
+        patch(
+            "proxy.app.core.context.build_context",
+            return_value="Base context",
+        ),
+        patch("proxy.app.core.orchestrator.nodes.TokenOptimizer") as mock_optimizer_class,
+    ):
         mock_optimizer = MagicMock()
         mock_optimizer.estimate_token_cost.return_value = 100
         mock_optimizer_class.return_value = mock_optimizer

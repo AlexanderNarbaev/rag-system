@@ -89,8 +89,10 @@ class TestRegister:
             "created_at": "2025-01-01T00:00:00+00:00",
         }
 
-        with patch("proxy.app.shared.config.AUTH_ENABLED", True), \
-             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db):
+        with (
+            patch("proxy.app.shared.config.AUTH_ENABLED", True),
+            patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db),
+        ):
             response = client.post(
                 "/v1/auth/register",
                 json={
@@ -109,8 +111,10 @@ class TestRegister:
         mock_db = _make_mock_db()
         mock_db.create_user.side_effect = ValueError("Username 'duplicate' already exists")
 
-        with patch("proxy.app.shared.config.AUTH_ENABLED", True), \
-             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db):
+        with (
+            patch("proxy.app.shared.config.AUTH_ENABLED", True),
+            patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db),
+        ):
             response = client.post(
                 "/v1/auth/register",
                 json={
@@ -178,12 +182,14 @@ class TestLogin:
         test_user = _make_test_user(username="loginuser", password="password123!")
         mock_db.verify_password.return_value = test_user
 
-        with patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"), \
-             patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"), \
-             patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"), \
-             patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"), \
-             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db), \
-             patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db):
+        with (
+            patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"),
+            patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"),
+            patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
+            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"),
+            patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db),
+            patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db),
+        ):
             response = client.post(
                 "/v1/auth/login",
                 json={"username": "loginuser", "password": "password123!"},
@@ -287,13 +293,15 @@ class TestRefresh:
         test_user = _make_test_user(username="refresher", user_id="refresh-user-id")
         mock_db.consume_refresh_token.return_value = test_user
 
-        with patch("proxy.app.shared.config.AUTH_ENABLED", True), \
-             patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"), \
-             patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"), \
-             patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"), \
-             patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"), \
-             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db), \
-             patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db):
+        with (
+            patch("proxy.app.shared.config.AUTH_ENABLED", True),
+            patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"),
+            patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"),
+            patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
+            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"),
+            patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db),
+            patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db),
+        ):
             response = client.post(
                 "/v1/auth/refresh",
                 json={"token": "fake-refresh-token"},
@@ -309,13 +317,15 @@ class TestRefresh:
         mock_db = _make_mock_db()
         mock_db.consume_refresh_token.return_value = None
 
-        with patch("proxy.app.shared.config.AUTH_ENABLED", True), \
-             patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"), \
-             patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"), \
-             patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"), \
-             patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"), \
-             patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db), \
-             patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db):
+        with (
+            patch("proxy.app.shared.config.AUTH_ENABLED", True),
+            patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"),
+            patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"),
+            patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"),
+            patch("proxy.app.auth.jwt.JWT_SECRET", "test-secret-key-for-unit-tests-32chars!"),
+            patch("proxy.app.api.auth_endpoints.get_user_db", return_value=mock_db),
+            patch("proxy.app.auth.user_db.get_user_db", return_value=mock_db),
+        ):
             response = client.post(
                 "/v1/auth/refresh",
                 json={"token": "bad-refresh-token"},

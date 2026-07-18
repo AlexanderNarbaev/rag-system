@@ -308,7 +308,10 @@ async def chat_completions(
 
         feedback_id = generate_feedback_id()
         confidence = compute_confidence(
-            query=user_query, context=context, answer=response_text, sources=orchestrator_sources,
+            query=user_query,
+            context=context,
+            answer=response_text,
+            sources=orchestrator_sources,
         )
         knowledge_status = determine_knowledge_status(orchestrator_sources, should_generate=True)
         completion = ChatCompletionResponse(
@@ -480,7 +483,10 @@ async def chat_completions(
 
                 feedback_id = generate_feedback_id()
                 confidence = compute_confidence(
-                    query=user_query, context=rag_context, answer=full_answer, sources=chunks_for_status,
+                    query=user_query,
+                    context=rag_context,
+                    answer=full_answer,
+                    sources=chunks_for_status,
                 )
 
                 conversation.add_turn("user", user_query)

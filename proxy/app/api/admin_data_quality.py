@@ -23,6 +23,18 @@ logger = logging.getLogger("rag-proxy")
 
 router = APIRouter(prefix="/v1/admin/data-quality", tags=["admin-data-quality"])
 
+"""Interactive data quality dashboard for the admin UI (FR-106).
+
+Endpoints:
+    GET /v1/admin/data-quality — Computes overall data quality score, per-source
+        metrics (OCR confidence, chunk coherence, staleness, contradictions),
+        and a prioritized list of issues requiring attention. Accepts
+        ``?source=confluence,jira,gitlab`` for filtered views.
+
+The module caches Qdrant payloads for 5 minutes (TTL) to avoid repeated
+full-scroll operations against large collections.
+"""
+
 SOURCE_FRESHNESS_DAYS: dict[str, int] = {
     "confluence": STALE_CONFLUENCE_DAYS,
     "jira": STALE_JIRA_DAYS,
@@ -57,7 +69,6 @@ def _get_qdrant_payloads(collection_name: str, source_filter: str | None = None)
         if qdrant_client is None:
             logger.warning("Qdrant client not available for data quality check")
             return []
-
 
         all_payloads: list[dict[str, Any]] = []
         offset: str | None = None
@@ -227,9 +238,7 @@ async def get_data_quality(
                     entry["ocr_confidences"].append(float(ocr_conf))
                     if float(ocr_conf) < 0.6:
                         chunk_id = payload.get("chunk_hash", payload.get("source_id", "unknown"))
-                        low_ocr_chunks.append(
-                            f"Chunk {chunk_id[:16]} in {st}: OCR confidence {float(ocr_conf):.0%}"
-                        )
+                        low_ocr_chunks.append(f"Chunk {chunk_id[:16]} in {st}: OCR confidence {float(ocr_conf):.0%}")
                 except (ValueError, TypeError):
                     pass
 
@@ -290,14 +299,8 @@ async def get_data_quality(
             issues.append("No indexed documents found")
 
         # Overall score (weighted: 30% OCR, 40% coherence, 30% freshness)
-        avg_ocr_all = (
-            (sum(total_ocr_confidences) / len(total_ocr_confidences) * 100)
-            if total_ocr_confidences
-            else 80.0
-        )
-        avg_coherence_all = (
-            (sum(all_coherence) / len(all_coherence)) if all_coherence else 0.7
-        )
+        avg_ocr_all = (sum(total_ocr_confidences) / len(total_ocr_confidences) * 100) if total_ocr_confidences else 80.0
+        avg_coherence_all = (sum(all_coherence) / len(all_coherence)) if all_coherence else 0.7
         freshness_ratio = 1.0 - (total_stale / max(total_docs, 1))
 
         overall_score = round(
@@ -305,11 +308,14 @@ async def get_data_quality(
             1,
         )
 
-        add_event("admin.data_quality.retrieved", {
-            "total_documents": total_docs,
-            "overall_score": overall_score,
-            "issues_count": len(issues),
-        })
+        add_event(
+            "admin.data_quality.retrieved",
+            {
+                "total_documents": total_docs,
+                "overall_score": overall_score,
+                "issues_count": len(issues),
+            },
+        )
 
         return JSONResponse(
             status_code=200,

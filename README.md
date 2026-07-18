@@ -53,6 +53,9 @@ curl http://localhost:8080/v1/health
 - ✅ Cross-encoder reranking — MiniLM-L-6-v2 with fine-tuning support
 - ✅ Knowledge graph (Neo4j) — entity extraction, multi-hop traversal
 - ✅ HyDE query expansion — hypothetical document generation for better retrieval
+- ✅ Progressive retrieval — iterative refinement with HyDE, reflection, and CRAG loops
+- ✅ SLM enrichment — lightweight model for chunk summarization, entity extraction
+- ✅ Reranker quality control — chunk-level feedback scoring and negative pair mining
 - ✅ CRAG evaluator — retrieval quality assessment with corrective loops
 - ✅ Hallucination grounding — NLI-based fact verification against context
 
@@ -66,7 +69,11 @@ curl http://localhost:8080/v1/health
 ### Production
 
 - ✅ User profiles and feedback — JWT auth, Keycloak OIDC, LDAP/AD, RBAC (4 roles)
+- ✅ Streaming ETL pipeline — WAL-based incremental ingestion with checkpointing
+- ✅ HTML→Markdown chunking — preserve document structure in semantic chunks
 - ✅ Air-gapped deployment — all models pre-downloaded, fully offline operation
+- ✅ Admin analytics dashboard — query volume, latency percentiles, token economies
+- ✅ Compliance requirements — data retention, audit logging, RBAC, encryption at rest
 - ✅ Federated RAG — multi-silo fan-out with weighted RRF merge
 - ✅ Model evolution — LoRA/QLoRA fine-tuning, canary deployment, MLflow tracking
 - ✅ Observability — Prometheus metrics, structured logging, Grafana dashboards
@@ -144,6 +151,7 @@ graph TB
 
 | Guide                                                                  | Description                                           |
 |------------------------------------------------------------------------|-------------------------------------------------------|
+| [Architecture Overview](docs/en/guides/architecture-overview.md)       | 6-layer architecture, data flow, deployment topology   |
 | [Architecture Decision Records](docs/en/adr/)                          | 14 ADRs covering all major design decisions           |
 | [C4 Architecture Diagrams](docs/en/diagrams/)                          | L1 (System Context), L2 (Containers), L3 (Components) |
 | [Knowledge Graph Strategy](docs/en/guides/knowledge-graph-strategy.md) | Neo4j entity extraction, graph enrichment             |

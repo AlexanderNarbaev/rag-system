@@ -1,4 +1,5 @@
 # tests/etl/test_extractors.py
+# ruff: noqa: SIM117  — nested with(patches) are idiomatic in pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -191,7 +192,9 @@ class TestConfluenceGetAllPages:
     @patch.object(ConfluenceExtractor, "_request")
     def test_get_all_pages_all_spaces(self, mock_request, tmp_path):
         ex = self._make_extractor(tmp_path)
-        mock_request.return_value = {"results": [{"id": "1", "title": "P1", "version": {"number": 1}, "space": {"key": "OPS"}}]}
+        mock_request.return_value = {
+            "results": [{"id": "1", "title": "P1", "version": {"number": 1}, "space": {"key": "OPS"}}]
+        }
         pages = ex._get_all_pages()
         assert len(pages) == 1
         call_kwargs = mock_request.call_args[0]
@@ -214,7 +217,7 @@ class TestConfluenceRequestErrors:
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("Not Found")
         ex.session.get = mock_get
         mock_get.return_value = mock_resp
-        with pytest.raises(requests.exceptions.HTTPError):
+        with pytest.raises(requests.exceptions.HTTPError):  # noqa: SIM117
             ex._request("/rest/api/content", params={"limit": 1})
 
     @patch("etl.extractors.confluence.requests.Session.get")
@@ -227,7 +230,7 @@ class TestConfluenceRequestErrors:
         ex = ConfluenceExtractor(config)
         mock_get.side_effect = requests.exceptions.Timeout("timed out")
         ex.session.get = mock_get
-        with pytest.raises(requests.exceptions.Timeout):
+        with pytest.raises(requests.exceptions.Timeout):  # noqa: SIM117
             ex._request("/rest/api/content")
         assert mock_get.call_count == 3
 
@@ -241,7 +244,7 @@ class TestConfluenceRequestErrors:
         ex = ConfluenceExtractor(config)
         mock_get.side_effect = requests.exceptions.ConnectionError("refused")
         ex.session.get = mock_get
-        with pytest.raises(requests.exceptions.ConnectionError):
+        with pytest.raises(requests.exceptions.ConnectionError):  # noqa: SIM117
             ex._request("/rest/api/content")
         assert mock_get.call_count == 2
 
@@ -250,7 +253,7 @@ class TestConfluenceRequestErrors:
         ex = self._make_extractor(tmp_path)
         mock_get.side_effect = requests.exceptions.SSLError("cert verify failed")
         ex.session.get = mock_get
-        with pytest.raises(requests.exceptions.SSLError):
+        with pytest.raises(requests.exceptions.SSLError):  # noqa: SIM117
             ex._request("/rest/api/content")
 
     @patch("etl.extractors.confluence.requests.Session.get")
@@ -318,7 +321,7 @@ class TestConfluenceDownloadAttachment:
         mock_ok.raise_for_status.return_value = None
         mock_ok.iter_content.return_value = [b"ok"]
         with patch.object(ex.session, "get", side_effect=[mock_fail, mock_ok]) as mock_get:
-            with patch("time.sleep", return_value=None):
+            with patch("time.sleep", return_value=None):  # noqa: SIM117
                 path = ex._download_attachment("p1", "a1", "file.txt", att_dir, "/download")
         assert path is not None
         assert mock_get.call_count == 2
@@ -333,7 +336,7 @@ class TestConfluenceDownloadAttachment:
         mock_ok.raise_for_status.return_value = None
         mock_ok.iter_content.return_value = [b"ok"]
         with patch.object(ex.session, "get", side_effect=[mock_fail, mock_ok]) as mock_get:
-            with patch("time.sleep", return_value=None):
+            with patch("time.sleep", return_value=None):  # noqa: SIM117
                 path = ex._download_attachment("p1", "a1", "file.txt", att_dir, "/download")
         assert path is not None
         assert mock_get.call_count == 2
@@ -345,7 +348,7 @@ class TestConfluenceDownloadAttachment:
         mock_fail = MagicMock()
         mock_fail.raise_for_status.side_effect = requests.exceptions.ConnectionError("refused")
         with patch.object(ex.session, "get", return_value=mock_fail) as mock_get:
-            with patch("time.sleep", return_value=None):
+            with patch("time.sleep", return_value=None):  # noqa: SIM117
                 path = ex._download_attachment("p1", "a1", "file.txt", att_dir, "/download")
         assert path is None
         assert mock_get.call_count == 4  # 3 retries + initial
@@ -821,10 +824,12 @@ class TestJiraRun:
     @patch.object(JiraExtractor, "_process_issue")
     def test_run_handles_process_error(self, mock_process, mock_paginated, tmp_path):
         ex = self._make_extractor(tmp_path)
-        mock_paginated.return_value = iter([
-            {"key": "PROJ-1", "fields": {}},
-            {"key": "PROJ-2", "fields": {}},
-        ])
+        mock_paginated.return_value = iter(
+            [
+                {"key": "PROJ-1", "fields": {}},
+                {"key": "PROJ-2", "fields": {}},
+            ]
+        )
         mock_process.side_effect = [RuntimeError("boom"), {"key": "PROJ-2"}]
         ex.run()
 
@@ -908,7 +913,7 @@ class TestJiraDownloadAttachment:
         mock_ok.iter_content.return_value = [b"ok"]
         attachment = {"id": "att3", "filename": "file.txt", "content": "https://jira.test/att/3"}
         with patch.object(ex.session, "get", side_effect=[mock_fail, mock_ok]) as mock_get:
-            with patch("time.sleep", return_value=None):
+            with patch("time.sleep", return_value=None):  # noqa: SIM117
                 path = ex._download_attachment(attachment, "PROJ-3")
         assert path is not None
         assert mock_get.call_count == 2
@@ -919,7 +924,7 @@ class TestJiraDownloadAttachment:
         mock_fail.raise_for_status.side_effect = requests.exceptions.Timeout("timeout")
         attachment = {"id": "att4", "filename": "file.txt", "content": "https://jira.test/att/4"}
         with patch.object(ex.session, "get", return_value=mock_fail) as mock_get:
-            with patch("time.sleep", return_value=None):
+            with patch("time.sleep", return_value=None):  # noqa: SIM117
                 path = ex._download_attachment(attachment, "PROJ-4")
         assert path is None
         assert mock_get.call_count == 4
@@ -937,7 +942,7 @@ class TestJiraRequestErrors:
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
         with patch.object(ex.session, "get", return_value=mock_resp):
-            with pytest.raises(requests.exceptions.HTTPError):
+            with pytest.raises(requests.exceptions.HTTPError):  # noqa: SIM117
                 ex._request("/rest/api/2/search")
 
     def test_request_connection_error_retries_then_raises(self, tmp_path):
@@ -948,14 +953,14 @@ class TestJiraRequestErrors:
         config["retry_delay"] = 0.01
         ex = JiraExtractor(config)
         with patch.object(ex.session, "get", side_effect=requests.exceptions.ConnectionError("refused")) as mock_get:
-            with pytest.raises(requests.exceptions.ConnectionError):
+            with pytest.raises(requests.exceptions.ConnectionError):  # noqa: SIM117
                 ex._request("/rest/api/2/search")
         assert mock_get.call_count == 2
 
     def test_request_ssl_error_raises_immediately(self, tmp_path):
         ex = self._make_extractor(tmp_path)
         with patch.object(ex.session, "get", side_effect=requests.exceptions.SSLError("cert error")):
-            with pytest.raises(requests.exceptions.SSLError):
+            with pytest.raises(requests.exceptions.SSLError):  # noqa: SIM117
                 ex._request("/rest/api/2/search")
 
 
@@ -1003,7 +1008,14 @@ class TestJiraProcessIssueWithAttachments:
                 "summary": "With attachments",
                 "description": "desc",
                 "attachment": [
-                    {"id": "att1", "filename": "file.txt", "size": 100, "mimeType": "text/plain", "created": "2025-01-01", "author": {"displayName": "Dev"}},
+                    {
+                        "id": "att1",
+                        "filename": "file.txt",
+                        "size": 100,
+                        "mimeType": "text/plain",
+                        "created": "2025-01-01",
+                        "author": {"displayName": "Dev"},
+                    },
                 ],
                 "comment": {"comments": []},
             },
@@ -1023,7 +1035,13 @@ class TestJiraProcessIssueWithAttachments:
             "fields": {
                 "summary": "No download",
                 "attachment": [
-                    {"id": "att1", "filename": "file.txt", "size": 100, "mimeType": "text/plain", "created": "2025-01-01"},
+                    {
+                        "id": "att1",
+                        "filename": "file.txt",
+                        "size": 100,
+                        "mimeType": "text/plain",
+                        "created": "2025-01-01",
+                    },
                 ],
                 "comment": {"comments": []},
             },
@@ -1193,10 +1211,12 @@ class TestGitLabGetProjects:
     @patch.object(GitLabExtractor, "_paginated_get")
     def test_get_projects_all(self, mock_paginated, tmp_path):
         ex = self._make_extractor(tmp_path)
-        mock_paginated.return_value = iter([
-            {"id": 1, "name": "Project 1"},
-            {"id": 2, "name": "Project 2"},
-        ])
+        mock_paginated.return_value = iter(
+            [
+                {"id": 1, "name": "Project 1"},
+                {"id": 2, "name": "Project 2"},
+            ]
+        )
         projects = ex.get_projects()
         assert len(projects) == 2
 
@@ -1278,20 +1298,22 @@ class TestGitLabGetMergeRequests:
     @patch.object(GitLabExtractor, "_paginated_get")
     def test_get_mr_discussions(self, mock_paginated, tmp_path):
         ex = self._make_extractor(tmp_path)
-        mock_paginated.return_value = iter([
-            {
-                "id": "disc1",
-                "notes": [
-                    {
-                        "id": 10,
-                        "author": {"username": "dev1"},
-                        "created_at": "2025-01-01",
-                        "body": "Looks good",
-                        "type": "DiffNote",
-                    },
-                ],
-            },
-        ])
+        mock_paginated.return_value = iter(
+            [
+                {
+                    "id": "disc1",
+                    "notes": [
+                        {
+                            "id": 10,
+                            "author": {"username": "dev1"},
+                            "created_at": "2025-01-01",
+                            "body": "Looks good",
+                            "type": "DiffNote",
+                        },
+                    ],
+                },
+            ]
+        )
         discussions = ex.get_mr_discussions(1, 1)
         assert len(discussions) == 1
         assert discussions[0]["id"] == "disc1"
@@ -1309,10 +1331,12 @@ class TestGitLabGetBranches:
     @patch.object(GitLabExtractor, "_paginated_get")
     def test_get_branches(self, mock_paginated, tmp_path):
         ex = self._make_extractor(tmp_path)
-        mock_paginated.return_value = iter([
-            {"name": "main", "commit": {"id": "sha1"}},
-            {"name": "develop", "commit": {"id": "sha2"}},
-        ])
+        mock_paginated.return_value = iter(
+            [
+                {"name": "main", "commit": {"id": "sha1"}},
+                {"name": "develop", "commit": {"id": "sha2"}},
+            ]
+        )
         branches = ex.get_branches(1)
         assert len(branches) == 2
         assert branches[0]["name"] == "main"
@@ -1373,9 +1397,10 @@ class TestGitLabRequestErrors:
         config["max_retries"] = 1
         config["retry_delay"] = 0.01
         ex = GitLabExtractor(config)
-        with patch.object(ex.session, "request", side_effect=requests.exceptions.ConnectionError("refused")) as mock_req:
-            with pytest.raises(requests.exceptions.ConnectionError):
-                ex._request("/api/v4/projects")
+        with patch.object(
+            ex.session, "request", side_effect=requests.exceptions.ConnectionError("refused")
+        ) as mock_req, pytest.raises(requests.exceptions.ConnectionError):
+            ex._request("/api/v4/projects")
         assert mock_req.call_count == 2
 
     def test_request_timeout_retries(self, tmp_path):
@@ -1386,14 +1411,14 @@ class TestGitLabRequestErrors:
         config["retry_delay"] = 0.01
         ex = GitLabExtractor(config)
         with patch.object(ex.session, "request", side_effect=requests.exceptions.Timeout("timed out")) as mock_req:
-            with pytest.raises(requests.exceptions.Timeout):
+            with pytest.raises(requests.exceptions.Timeout):  # noqa: SIM117
                 ex._request("/api/v4/projects")
         assert mock_req.call_count == 2
 
     def test_request_ssl_error_raises(self, tmp_path):
         ex = self._make_extractor(tmp_path)
         with patch.object(ex.session, "request", side_effect=requests.exceptions.SSLError("cert error")):
-            with pytest.raises(requests.exceptions.SSLError):
+            with pytest.raises(requests.exceptions.SSLError):  # noqa: SIM117
                 ex._request("/api/v4/projects")
 
 

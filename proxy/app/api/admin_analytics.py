@@ -16,6 +16,19 @@ logger = logging.getLogger("rag-proxy")
 
 router = APIRouter(prefix="/v1/admin/analytics", tags=["admin-analytics"])
 
+"""Usage analytics dashboard for the admin UI (FR-105).
+
+Endpoints:
+    GET /v1/admin/analytics — Returns aggregated analytics for the specified
+        time period: total queries, unique users, latency percentiles (P50/P95/P99),
+        token consumption (input/output split), and top knowledge bases by usage.
+        Supports ``?period=24h|7d|30d`` and ``?metric=queries,users,latency,tokens``.
+    GET /v1/admin/analytics/kb/{kb_id} — Per-knowledge-base breakdown with
+        daily query counts and percentage-of-total calculation.
+
+Data is accumulated in-memory via ``record_analytics_event()`` called from the
+chat pipeline. No external database dependency.
+"""
 
 PERIOD_MAP: dict[str, int] = {
     "24h": 1,

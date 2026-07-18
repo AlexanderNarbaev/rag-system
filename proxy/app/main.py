@@ -632,17 +632,10 @@ async def process_rag_query(
 
     base_prompt = get_system_prompt(resolved_lang)
     if generate_without_knowledge:
-        system_prompt = (
-            f"{UNGROUNDED_NOTICE}\n\n"
-            f"{base_prompt}\n\n"
-            f"Context:\n{context}"
-        )
+        system_prompt = f"{UNGROUNDED_NOTICE}\n\n{base_prompt}\n\nContext:\n{context}"
         logger.info("Allowing ungrounded generation (ALLOW_UNGROUNDED_GENERATION=true)")
     else:
-        system_prompt = (
-            f"{base_prompt}\n\n"
-            f"Context:\n{context}"
-        )
+        system_prompt = f"{base_prompt}\n\nContext:\n{context}"
     messages_for_llm = [{"role": "system", "content": system_prompt}]
     if other_messages:
         for msg in other_messages:
@@ -750,17 +743,18 @@ if COMPRESSION_ENABLED:
 if USE_BROTLI:
     try:
         from brotli_asgi import BrotliMiddleware
+
         app.add_middleware(BrotliMiddleware, minimum_size=COMPRESSION_MIN_SIZE)
         logger.info("Brotli compression enabled")
     except ImportError:
         try:
             from brotlipy import BrotliMiddleware
+
             app.add_middleware(BrotliMiddleware, minimum_size=COMPRESSION_MIN_SIZE)
             logger.info("Brotli compression enabled (via brotlipy)")
         except ImportError:
             logger.warning(
-                "USE_BROTLI=true but neither brotli_asgi nor brotlipy is installed — "
-                "Brotli compression skipped"
+                "USE_BROTLI=true but neither brotli_asgi nor brotlipy is installed — Brotli compression skipped"
             )
 
 # OpenTelemetry FastAPI instrumentation

@@ -184,9 +184,7 @@ class ChunkEnricher:
             if match:
                 data = json.loads(match.group(0))
             else:
-                raise ValueError(
-                    f"Failed to parse SLM response as JSON: {content[:200]}"
-                ) from None
+                raise ValueError(f"Failed to parse SLM response as JSON: {content[:200]}") from None
 
         return data
 
@@ -205,20 +203,14 @@ class ChunkEnricher:
         }
 
         if isinstance(result.get("keywords"), list):
-            normalized["keywords"] = [
-                str(k) for k in result["keywords"] if isinstance(k, str) and len(k) > 1
-            ][:10]
+            normalized["keywords"] = [str(k) for k in result["keywords"] if isinstance(k, str) and len(k) > 1][:10]
 
         if isinstance(result.get("entities"), list):
-            normalized["entities"] = [
-                str(e) for e in result["entities"] if isinstance(e, str) and len(e) > 1
-            ][:10]
+            normalized["entities"] = [str(e) for e in result["entities"] if isinstance(e, str) and len(e) > 1][:10]
 
         if isinstance(result.get("hyde_questions"), list):
             normalized["hyde_questions"] = [
-                str(q).rstrip("?") + "?"
-                for q in result["hyde_questions"]
-                if isinstance(q, str) and len(q) > 5
+                str(q).rstrip("?") + "?" for q in result["hyde_questions"] if isinstance(q, str) and len(q) > 5
             ][:5]
 
         if isinstance(result.get("summary"), str) and result["summary"].strip():
@@ -255,21 +247,136 @@ class ChunkEnricher:
             return []
 
         stopwords = {
-            "и", "в", "на", "с", "к", "у", "по", "для", "из", "о", "не", "быть",
-            "что", "как", "это", "то", "от", "за", "но", "же", "все", "она",
-            "они", "мы", "вы", "он", "его", "ее", "их", "the", "a", "an", "is",
-            "are", "was", "were", "be", "been", "being", "have", "has", "had",
-            "do", "does", "did", "will", "would", "could", "should", "may",
-            "might", "can", "shall", "to", "of", "in", "for", "on", "with",
-            "at", "by", "from", "as", "into", "through", "during", "before",
-            "after", "above", "below", "between", "under", "and", "but", "or",
-            "nor", "not", "so", "yet", "both", "either", "neither", "each",
-            "every", "all", "any", "few", "more", "most", "other", "some",
-            "such", "only", "own", "same", "than", "too", "very", "just",
-            "because", "about", "while", "which", "who", "whom", "when",
-            "where", "also", "then", "there", "here", "этом", "этой", "этого",
-            "если", "или", "уже", "еще", "бы", "ли", "без", "под", "над",
-            "около", "при", "про", "этот", "эти", "эта", "эту",
+            "и",
+            "в",
+            "на",
+            "с",
+            "к",
+            "у",
+            "по",
+            "для",
+            "из",
+            "о",
+            "не",
+            "быть",
+            "что",
+            "как",
+            "это",
+            "то",
+            "от",
+            "за",
+            "но",
+            "же",
+            "все",
+            "она",
+            "они",
+            "мы",
+            "вы",
+            "он",
+            "его",
+            "ее",
+            "их",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "under",
+            "and",
+            "but",
+            "or",
+            "nor",
+            "not",
+            "so",
+            "yet",
+            "both",
+            "either",
+            "neither",
+            "each",
+            "every",
+            "all",
+            "any",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "only",
+            "own",
+            "same",
+            "than",
+            "too",
+            "very",
+            "just",
+            "because",
+            "about",
+            "while",
+            "which",
+            "who",
+            "whom",
+            "when",
+            "where",
+            "also",
+            "then",
+            "there",
+            "here",
+            "этом",
+            "этой",
+            "этого",
+            "если",
+            "или",
+            "уже",
+            "еще",
+            "бы",
+            "ли",
+            "без",
+            "под",
+            "над",
+            "около",
+            "при",
+            "про",
+            "этот",
+            "эти",
+            "эта",
+            "эту",
         }
 
         words = re.findall(r"\b[A-Za-zА-Яа-я][A-Za-zА-Яа-я0-9_\-+#.]{2,}\b", text.lower())
@@ -396,7 +503,7 @@ class ChunkEnricher:
 
         result = result.strip()
         if len(text) > len(result) and not result.endswith("...") and len(result) >= max_chars - 3:
-            result = result[:max_chars - 3].rstrip() + "..."
+            result = result[: max_chars - 3].rstrip() + "..."
 
         return result
 
@@ -429,10 +536,7 @@ class ChunkEnricher:
         Each chunk dict should have "text" and optionally "metadata" keys.
         Returns list of enrichment result dicts in the same order.
         """
-        tasks = [
-            self.enrich_async(ch.get("text", ""), ch.get("metadata"))
-            for ch in chunks
-        ]
+        tasks = [self.enrich_async(ch.get("text", ""), ch.get("metadata")) for ch in chunks]
         return list(await asyncio.gather(*tasks, return_exceptions=False))
 
     def enrich_chunks_sync(

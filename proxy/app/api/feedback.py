@@ -29,8 +29,7 @@ def _get_feedback_rate_limiter() -> RateLimiter:
         burst = FEEDBACK_RATE_LIMIT
         _feedback_rate_limiter = RateLimiter(rate_per_minute=rate_per_minute, burst=burst)
         logger.info(
-            "Feedback rate limiter initialized: %d submissions/hour, "
-            "rate=%d/min, burst=%d",
+            "Feedback rate limiter initialized: %d submissions/hour, rate=%d/min, burst=%d",
             FEEDBACK_RATE_LIMIT,
             rate_per_minute,
             burst,
