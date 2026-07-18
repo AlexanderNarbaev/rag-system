@@ -17,6 +17,13 @@ logger = logging.getLogger("rag-proxy")
 router = APIRouter(prefix="/v1/admin/analytics", tags=["admin-analytics"])
 
 
+PERIOD_MAP: dict[str, int] = {
+    "24h": 1,
+    "7d": 7,
+    "30d": 30,
+}
+
+
 # ---------------------------------------------------------------------------
 # In-memory analytics store (accumulated at request time)
 # ---------------------------------------------------------------------------
@@ -24,7 +31,8 @@ router = APIRouter(prefix="/v1/admin/analytics", tags=["admin-analytics"])
 _analytics_lock = threading.RLock()
 _daily_queries: dict[str, int] = {}  # date → count
 _daily_users: dict[str, set[str]] = {}  # date → set of user_ids
-_daily_tokens: dict[str, dict[str, int]] = {}  # date → {model: tokens}
+_daily_input_tokens: dict[str, int] = {}  # date → input tokens
+_daily_output_tokens: dict[str, int] = {}  # date → output tokens
 _daily_kb_usage: dict[str, dict[str, int]] = {}  # date → {kb_id: count}
 _request_latencies: list[float] = []  # all request latencies in seconds
 _max_latency_samples = 100_000
@@ -48,10 +56,8 @@ def record_analytics_event(
             _daily_users[today] = set()
         _daily_users[today].add(user_id)
 
-        if today not in _daily_tokens:
-            _daily_tokens[today] = {}
-        model_tokens = _daily_tokens[today]
-        model_tokens[model] = model_tokens.get(model, 0) + prompt_tokens + completion_tokens
+        _daily_input_tokens[today] = _daily_input_tokens.get(today, 0) + prompt_tokens
+        _daily_output_tokens[today] = _daily_output_tokens.get(today, 0) + completion_tokens
 
         if today not in _daily_kb_usage:
             _daily_kb_usage[today] = {}
@@ -104,6 +110,26 @@ def _get_latency_data(days: int) -> dict[str, list[float]]:
         return result
 
 
+def _parse_period(period: str, days: int) -> tuple[str, int]:
+    """Parse period string to days. Supports '24h', '7d', '30d' and legacy days int.
+
+    When period is explicitly provided, it takes precedence.
+    When only days is changed from default, use days.
+    """
+    if period and period in PERIOD_MAP:
+        return period, PERIOD_MAP[period]
+    return f"{days}d", days
+
+
+def _compute_trend(current: int, previous: int) -> str:
+    """Compute percentage trend between current and previous period."""
+    if previous == 0:
+        return "+∞%" if current > 0 else "0%"
+    change = ((current - previous) / previous) * 100
+    sign = "+" if change >= 0 else ""
+    return f"{sign}{round(change)}%"
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -112,98 +138,129 @@ def _get_latency_data(days: int) -> dict[str, list[float]]:
 @router.get("")
 async def get_analytics(
     request: Request,
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    period: str = Query("", description="Time period: 24h, 7d, 30d"),
+    days: int = Query(30, ge=1, le=365, description="Number of days to look back (legacy)"),
+    metric: str | None = Query(None, description="Filter by metric: queries,users,latency,tokens"),
     user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> JSONResponse:
-    """Return usage analytics for the specified time period.
+    """Return usage analytics for the specified time period (FR-105).
 
-    Returns total queries, unique users, latency percentiles,
-    token consumption by model, and top KBs by query volume.
+    Supports period-based queries (24h/7d/30d) and legacy days-based queries.
+
+    Returns queries, unique users, latency percentiles (ms),
+    token consumption (input/output split), and top knowledge bases.
     """
+    period_key, num_days = _parse_period(period, days)
+
     with tracer.start_as_current_span("admin.analytics.overview") as span:
         if span.is_recording():
-            span.set_attribute("admin.analytics.days", days)
+            span.set_attribute("admin.analytics.period", period_key)
+            span.set_attribute("admin.analytics.days", num_days)
 
-        dates = _get_date_range(days)
-        latency_by_date = _get_latency_data(days)
+        dates = _get_date_range(num_days)
+        latency_by_date = _get_latency_data(num_days)
 
-        daily_breakdown = []
+        # ── Previous period for trend calculation ──
+        prev_dates = _get_date_range(num_days * 2)[num_days:]
+
         total_queries = 0
+        prev_total_queries = 0
         total_unique_users: set[str] = set()
-        total_tokens_by_model: dict[str, int] = {}
+        total_input_tokens = 0
+        total_output_tokens = 0
         total_kb_usage: dict[str, int] = {}
         all_latencies: list[float] = []
 
         for date_str in dates:
             with _analytics_lock:
                 q_count = _daily_queries.get(date_str, 0)
-                u_count = len(_daily_users.get(date_str, set()))
-                t_data = _daily_tokens.get(date_str, {})
-                k_data = _daily_kb_usage.get(date_str, {})
+                u_set = _daily_users.get(date_str, set())
+                i_tok = _daily_input_tokens.get(date_str, 0)
+                o_tok = _daily_output_tokens.get(date_str, 0)
+                k_data = dict(_daily_kb_usage.get(date_str, {}))
 
             total_queries += q_count
-            with _analytics_lock:
-                if date_str in _daily_users:
-                    total_unique_users.update(_daily_users[date_str])
-
-            for model, tokens in t_data.items():
-                total_tokens_by_model[model] = total_tokens_by_model.get(model, 0) + tokens
+            total_unique_users.update(u_set)
+            total_input_tokens += i_tok
+            total_output_tokens += o_tok
 
             for kb_id, count in k_data.items():
                 total_kb_usage[kb_id] = total_kb_usage.get(kb_id, 0) + count
 
             day_latencies = latency_by_date.get(date_str, [])
-            p50, p95, p99 = _compute_percentiles(sorted(day_latencies))
             all_latencies.extend(day_latencies)
 
-            daily_breakdown.append(
-                {
-                    "date": date_str,
-                    "queries": q_count,
-                    "unique_users": u_count,
-                    "latency_p50": round(p50, 3),
-                    "latency_p95": round(p95, 3),
-                    "latency_p99": round(p99, 3),
-                    "tokens": t_data,
-                }
-            )
+        for date_str in prev_dates:
+            with _analytics_lock:
+                prev_total_queries += _daily_queries.get(date_str, 0)
 
-        overall_p50, overall_p95, overall_p99 = _compute_percentiles(sorted(all_latencies))
-        avg_latency = round(sum(all_latencies) / len(all_latencies), 3) if all_latencies else 0.0
+        # ── Compute metrics ──
+        sorted_latencies = sorted(all_latencies)
+        p50, p95, p99 = _compute_percentiles(sorted_latencies)
+        avg_per_hour = round(total_queries / max(num_days * 24, 1), 1)
+        trend = _compute_trend(total_queries, prev_total_queries)
+
+        unique_users = len(total_unique_users)
+        avg_queries_per_user = round(total_queries / max(unique_users, 1), 1)
 
         top_kbs = sorted(total_kb_usage.items(), key=lambda x: x[1], reverse=True)[:10]
 
-        return JSONResponse(
-            status_code=200,
-            content={
-                "period_days": days,
-                "total_queries": total_queries,
-                "total_unique_users": len(total_unique_users),
-                "average_latency_seconds": avg_latency,
-                "latency_p50": round(overall_p50, 3),
-                "latency_p95": round(overall_p95, 3),
-                "latency_p99": round(overall_p99, 3),
-                "token_consumption_by_model": total_tokens_by_model,
-                "top_kbs_by_volume": [{"kb_id": kb, "queries": cnt} for kb, cnt in top_kbs],
-                "daily_breakdown": daily_breakdown,
-            },
-        )
+        # Build response in FR-105 format
+        content: dict[str, Any] = {
+            "period": period_key,
+        }
+
+        requested_metrics = [m.strip() for m in metric.split(",")] if metric else []
+        show_all = not requested_metrics
+
+        if show_all or "queries" in requested_metrics:
+            content["queries"] = {
+                "total": total_queries,
+                "avg_per_hour": avg_per_hour,
+                "trend": trend,
+            }
+
+        if show_all or "users" in requested_metrics:
+            content["users"] = {
+                "unique": unique_users,
+                "avg_queries_per_user": avg_queries_per_user,
+            }
+
+        if show_all or "latency" in requested_metrics:
+            content["latency"] = {
+                "p50_ms": round(p50 * 1000),
+                "p95_ms": round(p95 * 1000),
+                "p99_ms": round(p99 * 1000),
+            }
+
+        if show_all or "tokens" in requested_metrics:
+            content["tokens"] = {
+                "total_input": total_input_tokens,
+                "total_output": total_output_tokens,
+            }
+
+        content["top_kbs"] = [{"name": kb, "queries": cnt} for kb, cnt in top_kbs]
+
+        return JSONResponse(status_code=200, content=content)
 
 
 @router.get("/kb/{kb_id}")
 async def get_kb_analytics(
     kb_id: str,
     request: Request,
-    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    period: str = Query("", description="Time period: 24h, 7d, 30d"),
+    days: int = Query(30, ge=1, le=365, description="Number of days to look back (legacy)"),
     user: Any = Depends(require_role(Role.ADMIN)),  # noqa: B008
 ) -> JSONResponse:
     """Return per-KB analytics breakdown for the specified time period."""
+    period_key, num_days = _parse_period(period, days)
+
     with tracer.start_as_current_span("admin.analytics.kb") as span:
         if span.is_recording():
             span.set_attribute("admin.analytics.kb_id", kb_id)
-            span.set_attribute("admin.analytics.days", days)
+            span.set_attribute("admin.analytics.period", period_key)
 
-        dates = _get_date_range(days)
+        dates = _get_date_range(num_days)
 
         total_queries = 0
         daily_breakdown = []
@@ -229,7 +286,7 @@ async def get_kb_analytics(
             status_code=200,
             content={
                 "kb_id": kb_id,
-                "period_days": days,
+                "period": period_key,
                 "total_queries": total_queries,
                 "percentage_of_total": kb_pct,
                 "daily_breakdown": daily_breakdown,

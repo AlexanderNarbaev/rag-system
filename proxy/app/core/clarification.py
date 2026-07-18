@@ -1,6 +1,6 @@
 """Clarifying question generation for low-confidence RAG scenarios.
 
-When the RAG system has "partial" or "no_knowledge" status, this module
+When the RAG system has "partial", "insufficient", or "absent" status, this module
 generates 1-2 clarifying questions to help the user refine their query.
 """
 
@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+from proxy.app.core.knowledge_status import normalize_knowledge_status
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,8 @@ def generate_clarifying_questions(
 
     Args:
         query: The user's original query.
-        status: Knowledge status ("grounded", "partial", "no_knowledge").
+        status: Knowledge status ("sufficient", "partial", "insufficient", "absent").
+        Old names ("grounded", "no_knowledge") are accepted via backward compat.
         sources: Retrieved sources (used to understand what was found).
         context: Retrieved context text.
         use_slm: Whether to attempt SLM-based generation.
@@ -39,7 +42,9 @@ def generate_clarifying_questions(
     Returns:
         ClarificationResult with questions and metadata.
     """
-    if status == "grounded":
+    status = normalize_knowledge_status(status)
+
+    if status == "sufficient":
         return ClarificationResult(questions=[], clarification_needed=False)
 
     if use_slm:
@@ -121,7 +126,9 @@ def _generate_heuristic(
     """Heuristic-based clarifying question generation."""
     questions = []
 
-    if status == "no_knowledge":
+    status = normalize_knowledge_status(status)
+
+    if status == "absent":
         questions.append(
             "Could you rephrase your question with more specific technical terms or product names?",
         )
@@ -129,7 +136,7 @@ def _generate_heuristic(
             questions.append(
                 "Would you like to break this down into smaller, more focused questions?",
             )
-    elif status == "partial":
+    elif status in ("partial", "insufficient"):
         if sources:
             titles = [s.get("title", "") for s in sources[:2] if s.get("title")]
             if titles:
@@ -167,7 +174,7 @@ def build_uncertainty_response(
     - What's missing
     - Suggested ways to refine the query
     """
-    if status == "grounded":
+    if normalize_knowledge_status(status) == "sufficient":
         return ""
 
     parts = []

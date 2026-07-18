@@ -372,13 +372,20 @@ async def chat_completions(
                 if initial:
                     yield initial
                 add_event("rag.pipeline.stream.start", {"query": user_query[:100], "version": version or "latest"})
+
+                from proxy.app.shared.memory_manager import enrich_query_with_context, get_conversation
+
+                stream_session_id = user.user_id if user.is_authenticated else client_ip
+                stream_conversation = get_conversation(stream_session_id)
+                enriched_stream_query = enrich_query_with_context(stream_conversation, user_query)
+
                 with tracer.start_as_current_span("rag.pipeline.process") as pipeline_span:
                     if pipeline_span.is_recording():
                         pipeline_span.set_attribute("rag.query", user_query[:200])
                         pipeline_span.set_attribute("rag.version", version or "latest")
                         pipeline_span.set_attribute("rag.stream", True)
                     rag_context, messages_for_llm, _, sources, _ = await _main.process_rag_query(
-                        user_query=user_query,
+                        user_query=enriched_stream_query,
                         version=version,
                         force_refresh=request.rag_force_refresh or False,
                         temperature=request.temperature or 0.2,
@@ -392,7 +399,6 @@ async def chat_completions(
                 from proxy.app.core.confidence import should_generate_answer
                 from proxy.app.core.knowledge_status import determine_knowledge_status
                 from proxy.app.shared.config import CLARIFICATION_ENABLED
-                from proxy.app.shared.memory_manager import get_conversation
 
                 chunks_for_status = sources or []
                 chunks_with_score = [{"score": s.get("relevance", 0)} for s in chunks_for_status]
@@ -400,7 +406,7 @@ async def chat_completions(
                 knowledge_status = determine_knowledge_status(chunks_for_status, should_generate=should_gen)
 
                 clarification_result = None
-                if CLARIFICATION_ENABLED and knowledge_status.status in ("partial", "no_knowledge"):
+                if CLARIFICATION_ENABLED and knowledge_status.status in ("partial", "insufficient", "absent"):
                     clarification_result = generate_clarifying_questions(
                         query=user_query,
                         status=knowledge_status.status,
@@ -408,8 +414,7 @@ async def chat_completions(
                         context=rag_context if isinstance(rag_context, str) else "",
                     )
 
-                session_id = user.user_id if user.is_authenticated else client_ip
-                conversation = get_conversation(session_id)
+                conversation = stream_conversation
                 if conversation.needs_summarization():
                     from proxy.app.shared.config import CONVERSATION_MAX_TURNS
 
@@ -521,9 +526,15 @@ async def chat_completions(
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     # Non-streaming
+    from proxy.app.shared.memory_manager import enrich_query_with_context, get_conversation
+
+    session_id = user.user_id if user.is_authenticated else client_ip
+    conversation = get_conversation(session_id)
+    enriched_query = enrich_query_with_context(conversation, user_query)
+
     try:
         _rag_result = await _main.process_rag_query(
-            user_query=user_query,
+            user_query=enriched_query,
             version=version,
             force_refresh=request.rag_force_refresh or False,
             temperature=request.temperature or 0.2,
@@ -560,7 +571,6 @@ async def chat_completions(
     from proxy.app.core.hitl import generate_feedback_id
     from proxy.app.core.knowledge_status import determine_knowledge_status
     from proxy.app.shared.config import ALLOW_UNGROUNDED_GENERATION, CLARIFICATION_ENABLED, UNGROUNDED_NOTICE
-    from proxy.app.shared.memory_manager import get_conversation
 
     feedback_id = generate_feedback_id()
     confidence = compute_confidence(query=user_query, context=rag_ctx, answer=response_text)
@@ -571,7 +581,7 @@ async def chat_completions(
 
     clarification_result = None
     clarifying_questions = None
-    if CLARIFICATION_ENABLED and knowledge_status.status in ("partial", "no_knowledge"):
+    if CLARIFICATION_ENABLED and knowledge_status.status in ("partial", "insufficient", "absent"):
         clarification_result = generate_clarifying_questions(
             query=user_query,
             status=knowledge_status.status,
@@ -583,7 +593,7 @@ async def chat_completions(
 
     # Build structured uncertainty response when knowledge is insufficient
     final_response = response_text
-    if knowledge_status.status == "no_knowledge" and not should_gen:
+    if knowledge_status.status == "absent" and not should_gen:
         if ALLOW_UNGROUNDED_GENERATION:
             # Keep LLM response but prepend notice about missing knowledge
             final_response = f"{UNGROUNDED_NOTICE}\n\n{response_text}"
@@ -597,9 +607,7 @@ async def chat_completions(
             if uncertainty_message:
                 final_response = uncertainty_message
 
-    # Store conversation turn
-    session_id = user.user_id if user.is_authenticated else client_ip
-    conversation = get_conversation(session_id)
+    # Store conversation turn (conversation already loaded above for query enrichment)
     if conversation.needs_summarization():
         from proxy.app.shared.config import CONVERSATION_MAX_TURNS
 

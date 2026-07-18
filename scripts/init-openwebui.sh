@@ -155,7 +155,7 @@ check_prerequisites() {
     if docker compose version &> /dev/null; then
         log_success "Docker Compose: $(docker compose version --short)"
 
-        # Проверка поддержки флага --wait (добавлен в Docker Compose v2.22+)
+         # Check --wait flag support (added in Docker Compose v2.22+)
         local compose_version
         compose_version=$(docker compose version --short | grep -oP '\d+\.\d+' || echo "0.0")
         if printf '%s\n' "2.22" "$compose_version" | sort -V -C 2>/dev/null; then
@@ -205,7 +205,7 @@ check_rag_network() {
     if docker network inspect rag-network &> /dev/null; then
         log_success "rag-network exists"
 
-        # Проверка ожидаемых контейнеров в сети
+         # Check expected containers in the network
         local containers
         containers=$(docker network inspect rag-network --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || echo "")
 

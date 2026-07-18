@@ -1,12 +1,19 @@
 """Tests for proxy/app/memory_manager.py - multi-tier memory architecture."""
 
 import time
+from unittest.mock import patch
 
 from proxy.app.shared.memory_manager import (
     ConversationMemory,
+    EntityTracker,
     MemoryManager,
     QueryCache,
     WorkingMemoryStore,
+    _conversation_store,
+    clear_conversation,
+    enrich_query_with_context,
+    get_conversation,
+    prune_expired_sessions,
 )
 
 
@@ -233,3 +240,157 @@ class TestMemoryManager:
         emb = [0.1, 0.2, 0.3]
         mm.query_cache.store(emb, "response")
         assert mm.query_cache.find_similar(emb) == "response"
+
+
+class TestEntityTracker:
+    """Tests for EntityTracker — entity tracking across conversation turns."""
+
+    def test_track_capitalized_words(self):
+        tracker = EntityTracker()
+        tracker.track("Let's discuss RAG and Neo4j deployment.")
+        top = tracker.get_top_entities(5)
+        assert "RAG" in top
+        assert "Neo4j" in top
+
+    def test_track_underscored_terms(self):
+        tracker = EntityTracker()
+        tracker.track("Use the deploy_k8s.sh script.")
+        top = tracker.get_top_entities(5)
+        assert "deploy_k8s.sh" in top
+
+    def test_clears_entities(self):
+        tracker = EntityTracker()
+        tracker.track("RAG is great")
+        tracker.clear()
+        assert tracker.get_top_entities() == []
+
+    def test_get_context_str_non_empty(self):
+        tracker = EntityTracker()
+        tracker.track("RAG and Neo4j integration")
+        ctx = tracker.get_context_str()
+        assert "RAG" in ctx
+        assert "Entities mentioned in conversation" in ctx
+
+    def test_get_context_str_empty(self):
+        tracker = EntityTracker()
+        assert tracker.get_context_str() == ""
+
+    def test_ignores_short_words(self):
+        tracker = EntityTracker()
+        tracker.track("Hi AI")
+        top = tracker.get_top_entities(5)
+        assert "Hi" not in top
+
+    def test_prune_max_entities(self):
+        tracker = EntityTracker(max_entities=3)
+        for i in range(5):
+            tracker.track(f"Entity{i}")
+        assert len(tracker._entities) <= 3
+
+
+class TestSessionTTL:
+    """Tests for session TTL and expiration."""
+
+    def setup_method(self):
+        for sid in list(_conversation_store.keys()):
+            del _conversation_store[sid]
+
+    def teardown_method(self):
+        for sid in list(_conversation_store.keys()):
+            del _conversation_store[sid]
+
+    @patch("proxy.app.shared.memory_manager._get_session_ttl", return_value=1)
+    def test_session_expires_after_ttl(self, _mock):
+        conv = get_conversation("test-session-1")
+        conv.add_turn("user", "hello")
+        assert len(conv) == 1
+        time.sleep(1.1)
+        conv2 = get_conversation("test-session-1")
+        assert len(conv2) == 0
+        assert conv2 is not conv
+
+    @patch("proxy.app.shared.memory_manager._get_session_ttl", return_value=0)
+    def test_ttl_zero_no_expiry(self, _mock):
+        conv = get_conversation("test-session-2")
+        conv.add_turn("user", "hello")
+        conv2 = get_conversation("test-session-2")
+        assert len(conv2) == 1
+        assert conv2 is conv
+
+    @patch("proxy.app.shared.memory_manager._get_session_ttl", return_value=3600)
+    def test_no_expiry_within_ttl(self, _mock):
+        conv = get_conversation("test-session-3")
+        conv.add_turn("user", "hello")
+        conv2 = get_conversation("test-session-3")
+        assert len(conv2) == 1
+        assert conv2 is conv
+
+    @patch("proxy.app.shared.memory_manager._get_session_ttl", return_value=1)
+    def test_prune_expired_sessions(self, _mock):
+        conv1 = get_conversation("session-a")
+        conv1.add_turn("user", "a")
+        time.sleep(1.1)
+        conv2 = get_conversation("session-b")
+        conv2.add_turn("user", "b")
+        pruned = prune_expired_sessions()
+        assert pruned >= 1
+        assert "session-a" not in _conversation_store
+        assert "session-b" in _conversation_store
+
+    @patch("proxy.app.shared.memory_manager._get_session_ttl", return_value=0)
+    def test_prune_with_ttl_zero_does_nothing(self, _mock):
+        get_conversation("sess")
+        assert prune_expired_sessions() == 0
+
+
+class TestEnrichQueryWithContext:
+    """Tests for query enrichment with conversation context."""
+
+    def test_enrich_empty_conversation(self):
+        conv = ConversationMemory()
+        result = enrich_query_with_context(conv, "hello")
+        assert result == "hello"
+
+    def test_enrich_with_prior_turns(self):
+        conv = ConversationMemory()
+        conv.add_turn("user", "What is RAG?")
+        conv.add_turn("assistant", "RAG is Retrieval Augmented Generation.")
+        result = enrich_query_with_context(conv, "How does it work?")
+        assert "What is RAG" in result
+        assert "Retrieval Augmented" in result
+        assert "How does it work?" in result
+
+    def test_enrich_includes_entities(self):
+        conv = ConversationMemory()
+        conv.add_turn("user", "Tell me about Neo4j and Qdrant")
+        conv.add_turn("assistant", "Neo4j is a graph DB, Qdrant is a vector DB")
+        result = enrich_query_with_context(conv, "How do they compare?")
+        assert "Neo4j" in result
+        assert "Qdrant" in result
+
+    def test_enrich_with_anaphoric_reference(self):
+        conv = ConversationMemory()
+        conv.add_turn("user", "Расскажи про архитектуру RAG")
+        conv.add_turn("assistant", "RAG использует гибридный поиск через Qdrant")
+        result = enrich_query_with_context(conv, "А как насчёт этого?")
+        assert "Расскажи про архитектуру" in result
+        assert "гибридный поиск" in result
+        assert "как насчёт этого" in result
+        assert "RAG" in result
+
+    def test_enrich_only_last_2_turns(self):
+        conv = ConversationMemory()
+        for i in range(5):
+            conv.add_turn("user", f"question {i}")
+            conv.add_turn("assistant", f"answer {i}")
+        result = enrich_query_with_context(conv, "latest question")
+        assert "question 4" in result
+        assert "answer 4" in result
+        assert "question 0" not in result
+        assert "question 3" not in result
+
+    def test_clear_conversation_removes_from_store(self):
+        get_conversation("test-clear")
+        assert "test-clear" in _conversation_store
+        clear_conversation("test-clear")
+        assert "test-clear" not in _conversation_store

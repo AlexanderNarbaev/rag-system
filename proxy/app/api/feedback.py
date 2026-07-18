@@ -10,11 +10,32 @@ from pydantic import BaseModel, Field
 
 from proxy.app.auth import UserContext
 from proxy.app.auth.rbac import Role, require_role
+from proxy.app.shared.rate_limiter import RateLimiter
 from proxy.app.shared.tracing import add_event, set_span_error, tracer
 
 logger = logging.getLogger("rag-proxy")
 
 router = APIRouter(tags=["feedback"])
+
+_feedback_rate_limiter: RateLimiter | None = None
+
+
+def _get_feedback_rate_limiter() -> RateLimiter:
+    global _feedback_rate_limiter
+    if _feedback_rate_limiter is None:
+        from proxy.app.shared.config import FEEDBACK_RATE_LIMIT
+
+        rate_per_minute = max(1, int(FEEDBACK_RATE_LIMIT / 60) + 1)
+        burst = FEEDBACK_RATE_LIMIT
+        _feedback_rate_limiter = RateLimiter(rate_per_minute=rate_per_minute, burst=burst)
+        logger.info(
+            "Feedback rate limiter initialized: %d submissions/hour, "
+            "rate=%d/min, burst=%d",
+            FEEDBACK_RATE_LIMIT,
+            rate_per_minute,
+            burst,
+        )
+    return _feedback_rate_limiter
 
 
 class ChunkFeedbackItem(BaseModel):
@@ -52,7 +73,20 @@ async def submit_feedback(
 
     Role.USER and above can submit simple feedback (rating + comment).
     Corrections (corrected_answer) are restricted to Role.EXPERT and above.
+
+    Rate limited per user: FEEDBACK_RATE_LIMIT submissions per hour (default 100).
     """
+    limiter = _get_feedback_rate_limiter()
+    rate_key = f"feedback:{user.user_id}"
+    allowed, retry_after = await limiter.is_allowed(rate_key)
+    if not allowed:
+        retry_seconds = max(1, int(retry_after) + 1)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Feedback rate limit exceeded. Retry after {retry_seconds} seconds.",
+            headers={"Retry-After": str(retry_seconds)},
+        )
+
     from proxy.app.core.hitl import FeedbackType, get_logger
 
     has_correction = request.correction is not None and len(request.correction or "") > 0

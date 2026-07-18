@@ -142,6 +142,7 @@ RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "false").lower() == "true"
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "10"))
 TRUSTED_PROXY_COUNT = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
+FEEDBACK_RATE_LIMIT = int(os.getenv("FEEDBACK_RATE_LIMIT", "100"))  # submissions per hour per user
 
 # ============ CORS ============
 # Default allows localhost only. For production, set explicit allowed origins.
@@ -185,6 +186,14 @@ def validate_auth_config() -> None:
         warnings.warn(
             "JWT_SECRET is ephemeral (auto-generated). All issued tokens will be invalidated on restart. "
             "For production, set JWT_SECRET in your environment.",
+            stacklevel=2,
+        )
+    if _ETL_SECRET_IS_EPHEMERAL:
+        import warnings
+
+        warnings.warn(
+            "ETL_SECRET is ephemeral (auto-generated). ETL admin API tokens will not survive restarts. "
+            "For production, set ETL_SECRET in your environment and ETL config.",
             stacklevel=2,
         )
 
@@ -320,6 +329,7 @@ GITLAB_API_TOKEN = os.getenv("GITLAB_API_TOKEN", "")
 # ============ Conversation Memory ============
 CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "10"))
 CONVERSATION_SUMMARY_THRESHOLD_TOKENS = int(os.getenv("CONVERSATION_SUMMARY_THRESHOLD_TOKENS", "2000"))
+SESSION_TTL = int(os.getenv("SESSION_TTL", "1800"))
 CLARIFICATION_ENABLED = os.getenv("CLARIFICATION_ENABLED", "true").lower() == "true"
 
 # ============ I18N / Multi-Language Support ============
@@ -421,6 +431,20 @@ SHUTDOWN_TIMEOUT = int(os.getenv("SHUTDOWN_TIMEOUT", "30"))
 
 # ============ ETL IPC Secret ============
 ETL_SECRET = os.getenv("ETL_SECRET", "")
+_ETL_SECRET_IS_EPHEMERAL = False
+if not ETL_SECRET and os.getenv("REINDEX_ENABLED", "true").lower() != "false":
+    import secrets as _etl_secrets
+    import warnings as _etl_warnings
+
+    ETL_SECRET = _etl_secrets.token_hex(32)
+    _ETL_SECRET_IS_EPHEMERAL = True
+    _etl_warnings.warn(
+        "ETL_SECRET is empty but REINDEX_ENABLED is not false — auto-generated an ephemeral key. "
+        "ETL will be unable to authenticate to the proxy across restarts. "
+        "Set ETL_SECRET in your environment for persistence. "
+        "Generate with: openssl rand -hex 32",
+        stacklevel=2,
+    )
 
 
 # ============ Вспомогательная функция для отладки ============

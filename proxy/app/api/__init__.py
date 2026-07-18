@@ -4,6 +4,7 @@
 from proxy.app.api.admin import router as admin_router
 from proxy.app.api.admin_analytics import router as admin_analytics_router
 from proxy.app.api.admin_config import router as admin_config_router
+from proxy.app.api.admin_data_quality import router as admin_data_quality_router
 from proxy.app.api.auth_endpoints import router as auth_router
 from proxy.app.api.chat import router as chat_router
 from proxy.app.api.expert_kb import router as expert_kb_router
@@ -17,6 +18,7 @@ from proxy.app.api.widget import router as widget_router
 __all__ = [
     "admin_analytics_router",
     "admin_config_router",
+    "admin_data_quality_router",
     "admin_router",
     "auth_router",
     "chat_router",

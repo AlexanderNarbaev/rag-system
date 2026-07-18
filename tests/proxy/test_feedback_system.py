@@ -514,3 +514,103 @@ class TestFeedbackStore:
         assert d["feedback_id"] == "fb_dict"
         assert d["contexts"] == ["ctx1", "ctx2"]
         assert d["chunk_feedback"] == [{"chunk_id": "c1", "relevance_score": 4}]
+
+
+# ── FR-81: Feedback rate limiting ──
+
+
+class TestFeedbackRateLimit:
+    """FR-81: Feedback endpoint rate limiting."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_deps(self):
+        with (
+            patch("proxy.app.core.hitl.get_logger", return_value=MagicMock()),
+            patch("proxy.app.core.feedback_store.get_feedback_store", return_value=MagicMock()),
+            patch("proxy.app.shared.metrics.record_enrichment"),
+            patch("proxy.app.shared.metrics.record_feedback"),
+            patch("proxy.app.core.ragas_eval.evaluate_rag_response", return_value={}),
+        ):
+            yield
+
+    @pytest.fixture
+    def user_ctx(self):
+        return MagicMock(
+            user_id="rate-test-user",
+            username="ratetester",
+            roles=["user"],
+            groups=["everyone"],
+        )
+
+    @pytest.fixture(autouse=True)
+    def _reset_limiter(self):
+        import proxy.app.api.feedback as fb
+
+        fb._feedback_rate_limiter = None
+
+    def test_rate_limiter_allows_up_to_burst(self, user_ctx):
+        import asyncio
+
+        from proxy.app.api.feedback import FeedbackRequest, submit_feedback
+
+        for i in range(5):
+            request = FeedbackRequest(
+                feedback_id=f"fb_rate_{i}",
+                rating="positive",
+                comment=f"Feedback {i}",
+            )
+            result = asyncio.run(submit_feedback(request, MagicMock(), user_ctx))
+            assert result.status == "ok"
+
+    def test_rate_limiter_returns_429_when_exceeded(self, user_ctx):
+        import asyncio
+
+        from fastapi import HTTPException
+
+        import proxy.app.api.feedback as fb
+        from proxy.app.shared.rate_limiter import RateLimiter
+
+        fb._feedback_rate_limiter = RateLimiter(rate_per_minute=1, burst=1)
+
+        from proxy.app.api.feedback import FeedbackRequest, submit_feedback
+
+        request = FeedbackRequest(
+            feedback_id="fb_ratelimit_1",
+            rating="positive",
+        )
+        result = asyncio.run(submit_feedback(request, MagicMock(), user_ctx))
+        assert result.status == "ok"
+
+        request2 = FeedbackRequest(
+            feedback_id="fb_ratelimit_2",
+            rating="positive",
+        )
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(submit_feedback(request2, MagicMock(), user_ctx))
+        assert exc.value.status_code == 429
+        assert "eedback rate limit exceeded" in exc.value.detail
+
+    def test_different_users_have_independent_limits(self, user_ctx):
+        import asyncio
+
+        import proxy.app.api.feedback as fb
+        from proxy.app.shared.rate_limiter import RateLimiter
+
+        fb._feedback_rate_limiter = RateLimiter(rate_per_minute=1, burst=1)
+
+        from proxy.app.api.feedback import FeedbackRequest, submit_feedback
+
+        user_b = MagicMock(
+            user_id="rate-test-user-b",
+            username="ratetester_b",
+            roles=["user"],
+            groups=["everyone"],
+        )
+
+        request = FeedbackRequest(feedback_id="fb_diff_1", rating="positive")
+        result = asyncio.run(submit_feedback(request, MagicMock(), user_ctx))
+        assert result.status == "ok"
+
+        request2 = FeedbackRequest(feedback_id="fb_diff_2", rating="positive")
+        result2 = asyncio.run(submit_feedback(request2, MagicMock(), user_b))
+        assert result2.status == "ok"

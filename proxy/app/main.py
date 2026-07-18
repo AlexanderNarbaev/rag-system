@@ -323,6 +323,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Graceful shutdown handlers registered")
 
     logger.info("RAG Proxy ready")
+
+    # Start session cleanup (prunes expired conversations every 5 min)
+    try:
+        from proxy.app.shared.memory_manager import start_session_cleanup
+
+        start_session_cleanup()
+    except Exception as e:
+        logger.warning("Session cleanup start failed (non-blocking): %s", e)
+
     yield
     # Cleanup
     global shutting_down
@@ -342,6 +351,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info(f"Drained {len(done)} requests, cancelled {len(pending)}")
     if cache_manager:
         await cache_manager.close()
+    # Stop session cleanup
+    try:
+        from proxy.app.shared.memory_manager import stop_session_cleanup
+
+        await stop_session_cleanup()
+    except Exception as e:
+        logger.warning("Session cleanup stop failed: %s", e)
     logger.info("RAG Proxy shutdown")
 
 
@@ -774,6 +790,7 @@ async def list_models() -> ModelsResponse:
 from proxy.app.api import (  # noqa: E402
     admin_analytics_router,
     admin_config_router,
+    admin_data_quality_router,
     admin_router,
     auth_router,
     chat_router,
@@ -800,6 +817,7 @@ app.include_router(widget_router)
 app.include_router(admin_router)
 app.include_router(admin_config_router)
 app.include_router(admin_analytics_router)
+app.include_router(admin_data_quality_router)
 app.include_router(admin_feedback_router)
 app.include_router(admin_kb_router)
 app.include_router(expert_kb_router)

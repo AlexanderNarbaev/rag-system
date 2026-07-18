@@ -1,4 +1,4 @@
-"""Tests for admin analytics API — FR-20."""
+"""Tests for admin analytics API — FR-105."""
 
 import sys
 from unittest.mock import MagicMock
@@ -73,72 +73,97 @@ def _override_auth(user_context):
 class TestAdminAnalyticsOverview:
     def test_get_analytics_as_admin(self, client, admin_ctx):
         _override_auth(admin_ctx)
-        response = client.get("/v1/admin/analytics?days=7")
+        response = client.get("/v1/admin/analytics?period=7d")
         assert response.status_code == 200
         data = response.json()
-        assert "period_days" in data
-        assert data["period_days"] == 7
-        assert "total_queries" in data
-        assert "total_unique_users" in data
-        assert "average_latency_seconds" in data
-        assert "latency_p50" in data
-        assert "latency_p95" in data
-        assert "latency_p99" in data
-        assert "token_consumption_by_model" in data
-        assert "top_kbs_by_volume" in data
-        assert "daily_breakdown" in data
-        assert isinstance(data["daily_breakdown"], list)
+        assert "period" in data
+        assert data["period"] == "7d"
+        assert "queries" in data
+        assert "total" in data["queries"]
+        assert "avg_per_hour" in data["queries"]
+        assert "trend" in data["queries"]
+        assert "users" in data
+        assert "unique" in data["users"]
+        assert "avg_queries_per_user" in data["users"]
+        assert "latency" in data
+        assert "p50_ms" in data["latency"]
+        assert "p95_ms" in data["latency"]
+        assert "p99_ms" in data["latency"]
+        assert "tokens" in data
+        assert "total_input" in data["tokens"]
+        assert "total_output" in data["tokens"]
+        assert "top_kbs" in data
+        assert isinstance(data["top_kbs"], list)
 
-    def test_get_analytics_default_days(self, client, admin_ctx):
+    def test_get_analytics_default_period(self, client, admin_ctx):
         _override_auth(admin_ctx)
         response = client.get("/v1/admin/analytics")
         assert response.status_code == 200
         data = response.json()
-        assert data["period_days"] == 30
+        assert data["period"] == "30d"
 
-    def test_get_analytics_custom_days(self, client, admin_ctx):
+    def test_get_analytics_24h(self, client, admin_ctx):
+        _override_auth(admin_ctx)
+        response = client.get("/v1/admin/analytics?period=24h")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["period"] == "24h"
+
+    def test_get_analytics_days_backward_compat(self, client, admin_ctx):
         _override_auth(admin_ctx)
         response = client.get("/v1/admin/analytics?days=90")
         assert response.status_code == 200
         data = response.json()
-        assert data["period_days"] == 90
+        assert data["period"] == "90d"
 
     def test_get_analytics_rejects_invalid_days(self, client, admin_ctx):
         _override_auth(admin_ctx)
         response = client.get("/v1/admin/analytics?days=0")
         assert response.status_code == 422
 
-    def test_get_analytics_daily_breakdown_structure(self, client, admin_ctx):
+    def test_get_analytics_with_metric_filter(self, client, admin_ctx):
         _override_auth(admin_ctx)
-        response = client.get("/v1/admin/analytics?days=3")
+        response = client.get("/v1/admin/analytics?metric=queries,latency")
+        assert response.status_code == 200
         data = response.json()
-        assert len(data["daily_breakdown"]) <= 3
-        if data["daily_breakdown"]:
-            day = data["daily_breakdown"][0]
-            assert "date" in day
-            assert "queries" in day
-            assert "unique_users" in day
-            assert "latency_p50" in day
-            assert "latency_p95" in day
-            assert "latency_p99" in day
-            assert "tokens" in day
+        assert "period" in data
+        assert "queries" in data
+        assert "latency" in data
+        assert "users" not in data
+        assert "tokens" not in data
+
+    def test_get_analytics_top_kbs_structure(self, client, admin_ctx):
+        _override_auth(admin_ctx)
+        response = client.get("/v1/admin/analytics")
+        data = response.json()
+        assert "top_kbs" in data
+        for kb in data["top_kbs"]:
+            assert "name" in kb
+            assert "queries" in kb
 
 
 class TestAdminAnalyticsKB:
     def test_get_kb_analytics(self, client, admin_ctx):
         _override_auth(admin_ctx)
-        response = client.get("/v1/admin/analytics/kb/test-kb?days=7")
+        response = client.get("/v1/admin/analytics/kb/test-kb?period=7d")
         assert response.status_code == 200
         data = response.json()
         assert data["kb_id"] == "test-kb"
-        assert data["period_days"] == 7
+        assert data["period"] == "7d"
         assert "total_queries" in data
         assert "percentage_of_total" in data
         assert "daily_breakdown" in data
 
+    def test_get_kb_analytics_default(self, client, admin_ctx):
+        _override_auth(admin_ctx)
+        response = client.get("/v1/admin/analytics/kb/test-kb")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["period"] == "30d"
+
     def test_get_kb_analytics_daily_structure(self, client, admin_ctx):
         _override_auth(admin_ctx)
-        response = client.get("/v1/admin/analytics/kb/test-kb?days=2")
+        response = client.get("/v1/admin/analytics/kb/test-kb?period=24h")
         data = response.json()
         for day in data["daily_breakdown"]:
             assert "date" in day

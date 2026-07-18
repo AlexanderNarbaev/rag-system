@@ -30,7 +30,7 @@ class TestKnowledgeStatus:
             {"title": "Doc C", "relevance": 0.15},
         ]
         result = determine_knowledge_status(sources, should_generate=True)
-        assert result.status == "grounded"
+        assert result.status == "sufficient"
         assert result.source_count == 3
         assert result.strong_source_count == 2
         assert result.max_score == 0.85
@@ -43,7 +43,7 @@ class TestKnowledgeStatus:
             {"title": "Doc B", "relevance": 0.32},
         ]
         result = determine_knowledge_status(sources, should_generate=True)
-        assert result.status == "grounded"
+        assert result.status == "sufficient"
         assert result.strong_source_count == 2
 
     def test_partial_with_one_strong(self):
@@ -55,7 +55,7 @@ class TestKnowledgeStatus:
             {"title": "Doc C", "relevance": 0.10},
         ]
         result = determine_knowledge_status(sources, should_generate=True)
-        assert result.status == "partial"
+        assert result.status == "insufficient"
         assert result.strong_source_count == 1
 
     def test_partial_no_strong(self):
@@ -73,7 +73,7 @@ class TestKnowledgeStatus:
         from proxy.app.core.knowledge_status import determine_knowledge_status
 
         result = determine_knowledge_status([], should_generate=True)
-        assert result.status == "no_knowledge"
+        assert result.status == "absent"
         assert result.source_count == 0
         assert result.strong_source_count == 0
 
@@ -82,7 +82,7 @@ class TestKnowledgeStatus:
 
         sources = [{"title": "Doc A", "relevance": 0.90}]
         result = determine_knowledge_status(sources, should_generate=False)
-        assert result.status == "no_knowledge"
+        assert result.status == "insufficient"
 
     def test_uses_score_fallback(self):
         from proxy.app.core.knowledge_status import determine_knowledge_status
@@ -223,6 +223,17 @@ class TestClarification:
 
         result = generate_clarifying_questions(
             query="What is Python?",
+            status="sufficient",
+            use_slm=False,
+        )
+        assert not result.clarification_needed
+        assert len(result.questions) == 0
+
+    def test_no_clarification_when_grounded_old_name(self):
+        from proxy.app.core.clarification import generate_clarifying_questions
+
+        result = generate_clarifying_questions(
+            query="What is Python?",
             status="grounded",
             use_slm=False,
         )
@@ -234,7 +245,7 @@ class TestClarification:
 
         result = generate_clarifying_questions(
             query="Tell me about X",
-            status="no_knowledge",
+            status="absent",
             use_slm=False,
         )
         assert result.clarification_needed
@@ -242,13 +253,13 @@ class TestClarification:
         assert "generated_by" in result.__dict__
         assert result.generated_by == "heuristic"
 
-    def test_heuristic_partial_with_sources(self):
+    def test_heuristic_insufficient(self):
         from proxy.app.core.clarification import generate_clarifying_questions
 
         result = generate_clarifying_questions(
             query="How do I configure the server?",
-            status="partial",
-            sources=[{"title": "Server Setup Guide", "relevance": 0.28}],
+            status="insufficient",
+            sources=[{"title": "Server Setup Guide", "relevance": 0.35}],
             use_slm=False,
         )
         assert result.clarification_needed
@@ -259,7 +270,7 @@ class TestClarification:
 
         result = generate_clarifying_questions(
             query="Kubernetes?",
-            status="no_knowledge",
+            status="absent",
             use_slm=False,
         )
         assert result.clarification_needed
@@ -274,7 +285,7 @@ class TestUncertaintyResponse:
 
         response = build_uncertainty_response(
             query="What is X?",
-            status="no_knowledge",
+            status="absent",
             sources=[],
         )
         assert "wasn't able to find" in response.lower() or "not able" in response.lower()
@@ -286,7 +297,7 @@ class TestUncertaintyResponse:
 
         response = build_uncertainty_response(
             query="How to configure Nginx?",
-            status="partial",
+            status="insufficient",
             sources=[
                 {"title": "Apache Configuration", "relevance": 0.30},
             ],
@@ -303,7 +314,7 @@ class TestUncertaintyResponse:
         )
         response = build_uncertainty_response(
             query="How to install Python?",
-            status="partial",
+            status="insufficient",
             sources=[],
             clarification=clarification,
         )
@@ -311,6 +322,16 @@ class TestUncertaintyResponse:
         assert "CentOS" in response
 
     def test_no_response_for_grounded(self):
+        from proxy.app.core.clarification import build_uncertainty_response
+
+        response = build_uncertainty_response(
+            query="What is 2+2?",
+            status="sufficient",
+            sources=[{"title": "Math", "relevance": 0.90}],
+        )
+        assert response == ""
+
+    def test_no_response_for_grounded_old_name(self):
         from proxy.app.core.clarification import build_uncertainty_response
 
         response = build_uncertainty_response(
@@ -338,12 +359,12 @@ class TestChatResponseModel:
                     finish_reason="stop",
                 ),
             ],
-            rag_knowledge_status="grounded",
+            rag_knowledge_status="sufficient",
             rag_source_count=3,
             rag_clarification_needed=False,
             rag_clarifying_questions=None,
         )
-        assert resp.rag_knowledge_status == "grounded"
+        assert resp.rag_knowledge_status == "sufficient"
         assert resp.rag_source_count == 3
         assert resp.rag_clarification_needed is False
 
@@ -363,13 +384,13 @@ class TestChatResponseModel:
                     finish_reason="stop",
                 ),
             ],
-            rag_knowledge_status="partial",
+            rag_knowledge_status="insufficient",
             rag_source_count=1,
             rag_clarification_needed=True,
             rag_clarifying_questions=["Can you be more specific?"],
         )
         data = resp.model_dump()
-        assert data["rag_knowledge_status"] == "partial"
+        assert data["rag_knowledge_status"] == "insufficient"
         assert data["rag_source_count"] == 1
         assert data["rag_clarification_needed"] is True
         assert data["rag_clarifying_questions"] == ["Can you be more specific?"]

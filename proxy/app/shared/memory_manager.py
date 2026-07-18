@@ -7,6 +7,8 @@ Three-tier memory:
 3. QueryCache - semantic query cache for similar queries
 """
 
+import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -297,20 +299,47 @@ class MemoryManager:
 
 
 # Process-level conversation store keyed by session_id
-_conversation_store: dict[str, ConversationMemory] = {}
+# Each entry: (ConversationMemory, created_at_timestamp)
+_conversation_store: dict[str, tuple[ConversationMemory, float]] = {}
 _store_max_entries = 1000
 
 
-def get_conversation(session_id: str) -> ConversationMemory:
-    """Get or create a ConversationMemory for a session."""
-    if session_id not in _conversation_store:
-        from proxy.app.shared.config import CONVERSATION_SUMMARY_THRESHOLD_TOKENS
+def _get_session_ttl() -> int:
+    from proxy.app.shared.config import SESSION_TTL
 
-        _conversation_store[session_id] = ConversationMemory(
+    return SESSION_TTL
+
+
+def get_conversation(session_id: str) -> ConversationMemory:
+    """Get or create a ConversationMemory for a session.
+
+    If the existing session has expired (older than SESSION_TTL),
+    a fresh ConversationMemory is created in its place.
+    """
+    now = time.time()
+    ttl = _get_session_ttl()
+
+    if session_id in _conversation_store:
+        memory, created_at = _conversation_store[session_id]
+        if ttl > 0 and (now - created_at) > ttl:
+            logger.info(
+                "Session %s expired (age=%.0fs, ttl=%ds), creating fresh session",
+                session_id[:12], now - created_at, ttl,
+            )
+            del _conversation_store[session_id]
+        else:
+            return memory
+
+    from proxy.app.shared.config import CONVERSATION_SUMMARY_THRESHOLD_TOKENS
+
+    _conversation_store[session_id] = (
+        ConversationMemory(
             summary_threshold_tokens=CONVERSATION_SUMMARY_THRESHOLD_TOKENS,
-        )
-        _prune_store()
-    return _conversation_store[session_id]
+        ),
+        now,
+    )
+    _prune_store()
+    return _conversation_store[session_id][0]
 
 
 def _prune_store() -> None:
@@ -323,8 +352,89 @@ def _prune_store() -> None:
             del _conversation_store[k]
 
 
+def prune_expired_sessions() -> int:
+    """Prune all sessions older than SESSION_TTL. Returns count of sessions pruned."""
+    ttl = _get_session_ttl()
+    if ttl <= 0:
+        return 0
+    now = time.time()
+    expired = [
+        sid
+        for sid, (_, created_at) in _conversation_store.items()
+        if (now - created_at) > ttl
+    ]
+    for sid in expired:
+        del _conversation_store[sid]
+    if expired:
+        logger.info(
+            "Pruned %d expired session(s) (ttl=%ds, remaining=%d)",
+            len(expired), ttl, len(_conversation_store),
+        )
+    return len(expired)
+
+
+_cleanup_task: asyncio.Task[None] | None = None
+
+
+async def _session_cleanup_loop(interval_seconds: int = 300) -> None:
+    """Background loop that periodically prunes expired sessions."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            pruned = prune_expired_sessions()
+            if pruned:
+                logger.info("Periodic session cleanup pruned %d expired sessions", pruned)
+        except Exception:
+            logger.exception("Error during periodic session cleanup")
+
+
+def start_session_cleanup(interval_seconds: int = 300) -> None:
+    """Start the background session cleanup loop (call from FastAPI lifespan)."""
+    global _cleanup_task
+    if _cleanup_task is None or _cleanup_task.done():
+        _cleanup_task = asyncio.ensure_future(_session_cleanup_loop(interval_seconds))
+        logger.info("Session cleanup started (interval=%ds, ttl=%ds)", interval_seconds, _get_session_ttl())
+
+
+async def stop_session_cleanup() -> None:
+    """Stop the background session cleanup loop."""
+    global _cleanup_task
+    if _cleanup_task and not _cleanup_task.done():
+        _cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await _cleanup_task
+        _cleanup_task = None
+        logger.info("Session cleanup stopped")
+
+
+def enrich_query_with_context(conversation: ConversationMemory, user_query: str) -> str:
+    """Enrich a user query with conversation context for better retrieval.
+
+    Prepends last 2 conversation turns and tracked entities as context,
+    helping resolve anaphoric references like "this", "that", "это", "этого".
+    """
+    if len(conversation) == 0:
+        return user_query
+
+    parts: list[str] = []
+
+    entities = conversation.get_entity_tracker().get_top_entities(5)
+    if entities:
+        parts.append(f"[Entities: {', '.join(entities)}]")
+
+    recent_context = conversation.get_context(max_turns=2, include_entities=False)
+    if recent_context:
+        parts.append(f"[Previous conversation:\n{recent_context}\n]")
+
+    if not parts:
+        return user_query
+
+    parts.append(f"Current question: {user_query}")
+    return "\n".join(parts)
+
+
 def clear_conversation(session_id: str) -> None:
     """Clear conversation memory for a session."""
     if session_id in _conversation_store:
-        _conversation_store[session_id].clear()
+        _conversation_store[session_id][0].clear()
         del _conversation_store[session_id]

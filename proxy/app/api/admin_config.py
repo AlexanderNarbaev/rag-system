@@ -323,7 +323,7 @@ def _get_default_value(name: str) -> Any:
         "INTEGRITY_CHUNK_SAMPLE_LIMIT": 200,
         "GRACEFUL_SHUTDOWN_ENABLED": True,
         "SHUTDOWN_TIMEOUT": 30,
-        "ETL_SECRET": "",
+        "ETL_SECRET": "***" if cfg.ETL_SECRET else "",
     }
     return defaults.get(name, getattr(cfg, name, None))
 
