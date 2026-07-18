@@ -1053,7 +1053,32 @@ helm upgrade --install rag-system ./rag-system -n rag-system \
 kubectl rollout undo deployment/rag-proxy -n rag-system
 ```
 
-### 5.9 Probes Reference
+### 5.9 WORKERS=1 Limitation and Zero-Downtime Deployments
+
+The RAG proxy requires `WORKERS=1` per replica (see CON-03 in the compliance requirements). This is because
+the embedder, reranker, and in-process caches are singletons that cannot be shared across multiple worker
+processes without race conditions.
+
+**Impact on zero-downtime deployments:**
+
+- With `WORKERS=1`, a standard rolling update causes a brief window where the old pod is terminated before
+  the new pod is ready to serve traffic. In-flight requests may be dropped during this gap.
+- The proxy does **not** support graceful connection draining across multiple workers within a single pod,
+  since there is only one worker.
+
+**Recommended workarounds:**
+
+| Strategy | Description |
+|----------|-------------|
+| **Weighted traffic (K8s)** | Use multiple proxy replicas (≥2) with a PDB (`minAvailable: 1`). Configure `terminationGracePeriodSeconds: 60` and a `preStop` hook that calls `/v1/admin/drain` or simply sleeps to allow in-flight requests to complete. |
+| **Graceful drain (Docker Compose)** | Scale to 2+ replicas. Before shutting down a replica, remove it from the load balancer and wait for `SHUTDOWN_TIMEOUT` (default 30s) before sending SIGTERM. |
+| **Canary promotion (recommended)** | Deploy the new version as a canary replica, verify health, adjust traffic split via the canary controller, then decommission the old replica. See `model_evolution/canary_controller.py` for the built-in canary mechanism. |
+
+For multi-worker serving without this limitation, deploy the embedder and reranker as standalone remote
+services (see section 8.4 for GPUStack backend) and set `EMBEDDER_ENDPOINT` and `RERANKER_ENDPOINT`
+to external endpoints. This decouples model serving from the proxy and allows `WORKERS > 1`.
+
+### 5.10 Probes Reference
 
 | Probe         | Endpoint           | Purpose                    | Initial Delay | Period |
 |---------------|--------------------|----------------------------|---------------|--------|

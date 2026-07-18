@@ -107,7 +107,7 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 | FR-57 | The ETL pipeline SHALL extract text from scanned PDFs and images using Tesseract OCR with configurable language (default: `eng+rus`) | requirements-and-sprint-plan FR-05, etl-operations OCR | HIGH | Integration test: scanned PDF yields text via OCR |
 | FR-58 | The ETL pipeline SHALL support CLIP-based image embedding generation with captions stored in Qdrant as `content_type: "image"` | requirements-and-sprint-plan FR-06, roadmap Phase 5.1 | HIGH | Integration test: image indexed with embedding and caption |
 | FR-59 | The ETL pipeline SHALL extract embedded images from PDFs, run OCR on each, and append extracted text to document content | etl-operations PDF-Images | HIGH | Integration test: embedded image text merged with document |
-| FR-60 | The ETL pipeline SHALL generate extraction quality reports with per-document OCR confidence, table extraction metrics, and overall score | etl-operations Quality-Report | MEDIUM | CLI: `--quality-report path.json` produces valid JSON |
+| FR-60 | The ETL pipeline SHALL generate extraction quality reports with per-document OCR confidence, table extraction metrics, and overall score | etl-operations Quality-Report | MEDIUM | MET: CLI `--quality-report path.json` produces valid JSON |
 
 ### ETL — Cleanup & Persistence
 
@@ -146,11 +146,11 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 | FR-76 | The system SHALL support training dataset export from HITL logs: expert-corrected pairs and positively-rated pairs in JSONL format for fine-tuning | ADR-007, ADR-010 | HIGH | CLI: export produces valid prompt-completion pairs |
 | FR-77 | The system SHALL provide a Streamlit-based expert review dashboard with browse/filter, feedback submission, corrections, and training dataset export | ADR-007 | HIGH | Manual: dashboard loads, filtering works, corrections save |
 | FR-78 | The system SHALL implement self-enrichment: positive feedback with corrections indexed back into Qdrant as Q&A pairs via `enricher.py` | ADR-007, roadmap Phase 2 | HIGH | Integration test: corrected Q&A pair appears in retrieval after enrichment |
-| FR-79 | All authenticated users SHALL be able to submit feedback (not just experts) | requirements-and-sprint-plan FR-07 | HIGH | Integration test: user-role submits feedback successfully |
+| FR-79 | All authenticated users SHALL be able to submit feedback (not just experts) | requirements-and-sprint-plan FR-07 | HIGH | MET: user-role submits feedback successfully |
 | FR-80 | The system SHALL support `retrieval_quality` as a feedback dimension alongside existing dimensions | requirements-and-sprint-plan FR-07 | HIGH | Integration test: retrieval_quality feedback recorded |
-| FR-81 | The system SHALL rate-limit feedback at 100 submissions per user per hour | requirements-and-sprint-plan FR-07 | HIGH | Unit test: 101st submission returns 429 |
+| FR-81 | The system SHALL rate-limit feedback at 100 submissions per user per hour | requirements-and-sprint-plan FR-07 | HIGH | MET: 101st submission returns 429 |
 | FR-82 | Administrators and experts SHALL have feedback review endpoints: list/filter by status/rating/dimension/date, review with notes, dismiss with reason, trigger enrichment | requirements-and-sprint-plan FR-08 | HIGH | Integration test: admin reviews, dismisses, triggers enrichment |
-| FR-83 | The system SHALL support confidence-based alerting: low-confidence answers trigger admin alerts | roadmap Phase 2, rag-maturity-assessment L5.8 | HIGH | Integration test: confidence < threshold triggers alert |
+| FR-83 | The system SHALL support confidence-based alerting: low-confidence answers trigger admin alerts | roadmap Phase 2, rag-maturity-assessment L5.8 | HIGH | MET: confidence < threshold triggers alert |
 
 ### Authentication & RBAC
 
@@ -182,8 +182,8 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 | FR-102 | The system SHALL expose `/v1/admin/models/reload` (POST) for hot-reload of model adapters | ADR-010 | HIGH | curl test: reload triggers adapter swap |
 | FR-103 | The system SHALL expose `POST /v1/admin/warmup` to pre-load embedder, reranker, and SLM models at startup | roadmap Phase 6.6, performance-quality 12 | HIGH | curl test: warmup completes, first request latency = subsequent |
 | FR-104 | The system SHALL expose `GET /v1/admin/config` and `PATCH /v1/admin/config` for runtime configuration management with validation and audit logging | requirements-and-sprint-plan FR-11 | HIGH | curl test: config read, modified, audit log entry created |
-| FR-105 | The system SHALL expose `GET /v1/admin/analytics` returning time-series usage data (24h/7d/30d) from Prometheus or JSON fallback | requirements-and-sprint-plan FR-12 | HIGH | curl test: analytics JSON returned with expected metrics |
-| FR-106 | The system SHALL expose `GET /v1/admin/data-quality` returning per-source aggregated quality metrics for Streamlit dashboard consumption | requirements-and-sprint-plan FR-13 | HIGH | curl test: data-quality JSON includes per-source breakdown |
+| FR-105 | The system SHALL expose `GET /v1/admin/analytics` returning time-series usage data (24h/7d/30d) from Prometheus or JSON fallback | requirements-and-sprint-plan FR-12 | HIGH | MET: analytics JSON returned with expected metrics |
+| FR-106 | The system SHALL expose `GET /v1/admin/data-quality` returning per-source aggregated quality metrics for Streamlit dashboard consumption | requirements-and-sprint-plan FR-13 | HIGH | MET: data-quality JSON includes per-source breakdown |
 | FR-107 | The system SHALL expose `GET /v1/admin/stale/report` listing documents flagged as stale grouped by source | requirements-and-sprint-plan FR-09 | HIGH | curl test: stale report returns documents older than threshold |
 | FR-108 | The system SHALL expose `POST /v1/admin/reindex/trigger` (webhook) and `GET /v1/admin/reindex/status/{job_id}` for reindexing management | requirements-and-sprint-plan FR-10 | HIGH | curl test: trigger queues job, status trackable |
 | FR-109 | The system SHALL expose expert KB management: `GET /v1/expert/documents`, `POST /v1/expert/documents/{id}/reindex`, `POST /v1/expert/documents/{id}/flag`, `GET /v1/expert/documents/{id}/chunks` | requirements-and-sprint-plan FR-15 | HIGH | Integration test: expert lists, reindexes, flags, lists chunks |
@@ -242,23 +242,23 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 
 | ID | Description | Source | Priority | Verification |
 |----|------------|--------|----------|-------------|
-| FR-140 | The system SHALL accumulate conversational context across multi-turn sessions via `ConversationMemory`, using session context for query expansion (pronoun resolution, topic tracking) | requirements-and-sprint-plan FR-02 | HIGH | Integration test: follow-up question resolves pronouns from prior turn |
-| FR-141 | The system SHALL bound session context to last N turns or token cap and expire sessions after configurable TTL (default 30 min) | requirements-and-sprint-plan FR-02 | HIGH | Integration test: old session expires, new session starts |
+| FR-140 | The system SHALL accumulate conversational context across multi-turn sessions via `ConversationMemory`, using session context for query expansion (pronoun resolution, topic tracking) | requirements-and-sprint-plan FR-02 | HIGH | MET: follow-up question resolves pronouns from prior turn |
+| FR-141 | The system SHALL bound session context to last N turns or token cap and expire sessions after configurable TTL (default 30 min) | requirements-and-sprint-plan FR-02 | HIGH | MET: old session expires, new session starts |
 | FR-142 | The system SHALL generate clarifying questions when knowledge is insufficient (status `insufficient` or `absent`) instead of producing low-confidence or hallucinated answers | requirements-and-sprint-plan FR-03 | HIGH | Integration test: low-confidence query produces specific clarifying questions |
-| FR-143 | The system SHALL implement progressive context gathering: HyDE expansion → sparse-only → live sources → clarification when initial retrieval < MIN_CHUNKS_THRESHOLD (default 3) | requirements-and-sprint-plan FR-23 | HIGH | Integration test: each progressive step logged and attempted |
+| FR-143 | The system SHALL implement progressive context gathering: HyDE expansion → sparse-only → live sources → clarification when initial retrieval < MIN_CHUNKS_THRESHOLD (default 3) | requirements-and-sprint-plan FR-23 | HIGH | MET: each progressive step logged and attempted |
 
 ### Knowledge Status
 
 | ID | Description | Source | Priority | Verification |
 |----|------------|--------|----------|-------------|
-| FR-144 | Every chat response SHALL include a `rag_knowledge_status` field with: status (sufficient/partial/insufficient/absent), chunks_found, chunks_used, confidence_threshold_met | requirements-and-sprint-plan FR-01 | HIGH | Integration test: all four fields present and correct for each scenario |
+| FR-144 | Every chat response SHALL include a `rag_knowledge_status` field with: status (sufficient/partial/insufficient/absent), chunks_found, chunks_used, confidence_threshold_met | requirements-and-sprint-plan FR-01 | HIGH | MET: all four fields present and correct for each scenario |
 | FR-145 | When `rag_knowledge_status` is `insufficient` or `absent`, the response body SHALL clearly signal this to the client | requirements-and-sprint-plan FR-01 | HIGH | Integration test: insufficient retrieval produces clear signal |
 
 ### Multi-Language & i18n
 
 | ID | Description | Source | Priority | Verification |
 |----|------------|--------|----------|-------------|
-| FR-146 | The system SHALL support full i18n with response generation in RU, EN, DE, FR, ZH via `lang` parameter | rag-maturity-assessment L5, roadmap Phase 8.7 | HIGH | Integration test: `lang=de` produces German response |
+| FR-146 | The system SHALL support full i18n with response generation in RU, EN, DE, FR, ZH via `lang` parameter | rag-maturity-assessment L5, roadmap Phase 8.7 | HIGH | MET: `lang=de` produces German response |
 | FR-147 | The system SHALL maintain cross-lingual retrieval benchmarks (MRR > 0.75 for all supported languages) | rag-maturity-assessment L5, roadmap Phase 8.7 | HIGH | Evaluation pipeline: per-language MRR within target |
 | FR-148 | Documentation SHALL be available in RU and EN with a language switcher | AGENTS.md | HIGH | Check: docs/en/ and docs/ru/ directories populated |
 
@@ -272,7 +272,7 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 | FR-152 | The system SHALL provide a unified `docker-compose.distributed.yml` for multi-machine deployment | requirements-and-sprint-plan FR-16 | HIGH | `docker-compose config` validates the distributed compose |
 | FR-153 | MinIO SHALL be deployable via Helm chart (`minio.enabled: true`) for model artifacts, backup storage, and file uploads | requirements-and-sprint-plan FR-20 | HIGH | Helm template renders MinIO with PVC and bucket creation |
 | FR-154 | PostgreSQL SHALL be deployable via Helm chart for structured data (user DB, feedback store) | requirements-and-sprint-plan FR-20 | HIGH | Helm template renders PostgreSQL |
-| FR-155 | A single shared Redis instance SHALL serve both proxy and OpenWebUI with namespaced keys | requirements-and-sprint-plan FR-21 | HIGH | Integration test: proxy and OWUI keys don't collide |
+| FR-155 | A single shared Redis instance SHALL serve both proxy and OpenWebUI with namespaced keys | requirements-and-sprint-plan FR-21 | HIGH | MET: proxy and OWUI keys don't collide |
 | FR-156 | The system SHALL provide a setup wizard (`setup.sh`) with interactive dependency checks, configuration, Docker startup, collection initialization, and health verification | deployment-guide 2 | HIGH | Run setup.sh: all steps complete successfully |
 
 ### File Management (MinIO)
@@ -312,9 +312,9 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 |----|------------|--------|----------|-------------|
 | FR-168 | The system SHALL use Qdrant scalar quantization (INT8 default) for vector storage to reduce memory by 4× | requirements-and-sprint-plan FR-17, performance-quality 1.2 | HIGH | Metric: Qdrant memory usage ≤50% of unquantized |
 | FR-169 | The system SHALL use Qdrant gRPC client (prefer_grpc=True) with HTTP fallback for lower latency (≥30% improvement vs HTTP) | requirements-and-sprint-plan FR-18 | HIGH | Metric: p50 retrieval latency < 130ms via gRPC |
-| FR-170 | The system SHALL enable vLLM prefix caching (`--enable-prefix-caching`) to reduce TTFT by ≥50% for repeated system prompts | requirements-and-sprint-plan FR-19 | HIGH | Metric: TTFT for cached prompts < 50% of uncached |
+| FR-170 | The system SHALL enable vLLM prefix caching (`--enable-prefix-caching`) to reduce TTFT by ≥50% for repeated system prompts | requirements-and-sprint-plan FR-19 | HIGH | PARTIAL: gauge `rag_vllm_prefix_cache_hit_ratio` added to metrics.py; actual monitoring requires external Prometheus job scraping vLLM /metrics endpoint |
 | FR-171 | The system SHALL configure HNSW parameters per collection size: m=16-32, ef_construct=128-256, ef_search=64-200 | requirements-and-sprint-plan FR-24, performance-quality 1.1 | HIGH | Benchmark: recall@10 within documented ranges |
-| FR-172 | The system SHALL implement response compression (gzip level 6 default, brotli level 4 optional) with 60%+ JSON reduction and <5ms CPU overhead | best-practices-checklist 6.10, performance-quality 11 | HIGH | curl: Content-Encoding header present, size reduced |
+| FR-172 | The system SHALL implement response compression (gzip level 6 default, brotli level 4 optional) with 60%+ JSON reduction and <5ms CPU overhead | best-practices-checklist 6.10, performance-quality 11 | HIGH | MET: Content-Encoding header present, size reduced |
 | FR-173 | The system SHALL implement model warm-up via `POST /v1/admin/warmup` eliminating cold-start latency (first request = subsequent) | best-practices-checklist 6.8, performance-quality 12 | HIGH | Metric: first request latency within 100ms of 10th request |
 
 ### Multi-Modal
@@ -523,3 +523,12 @@ Architectural decisions from ADRs that MUST be respected in all future developme
 ---
 
 **Total Requirements:** 175 FR + 50 NFR + 28 CON + 15 DEC = **268 traceable items**
+
+---
+
+## FR Implementation Status Summary (2026-07-18)
+
+| Status   | Count | FR IDs                                                                                          |
+|----------|-------|-------------------------------------------------------------------------------------------------|
+| **MET**  | 13    | FR-60, FR-79, FR-81, FR-83, FR-105, FR-106, FR-140, FR-141, FR-143, FR-144, FR-146, FR-155, FR-172 |
+| **PARTIAL** | 1  | FR-170 (gauge added; external vLLM scraping required)                                           |

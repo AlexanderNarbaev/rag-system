@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.4.0] - 2026-07-18
+
+This release addresses MEDIUM-priority gaps across Waves 10-13: conversational context,
+admin analytics, feedback hardening, i18n, response compression, progressive retrieval,
+and vLLM monitoring.
+
+### Added
+
+- **Wave 10 — Conversation & Context**
+  - Multi-turn conversational context via `ConversationMemory` with pronoun resolution
+    and topic tracking across sessions (FR-140)
+  - Session context bounding: configurable TTL (default 30 min) and last-N-turn token
+    cap to prevent unbounded growth (FR-141)
+  - Admin analytics endpoint (`GET /v1/admin/analytics`) returning 24h/7d/30d time-series
+    usage data from Prometheus with JSON fallback (FR-105)
+  - Admin data-quality endpoint (`GET /v1/admin/data-quality`) returning per-source
+    aggregated quality metrics for Streamlit dashboard consumption (FR-106)
+  - Knowledge status field (`rag_knowledge_status`) in every chat response with
+    status, chunks_found, chunks_used, and confidence_threshold_met (FR-144)
+
+- **Wave 11 — HITL, i18n & ETL**
+  - Feedback available to all authenticated users (not just experts) (FR-79)
+  - Feedback rate limiting at 100 submissions per user per hour (FR-81)
+  - Confidence-based alerting: low-confidence answers trigger admin alerts
+    tracked via `rag_low_confidence_alerts` Prometheus counter (FR-83)
+  - Full i18n support: response generation in RU, EN, DE, FR, ZH via `lang`
+    parameter (FR-146)
+  - ETL extraction quality reports with per-document OCR confidence, table
+    extraction metrics, and overall score (FR-60)
+
+- **Wave 12 — Performance & Retrieval**
+  - Response compression: gzip level 6 (default) and brotli level 4 (optional)
+    with 60%+ JSON reduction and <5ms CPU overhead (FR-172)
+  - Progressive context gathering: HyDE expansion → sparse-only → live sources →
+    clarification when initial retrieval below `MIN_CHUNKS_THRESHOLD` (FR-143)
+  - Shared Redis namespacing: single Redis instance serves both proxy and
+    OpenWebUI with non-colliding key prefixes (FR-155)
+
+- **Wave 13 — Monitoring**
+  - vLLM prefix cache monitoring: `rag_vllm_prefix_cache_hit_ratio` gauge added
+    to Prometheus metrics; actual scraping requires external job targeting vLLM
+    `/metrics` endpoint (FR-170, PARTIAL)
+
+### Changed
+
+- Deployment guide updated with WORKERS=1 zero-downtime limitation note and
+  recommended workarounds (NFR-D04)
+
+### Fixed
+
+- Compliance requirements document updated: 13 FRs marked MET, 1 marked PARTIAL,
+  status summary table added
+
 ## [v2.3.0] - 2026-07-17
 
 ### Added

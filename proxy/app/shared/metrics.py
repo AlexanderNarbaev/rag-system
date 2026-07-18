@@ -308,6 +308,17 @@ RAG_WARMUP_STATUS: Any = _reuse_metric("rag_warmup_status", Gauge) or Gauge(
 )
 
 
+# ── vLLM prefix cache monitoring ──
+# This gauge should be updated by an external Prometheus job that scrapes
+# the vLLM /metrics endpoint. Set to 0.0 initially until external scraping
+# is configured. vLLM exposes this via --enable-prefix-caching.
+
+rag_vllm_prefix_cache_hit_ratio: Any = _reuse_metric("rag_vllm_prefix_cache_hit_ratio", Gauge) or Gauge(
+    "rag_vllm_prefix_cache_hit_ratio",
+    "vLLM prefix cache hit ratio (0.0-1.0). Updated by external Prometheus job scraping vLLM /metrics endpoint.",
+)
+
+
 # ── Helper functions ──
 
 
