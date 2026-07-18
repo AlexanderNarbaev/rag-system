@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.5.0] - 2026-07-18
+
+This release covers Waves 14-17: monitoring enhancements, test coverage boost,
+security hardening, ETL extractor tests, and CI stabilization.
+
+### Added
+
+- **Wave 14 — Monitoring & Documentation**
+  - vLLM prefix cache gauge (`rag_vllm_prefix_cache_hit_ratio`) added to
+    Prometheus metrics for monitoring cache hit rates on vLLM inference
+    backends (FR-170 refinement)
+  - Zero-downtime deployment docs: WORKERS=1 limitation and recommended
+    workarounds documented in deployment guide (NFR-D04)
+  - Compliance requirements document synchronized with v2.4.0 scope
+    (13 FRs marked MET, 1 PARTIAL, status summary table)
+
+- **Wave 15 — Test Coverage & Hardening**
+  - Admin data quality endpoint tests added (`test_admin_data_quality.py`)
+  - Auth endpoints test coverage expanded (`test_auth_endpoints.py` — 58 tests)
+  - Orchestrator tests hardened (`test_orchestrator.py` — 136 tests)
+  - Security hardening: `.env.example` refreshed with all config variables,
+    docker-compose `depends_on` with healthcheck conditions on all services
+  - ETL_SECRET persistence: secret survives container restarts via durable
+    volume mount in ETL docker-compose configuration
+
+- **Wave 16 — ETL Extractor Tests**
+  - Confluence extractor tests: 7 test functions covering page extraction,
+    attachment handling, incremental delta extraction, and error recovery
+  - GitLab extractor tests: 7 test functions covering repo file extraction,
+    MR/issue extraction, pagination, and rate limiting
+  - Jira extractor tests: extended coverage for issue extraction, comments,
+    attachments, custom fields, and pagination
+  - Chunker tests: 16 test functions covering semantic chunking quality,
+    HTML→Markdown conversion, overlap configuration, and heading detection
+  - Total: 71 new ETL test functions across extractors and chunker
+
+- **Wave 17 — CI Stabilization & Documentation**
+  - CI green: ruff format applied across 13 files, lint errors reduced to 0
+  - Architecture overview document (`docs/en/guides/architecture-overview.md`)
+    — 314 lines covering all 6 layers, deployment topology, and data flow
+  - README updated with v2.5.0 scope and architecture overview link
+
+### Fixed
+
+- **Sync blocking fixes:** replaced `time.sleep()` with `threading.Event.wait()`
+  in memory manager and progressive retrieval, and improved asyncio integration
+  in chat endpoint to eliminate event loop blocking
+- **Lint errors:** 17 ruff lint violations resolved across proxy and ETL modules
+- **Format violations:** 13 files reformatted to pass `ruff format --check`
+
 ## [v2.4.0] - 2026-07-18
 
 This release addresses MEDIUM-priority gaps across Waves 10-13: conversational context,

@@ -160,3 +160,44 @@ jobs:
           path: |
             docs/en/api/openapi.json
             docs/en/api/reference.md
+
+  pip-audit:
+    name: Dependency Audit (pip-audit)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit proxy dependencies
+        run: |
+          pip-audit \
+            --requirement requirements-proxy.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+      - name: Audit ETL dependencies
+        run: |
+          pip-audit \
+            --requirement requirements-etl.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+      - name: Audit dev dependencies
+        run: |
+          pip-audit \
+            --requirement requirements-dev.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
