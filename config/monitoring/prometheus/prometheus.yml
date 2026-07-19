@@ -1,0 +1,84 @@
+# Prometheus configuration for RAG System
+# Docs: https://prometheus.io/docs/prometheus/latest/configuration/
+#
+# Targets use Docker service names. For bare-metal deployments,
+# replace service names with localhost (e.g., "localhost:8080").
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [ ]
+  alert_relabel_configs: [ ]
+  alertmanager_config: [ ]
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  # ── RAG Proxy ───────────────────────────────────────────────────────────────
+  - job_name: "rag-proxy"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "rag-proxy:8080"
+        labels:
+          component: "proxy"
+          environment: "production"
+      # Bare-metal fallback: uncomment and comment the line above
+      # - targets:
+      #     - "host.docker.internal:8080"
+
+  # ── Qdrant (vector database) ────────────────────────────────────────────────
+  - job_name: "qdrant"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "rag-qdrant:6333"
+        labels:
+          component: "qdrant"
+          environment: "production"
+
+  # ── Redis Exporter ──────────────────────────────────────────────────────────
+  - job_name: "redis-exporter"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "redis-exporter:9121"
+        labels:
+          component: "redis"
+          environment: "production"
+
+  # ── Neo4j ───────────────────────────────────────────────────────────────────
+  - job_name: "neo4j"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "neo4j-exporter:2004"
+        labels:
+          component: "neo4j"
+          environment: "production"
+
+  # ── Prometheus self-monitoring ──────────────────────────────────────────────
+  - job_name: "prometheus"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "localhost:9090"
+        labels:
+          component: "prometheus"
+          environment: "production"

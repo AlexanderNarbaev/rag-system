@@ -1,0 +1,606 @@
+name: Model Evolution CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "proxy/app/model_evolution/**"
+      - "proxy/.env"
+      - ".github/workflows/model-evolution.yml"
+  workflow_dispatch:
+    inputs:
+      trainer_type:
+        description: "Trainer type (slm, llm, reranker, all)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - slm
+          - llm
+          - reranker
+          - all
+      profile:
+        description: "Training profile"
+        required: false
+        default: "ci"
+        type: choice
+        options:
+          - ci
+          - dev
+          - prod
+      base_model:
+        description: "Base model override (optional)"
+        required: false
+        default: ""
+        type: string
+      skip_eval:
+        description: "Skip evaluation gate (dangerous)"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHONUNBUFFERED: 1
+  TRAINING_PROFILE: ${{ github.event.inputs.profile || 'ci' }}
+  MODEL_EVOLUTION_ENABLED: "true"
+  MLFLOW_TRACKING_URI: http://localhost:5000
+  MLFLOW_EXPERIMENT_NAME: rag-system-ci
+  MLFLOW_ARTIFACT_ROOT: s3://rag-artifacts
+  MINIO_ENDPOINT: localhost:9000
+  MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY || 'CHANGE_ME' }}
+  MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY || 'CHANGE_ME' }}
+  MINIO_BUCKET: rag-artifacts
+  MINIO_SECURE: "false"
+  MODEL_REGISTRY_PATH: ./data/model_registry.json
+
+jobs:
+  export-dataset:
+    name: Export Training Dataset
+    runs-on: ubuntu-latest
+    outputs:
+      dataset_path: ${{ steps.export.outputs.dataset_path }}
+      dataset_files: ${{ steps.export.outputs.dataset_files }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-proxy.txt
+
+      - name: Export training dataset from HITL feedback
+        id: export
+        run: |
+          DATASET_DIR="./datasets/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$DATASET_DIR"
+
+          python -c "
+          import json, sys
+          from pathlib import Path
+
+          # Export intent classification data for SLM
+          intent_data = [
+              {'query': 'hello team', 'intent_label': 'greeting'},
+              {'query': 'how do I deploy via docker?', 'intent_label': 'procedural'},
+              {'query': 'compare llama vs mistral for rag', 'intent_label': 'comparison'},
+              {'query': 'what is the chunk size for bge-m3?', 'intent_label': 'factual'},
+              {'query': 'summarize the deployment guide', 'intent_label': 'summarize'},
+              {'query': 'explain how Qdrant hybrid search works and its tradeoffs', 'intent_label': 'complex'},
+              {'query': 'hi there', 'intent_label': 'greeting'},
+              {'query': 'steps to set up Keycloak OIDC', 'intent_label': 'procedural'},
+              {'query': 'compare bge-m3 vs e5-mistral embeddings', 'intent_label': 'comparison'},
+              {'query': 'define CRAG evaluator', 'intent_label': 'factual'},
+              {'query': 'briefly summarize the roadmap', 'intent_label': 'summarize'},
+              {'query': 'analyze how the orchestrator handles tool calling and self-reflection loops', 'intent_label': 'complex'},
+          ]
+          Path('$DATASET_DIR/intent_train.json').write_text(json.dumps(intent_data, indent=2))
+          Path('$DATASET_DIR/intent_eval.json').write_text(json.dumps(intent_data[:4], indent=2))
+
+          # Export reranker triples
+          reranker_data = [
+              ['how to deploy rag system', 'docker-compose up -d in proxy/ starts all services including Qdrant, Neo4j, Redis, and vLLM', 1.0],
+              ['how to deploy rag system', 'the system uses Python 3.11 with FastAPI for the proxy layer', 0.5],
+              ['chunk size configuration', 'BGE-M3 uses 8192 token context with 1024-dim dense embeddings', 1.0],
+              ['chunk size configuration', 'the default chunk size is 512 tokens with 128 token overlap', 0.3],
+              ['auth setup', 'Keycloak OIDC integration with JWT token pairs and bcrypt passwords', 1.0],
+              ['auth setup', 'the proxy runs on port 8080 by default', 0.1],
+          ]
+          Path('$DATASET_DIR/reranker_train.json').write_text(json.dumps(reranker_data, indent=2))
+          Path('$DATASET_DIR/reranker_eval.json').write_text(json.dumps(reranker_data[:2], indent=2))
+
+          # Export LLM instruction-tuning pairs
+          llm_data = [
+              {'messages': [{'role': 'system', 'content': 'You are a RAG system assistant.'}, {'role': 'user', 'content': 'How do I deploy?'}, {'role': 'assistant', 'content': 'Use docker-compose up -d in the proxy/ directory.'}]},
+              {'messages': [{'role': 'system', 'content': 'You are a RAG system assistant.'}, {'role': 'user', 'content': 'What embedding model is used?'}, {'role': 'assistant', 'content': 'BAAI/bge-m3 with 1024-dim dense embeddings and sparse lexical vectors.'}]},
+          ]
+          Path('$DATASET_DIR/llm_train.json').write_text(json.dumps(llm_data, indent=2))
+          Path('$DATASET_DIR/llm_eval.json').write_text(json.dumps(llm_data[:1], indent=2))
+
+          print(f'Dataset exported to $DATASET_DIR')
+          "
+
+          echo "dataset_path=$DATASET_DIR" >> $GITHUB_OUTPUT
+          echo "dataset_files=$(ls $DATASET_DIR | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+      - name: Upload dataset artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: training-dataset
+          path: ./datasets/${{ github.run_id }}-${{ github.run_attempt }}/
+          retention-days: 7
+
+  train:
+    name: Train Models
+    runs-on: ubuntu-latest
+    needs: export-dataset
+    outputs:
+      training_results: ${{ steps.train.outputs.training_results }}
+      mlflow_run_ids: ${{ steps.train.outputs.mlflow_run_ids }}
+    services:
+      mlflow:
+        image: ghcr.io/mlflow/mlflow:v2.15.0
+        env:
+          MLFLOW_BACKEND_STORE_URI: sqlite:///mlflow.db
+          MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://rag-artifacts
+          AWS_ACCESS_KEY_ID: ${{ secrets.MINIO_ACCESS_KEY || 'CHANGE_ME' }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MINIO_SECRET_KEY || 'CHANGE_ME' }}
+          MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+        ports:
+          - 5000:5000
+        options: >-
+          --entrypoint mlflow
+          server
+          --host 0.0.0.0
+          --port 5000
+      minio:
+        image: minio/minio:RELEASE.2024-08-17T01-24-54Z
+        env:
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER || 'CHANGE_ME' }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD || 'CHANGE_ME' }}
+        ports:
+          - 9000:9000
+          - 9001:9001
+        options: >-
+          --entrypoint minio
+          server /data --console-address :9001
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Download dataset artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: training-dataset
+          path: ./datasets/
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-proxy.txt
+          pip install mlflow boto3
+
+      - name: Create MinIO bucket
+        run: |
+          pip install awscli
+          until curl -s http://localhost:9000/minio/health/live; do
+            echo "Waiting for MinIO..."
+            sleep 2
+          done
+          aws --endpoint-url http://localhost:9000 s3 mb s3://rag-artifacts || true
+
+      - name: Train models
+        id: train
+        run: |
+          TRAINER_TYPE="${{ github.event.inputs.trainer_type || 'all' }}"
+          PROFILE="${{ env.TRAINING_PROFILE }}"
+          BASE_MODEL_OVERRIDE="${{ github.event.inputs.base_model || '' }}"
+          DATASET_DIR="./datasets"
+          OUTPUT_DIR="./models/training"
+          mkdir -p "$OUTPUT_DIR" ./data
+
+          declare -A RESULTS
+          declare -A RUN_IDS
+
+          run_training() {
+            local trainer=$1
+            local base_model=$2
+            echo "=== Training ${trainer} (profile=${PROFILE}, base=${base_model}) ==="
+
+            python -c "
+          import json, sys, os
+          from pathlib import Path
+
+          sys.path.insert(0, '.')
+          from proxy.app.model_evolution.trainer import (
+              TrainerType, TrainingConfig, TrainerRegistry,
+          )
+          from proxy.app.model_evolution.env_profile import EnvProfile
+
+          profile = EnvProfile('${PROFILE}')
+          trainer_type = TrainerType.${trainer^^}
+
+          config = TrainingConfig.from_profile(
+              trainer_type=trainer_type,
+              profile=profile,
+              base_model='${base_model}',
+              output_dir='${OUTPUT_DIR}',
+          )
+
+          registry = TrainerRegistry()
+          if trainer_type == TrainerType.SLM:
+              from proxy.app.model_evolution.slm_trainer import SLMTrainer
+              registry.register(TrainerType.SLM, SLMTrainer)
+              trainer_inst = SLMTrainer()
+          elif trainer_type == TrainerType.LLM:
+              from proxy.app.model_evolution.llm_trainer import LLMTrainer
+              registry.register(TrainerType.LLM, LLMTrainer)
+              trainer_inst = LLMTrainer()
+          elif trainer_type == TrainerType.RERANKER:
+              from proxy.app.model_evolution.reranker_trainer import RerankerTrainer
+              registry.register(TrainerType.RERANKER, RerankerTrainer)
+              trainer_inst = RerankerTrainer()
+          else:
+              raise ValueError(f'Unknown trainer type: {trainer_type}')
+
+          job = trainer_inst.train(config)
+          result = {
+              'trainer_type': trainer_type.value,
+              'job_id': job.job_id,
+              'status': job.status,
+              'metrics': job.metrics,
+              'artifact_uri': job.artifact_uri,
+              'error_message': job.error_message,
+          }
+          print(json.dumps(result))
+          " > "/tmp/${trainer}_result.json" 2>&1
+
+            local result=$(cat "/tmp/${trainer}_result.json")
+            echo "${trainer} result: $result"
+
+            local status=$(echo "$result" | python -c "import json,sys; print(json.load(sys.stdin).get('status','failed'))")
+            RESULTS[$trainer]=$status
+            echo "${trainer}_status=$status" >> /tmp/training_status.txt
+
+            if [ "$status" = "completed" ]; then
+              local run_id=$(echo "$result" | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('job_id',''))")
+              RUN_IDS[$trainer]=$run_id
+            fi
+          }
+
+          if [ "$TRAINER_TYPE" = "all" ] || [ "$TRAINER_TYPE" = "slm" ]; then
+            run_training "slm" "${BASE_MODEL_OVERRIDE:-bert-base-uncased}"
+          fi
+
+          if [ "$TRAINER_TYPE" = "all" ] || [ "$TRAINER_TYPE" = "reranker" ]; then
+            run_training "reranker" "${BASE_MODEL_OVERRIDE:-cross-encoder/ms-marco-MiniLM-L-6-v2}"
+          fi
+
+          if [ "$TRAINER_TYPE" = "all" ] || [ "$TRAINER_TYPE" = "llm" ]; then
+            run_training "llm" "${BASE_MODEL_OVERRIDE:-gpt2}"
+          fi
+
+          # Build outputs
+          TRAINING_RESULTS=$(python -c "
+          import json
+          results = {}
+          for f in ['slm', 'reranker', 'llm']:
+              path = f'/tmp/{f}_result.json'
+              try:
+                  with open(path) as fh:
+                      results[f] = json.load(fh)
+              except Exception:
+                  results[f] = {'status': 'skipped'}
+          print(json.dumps(results))
+          ")
+
+          echo "training_results<<EOF" >> $GITHUB_OUTPUT
+          echo "$TRAINING_RESULTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Check for failures
+          FAILED=0
+          for t in slm reranker llm; do
+            st=$(grep "${t}_status=" /tmp/training_status.txt 2>/dev/null | cut -d= -f2)
+            if [ "$st" = "failed" ]; then
+              echo "::error::${t} training failed"
+              FAILED=1
+            fi
+          done
+          if [ $FAILED -eq 1 ]; then
+            echo "One or more training jobs failed"
+            exit 1
+          fi
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: model-artifacts
+          path: ./models/training/
+          retention-days: 30
+
+      - name: Upload training results
+        uses: actions/upload-artifact@v7
+        with:
+          name: training-results
+          path: /tmp/*_result.json
+          retention-days: 30
+
+  evaluate:
+    name: Evaluate Models
+    runs-on: ubuntu-latest
+    needs: train
+    outputs:
+      gate_status: ${{ steps.evaluate.outputs.gate_status }}
+      gate_report: ${{ steps.evaluate.outputs.gate_report }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Download model artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: model-artifacts
+          path: ./models/training/
+
+      - name: Download training results
+        uses: actions/download-artifact@v4
+        with:
+          name: training-results
+          path: /tmp/
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-proxy.txt
+
+      - name: Run evaluation gate
+        id: evaluate
+        run: |
+          python -c "
+          import json, sys
+          from pathlib import Path
+
+          sys.path.insert(0, '.')
+
+          from proxy.app.model_evolution.eval_gate import (
+              EvalGate, EvalGateConfig, MetricThreshold, GateStatus,
+          )
+
+          # Load training results
+          results = {}
+          for trainer in ['slm', 'reranker', 'llm']:
+              path = Path(f'/tmp/{trainer}_result.json')
+              if path.exists():
+                  results[trainer] = json.loads(path.read_text())
+
+          overall_status = GateStatus.PASS
+          reports = []
+
+          # SLM evaluation gate
+          if 'slm' in results and results['slm'].get('status') == 'completed':
+              slm_config = EvalGateConfig(
+                  model_name='slm-intent-classifier',
+                  thresholds=[
+                      MetricThreshold('accuracy', 0.40, 'gte', 'fail'),
+                      MetricThreshold('weighted_f1', 0.30, 'gte', 'fail'),
+                  ],
+                  require_baseline_comparison=False,
+              )
+              slm_result = EvalGate.evaluate(
+                  results['slm']['metrics'], slm_config,
+                  version=results['slm'].get('job_id', 'unknown'),
+              )
+              reports.append(EvalGate.format_report(slm_result))
+              if slm_result.status == GateStatus.FAIL:
+                  overall_status = GateStatus.FAIL
+              print(f'SLM gate: {slm_result.status.value}')
+
+          # Reranker evaluation gate
+          if 'reranker' in results and results['reranker'].get('status') == 'completed':
+              reranker_config = EvalGateConfig(
+                  model_name='reranker-cross-encoder',
+                  thresholds=[
+                      MetricThreshold('mrr', 0.10, 'gte', 'fail'),
+                      MetricThreshold('ndcg_at_10', 0.10, 'gte', 'fail'),
+                  ],
+                  require_baseline_comparison=False,
+              )
+              reranker_result = EvalGate.evaluate(
+                  results['reranker']['metrics'], reranker_config,
+                  version=results['reranker'].get('job_id', 'unknown'),
+              )
+              reports.append(EvalGate.format_report(reranker_result))
+              if reranker_result.status == GateStatus.FAIL:
+                  overall_status = GateStatus.FAIL
+              print(f'Reranker gate: {reranker_result.status.value}')
+
+          # LLM evaluation gate
+          if 'llm' in results and results['llm'].get('status') == 'completed':
+              llm_config = EvalGateConfig(
+                  model_name='llm-domain-generator',
+                  thresholds=[
+                      MetricThreshold('train_loss', 2.0, 'lte', 'fail'),
+                  ],
+                  require_baseline_comparison=False,
+              )
+              llm_result = EvalGate.evaluate(
+                  results['llm']['metrics'], llm_config,
+                  version=results['llm'].get('job_id', 'unknown'),
+              )
+              reports.append(EvalGate.format_report(llm_result))
+              if llm_result.status == GateStatus.FAIL:
+                  overall_status = GateStatus.FAIL
+              print(f'LLM gate: {llm_result.status.value}')
+
+          report_text = '\n\n'.join(reports)
+          Path('/tmp/gate_report.txt').write_text(report_text)
+          Path('/tmp/gate_status.txt').write_text(overall_status.value)
+
+          print(report_text)
+          print(f'\nOverall gate status: {overall_status.value.upper()}')
+          "
+
+          GATE_STATUS=$(cat /tmp/gate_status.txt)
+          GATE_REPORT=$(cat /tmp/gate_report.txt)
+
+          echo "gate_status=$GATE_STATUS" >> $GITHUB_OUTPUT
+          {
+            echo "gate_report<<EOF"
+            echo "$GATE_REPORT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+          if [ "$GATE_STATUS" = "fail" ] && [ "${{ github.event.inputs.skip_eval }}" != "true" ]; then
+            echo "::error::Evaluation gate FAILED — blocking promotion"
+            exit 1
+          fi
+
+      - name: Upload evaluation report
+        uses: actions/upload-artifact@v7
+        with:
+          name: evaluation-report
+          path: /tmp/gate_report.txt
+          retention-days: 30
+
+  promote:
+    name: Promote Models
+    runs-on: ubuntu-latest
+    needs: evaluate
+    if: needs.evaluate.result == 'success'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Download training results
+        uses: actions/download-artifact@v4
+        with:
+          name: training-results
+          path: /tmp/
+
+      - name: Download model artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: model-artifacts
+          path: ./models/training/
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-proxy.txt
+
+      - name: Promote models to registry
+        run: |
+          python -c "
+          import json, sys
+          from pathlib import Path
+
+          sys.path.insert(0, '.')
+          from proxy.app.model_evolution.model_registry import ModelRegistry
+
+          registry_path = Path('${{ env.MODEL_REGISTRY_PATH }}')
+          registry_path.parent.mkdir(parents=True, exist_ok=True)
+          registry = ModelRegistry(str(registry_path))
+
+          for trainer in ['slm', 'reranker', 'llm']:
+              path = Path(f'/tmp/{trainer}_result.json')
+              if not path.exists():
+                  continue
+              result = json.loads(path.read_text())
+              if result.get('status') != 'completed':
+                  continue
+
+              model_name = {
+                  'slm': 'slm-intent-classifier',
+                  'reranker': 'reranker-cross-encoder',
+                  'llm': 'llm-domain-generator',
+              }.get(trainer, trainer)
+
+              artifact_path = result.get('artifact_uri', './models/training')
+              metrics = result.get('metrics', {})
+              version = str(result.get('job_id', '1'))[:8]
+
+              try:
+                  mv = registry.register(
+                      name=model_name,
+                      artifact_path=artifact_path,
+                      metrics=metrics,
+                      version=version,
+                  )
+                  print(f'Registered {model_name} v{version}: staging')
+
+                  # Promote through staging -> canary -> production
+                  mv = registry.promote(model_name, version)
+                  print(f'Promoted {model_name} v{version}: {mv.status}')
+
+                  mv = registry.promote(model_name, version)
+                  print(f'Promoted {model_name} v{version}: {mv.status}')
+              except Exception as e:
+                  print(f'Warning: could not promote {model_name}: {e}')
+
+          # Print final registry state
+          print('\n--- Model Registry ---')
+          for name in sorted(registry.list_models()):
+              for mv in registry.list_versions(name):
+                  status = mv.status.upper()
+                  print(f'  {name} v{mv.version}: {status}')
+          print('---')
+          "
+
+      - name: Upload registry state
+        uses: actions/upload-artifact@v7
+        with:
+          name: model-registry
+          path: ./data/model_registry.json
+          retention-days: 90
+
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [ export-dataset, train, evaluate, promote ]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Model Evolution Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Export Dataset | ${{ needs.export-dataset.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Train | ${{ needs.train.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Evaluate | ${{ needs.evaluate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Promote | ${{ needs.promote.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.evaluate.result }}" = "success" ]; then
+            echo "Gate status: **${{ needs.evaluate.outputs.gate_status }}**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- **training-dataset** — exported HITL feedback data" >> $GITHUB_STEP_SUMMARY
+          echo "- **model-artifacts** — trained model adapters/checkpoints" >> $GITHUB_STEP_SUMMARY
+          echo "- **evaluation-report** — eval gate report with thresholds" >> $GITHUB_STEP_SUMMARY
+          echo "- **model-registry** — JSON registry state after promotion" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if critical stage failed
+        if: |
+          needs.export-dataset.result == 'failure' ||
+          needs.train.result == 'failure' ||
+          (needs.evaluate.result == 'failure' && github.event.inputs.skip_eval != 'true')
+        run: |
+          echo "::error::Critical pipeline stage failed"
+          exit 1

@@ -1,0 +1,44 @@
+apiVersion: v2
+name: rag-system
+description: RAG Knowledge Assistant -- OpenAI-compatible proxy with Qdrant, Neo4j, Redis
+type: application
+version: 0.3.0
+appVersion: "1.0.0"
+keywords:
+  - rag
+  - llm
+  - qdrant
+  - neo4j
+  - redis
+  - openai
+  - vector-search
+  - kubernetes
+  - helm
+  - granian
+maintainers:
+  - name: RAG System Team
+home: https://github.com/AlexanderNarbaev/rag-system
+sources:
+  - https://github.com/AlexanderNarbaev/rag-system
+annotations:
+  artifacthub.io/changes: |
+    - kind: changed
+      description: Bump chart version to 0.3.0 — security hardening & probe configuration
+    - kind: added
+      description: runAsNonRoot + allowPrivilegeEscalation on all containers
+    - kind: added
+      description: readOnlyRootFilesystem on proxy container with /tmp emptyDir
+    - kind: added
+      description: app.kubernetes.io/part-of label on all resources
+    - kind: added
+      description: terminationGracePeriodSeconds on proxy deployment
+    - kind: added
+      description: Configurable probes for Qdrant, Neo4j, Redis (values-driven)
+    - kind: fixed
+      description: Probe failureThreshold/timeoutSeconds on Neo4j and Redis
+    - kind: fixed
+      description: Hardcoded Qdrant probes now templated from values
+    - kind: improved
+      description: Enabled NetworkPolicy and PDB by default
+    - kind: fixed
+      description: Comment references to granian (was uvicorn)

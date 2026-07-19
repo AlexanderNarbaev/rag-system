@@ -1,0 +1,302 @@
+# etl/graph_builder/schema.yaml
+# Схема графа знаний для интеграции Confluence, Jira, GitLab
+# Используется entity_extractor.py и neo4j_loader.py
+
+version: "1.0"
+description: "Схема графа знаний для корпоративного RAG"
+
+# Типы сущностей (узлы)
+entity_types:
+  - name: "PERSON"
+    label: "Person"
+    description: "Сотрудник, разработчик, автор, менеджер"
+    properties:
+      - name: "full_name"
+        type: "string"
+        required: true
+      - name: "username"
+        type: "string"
+      - name: "email"
+        type: "string"
+      - name: "role"
+        type: "string"
+      - name: "department"
+        type: "string"
+    source_mapping:
+      confluence: "author.displayName"
+      jira: "assignee, reporter, author"
+      gitlab: "author.username, author.name"
+
+  - name: "ORGANIZATION"
+    label: "Organization"
+    description: "Команда, отдел, компания, проект"
+    properties:
+      - name: "name"
+        type: "string"
+        required: true
+      - name: "type"
+        type: "string"  # team, department, company
+      - name: "parent"
+        type: "string"
+
+  - name: "TECHNOLOGY"
+    label: "Technology"
+    description: "Технологии, фреймворки, языки программирования, инструменты"
+    properties:
+      - name: "name"
+        type: "string"
+        required: true
+      - name: "category"
+        type: "string"  # language, framework, database, cloud
+      - name: "version"
+        type: "string"
+
+  - name: "PRODUCT"
+    label: "Product"
+    description: "Продукт, сервис, модуль, библиотека"
+    properties:
+      - name: "name"
+        type: "string"
+        required: true
+      - name: "status"
+        type: "string"  # active, deprecated, planning
+      - name: "owner"
+        type: "string"  # ссылка на PERSON или ORGANIZATION
+
+  - name: "PROJECT"
+    label: "Project"
+    description: "Jira проект, GitLab проект, Confluence пространство"
+    properties:
+      - name: "key"
+        type: "string"
+        required: true
+      - name: "name"
+        type: "string"
+      - name: "url"
+        type: "string"
+      - name: "source_system"
+        type: "string"  # jira, gitlab, confluence
+
+  - name: "DOCUMENT"
+    label: "Document"
+    description: "Документ (страница Confluence, задача Jira, коммит Git, статья)"
+    properties:
+      - name: "id"
+        type: "string"
+        required: true
+      - name: "title"
+        type: "string"
+      - name: "url"
+        type: "string"
+      - name: "source_type"
+        type: "string"
+      - name: "version"
+        type: "string"
+      - name: "updated_at"
+        type: "datetime"
+
+  - name: "TICKET"
+    label: "Ticket"
+    description: "Задача Jira (подтип DOCUMENT)"
+    properties:
+      - name: "key"
+        type: "string"
+        required: true
+      - name: "status"
+        type: "string"
+      - name: "priority"
+        type: "string"
+      - name: "issue_type"
+        type: "string"  # Bug, Task, Story, Epic
+
+  - name: "COMMIT"
+    label: "Commit"
+    description: "Git коммит (подтип DOCUMENT)"
+    properties:
+      - name: "sha"
+        type: "string"
+        required: true
+      - name: "message"
+        type: "string"
+      - name: "author"
+        type: "string"
+      - name: "date"
+        type: "datetime"
+
+  - name: "CODE_FILE"
+    label: "CodeFile"
+    description: "Файл с исходным кодом"
+    properties:
+      - name: "path"
+        type: "string"
+        required: true
+      - name: "language"
+        type: "string"
+      - name: "repository"
+        type: "string"
+
+  - name: "CONCEPT"
+    label: "Concept"
+    description: "Абстрактное понятие, доменная сущность, термин"
+    properties:
+      - name: "name"
+        type: "string"
+        required: true
+      - name: "definition"
+        type: "string"
+
+  - name: "LOCATION"
+    label: "Location"
+    description: "Географическое место, офис, дата-центр"
+    properties:
+      - name: "name"
+        type: "string"
+        required: true
+      - name: "country"
+        type: "string"
+      - name: "city"
+        type: "string"
+
+# Типы отношений (рёбра)
+relation_types:
+  - name: "WORKS_ON"
+    description: "Сотрудник работает над проектом/задачей"
+    source_type: "PERSON"
+    target_type: [ "PROJECT", "TICKET" ]
+    properties:
+      - name: "since"
+        type: "date"
+      - name: "role"
+        type: "string"
+
+  - name: "AUTHORED_BY"
+    description: "Документ/коммит создан автором"
+    source_type: [ "DOCUMENT", "COMMIT", "TICKET", "CODE_FILE" ]
+    target_type: "PERSON"
+    properties:
+      - name: "date"
+        type: "datetime"
+
+  - name: "MENTIONS"
+    description: "Документ упоминает сущность (человека, технологию, проект)"
+    source_type: "DOCUMENT"
+    target_type: [ "PERSON", "TECHNOLOGY", "PRODUCT", "PROJECT", "CONCEPT" ]
+    properties:
+      - name: "context"
+        type: "string"
+      - name: "count"
+        type: "int"
+
+  - name: "DEPENDS_ON"
+    description: "Проект/компонент зависит от другого"
+    source_type: [ "PROJECT", "TICKET", "CODE_FILE" ]
+    target_type: [ "PROJECT", "PRODUCT", "TECHNOLOGY" ]
+    properties:
+      - name: "type"
+        type: "string"  # build, runtime, optional
+
+  - name: "RELATES_TO"
+    description: "Общая связь между любыми сущностями"
+    source_type: "*"
+    target_type: "*"
+    properties:
+      - name: "strength"
+        type: "float"  # 0..1
+      - name: "evidence"
+        type: "string"
+
+  - name: "CONTAINS"
+    description: "Включает в себя (проект содержит файл, документ содержит код)"
+    source_type: [ "PROJECT", "DOCUMENT" ]
+    target_type: [ "CODE_FILE", "DOCUMENT", "TICKET" ]
+    properties:
+      - name: "path"
+        type: "string"
+
+  - name: "PARENT_OF"
+    description: "Иерархическая связь (эпик содержит подзадачи, папка содержит страницы)"
+    source_type: [ "TICKET", "DOCUMENT", "PROJECT" ]
+    target_type: [ "TICKET", "DOCUMENT" ]
+    properties:
+      - name: "type"
+        type: "string"  # epic->task, folder->page, etc.
+
+  - name: "REFERENCES"
+    description: "Ссылка на внешний ресурс (URL, issue key)"
+    source_type: "DOCUMENT"
+    target_type: "DOCUMENT"
+    properties:
+      - name: "url"
+        type: "string"
+      - name: "type"
+        type: "string"  # internal, external
+
+  - name: "UPDATES"
+    description: "Коммит обновляет файл или задачу"
+    source_type: "COMMIT"
+    target_type: [ "CODE_FILE", "TICKET" ]
+    properties:
+      - name: "lines_added"
+        type: "int"
+      - name: "lines_deleted"
+        type: "int"
+
+  - name: "BELONGS_TO"
+    description: "Принадлежность к проекту/организации"
+    source_type: [ "DOCUMENT", "TICKET", "CODE_FILE" ]
+    target_type: [ "PROJECT", "ORGANIZATION" ]
+    properties:
+      - name: "role"
+        type: "string"
+
+# Правила извлечения для SLM (подсказки для промпта)
+extraction_rules:
+  # Шаблоны для выявления сущностей в тексте
+  entity_patterns:
+    PERSON:
+      - pattern: "[А-Я][а-я]+ [А-Я][а-я]+"  # Имя Фамилия
+      - pattern: "@[a-z0-9_-]+"            # username
+    TECHNOLOGY:
+      - keywords: [ "Python", "Java", "Docker", "Kubernetes", "PostgreSQL", "Redis", "Git", "CI/CD", "REST API" ]
+    PROJECT:
+      - pattern: "[A-Z]{2,}-\d+"           # Jira issue ключ
+    CONCEPT:
+      - keywords: [ "микросервисы", "RAG", "LLM", "векторная база", "рефакторинг", "деплой" ]
+
+  # Шаблоны для отношений
+  relation_patterns:
+    DEPENDS_ON:
+      - trigger: "зависит от"
+      - trigger: "requires"
+      - trigger: "использует версию"
+    MENTIONS:
+      - trigger: "упоминается"
+      - trigger: "описано в"
+    PARENT_OF:
+      - trigger: "состоит из"
+      - trigger: "включает подзадачу"
+
+# Конфигурация для экспорта в Neo4j (индексы, ограничения)
+neo4j_config:
+  indexes:
+    - type: "Entity"
+      property: "id"
+      unique: true
+    - type: "Entity"
+      property: "name"
+    - type: "Document"
+      property: "source_id"
+    - type: "Ticket"
+      property: "key"
+  constraints:
+    - type: "Entity"
+      property: "id"
+    - type: "Document"
+      property: "id"
+
+# Версионирование графа
+versioning:
+  enabled: true
+  track_history: true
+  history_property: "updated_at"
+  retention_days: 90

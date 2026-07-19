@@ -1,0 +1,202 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs.yml"
+      - "mkdocs.yml"
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs.yml"
+      - "mkdocs.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check proxy/ etl/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check proxy/ etl/
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.11", "3.12", "3.13" ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-proxy.txt
+            requirements-etl.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-proxy.txt
+          pip install -r requirements-etl.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run unit and integration tests with coverage
+        run: |
+          python -m pytest tests/proxy/ tests/etl/ tests/integration/ \
+            -v --tb=short \
+            --junitxml=test-results.xml \
+            --cov=proxy --cov=etl \
+            --cov-report=term-missing \
+            --cov-report=html:htmlcov \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=80 \
+            -q \
+            --ignore=tests/performance \
+            --ignore=tests/e2e \
+            --ignore=tests/resilience
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: test-results.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report-py${{ matrix.python-version }}
+          path: |
+            htmlcov/
+            coverage.xml
+
+  typecheck:
+    name: Type Check
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-proxy.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run mypy
+        run: mypy proxy/app/ --ignore-missing-imports --no-error-summary
+        continue-on-error: true
+
+  openapi:
+    name: OpenAPI Spec Validation
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-proxy.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-proxy.txt
+
+      - name: Validate and export OpenAPI spec
+        run: python scripts/export_openapi.py
+
+      - name: Upload OpenAPI spec
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: openapi-spec
+          path: |
+            docs/en/api/openapi.json
+            docs/en/api/reference.md
+
+  pip-audit:
+    name: Dependency Audit (pip-audit)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit proxy dependencies
+        run: |
+          pip-audit \
+            --requirement requirements-proxy.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+      - name: Audit ETL dependencies
+        run: |
+          pip-audit \
+            --requirement requirements-etl.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+      - name: Audit dev dependencies
+        run: |
+          pip-audit \
+            --requirement requirements-dev.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv

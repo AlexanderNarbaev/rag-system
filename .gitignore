@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Data
+raw_data/
+chunks/
+hot_chunks/
+cold_chunks/
+cold_lake/
+entity_cache/
+wal/
+data/
+*.db
+*.sqlite
+
+# Docker
+.env
+.env.local
+.env.production
+proxy/.env
+proxy/.env.production
+
+# Team state (session-specific, not for public repo)
+.rag-team/
+artifacts/state/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OpenCode IDE
+.opencode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+
+# Backup artifacts
+*.bak
+*~
+*.orig
+
+# Models
+models/
+*.gguf
+
+# Docs build
+site/
+
+# Cache
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+coverage.json
+
+# TLS certificates & keys (generated locally via deploy/nginx/generate-certs.sh)
+deploy/nginx/ssl/
+.~lock*
+
+# Secrets (never commit)
+*.env.production
+proxy/.env.production
+etl/.env
+*.pem
+*.key

@@ -1,0 +1,289 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3178.50" height="932.75" viewBox="0 0 3178.50 932.75">
+    <defs>
+        <marker id="arr-495057" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#495057"/>
+        </marker>
+    </defs>
+    <rect width="3178.50" height="932.75" fill="#ffffff"/>
+    <rect x="40.00" y="198.25" width="310.00" height="460.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="900.50" y="281.50" width="229.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1000.40" y="287.50" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="887.00" y="741.50" width="256.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1000.40" y="747.50" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="882.50" y="511.50" width="265.00" height="110.00" rx="8" fill="#e5dbff" stroke="#6741d9" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1000.40" y="517.50" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#6741d9" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="488.00" y="40.00" width="256.00" height="92.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1276.50" y="138.25" width="265.00" height="580.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="1720.00" y="375.50" width="184.00" height="92.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="2098.50" y="210.00" width="229.00" height="92.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="2536.50" y="210.00" width="202.00" height="92.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="2098.50" y="447.00" width="229.00" height="110.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="2198.40" y="453.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="2536.50" y="362.00" width="202.00" height="110.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="2622.90" y="368.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="519.50" y="274.00" width="193.00" height="550.00" rx="8" fill="#ffe8cc" stroke="#d9480f" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="591.50" y="280.00" width="49.00" height="21.00" rx="8" fill="#e9ecef" stroke="#d9480f" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="2909.50" y="546.00" width="229.00" height="86.00" rx="8" fill="#dbe4ff" stroke="#364fc7" stroke-width="2"
+          opacity="1.00"/>
+    <rect x="3009.40" y="552.00" width="29.20" height="21.00" rx="8" fill="#e9ecef" stroke="#364fc7" stroke-width="1"
+          opacity="1.00"/>
+    <rect x="2914.00" y="222.00" width="220.00" height="68.00" rx="8" fill="#f8f9fa" stroke="#495057" stroke-width="2"
+          opacity="1.00"/>
+    <path d="M 350.00,354.25 L 440.65,234.00 L 796.90,234.00 L 900.50,320.83" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 350.00,576.25 L 440.65,884.00 L 792.85,884.00 L 887.00,812.17" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 350.00,502.25 L 440.65,194.00 L 791.50,194.00 L 882.50,550.83" fill="none" stroke="#495057"
+          stroke-width="2" opacity="1.00" marker-end="url(#arr-495057)"/>
+    <path d="M 350.00,280.25 L 488.00,124.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 350.00,428.25 L 519.50,428.25" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1129.50,383.50 L 1276.50,371.85" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1143.00,749.50 L 1276.50,597.45" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1147.50,519.50 L 1276.50,484.65" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 744.00,124.00 L 1276.50,259.05" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1541.50,421.50 L 1720.00,428.25" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1904.00,408.83 L 2098.50,294.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 1904.00,434.17 L 2098.50,455.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 2327.50,256.00 L 2536.50,256.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 2738.50,256.00 L 2914.00,256.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 2327.50,517.67 L 2909.50,600.67" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 2327.50,486.33 L 2536.50,464.00" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 712.50,415.50 L 900.50,352.17" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 712.50,682.50 L 887.00,780.83" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 712.50,549.00 L 882.50,582.17" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <path d="M 2738.50,464.00 L 2909.50,577.33" fill="none" stroke="#495057" stroke-width="2" opacity="1.00"
+          marker-end="url(#arr-495057)"/>
+    <text x="195.00" y="398.25" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="195.00" dy="16.00">Scheduler</tspan>
+        <tspan x="195.00" dy="20.00">[run_etl.py]</tspan>
+        <tspan x="195.00" dy="20.00">Orchestrates full ETL pipeline</tspan>
+    </text>
+    <text x="1015.00" y="314.50" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1015.00" dy="16.00">Confluence Extractor</tspan>
+        <tspan x="1015.00" dy="20.00">REST API to pages,</tspan>
+        <tspan x="1015.00" dy="20.00">comments, attachments</tspan>
+    </text>
+    <text x="1015.00" y="290.50" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1015.00" dy="12.00">LB</tspan>
+    </text>
+    <text x="1015.00" y="774.50" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1015.00" dy="16.00">Jira Extractor</tspan>
+        <tspan x="1015.00" dy="20.00">REST API to issues,</tspan>
+        <tspan x="1015.00" dy="20.00">transitions, attachments</tspan>
+    </text>
+    <text x="1015.00" y="750.50" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1015.00" dy="12.00">LB</tspan>
+    </text>
+    <text x="1015.00" y="544.50" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1015.00" dy="16.00">GitLab Extractor</tspan>
+        <tspan x="1015.00" dy="20.00">REST API to commits, MRs,</tspan>
+        <tspan x="1015.00" dy="20.00">files, discussions</tspan>
+    </text>
+    <text x="1015.00" y="520.50" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1015.00" dy="12.00">LB</tspan>
+    </text>
+    <text x="616.00" y="56.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="616.00" dy="16.00">Generic Doc Loader</tspan>
+        <tspan x="616.00" dy="20.00">Books (EPUB/PDF), chat</tspan>
+        <tspan x="616.00" dy="20.00">exports (JSON), markdown</tspan>
+    </text>
+    <text x="1409.00" y="388.25" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1409.00" dy="16.00">Semantic Chunker</tspan>
+        <tspan x="1409.00" dy="20.00">[MDKeyChunker]</tspan>
+        <tspan x="1409.00" dy="20.00">Structure-aware splitting</tspan>
+        <tspan x="1409.00" dy="20.00">by headers/sections</tspan>
+    </text>
+    <text x="1812.00" y="391.50" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1812.00" dy="16.00">Hash Versioning</tspan>
+        <tspan x="1812.00" dy="20.00">SHA-256 dedup,</tspan>
+        <tspan x="1812.00" dy="20.00">change detection</tspan>
+    </text>
+    <text x="2213.00" y="226.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2213.00" dy="16.00">Entity Extractor</tspan>
+        <tspan x="2213.00" dy="20.00">spaCy NER to entities</tspan>
+        <tspan x="2213.00" dy="20.00">+ relations</tspan>
+    </text>
+    <text x="2637.50" y="226.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2637.50" dy="16.00">Neo4j Loader</tspan>
+        <tspan x="2637.50" dy="20.00">Bulk load entities</tspan>
+        <tspan x="2637.50" dy="20.00">and relations</tspan>
+    </text>
+    <text x="2213.00" y="480.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2213.00" dy="16.00">Qdrant Hybrid Indexer</tspan>
+        <tspan x="2213.00" dy="20.00">Dense + sparse vector</tspan>
+        <tspan x="2213.00" dy="20.00">indexing with RRF</tspan>
+    </text>
+    <text x="2213.00" y="456.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2213.00" dy="12.00">DB</tspan>
+    </text>
+    <text x="2637.50" y="395.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2637.50" dy="16.00">Live Vector Lake</tspan>
+        <tspan x="2637.50" dy="20.00">Hot/cold storage,</tspan>
+        <tspan x="2637.50" dy="20.00">version management</tspan>
+    </text>
+    <text x="2637.50" y="371.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2637.50" dy="12.00">DB</tspan>
+    </text>
+    <text x="616.00" y="527.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle" opacity="1.00">
+        <tspan x="616.00" dy="16.00">WAL Manager</tspan>
+        <tspan x="616.00" dy="20.00">Checkpointing,</tspan>
+        <tspan x="616.00" dy="20.00">resume capability</tspan>
+    </text>
+    <text x="616.00" y="283.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="616.00" dy="12.00">Queue</tspan>
+    </text>
+    <text x="3024.00" y="577.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="3024.00" dy="16.00">Qdrant</tspan>
+        <tspan x="3024.00" dy="20.00">[External: Vector DB]</tspan>
+    </text>
+    <text x="3024.00" y="555.00" font-size="12" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="3024.00" dy="12.00">DB</tspan>
+    </text>
+    <text x="3024.00" y="236.00" font-size="16" font-family="cursive" fill="#1e1e1e" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="3024.00" dy="16.00">Neo4j</tspan>
+        <tspan x="3024.00" dy="20.00">[External: Graph DB]</tspan>
+    </text>
+    <rect x="591.67" y="223.25" width="38.80" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="611.07" y="225.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="611.07" dy="14.00">Runs</tspan>
+    </text>
+    <rect x="496.15" y="873.25" width="38.80" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="515.55" y="875.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="515.55" dy="14.00">Runs</tspan>
+    </text>
+    <rect x="620.15" y="183.25" width="38.80" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="639.55" y="185.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="639.55" dy="14.00">Runs</tspan>
+    </text>
+    <rect x="399.60" y="191.38" width="38.80" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="419.00" y="193.38" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="419.00" dy="14.00">Runs</tspan>
+    </text>
+    <rect x="388.40" y="417.50" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="434.75" y="419.50" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="434.75" dy="14.00">Checkpoints</tspan>
+    </text>
+    <rect x="1164.35" y="366.93" width="77.30" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1203.00" y="368.93" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1203.00" dy="14.00">Raw pages</tspan>
+    </text>
+    <rect x="1167.25" y="662.73" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1209.75" y="664.73" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1209.75" dy="14.00">Raw issues</tspan>
+    </text>
+    <rect x="1173.35" y="491.33" width="77.30" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1212.00" y="493.33" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1212.00" dy="14.00">Raw files</tspan>
+    </text>
+    <rect x="975.45" y="180.78" width="69.60" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1010.25" y="182.78" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1010.25" dy="14.00">Raw docs</tspan>
+    </text>
+    <rect x="1565.15" y="414.12" width="131.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="1630.75" y="416.12" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="1630.75" dy="14.00">Chunks for dedup</tspan>
+    </text>
+    <rect x="1939.50" y="340.66" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2001.25" y="342.66" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2001.25" dy="14.00">Verified chunks</tspan>
+    </text>
+    <rect x="1927.95" y="433.84" width="146.60" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2001.25" y="435.84" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2001.25" dy="14.00">New/updated chunks</tspan>
+    </text>
+    <rect x="2351.00" y="245.25" width="162.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2432.00" y="247.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2432.00" dy="14.00">Entities + relations</tspan>
+    </text>
+    <rect x="2783.75" y="245.25" width="85.00" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2826.25" y="247.25" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2826.25" dy="14.00">Loads into</tspan>
+    </text>
+    <rect x="2568.30" y="548.42" width="100.40" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2618.50" y="550.42" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2618.50" dy="14.00">Indexes into</tspan>
+    </text>
+    <rect x="2366.40" y="464.41" width="131.20" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2432.00" y="466.41" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2432.00" dy="14.00">Manages versions</tspan>
+    </text>
+    <rect x="760.15" y="373.08" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="806.50" y="375.08" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="806.50" dy="14.00">Last run ts</tspan>
+    </text>
+    <rect x="753.40" y="720.91" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="799.75" y="722.91" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="799.75" dy="14.00">Last run ts</tspan>
+    </text>
+    <rect x="751.15" y="554.84" width="92.70" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="797.50" y="556.84" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle" opacity="1.00">
+        <tspan x="797.50" dy="14.00">Last run ts</tspan>
+    </text>
+    <rect x="2762.25" y="509.91" width="123.50" height="21.50" rx="3" fill="#ffffff" opacity="1.00"/>
+    <text x="2824.00" y="511.91" font-size="14" font-family="cursive" fill="#495057" text-anchor="middle"
+          opacity="1.00">
+        <tspan x="2824.00" dy="14.00">Hot/cold layers</tspan>
+    </text>
+</svg>

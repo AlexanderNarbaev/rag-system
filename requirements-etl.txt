@@ -1,0 +1,40 @@
+# requirements-etl.txt
+# Dependencies for the ETL pipeline (data extraction, chunking, embedding, indexing)
+# Install: pip install -r requirements-etl.txt
+
+# ── HTTP & API clients ────────────────────────────────────────────────────────
+requests>=2.34.2
+beautifulsoup4>=4.12.0
+markdown>=3.8.1
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# ── Vector database & embeddings ──────────────────────────────────────────────
+qdrant-client>=1.18.0,<2.0.0
+sentence-transformers>=5.6.0,<6.0.0
+
+# ── NLP & entity extraction ───────────────────────────────────────────────────
+spacy>=3.8.13
+
+# ── Data processing ───────────────────────────────────────────────────────────
+pandas>=2.0.0
+pyarrow>=24.0.0
+
+# ── Graph database (optional) ─────────────────────────────────────────────────
+neo4j>=5.14.0,<6.0.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+filelock>=3.29.5
+
+markdownify>=1.2.3
+
+# ── Multimodal: OCR, image embedding, PDF images (FR-09–FR-11) ───────────────
+pytesseract>=0.3.10                      # Tesseract OCR — primary OCR engine
+easyocr>=1.7.0                           # EasyOCR — fallback for non-Latin scripts
+pillow>=10.0.0                           # Image loading (PIL)
+pdfplumber>=0.11.0                       # PDF text + image extraction (primary)
+PyMuPDF>=1.24.0                          # PDF image extraction (fallback, fitz)
+
+# ── Vision models: CLIP + BLIP (FR-10) — optional, heavy dependencies ────────
+# transformers>=4.40.0                   # HuggingFace Transformers (CLIP, BLIP)
+# torch>=2.0.0                           # PyTorch (CLIP, BLIP inference)

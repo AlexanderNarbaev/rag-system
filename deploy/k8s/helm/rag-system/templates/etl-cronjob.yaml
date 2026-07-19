@@ -1,0 +1,73 @@
+{{- if .Values.etl.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "rag-system.fullname" . }}-etl
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.etlLabels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.etl.schedule | quote }}
+  concurrencyPolicy: {{ .Values.etl.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.etl.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.etl.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.etl.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            {{- include "rag-system.etlLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: {{ .Values.etl.restartPolicy }}
+          {{- with .Values.etl.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: etl
+              image: "{{ .Values.global.imageRegistry | default "" }}{{ .Values.etl.image.repository }}:{{ .Values.etl.image.tag }}"
+              imagePullPolicy: {{ .Values.etl.image.pullPolicy }}
+              command: {{ toYaml .Values.etl.command | nindent 16 }}
+              env:
+                {{- range .Values.etl.env }}
+                - name: {{ .name }}
+                  value: {{ .value | quote }}
+                {{- end }}
+              resources:
+                {{- toYaml .Values.etl.resources | nindent 16 }}
+              volumeMounts:
+                - name: etl-config
+                  mountPath: /app/etl/config
+                  readOnly: true
+                {{- if .Values.etl.extraVolumeMounts }}
+                {{- toYaml .Values.etl.extraVolumeMounts | nindent 16 }}
+                {{- end }}
+          volumes:
+            - name: etl-config
+              configMap:
+                name: {{ include "rag-system.fullname" . }}-etl-config
+            {{- if .Values.etl.extraVolumes }}
+            {{- toYaml .Values.etl.extraVolumes | nindent 12 }}
+            {{- end }}
+{{- end }}
+---
+{{- if .Values.etl.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rag-system.fullname" . }}-etl-config
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.etlLabels" . | nindent 4 }}
+data:
+  etl_config.yaml: |
+    qdrant:
+      host: {{ .Values.etl.config.qdrantHost | default (printf "%s-qdrant" (include "rag-system.fullname" .)) }}
+      port: {{ .Values.etl.config.qdrantPort | default 6333 | quote }}
+    neo4j:
+      uri: {{ .Values.etl.config.neo4jUri | default (printf "bolt://%s-neo4j:7687" (include "rag-system.fullname" .)) }}
+      user: {{ .Values.etl.config.neo4jUser | default "neo4j" }}
+    sources:
+      {{- toYaml .Values.etl.config.sources | default dict | nindent 6 }}
+{{- end }}

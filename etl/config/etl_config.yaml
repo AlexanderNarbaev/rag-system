@@ -1,0 +1,266 @@
+# etl/config/etl_config.yaml
+# Конфигурация ETL-пайплайна для RAG-системы
+# Замените значения на реальные для вашей инфраструктуры
+
+# Общие настройки
+global:
+  timeout: 120                             # глобальный таймаут чтения (сек) — увеличен для больших инстансов
+  connect_timeout: 30                      # таймаут подключения (сек)
+  max_retries: 5                           # максимальное количество повторов
+  retry_delay: 5                           # задержка между повторами (сек)
+
+# Общие настройки WAL (единая точка контроля прогресса)
+wal:
+  wal_file: "./wal/etl_wal.json"        # путь к файлу WAL
+  use_lock: true                         # использовать файловую блокировку
+  lock_timeout: 30                       # таймаут блокировки (сек)
+  wal_backend: "file"                    # backend: "file" (default), "redis", "proxy"
+  redis_host: "localhost"                # Redis host (when wal_backend=redis)
+  redis_port: 6379                       # Redis port
+  proxy_url: "http://localhost:8080"     # proxy URL (when wal_backend=proxy)
+
+# Confluence (Self-Hosted)
+confluence:
+  url: "https://confluence.internal.company.com"
+  username: ""                             # оставьте пустым для Bearer token auth
+  token: "your_token_here"                 # Bearer токен (или пароль с username)
+  api_key: "your_api_key_here"             # API-ключ (если используется вместо Bearer)
+  verify_ssl: false                        # false для самоподписанных сертификатов
+  ca_bundle: ""                            # путь к корпоративному CA bundle (e.g. /etc/ssl/certs/company.pem)
+  space_keys:                              # список ключей пространств (None = все)
+    - "DEV"
+    - "OPS"
+    - "QA"
+  output_dir: "./raw_data/confluence"
+  incremental: true
+  download_attachments: true
+  max_versions: 0                          # 0 = все версии
+  api_version: "2"                         # "2" или "1"
+
+# Jira (Self-Hosted)
+jira:
+  url: "https://jira.internal.company.com"
+  username: ""                             # оставьте пустым для Bearer token auth
+  token: "your_token_here"                 # Bearer токен (или пароль с username)
+  api_key: "your_api_key_here"             # API-ключ (если используется вместо Bearer)
+  verify_ssl: false                        # false для самоподписанных сертификатов
+  ca_bundle: ""                            # путь к корпоративному CA bundle
+  jql: "project in (DEV, OPS) ORDER BY updated DESC"
+  output_dir: "./raw_data/jira"
+  incremental: true
+  download_attachments: true
+  max_issues_per_run: 0                    # 0 = без ограничений
+  fields: "*all"
+  expand: "changelog,renderedBody"
+
+# GitLab (Self-Hosted)
+gitlab:
+  url: "https://gitlab.internal.company.com"
+  token: "your_token_here"
+  api_key: "your_api_key_here"             # API-ключ (если используется вместо Bearer)
+  verify_ssl: false                        # false для самоподписанных сертификатов
+  ca_bundle: ""                            # путь к корпоративному CA bundle
+  project_ids: null                        # null = все проекты, либо список [1,2,3]
+  output_dir: "./raw_data/gitlab"
+  incremental: true
+  branch: "main"                           # ветка для извлечения файлов (main, dev, master и т.д.)
+  fetch_commits: true
+  fetch_files: true
+  fetch_merge_requests: true
+  max_commits_per_project: 1000            # ограничение для больших репозиториев
+  since_date: null                         # ISO дата, например "2025-01-01T00:00:00Z"
+  file_paths_filter:                       # фильтр файлов для индексации кода
+    - "*.py"
+    - "*.md"
+    - "*.rst"
+    - "Dockerfile"
+    - "*.yaml"
+    - "*.yml"
+    - "*.json"
+    - "*.toml"
+    - "*.cfg"
+    - "*.ini"
+    - "*.sh"
+    - "*.bash"
+    - "*.sql"
+    - "*.graphql"
+    - "*.proto"
+    - "*.tf"                              # Terraform
+    - "*.hcl"                             # HCL configs
+  file_paths_exclude:                      # исключения (не индексировать)
+    - "*.java"
+    - "*.kt"
+    - "*.kts"
+    - "*.class"
+    - "*.jar"
+    - "*.war"
+    - "*.pyc"
+    - "__pycache__/*"
+    - "node_modules/*"
+    - ".git/*"
+    - "*.min.js"
+    - "*.min.css"
+    - "vendor/*"
+    - "target/*"                          # Maven/Gradle build dir
+    - "build/*"
+    - ".gradle/*"
+
+# Удалённые ML-сервисы (GPUStack / vLLM / llama.cpp / RAG Proxy)
+# Каждый сервис может иметь свой endpoint, модель и API-ключ.
+# Переменные окружения (${VAR:-default}) подставляются при загрузке.
+remote_services:
+  embedder:
+    endpoint: "${EMBEDDER_ENDPOINT:-http://rag-proxy:8080/v1}"   # OpenAI-compatible /v1/embeddings
+    model: "${EMBEDDER_MODEL:-BAAI/bge-m3}"
+    api_key: "${EMBEDDER_API_KEY:-}"
+    timeout: 60
+    batch_size: 64                          # Max texts per single API call
+    max_retries: 5                          # Retry attempts for API calls
+    retry_delay: 2.0                        # Base retry delay (seconds)
+    retry_max_delay: 30.0                   # Max retry delay cap (seconds)
+    connection_pool_size: 16                # HTTP connection pool size
+  reranker:
+    endpoint: "${RERANKER_ENDPOINT:-http://rag-proxy:8080/v1}"   # или http://host:8080/v1/rerank
+    model: "${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
+    api_key: "${RERANKER_API_KEY:-}"
+    timeout: 30
+  slm:
+    endpoint: "${SLM_ENDPOINT:-http://rag-proxy:8080/v1}"        # лёгкая модель для entity extraction
+    model: "${SLM_MODEL:-qwen2.5-3b}"
+    api_key: "${SLM_API_KEY:-}"
+    timeout: 30
+
+# SLM-based chunk enrichment: keywords, entities, HyDE questions, summary
+enrichment:
+  enabled: true                                                    # Enable SLM-based chunk enrichment
+  slm_endpoint: "${SLM_ENRICHMENT_ENDPOINT:-${SLM_ENDPOINT:-http://rag-proxy:8080/v1}}"
+  slm_model: "${SLM_ENRICHMENT_MODEL:-${SLM_MODEL:-qwen2.5-3b}}"
+  slm_api_key: "${SLM_API_KEY:-}"
+  max_concurrent: 5                                                # Max parallel SLM calls (backpressure)
+  fallback_to_heuristic: true                                      # Use spaCy/regex when SLM fails
+  timeout: 30
+
+# Настройки режима пайплайна
+pipeline:
+  mode: streaming                # "streaming" — extract→chunk→embed→index в один проход
+                                 # "batch"     — extract→collect→chunk→index поэтапно
+  batch_size: 10                 # документов за один батч в streaming режиме
+  save_raw: false                # сохранять сырые данные на диск (только для batch)
+  save_chunks: false             # сохранять чанки на диск (только для batch)
+
+# Семантический чанкинг
+# Research-backed optimal settings: 500-1500 chars with 10-20% overlap
+# See: https://habr.com/ru/articles/1029740/
+chunking:
+  max_tokens: 1500                       # Chunk token limit. Set to "auto" to auto-detect from embedder model.
+                                         #   "auto" — resolve from embedder's known context window
+                                         #   number — explicit token limit for chunking
+                                         #   Known embedder limits: bge-m3=8192, text-embedding-3=8191, e5=512
+  overlap_tokens: 200                    # ~800 chars, ~13% overlap for context continuity
+  min_chunk_tokens: 100                  # ~400 chars, minimum viable chunk
+  use_slm: false                         # использовать SLM для обогащения (требуется эндпоинт)
+  slm_endpoint: "http://localhost:8080/v1/completions"  # если use_slm true
+  output_dir: "./chunks"                 # директория для сохранения чанков (JSON)
+  index_headings: true                   # создавать heading-level чанки с source_type="heading"
+  index_documents: true                  # создавать document-level чанки с source_type="document"
+  contextual_enrichment: true            # prepend document context to each chunk before embedding
+                                         #   Heuristic-based (no LLM), uses headings + adjacent paragraphs
+                                         #   Reduces retrieval failures by up to 49% (Anthropic 2024)
+
+# Гибридная индексация Qdrant
+indexing:
+  qdrant_host: "localhost"
+  qdrant_port: 6333
+  collection_name: "knowledge_base"
+  embedder_model: ""                      # REQUIRED — e.g. BAAI/bge-m3
+  embedder_device: "cpu"                 # или "cuda"
+  batch_size: 100
+  hot_dir: "./hot_chunks"                # горячее хранилище чанков (текущие версии)
+  cold_dir: "./cold_chunks"              # холодное хранилище (история Parquet)
+  lake_dir: "./cold_lake"                # LiveVectorLake cold storage
+  use_delta: false                       # использовать Delta Lake (требуется deltalake)
+  version_wal: "./wal/version_wal.json"  # WAL для версионирования чанков
+  live_upsert_enabled: true               # Enable atomic chunk-level upserts (no full reindex)
+
+# Streaming ETL (Redis Streams) — real-time webhook-driven ingestion
+streaming:
+  streaming_enabled: false                  # Enable real-time streaming mode
+  webhook_enabled: true                     # Enable webhook server
+  webhook_host: "0.0.0.0"
+  webhook_port: 9000
+  webhook_secret: ""                        # REQUIRED — shared secret for HMAC validation
+  redis_host: "localhost"
+  redis_port: 6379
+  redis_stream_key: "etl:events"
+  redis_consumer_group: "etl-workers"
+  # Streaming pipeline settings (--mode streaming)
+  progress_interval: 50                     # Log progress every N documents
+  max_concurrent_api_calls: 10              # Max concurrent embedder API calls (backpressure)
+
+# Chunk quality filter — reranker-based filtering of low-quality chunks
+quality_filter:
+  enabled: false
+  reranker_endpoint: "${RERANKER_ENDPOINT:-http://rag-proxy:8080/v1/rerank}"
+  reranker_model: "${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
+  relevance_threshold: 0.3
+  detect_boilerplate: true
+  max_chunks_per_doc: 500
+  timeout: 30
+
+# ETL-level settings
+etl:
+  data_retention:
+    raw_data_days: 7         # auto-delete raw extracts after N days (0 = keep forever)
+    cleanup_after_run: false  # clean immediately after indexing
+    keep_cold_storage: true   # preserve cold storage for versioning
+
+# Schedule settings (for cron-based or periodic ETL runs)
+schedule:
+  enabled: false                            # Enable scheduled ETL runs
+  cron_expression: "0 2 * * *"              # Default: daily at 02:00
+  timezone: "UTC"                           # Schedule timezone
+  retry_on_failure: true                    # Retry failed extraction stages
+  max_retries: 3                            # Maximum retries per stage
+  notify_on_failure: true                   # Log/notify on pipeline failure
+
+# Граф знаний (Neo4j) – опционально
+graph:
+  enabled: false                         # включить построение графа (set to true to enable)
+  use_spacy: true                        # использовать spaCy для NER
+  spacy_model: "ru_core_news_sm"         # spaCy модель для извлечения сущностей
+  use_slm: false                         # использовать SLM для извлечения отношений
+  slm_endpoint: "http://localhost:8080/v1/completions"
+  cache_dir: "./entity_cache"            # кэш сущностей
+  neo4j:
+    enabled: false                       # включить загрузку в Neo4j (set to true to enable)
+    uri: "bolt://localhost:7687"
+    user: "neo4j"
+    password: "your_password_here"       # CHANGE THIS to your Neo4j password
+    database: "neo4j"
+
+# Multimodal extraction (FR-09, FR-10, FR-11)
+multimodal:
+  # OCR pipeline (FR-09)
+  ocr_enabled: true                          # Enable Tesseract+EasyOCR pipeline
+  ocr_languages: "rus+eng"                   # Language codes for Tesseract
+  ocr_confidence_threshold: 60               # Min confidence (0-100) to include OCR text
+  ocr_primary_engine: "tesseract"            # "tesseract" or "easyocr"
+
+  # Image embedding (FR-10)
+  image_extraction_enabled: false            # Enable CLIP/BLIP models
+  clip_model: "openai/clip-vit-base-patch32"
+  blip_model: "Salesforce/blip-image-captioning-base"
+  image_collection_suffix: "_images"         # Qdrant collection suffix for image vectors
+
+  # PDF embedded image extraction (FR-11)
+  pdf_image_extraction_enabled: false        # Extract images from PDFs and run OCR
+
+  # Quality metrics (FR-12)
+  quality_report_enabled: false              # Generate extraction quality reports
+
+# SSL / TLS — корпоративные сертификаты
+# В корпоративных средах часто используются самоподписанные сертификаты
+# или перехват TLS (SSL inspection). Настройте здесь.
+ssl:
+  verify: true                           # false — отключить проверку сертификатов (НЕ для production)
+  cert_path: ""                          # путь к корпоративному CA bundle (e.g. /etc/ssl/certs/corporate.pem)

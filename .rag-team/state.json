@@ -1,0 +1,46 @@
+{
+  "version": "2.7.0",
+  "framework_version": "3.0",
+  "wave": 20,
+  "wave_name": "Multi-Agent Continuous Development Framework v3.0 Integration",
+  "waves_completed": 19,
+  "status": "active",
+  "tests": 5025,
+  "coverage": 84.29,
+  "metrics": {
+    "api_endpoints": 51,
+    "source_files": 165,
+    "k8s_templates": 15
+  },
+  "last_wave": "Semantic Cache + RAGAS Metrics + Code Quality + Team State",
+  "completed_fr": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 60, 79, 81, 83, 105, 106, 140, 141, 142, 143, 144, 145, 146, 155, 170, 172],
+  "last_updated": "2026-07-18T19:11:00+03:00",
+  "checkpoint": {
+    "last_commit": "fe1b65d",
+    "session_timestamp": "2026-07-18T19:11:00+03:00",
+    "artifacts_dir": "artifacts/state/",
+    "context_compaction_log": "artifacts/state/context_compaction_log.md",
+    "current_wave_file": "artifacts/state/current_wave.md",
+    "session_checkpoint_file": "artifacts/state/session_checkpoint.json"
+  },
+  "protected_zones": [
+    "proxy/app/shared/config.py",
+    "etl/scheduler/run_etl.py"
+  ],
+  "agent_roles_count": 23,
+  "tool_ecosystem": [
+    "CodeGraph",
+    "LSP",
+    "MCP (10 servers)",
+    "MemoryLayer",
+    "ChromaDB",
+    "Muninn",
+    "Multi-Model Router",
+    "Session Compaction"
+  ],
+  "bilingual_docs": {
+    "en": "docs/en/",
+    "ru": "docs/ru/",
+    "sync_status": "maintained"
+  }
+}

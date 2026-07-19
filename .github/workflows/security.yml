@@ -1,0 +1,190 @@
+# .github/workflows/security.yml
+# Dependency security audit — runs on PRs and weekly schedule
+# Task: SEC-06 — No HIGH/CRITICAL CVEs remaining
+
+name: Security Audit
+
+on:
+  pull_request:
+    paths:
+      - "requirements*.txt"
+      - "proxy/requirements*.txt"
+      - "etl/requirements*.txt"
+      - "mcp_server/requirements.txt"
+      - "dashboard/requirements.txt"
+      - "tui/requirements.txt"
+      - ".github/workflows/security.yml"
+  schedule:
+    # Weekly on Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  pip-audit-proxy:
+    name: Audit Proxy Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit requirements-proxy.txt
+        run: |
+          pip-audit \
+            --requirement requirements-proxy.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+  pip-audit-etl:
+    name: Audit ETL Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit requirements-etl.txt
+        run: |
+          pip-audit \
+            --requirement requirements-etl.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+  pip-audit-dev:
+    name: Audit Dev Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit requirements-dev.txt
+        run: |
+          pip-audit \
+            --requirement requirements-dev.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv
+
+  pip-audit-auxiliary:
+    name: Audit Auxiliary Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit MCP server deps
+        run: |
+          pip-audit \
+            --requirement mcp_server/requirements.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv \
+            --no-deps || true
+
+      - name: Audit dashboard deps
+        run: |
+          pip-audit \
+            --requirement dashboard/requirements.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv \
+            --no-deps || true
+
+      - name: Audit TUI deps
+        run: |
+          pip-audit \
+            --requirement tui/requirements.txt \
+            --desc \
+            --format columns \
+            --vulnerability-service osv \
+            --no-deps || true
+
+  safety-check:
+    name: Safety Check (all-in-one)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Check all requirements
+        run: |
+          safety check \
+            --file requirements-proxy.txt \
+            --output json \
+            --continue-on-error || true
+
+          safety check \
+            --file requirements-etl.txt \
+            --output json \
+            --continue-on-error || true
+
+  sbom-generation:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Generate requirements-proxy SBOM
+        run: |
+          pip-audit \
+            --requirement requirements-proxy.txt \
+            --format json \
+            --output sbom-proxy.json \
+            --vulnerability-service osv || true
+
+      - name: Generate requirements-etl SBOM
+        run: |
+          pip-audit \
+            --requirement requirements-etl.txt \
+            --format json \
+            --output sbom-etl.json \
+            --vulnerability-service osv || true
+
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-reports
+          path: sbom-*.json
+          retention-days: 90

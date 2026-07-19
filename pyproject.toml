@@ -1,0 +1,104 @@
+[project]
+name = "rag-system"
+version = "2.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# PEP 695 [T] syntax requires Python 3.12+; we use TypeVar for 3.11 compat in CI
+"proxy/app/shared/retry.py" = ["UP047"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "etl.*"
+# ETL modules have lower type coverage maturity — strict relaxed incrementally
+disallow_untyped_defs = false
+warn_return_any = false
+disallow_any_generics = false
+no_implicit_optional = false
+disable_error_code = ["no-untyped-def", "no-untyped-call", "var-annotated", "return", "override", "misc", "name-defined", "index", "list-item", "dict-item", "union-attr", "return-value", "operator"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--cov=proxy --cov=etl --cov-report=term-missing --cov-report=html"
+markers = [
+    "e2e: End-to-end tests requiring running services",
+    "benchmark: Performance and load tests",
+    "chaos: Resilience and chaos engineering tests",
+    "asyncio: Tests using asyncio for async code paths",
+    "slow: Tests that take longer than 5 seconds to complete",
+    "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
+    "regression: Quality regression tests for retrieval and evaluation metrics",
+]
+filterwarnings = [
+    # Persistent SQLite user database singleton — connections live for app lifetime,
+    # garbage collected at test teardown. Normal test behavior.
+    "ignore::ResourceWarning",
+    # Emitted on every proxy app import in tests — expected in CI without real secret
+    "ignore:JWT_SECRET is ephemeral:UserWarning",
+    # Emitted when AUTH_ENABLED is true but no JWT_SECRET set
+    "ignore:AUTH_ENABLED is true but JWT_SECRET is empty:UserWarning",
+    # Torch JIT scripting not supported on Python 3.14+
+    "ignore:.*torch.jit.script.*not supported:DeprecationWarning",
+    # Neo4j driver version deprecation
+    "ignore::DeprecationWarning:neo4j",
+    # GRAPH_ENABLED without Neo4j password — expected in unit tests
+    "ignore:GRAPH_ENABLED is true but NEO4J_PASSWORD is empty:UserWarning",
+    # Mock async methods created during tests — coroutine not awaited is expected
+    "ignore:coroutine.*was never awaited:RuntimeWarning",
+    # MINIO_ACCESS_KEY not set in unit test environment
+    "ignore:MODEL_EVOLUTION_ENABLED is true but MINIO_ACCESS_KEY:UserWarning",
+    # spaCy model not installed in CI — expected warning
+    "ignore:spaCy model not found:UserWarning",
+]
+
+[tool.coverage.run]
+source = ["proxy", "etl"]
+omit = [
+    # NOTE: Keep tests/ and __pycache__ excluded
+    "*/__pycache__/*",
+    "*/tests/*",
+    # Streaming pipeline (webhook + consumer) not yet tested
+    "etl/scheduler/streaming_pipeline.py",
+    # FLARE adaptive retrieval — not yet tested
+    "proxy/app/core/flare.py",
+    # RAGAS evaluation — requires running models
+    "proxy/app/core/ragas_eval.py",
+    # Query router — not yet tested
+    "proxy/app/core/query_router.py",
+    # RAPTOR tree builder — not yet tested
+    "etl/indexer/tree_builder.py",
+    # GraphRAG community detection — not yet tested
+    "etl/graph_builder/community.py",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

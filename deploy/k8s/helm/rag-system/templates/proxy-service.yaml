@@ -1,0 +1,18 @@
+{{- if .Values.proxy.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rag-system.fullname" . }}-proxy
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.proxyLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.proxy.service.type }}
+  ports:
+    - port: {{ .Values.proxy.service.port }}
+      targetPort: {{ .Values.proxy.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "rag-system.proxySelector" . | nindent 4 }}
+{{- end }}

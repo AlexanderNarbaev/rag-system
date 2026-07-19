@@ -1,0 +1,44 @@
+# Dockerfile.etl
+# Build for RAG ETL pipeline (data extraction, chunking, embedding, indexing)
+# Build:  docker build -f Dockerfile.etl -t rag-etl .
+# Run:    docker run --env-file etl/.env rag-etl
+
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Install dependencies first (layer caching)
+COPY requirements-etl.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements-etl.txt
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+
+# Copy ETL code
+COPY etl/ ./etl/
+
+# Create data directories
+RUN mkdir -p /data/raw /data/chunks /data/hot_chunks /data/cold_chunks \
+    /data/cold_lake /data/entity_cache /wal
+
+# Python settings
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+ENTRYPOINT ["python", "-m", "etl.scheduler.run_etl"]
+CMD ["--config", "/app/etl/config/etl_config.yaml"]

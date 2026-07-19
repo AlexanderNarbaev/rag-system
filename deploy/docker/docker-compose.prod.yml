@@ -1,0 +1,260 @@
+# docker-compose.prod.yml
+# Production Docker Compose for RAG System
+# Start:   docker compose -f docker-compose.prod.yml up -d
+# Stop:    docker compose -f docker-compose.prod.yml down
+
+services:
+  # ── Nginx (reverse proxy with TLS termination) ─────────────────────────────
+  nginx:
+    image: nginx:1.27
+    container_name: rag-nginx
+    ports:
+      - "443:443"   # HTTPS
+      - "80:80"     # HTTP (redirects to HTTPS)
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
+      - ${TLS_CERT_PATH:-../nginx/ssl}:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      rag-proxy:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--insecure", "https://localhost/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - rag-network
+
+  # ── Qdrant (vector database) ────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: rag-qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"   # HTTP API (localhost only)
+      - "127.0.0.1:6334:6334"   # gRPC (localhost only)
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6333/healthz" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    networks:
+      - rag-network
+
+  # ── Neo4j (graph database) ──────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    container_name: rag-neo4j
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    ports:
+      - "127.0.0.1:7474:7474"   # HTTP Browser (localhost only)
+      - "127.0.0.1:7687:7687"   # Bolt (localhost only)
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+      - NEO4J_server_memory_pagecache_size=1G
+      - NEO4J_server_memory_heap_initial__size=1G
+      - NEO4J_server_memory_heap_max__size=2G
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 2G
+    healthcheck:
+      test: [ "CMD", "neo4j", "status" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    networks:
+      - rag-network
+
+  # ── Redis (cache) ───────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "127.0.0.1:6379:6379"   # localhost only
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru --save 900 1 300 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+        reservations:
+          cpus: "0.1"
+          memory: 256M
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - rag-network
+
+  # ── RAG proxy (FastAPI) ─────────────────────────────────────────────────────
+  rag-proxy:
+    build:
+      context: ../..
+      dockerfile: proxy/Dockerfile
+    container_name: rag-proxy
+    # Port 8080 is only exposed to internal network (nginx handles external traffic)
+    expose:
+      - "8080"
+    volumes:
+      - ${MODEL_CACHE_PATH:-/opt/models/cache}:/app/cache:ro
+      - proxy_logs:/app/logs
+      - ../../proxy/.env:/app/.env:ro
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - NEO4J_URI=bolt://neo4j:7687
+      - REDIS_URL=redis://redis:6379/0
+      - LLM_ENDPOINT=http://vllm:8000/v1
+      - USE_REDIS=true
+      - USE_LANGGRAPH=true
+      - GRAPH_ENABLED=true
+      - METRICS_ENABLED=true
+      - LOG_FORMAT=json
+      - RATE_LIMIT_ENABLED=true
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/v1/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 45s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    networks:
+      - rag-network
+
+  # ── LLM backend (vLLM, OpenAI-compatible) ───────────────────────────────────
+  vllm:
+    image: vllm/vllm-openai:v0.6.6
+    container_name: rag-vllm
+    volumes:
+      - ${MODEL_PATH:-/opt/models}:/models:ro
+    ports:
+      - "127.0.0.1:8000:8000"   # localhost only
+    environment:
+      - HUGGINGFACE_HUB_CACHE=/models/cache
+    command: >
+      --model /models/${MODEL_FILE:-model.gguf}
+      --api-key ${LLM_API_KEY:-}
+      --port 8000
+      --max-model-len ${LLM_MAX_MODEL_LEN:-65536}
+      --tensor-parallel-size ${LLM_TP_SIZE:-1}
+      --enable-prefix-caching
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "2"
+    networks:
+      - rag-network
+
+volumes:
+  qdrant_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  redis_data:
+    driver: local
+  proxy_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge

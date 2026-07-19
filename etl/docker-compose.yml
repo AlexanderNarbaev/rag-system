@@ -1,0 +1,60 @@
+# etl/docker-compose.yml
+# ETL standalone deployment — runs extraction, chunking, embedding, indexing.
+# Build:  docker compose -f etl/docker-compose.yml build
+# Run:    docker compose -f etl/docker-compose.yml up -d
+# Logs:   docker compose -f etl/docker-compose.yml logs -f etl
+
+services:
+  etl:
+    build:
+      context: ..
+      dockerfile: etl/Dockerfile.etl
+    container_name: rag-etl
+    env_file:
+      - ../proxy/.env
+    environment:
+      - QDRANT_HOST=${QDRANT_HOST:-qdrant}
+      - QDRANT_PORT=${QDRANT_PORT:-6333}
+      - ETL_SECRET=${ETL_SECRET:-}
+    volumes:
+      - etl_wal:/app/wal
+      - etl_data:/data
+      - etl_chunks:/app/chunks
+      - etl_hot_chunks:/app/hot_chunks
+      - etl_cold_chunks:/app/cold_chunks
+      - etl_cold_lake:/app/cold_lake
+      - etl_entity_cache:/app/entity_cache
+      - etl_raw:/app/raw_data
+      - ../etl/config/etl_config.yaml:/app/etl/config/etl_config.yaml:ro
+    command: ["--config", "/app/etl/config/etl_config.yaml"]
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.0
+    container_name: rag-etl-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+volumes:
+  etl_wal:
+  etl_data:
+  etl_chunks:
+  etl_hot_chunks:
+  etl_cold_chunks:
+  etl_cold_lake:
+  etl_entity_cache:
+  etl_raw:
+  qdrant_storage:
+
+networks:
+  rag-network:
+    name: rag-network
+    external: true

@@ -1,0 +1,56 @@
+# Dockerfile.proxy
+# Multi-stage build for RAG proxy (FastAPI + Qdrant + embeddings + reranking)
+# Build:  docker build -f Dockerfile.proxy -t rag-proxy .
+# Run:    docker run -p 8080:8080 --env-file proxy/.env rag-proxy
+
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Install dependencies first (layer caching)
+COPY requirements-proxy.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements-proxy.txt
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+
+# Copy proxy package (preserves proxy.app.* import paths)
+COPY proxy/ ./proxy/
+
+# Create directories for logs and model cache
+RUN mkdir -p /app/logs /app/cache
+
+# Add project root to Python path so 'proxy.app.*' imports work
+ENV PYTHONPATH=/app
+
+# HuggingFace cache paths (override at runtime)
+ENV HF_HOME=/app/cache/huggingface
+ENV TRANSFORMERS_CACHE=/app/cache/huggingface/transformers
+ENV SENTENCE_TRANSFORMERS_HOME=/app/cache/huggingface/sentence-transformers
+
+# Python settings
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8080
+
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:8080/v1/health/live || exit 1
+
+CMD ["uvicorn", "proxy.app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

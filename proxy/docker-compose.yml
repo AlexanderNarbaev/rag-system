@@ -1,0 +1,163 @@
+# docker-compose.yml
+# Docker Compose for RAG proxy with infrastructure dependencies
+#
+# For production:  docker compose --env-file .env.production up -d
+# For development: docker compose --env-file .env up -d
+#
+# Start:   docker compose up -d
+# Stop:    docker compose down
+
+services:
+  # ── Qdrant (vector database + Web UI) ───────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.18.2
+    container_name: rag-qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"    # REST API
+      - "6334:6334"    # gRPC
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ── Neo4j (graph database + Browser UI) ─────────────────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    container_name: rag-neo4j
+    volumes:
+      - neo4j_data:/data
+    ports:
+      - "7474:7474"    # HTTP Browser UI
+      - "7687:7687"    # Bolt protocol
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+    healthcheck:
+      test: [ "CMD", "neo4j", "status" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ── Redis (cache) ───────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ── Redis Commander (Web UI for Redis) ──────────────────────────────────────
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: rag-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8081" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ── MinIO (S3-compatible object storage + Console UI) ────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: rag-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"    # S3 API
+      - "9001:9001"    # Web Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-CHANGE_ME}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-CHANGE_ME}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: [ "CMD", "mc", "ready", "local" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+  # ── RAG proxy (FastAPI + Swagger UI) ────────────────────────────────────────
+  rag-proxy:
+    image: rag-proxy:latest
+    container_name: rag-proxy
+    ports:
+      - "8080:8080"    # API + Swagger UI at /docs
+    volumes:
+      - ./logs:/app/logs
+      # Mount .env file for config loading (used by config.py via python-dotenv).
+      # For production, change to ./.env.production:/app/.env:ro.
+      - ./.env:/app/.env:ro
+    # env_file passes variables into the container environment.
+    # For production, change to .env.production.
+    env_file:
+      - .env
+    environment:
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - NEO4J_URI=bolt://neo4j:7687
+      - REDIS_URL=redis://redis:6379
+      - MINIO_ENDPOINT=minio:9000
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/v1/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
+volumes:
+  qdrant_data:
+  neo4j_data:
+  redis_data:
+  minio_data:
+
+networks:
+  rag-network:
+    driver: bridge

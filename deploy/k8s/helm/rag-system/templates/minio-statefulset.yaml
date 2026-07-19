@@ -1,0 +1,148 @@
+{{- if .Values.minio.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "rag-system.fullname" . }}-minio
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.minioLabels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "rag-system.fullname" . }}-minio
+  replicas: {{ .Values.minio.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "rag-system.minioSelector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "rag-system.minioLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.minio.podSecurityContext | nindent 8 }}
+      containers:
+        - name: minio
+          securityContext:
+            {{- toYaml .Values.minio.securityContext | nindent 12 }}
+          image: "{{ .Values.minio.image.repository }}:{{ .Values.minio.image.tag }}"
+          imagePullPolicy: {{ .Values.minio.image.pullPolicy }}
+          command:
+            - minio
+          args:
+            - server
+            - /data
+            - --console-address
+            - ":{{ .Values.minio.service.consolePort }}"
+          ports:
+            - name: api
+              containerPort: {{ .Values.minio.service.port }}
+              protocol: TCP
+            - name: console
+              containerPort: {{ .Values.minio.service.consolePort }}
+              protocol: TCP
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rag-system.fullname" . }}-minio-secrets
+                  key: rootUser
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rag-system.fullname" . }}-minio-secrets
+                  key: rootPassword
+            {{- range .Values.minio.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            {{- toYaml .Values.minio.resources | nindent 12 }}
+          {{- with .Values.minio.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.minio.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if .Values.minio.podAntiAffinity.enabled }}
+      affinity:
+        podAntiAffinity:
+          {{- if eq .Values.minio.podAntiAffinity.type "hard" }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - minio
+              topologyKey: kubernetes.io/hostname
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - minio
+                topologyKey: kubernetes.io/hostname
+          {{- end }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "rag-system.minioLabels" . | nindent 10 }}
+      spec:
+        accessModes:
+          - {{ .Values.minio.persistence.accessMode }}
+        {{- if .Values.minio.persistence.storageClass }}
+        storageClassName: {{ .Values.minio.persistence.storageClass }}
+        {{- else if .Values.global.storageClass }}
+        storageClassName: {{ .Values.global.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.minio.persistence.size }}
+{{- end }}
+---
+{{- if .Values.minio.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rag-system.fullname" . }}-minio
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.minioLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: api
+      port: {{ .Values.minio.service.port }}
+      targetPort: {{ .Values.minio.service.port }}
+      protocol: TCP
+    - name: console
+      port: {{ .Values.minio.service.consolePort }}
+      targetPort: {{ .Values.minio.service.consolePort }}
+      protocol: TCP
+  selector:
+    {{- include "rag-system.minioSelector" . | nindent 4 }}
+{{- end }}
+---
+{{- if .Values.minio.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "rag-system.fullname" . }}-minio-secrets
+  namespace: {{ .Values.global.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "rag-system.minioLabels" . | nindent 4 }}
+type: Opaque
+stringData:
+  rootUser: {{ .Values.minio.auth.rootUser | quote }}
+  rootPassword: {{ .Values.minio.auth.rootPassword | quote }}
+{{- end }}

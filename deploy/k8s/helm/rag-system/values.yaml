@@ -1,0 +1,1014 @@
+# Default values for rag-system Helm chart.
+# This is a YAML-formatted file documenting configurable parameters.
+#
+# Usage:
+#   helm install rag-system ./deploy/k8s/helm/rag-system -f values.yaml
+#   helm install rag-system ./deploy/k8s/helm/rag-system -f values.yaml -f values-prod.yaml
+
+# -- Override the name of the chart
+nameOverride: ""
+# -- Override the fully qualified app name
+fullnameOverride: ""
+
+# =============================================================================
+# Global configuration
+# =============================================================================
+global:
+  # -- Docker image registry (e.g., "registry.airgap.local/")
+  imageRegistry: ""
+  # -- Image pull secrets for private registries
+  imagePullSecrets: []
+  # -- Storage class for PVCs (empty = default StorageClass)
+  storageClass: ""
+  # -- Namespace all resources are deployed into (defaults to Release.Namespace)
+  namespace: ""
+
+# =============================================================================
+# RAG Proxy — FastAPI application
+# =============================================================================
+proxy:
+  # -- Enable/disable proxy deployment
+  enabled: true
+  # -- Number of proxy replicas (overridden by HPA when autoscaling is enabled)
+  replicaCount: 2
+
+  image:
+    # -- Proxy image repository
+    repository: rag-system/proxy
+    # -- Image pull policy (IfNotPresent for production, Always for dev)
+    pullPolicy: IfNotPresent
+    # -- Image tag (overrides Chart.appVersion)
+    tag: ""
+
+  # -- Image pull secrets for the proxy container
+  imagePullSecrets: []
+
+  # -- Additional pod annotations (e.g., Prometheus scrape config)
+  podAnnotations: {}
+  # -- Additional pod labels
+  podLabels: {}
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    # NOTE: HuggingFace transformers cache (/root/.cache/huggingface) requires
+    # write access. An emptyDir volume is mounted at /app/cache to provide an
+    # ephemeral writable location. Set TRANSFORMERS_CACHE=/app/cache in env.
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  # -- Termination grace period for graceful shutdown (seconds)
+  terminationGracePeriodSeconds: 60
+
+  service:
+    # -- Service type (ClusterIP for internal, LoadBalancer for external)
+    type: ClusterIP
+    # -- Service port
+    port: 8080
+    # -- Target port on container
+    targetPort: 8080
+
+  resources:
+    limits:
+      cpu: "4"
+      memory: 8Gi
+    requests:
+      cpu: "1"
+      memory: 2Gi
+
+  # -- Startup probe: grace period for model loading (up to 150s)
+  startupProbe:
+    httpGet:
+      path: /v1/health/live
+      port: 8080
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+  # -- Liveness probe: checks the app is alive
+  livenessProbe:
+    httpGet:
+      path: /v1/health/live
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe: checks dependencies (Qdrant, LLM) are reachable
+  readinessProbe:
+    httpGet:
+      path: /v1/health/ready
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- HPA configuration
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    # -- Average CPU utilization percentage across pods
+    targetCPUUtilizationPercentage: 70
+    # -- Average memory utilization percentage across pods (optional)
+    targetMemoryUtilizationPercentage: null
+    # -- HPA behavior (scale-down stabilization)
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+
+  # -- Pod anti-affinity to spread replicas across nodes
+  podAntiAffinity:
+    enabled: true
+    # -- soft = preferredDuringScheduling, hard = requiredDuringScheduling
+    type: soft
+
+  # -- Extra environment variables (added directly to the container)
+  extraEnv: []
+
+  # Environment variables injected from config values
+  env:
+    # -- Qdrant host (defaults to in-cluster service name)
+    qdrantHost: ""
+    # -- Qdrant port
+    qdrantPort: "6333"
+    # -- Enable Qdrant gRPC (3-5x higher throughput)
+    qdrantGrpcEnabled: "false"
+    # -- Qdrant gRPC port
+    qdrantGrpcPort: "6334"
+    # -- Enable Qdrant scalar quantization (~4x memory reduction)
+    qdrantQuantizationEnabled: "false"
+    # -- HNSW M parameter (higher = better recall, more build time memory)
+    qdrantHnswM: "16"
+    # -- HNSW ef_construct (higher = better index quality)
+    qdrantHnswEfConstruct: "100"
+    # -- Qdrant collection name
+    collectionName: "knowledge_base"
+    # -- Embedder model name (e.g. BAAI/bge-m3)
+    embedderModel: ""
+    # -- Embedder device (cpu or cuda)
+    embedderDevice: "cpu"
+    # -- Remote embedder endpoint (empty = local model)
+    embedderEndpoint: ""
+    # -- Embedder fallback to local model when remote unavailable
+    embedderFallbackLocal: "true"
+    # -- Reranker model name (e.g. cross-encoder/ms-marco-MiniLM-L-6-v2)
+    rerankerModel: ""
+    # -- Reranker max input length
+    rerankerMaxLength: "512"
+    # -- Reranker batch size
+    rerankerBatchSize: "32"
+    # -- Remote reranker endpoint (empty = local model)
+    rerankerEndpoint: ""
+    # -- Reranker fallback to local model when remote unavailable
+    rerankerFallbackLocal: "true"
+    # -- LLM endpoint URL
+    llmEndpoint: ""
+    # -- LLM model name
+    llmModelName: ""
+    # -- LLM provider type (openai, anthropic, generic)
+    llmProviderType: "openai"
+    # -- Request timeout for LLM calls (seconds)
+    requestTimeout: "120"
+    # -- Max retries for LLM calls
+    maxRetries: "3"
+    # -- Delay between retries (seconds)
+    retryDelay: "1.0"
+    # -- SLM endpoint (leave empty to disable SLM)
+    slmEndpoint: ""
+    # -- SLM model name
+    slmModelName: ""
+    # -- Max tokens for SLM responses
+    slmMaxTokens: "256"
+    # -- Max chunks to retrieve
+    maxChunksRetrieval: "50"
+    # -- Max chunks after reranking
+    maxChunksAfterRerank: "20"
+    # -- Enable Redis cache
+    useRedis: "false"
+    # -- Redis URL (defaults to in-cluster Redis)
+    redisUrl: ""
+    # -- Enable LangGraph orchestration
+    useLangGraph: "false"
+    # -- Enable adaptive routing
+    adaptiveRoutingEnabled: "false"
+    # -- Max retrieval loops for agentic mode
+    maxRetrievalLoops: "3"
+    # -- Enable Neo4j graph knowledge base
+    graphEnabled: "false"
+    # -- Neo4j URI (defaults to in-cluster Neo4j)
+    neo4jUri: ""
+    # -- Neo4j user
+    neo4jUser: "neo4j"
+    # -- Enable graph expansion in RAG pipeline
+    useGraphExpansion: "false"
+    # -- Enable request logging
+    logRequests: "true"
+    # -- Log directory path
+    logDir: "/app/logs"
+    # -- Enable Prometheus metrics
+    metricsEnabled: "true"
+    # -- Log format (text or json)
+    logFormat: "text"
+    # -- Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    logLevel: "INFO"
+    # -- Enable rate limiting
+    rateLimitEnabled: "false"
+    # -- Rate limit per minute per IP
+    rateLimitPerMinute: "60"
+    # -- Rate limit burst
+    rateLimitBurst: "10"
+    # -- Trusted proxy count for X-Forwarded-For
+    trustedProxyCount: "0"
+    # -- CORS allowed origins
+    corsOrigins: "http://localhost:3000,http://localhost:8080"
+    # -- Enable JWT authentication
+    authEnabled: "false"
+    # -- JWT signing algorithm
+    jwtAlgorithm: "HS256"
+    # -- Token expiry hours
+    tokenExpireHours: "24"
+    # -- Access token duration in minutes
+    accessTokenMinutes: "60"
+    # -- Refresh token duration in days
+    refreshTokenDays: "7"
+    # -- Enable RBAC
+    rbacEnabled: "false"
+    # -- Keycloak URL (OIDC)
+    keycloakUrl: ""
+    # -- Keycloak realm
+    keycloakRealm: "master"
+    # -- Keycloak client ID
+    keycloakClientId: "rag-proxy"
+    # -- Enable input sanitization
+    sanitizeInput: "true"
+    # -- Enable audit logging
+    auditEnabled: "true"
+    # -- Confidence threshold (0.0-1.0)
+    confidenceThreshold: "0.5"
+    # -- Enable NLI grounding
+    nliGroundingEnabled: "true"
+    # -- Enable self-critique
+    selfCritiqueEnabled: "true"
+    # -- Compression strategy (perplexity, keyword, none)
+    compressionStrategy: "keyword"
+    # -- Enable context reordering
+    reorderEnabled: "true"
+    # -- Enable CRAG decomposition
+    cragDecompositionEnabled: "true"
+    # -- Enable NLI model
+    nliModelEnabled: "false"
+    # -- Enable self-enrichment
+    enrichmentEnabled: "false"
+    # -- Enable HyDE (Hypothetical Document Embeddings)
+    hydeEnabled: "true"
+    # -- Enable reflection
+    reflectionEnabled: "true"
+    # -- Reflection depth
+    reflectionDepth: "2"
+    # -- Enable hallucination check
+    hallucinationCheckEnabled: "false"
+    # -- Enable token optimizer
+    tokenOptimizerEnabled: "true"
+    # -- Enable prefix caching (vLLM)
+    prefixCachingEnabled: "false"
+    # -- Eval dataset path
+    evalDatasetPath: "./data/eval_dataset.json"
+    # -- Enable admin alerts
+    adminAlertEnabled: "false"
+    # -- Admin alert endpoint
+    adminAlertEndpoint: ""
+    # -- Enable response compression
+    compressionEnabled: "true"
+    # -- Minimum size for compression (bytes)
+    compressionMinSize: "500"
+    # -- Compression level (1-9)
+    compressionLevel: "6"
+    # -- SSE chunk size
+    sseChunkSize: "4"
+    # -- Stream buffer size
+    streamBufferSize: "1"
+    # -- Enable warmup
+    warmupEnabled: "true"
+    # -- Warmup on startup
+    warmupOnStartup: "true"
+    # -- Server host
+    host: "0.0.0.0"
+    # -- Server port
+    port: "8080"
+    # -- Number of granian workers (keep at 1 per ADR-008).
+    # This env var is consumed by the deployment template's command override
+    # to pass --workers to the granian CLI. The proxy-deployment.yaml template
+    # reads this value and sets the granian --workers flag accordingly.
+    workers: "1"
+    # -- Enable tools / function calling
+    toolsEnabled: "false"
+    # -- Enable live source APIs
+    liveSourcesEnabled: "false"
+    # -- Enable I18N
+    i18nEnabled: "true"
+    # -- Default language
+    defaultLanguage: "en"
+    # -- Supported languages
+    supportedLanguages: "en,ru,de,fr,zh"
+    # -- SSL verification
+    sslVerify: "true"
+    # -- Graceful shutdown
+    gracefulShutdownEnabled: "true"
+    # -- Shutdown timeout (seconds)
+    shutdownTimeout: "30"
+    # -- Enable clarification questions
+    clarificationEnabled: "true"
+    # -- Max conversation turns before summarization
+    conversationMaxTurns: "10"
+    # -- Token threshold for conversation summarization
+    conversationSummaryThresholdTokens: "2000"
+    # -- Enable stale document detection
+    staleDetectionEnabled: "true"
+    # -- Confluence staleness threshold (days)
+    staleConfluenceDays: "90"
+    # -- Jira staleness threshold (days)
+    staleJiraDays: "30"
+    # -- GitLab staleness threshold (days)
+    staleGitlabDays: "14"
+    # -- Enable reindex scheduler
+    reindexEnabled: "true"
+    # -- Reindex check interval (seconds)
+    reindexCheckInterval: "3600"
+    # -- Reindex staleness threshold (0-100)
+    reindexStalenessThreshold: "80"
+    # -- Max concurrent reindex tasks
+    reindexMaxConcurrentTasks: "5"
+    # -- Enable knowledge integrity validation
+    integrityCheckEnabled: "true"
+    # -- NLI contradiction threshold for integrity check
+    integrityNliContradictionThreshold: "0.7"
+    # -- Chunk sample limit for integrity check
+    integrityChunkSampleLimit: "200"
+    # -- MinIO endpoint for model artifacts
+    minioEndpoint: ""
+    # -- PostgreSQL connection string (DSN) for proxy system database
+    postgresqlDsn: ""
+
+# =============================================================================
+# Qdrant — Vector database (StatefulSet)
+# =============================================================================
+qdrant:
+  # -- Enable Qdrant deployment
+  enabled: true
+
+  image:
+    # -- Qdrant image repository
+    repository: qdrant/qdrant
+    # -- Image tag
+    tag: "v1.12.1"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  # -- Number of replicas in StatefulSet
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  service:
+    # -- HTTP API port
+    port: 6333
+    # -- gRPC port
+    grpcPort: 6334
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size
+    size: 50Gi
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+  # -- Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 6333
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 6333
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
+# Neo4j — Graph database (StatefulSet)
+# =============================================================================
+neo4j:
+  # -- Enable Neo4j deployment
+  enabled: true
+
+  image:
+    # -- Neo4j image repository
+    repository: neo4j
+    # -- Neo4j edition: 5-enterprise or 5-community
+    tag: "5-community"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  # -- Number of replicas (1 for community, 3+ for enterprise cluster)
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 7474
+    runAsNonRoot: true
+    runAsUser: 7474
+    runAsGroup: 7474
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 7474
+    runAsGroup: 7474
+
+  service:
+    # -- HTTP browser port
+    httpPort: 7474
+    # -- Bolt protocol port
+    boltPort: 7687
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size for data
+    size: 20Gi
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "500m"
+      memory: 2Gi
+
+  # -- Liveness probe
+  livenessProbe:
+    tcpSocket:
+      port: 7687
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  # -- Readiness probe
+  readinessProbe:
+    tcpSocket:
+      port: 7687
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Accept Neo4j enterprise license
+  acceptLicenseAgreement: "yes"
+  # -- Page cache size (e.g. 1G)
+  pagecacheSize: "1G"
+  # -- Heap initial size (e.g. 1G)
+  heapInitialSize: "1G"
+  # -- Heap max size (e.g. 2G)
+  heapMaxSize: "2G"
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
+# Redis — Cache (Deployment)
+# =============================================================================
+redis:
+  # -- Enable Redis deployment
+  enabled: true
+
+  image:
+    # -- Redis image repository
+    repository: redis
+    # -- Image tag (7-alpine for minimal footprint)
+    tag: "7-alpine"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  # -- Number of replicas
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 999
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+
+  service:
+    # -- Redis port
+    port: 6379
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size
+    size: 10Gi
+
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: "100m"
+      memory: 256Mi
+
+  # -- Liveness probe
+  livenessProbe:
+    tcpSocket:
+      port: 6379
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe
+  readinessProbe:
+    exec:
+      command:
+        - redis-cli
+        - ping
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Redis command arguments
+  args: "--appendonly yes --maxmemory-policy allkeys-lru"
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
+# ETL — Incremental data ingestion pipeline (CronJob)
+# =============================================================================
+etl:
+  # -- Enable ETL CronJob
+  enabled: false
+  # -- Cron schedule (standard cron syntax)
+  schedule: "0 */6 * * *"
+  # -- Concurrency policy (Allow, Forbid, Replace)
+  concurrencyPolicy: Forbid
+  # -- Number of successful jobs to keep
+  successfulJobsHistoryLimit: 3
+  # -- Number of failed jobs to keep
+  failedJobsHistoryLimit: 1
+  # -- Backoff limit for job retries
+  backoffLimit: 2
+  # -- Restart policy for the CronJob pod
+  restartPolicy: OnFailure
+
+  image:
+    repository: rag-system/etl
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  imagePullSecrets: []
+
+  # -- Override command for the ETL container
+  command:
+    - python
+    - scheduler/run_etl.py
+    - --config
+    - /app/etl/config/etl_config.yaml
+
+  # -- Environment variables injected into the ETL container
+  env: []
+    # - name: ETL_SECRET
+    #   valueFrom:
+    #     secretKeyRef:
+    #       name: rag-system-proxy-secrets
+    #       key: etlSecret
+
+  config:
+    # -- Qdrant host (defaults to in-cluster Qdrant service)
+    qdrantHost: ""
+    # -- Qdrant HTTP port
+    qdrantPort: "6333"
+    # -- Neo4j bolt URI
+    neo4jUri: ""
+    # -- Neo4j user
+    neo4jUser: "neo4j"
+    # -- Data sources configuration (Confluence, Jira, GitLab)
+    sources: {}
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+  extraVolumeMounts: []
+  extraVolumes: []
+
+# =============================================================================
+# MinIO — S3-compatible object storage for model artifacts and documents
+# =============================================================================
+minio:
+  # -- Enable MinIO deployment
+  enabled: false
+
+  image:
+    # -- MinIO image repository
+    repository: minio/minio
+    # -- MinIO image tag
+    tag: "RELEASE.2024-11-07T00-52-20Z"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+
+  service:
+    # -- MinIO API port
+    port: 9000
+    # -- MinIO console port
+    consolePort: 9001
+
+  auth:
+    # -- MinIO root username
+    rootUser: "CHANGE_ME"
+    # -- MinIO root password (override with --set or sealed-secrets)
+    rootPassword: "CHANGE_ME"
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size
+    size: 100Gi
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+
+  # -- Liveness probe
+  livenessProbe:
+    httpGet:
+      path: /minio/health/live
+      port: 9000
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # -- Readiness probe
+  readinessProbe:
+    httpGet:
+      path: /minio/health/ready
+      port: 9000
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  extraEnv: []
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
+# PostgreSQL — Proxy system database (replaces SQLite for production)
+# =============================================================================
+postgresql:
+  # -- Enable PostgreSQL deployment
+  enabled: false
+
+  image:
+    # -- PostgreSQL image repository
+    repository: postgres
+    # -- Image tag
+    tag: "16-alpine"
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # Pod security context
+  podSecurityContext:
+    fsGroup: 999
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+
+  # Container security context
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+
+  service:
+    # -- PostgreSQL port
+    port: 5432
+
+  auth:
+    # -- Database username
+    username: "ragproxy"
+    # -- Database password (override with --set or sealed-secrets)
+    password: ""
+    # -- Database name
+    database: "ragproxy"
+
+  args:
+    - postgres
+    - -c
+    - shared_buffers=256MB
+    - -c
+    - effective_cache_size=768MB
+    - -c
+    - maintenance_work_mem=64MB
+    - -c
+    - max_connections=50
+
+  persistence:
+    # -- Enable persistent storage
+    enabled: true
+    # -- Storage class name (empty = default)
+    storageClass: ""
+    # -- PVC access mode
+    accessMode: ReadWriteOnce
+    # -- PVC size
+    size: 20Gi
+
+  resources:
+    limits:
+      cpu: "2"
+      memory: 2Gi
+    requests:
+      cpu: "250m"
+      memory: 512Mi
+
+  # -- Liveness probe
+  livenessProbe:
+    exec:
+      command:
+        - pg_isready
+        - -U
+        - ragproxy
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 5
+
+  # -- Readiness probe
+  readinessProbe:
+    exec:
+      command:
+        - pg_isready
+        - -U
+        - ragproxy
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  extraEnv: []
+
+  # -- Pod anti-affinity
+  podAntiAffinity:
+    enabled: false
+    type: soft
+
+# =============================================================================
+# Ingress
+# =============================================================================
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name (e.g. nginx, traefik)
+  className: "nginx"
+  # -- Additional annotations (e.g. cert-manager, nginx proxy settings)
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    # nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  # -- TLS configuration
+  tls:
+    enabled: false
+    # -- Secret name holding TLS cert and key
+    secretName: rag-system-tls
+    # -- Hosts covered by the TLS certificate
+    hosts:
+      - rag.example.com
+  hosts:
+    # -- Primary hostname
+    - host: rag.example.com
+      paths:
+        # Proxy API (chat completions, models, health, feedback, auth)
+        - path: /v1/
+          pathType: Prefix
+          serviceName: proxy
+          servicePort: 8080
+        # Prometheus metrics
+        - path: /metrics
+          pathType: Exact
+          serviceName: proxy
+          servicePort: 8080
+
+# =============================================================================
+# Secrets (do NOT commit real values — use --set, sealed-secrets, or ESO)
+# =============================================================================
+secrets:
+  # -- Neo4j password for authentication
+  CHANGE_ME: ""
+  # -- JWT secret for token signing (at least 32 characters)
+  jwtSecret: ""
+  # -- JWT public key (for RS256 verification)
+  jwtPublicKey: ""
+  # -- Auth valid users as JSON: '{"admin":"password","expert":"password"}'
+  authValidUsers: "{}"
+  # -- LLM API key
+  llmApiKey: ""
+  # -- SLM API key
+  slmApiKey: ""
+  # -- Embedder API key (for remote embedding services)
+  embedderApiKey: ""
+  # -- Reranker API key (for remote reranker services)
+  rerankerApiKey: ""
+  # -- Confluence API token
+  confluenceApiToken: ""
+  # -- Jira API token
+  jiraApiToken: ""
+  # -- GitLab API token
+  gitlabApiToken: ""
+  # -- MinIO root password
+  minioRootPassword: ""
+  # -- PostgreSQL password
+  postgresqlPassword: ""
+  # -- ETL secret for IPC between proxy and ETL
+  etlSecret: ""
+
+# =============================================================================
+# Service account
+# =============================================================================
+serviceAccount:
+  # -- Create service account
+  create: true
+  # -- Service account name (empty = fullname)
+  name: ""
+  # -- Service account annotations (e.g., for IRSA/workload identity)
+  annotations: {}
+  # -- Service account automount API token
+  automountServiceAccountToken: false
+
+# =============================================================================
+# Pod Disruption Budget
+# =============================================================================
+podDisruptionBudget:
+  # -- Enable PDB for proxy
+  enabled: true
+  # -- Min available pods (mutually exclusive with maxUnavailable)
+  minAvailable: 1
+  # -- Max unavailable pods
+  maxUnavailable: null
+
+# =============================================================================
+# Network Policy
+# =============================================================================
+networkPolicy:
+  # -- Enable NetworkPolicy for proxy pods
+  enabled: true
+  # -- Allow ingress from these namespace labels
+  ingressNamespaceSelector:
+    - kubernetes.io/metadata.name: ingress-nginx
+  # -- Allow ingress on these ports
+  ingressPorts:
+    - port: 8080
+      protocol: TCP
+  # -- Allow egress to DNS (kube-dns)
+  # -- Allow egress to intra-namespace pods
+  # -- Allow egress to external services (LLM, embedder endpoints)
+  extraEgressRules: []
+
+# =============================================================================
+# Node selector, tolerations, affinity
+# =============================================================================
+# -- Node selector for all pods
+nodeSelector: {}
+
+# -- Tolerations for all pods
+tolerations: []
+
+# -- Affinity rules for all pods
+affinity: {}
