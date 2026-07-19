@@ -78,7 +78,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm) as mock_llm_fn,
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "What is RAG?"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -127,7 +127,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Explain RAG and hybrid search"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -164,7 +164,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Test query"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -191,7 +191,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "What is RAG?"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -212,7 +212,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Unknown topic query"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -234,7 +234,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Test degraded mode"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -265,7 +265,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [
                     {"role": "user", "content": "What is RAG?"},
                     {"role": "assistant", "content": "RAG is retrieval-augmented generation."},
@@ -304,7 +304,7 @@ class TestChatCompletionRAGPipeline:
             mock_search.return_value = search_results
 
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Show docs for v2.0"}],
                 "rag_version": "2.0",
             }
@@ -332,14 +332,14 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Test"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
             data = response.json()
 
             assert data["id"].startswith("rag_")
-            assert data["model"] == "test-model"
+            assert data["model"] == "test-model+RAG"
             assert data["choices"][0]["finish_reason"] == "stop"
             assert "usage" in data
 
@@ -364,7 +364,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "What is RAG?"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -388,7 +388,7 @@ class TestChatCompletionRAGPipeline:
             patch("proxy.app.main.rerank_chunks", side_effect=RuntimeError("Reranker OOM")),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Test"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)

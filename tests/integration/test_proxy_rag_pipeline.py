@@ -98,7 +98,7 @@ class TestChatCompletionsNonStreaming:
             patch("proxy.app.main.non_stream_completion", self.mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -107,7 +107,7 @@ class TestChatCompletionsNonStreaming:
             assert data["object"] == "chat.completion"
             assert "id" in data
             assert data["id"].startswith("rag_")
-            assert data["model"] == "test-model"
+            assert data["model"] == "test-model+RAG"
             assert len(data["choices"]) == 1
             choice = data["choices"][0]
             assert choice["index"] == 0
@@ -126,7 +126,7 @@ class TestChatCompletionsNonStreaming:
             mock_search.return_value = self.search_results
 
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Расскажи про CI/CD pipeline"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -145,7 +145,7 @@ class TestChatCompletionsNonStreaming:
             mock_search.return_value = self.search_results
 
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Расскажи про RAG"}],
                 "rag_version": "2.0",
             }
@@ -161,7 +161,7 @@ class TestChatCompletionsNonStreaming:
             patch("proxy.app.main.non_stream_completion", self.mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Запрос без результатов"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -177,7 +177,7 @@ class TestChatCompletionsNonStreaming:
             patch("proxy.app.main.non_stream_completion", self.mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
             }
             # First request — no cache
@@ -206,7 +206,7 @@ class TestChatCompletionsNonStreaming:
             patch("proxy.app.main.non_stream_completion", side_effect=tracking_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Cache test query"}],
             }
             response1 = app_client.post("/v1/chat/completions", json=payload)
@@ -219,7 +219,7 @@ class TestChatCompletionsNonStreaming:
     def test_chat_completion_missing_user_message_returns_400(self, app_client):
         """Request without a user message returns 400 Bad Request."""
         payload = {
-            "model": "test-model",
+            "model": "test-model+RAG",
             "messages": [{"role": "system", "content": "You are a helpful assistant."}],
         }
         response = app_client.post("/v1/chat/completions", json=payload)
@@ -236,7 +236,7 @@ class TestChatCompletionsNonStreaming:
             mock_search.return_value = self.search_results
 
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Покажи документацию v2.0 про RAG"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)
@@ -284,7 +284,7 @@ class TestChatCompletionsStreaming:
             ]
 
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Что такое RAG?"}],
                 "stream": True,
             }
@@ -311,7 +311,7 @@ class TestErrorHandling:
             patch("proxy.app.main.rerank_chunks", side_effect=RuntimeError("Rerank failed")),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Test"}],
             }
             response = app_client.post("/v1/chat/completions", json=payload)

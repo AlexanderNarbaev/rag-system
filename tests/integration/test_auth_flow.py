@@ -137,7 +137,7 @@ class TestProtectedEndpointsWithAuth:
     def test_chat_endpoint_rejects_no_token(self, auth_enabled_client):
         """POST /v1/chat/completions returns 401 when no token is provided."""
         payload = {
-            "model": "test-model",
+            "model": "test-model+RAG",
             "messages": [{"role": "user", "content": "Hello"}],
         }
         response = auth_enabled_client.post("/v1/chat/completions", json=payload)
@@ -146,7 +146,7 @@ class TestProtectedEndpointsWithAuth:
     def test_chat_endpoint_rejects_invalid_token(self, auth_enabled_client):
         """POST /v1/chat/completions returns 401 for an invalid JWT token."""
         payload = {
-            "model": "test-model",
+            "model": "test-model+RAG",
             "messages": [{"role": "user", "content": "Hello"}],
         }
         response = auth_enabled_client.post(
@@ -181,7 +181,7 @@ class TestProtectedEndpointsWithAuth:
             patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
         ):
             payload = {
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "Hello"}],
             }
             response = auth_enabled_client.post(
@@ -359,7 +359,7 @@ class TestLoginFlow:
             ):
                 chat_response = auth_enabled_client.post(
                     "/v1/chat/completions",
-                    json={"model": "test-model", "messages": [{"role": "user", "content": "Hello"}]},
+                    json={"model": "test-model+RAG", "messages": [{"role": "user", "content": "Hello"}]},
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
                 assert chat_response.status_code == 200
