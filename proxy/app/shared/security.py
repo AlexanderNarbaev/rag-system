@@ -38,13 +38,11 @@ class InputValidator:
         """Validate string is non-empty and within length. Returns sanitized or None."""
         if not isinstance(s, str) or not s.strip():
             return None
-        if not re.match(r"^[\s\S]{1," + str(max_len) + r"}$", s):
-            return None
         sanitized = InputValidator._HTML_TAG_RE.sub("", s.strip())
         sanitized = InputValidator._CONTROL_CHARS_RE.sub("", sanitized)
         if len(sanitized) > max_len:
             sanitized = sanitized[:max_len]
-        return sanitized
+        return sanitized if sanitized else None
 
     @staticmethod
     def sanitize_for_log(text: str) -> str:

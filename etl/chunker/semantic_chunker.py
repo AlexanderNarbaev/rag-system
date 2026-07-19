@@ -64,6 +64,9 @@ class Chunk:
     tokens_approx: int = 0  # примерное количество токенов
     original_text: str = ""  # текст без контекстного префикса (для отображения)
     enriched: bool = False  # был ли чанк обогащён контекстом
+    access_level: str = "public"  # public, internal, confidential, restricted
+    allowed_groups: list[str] = field(default_factory=list)
+    allowed_users: list[str] = field(default_factory=list)
 
 
 class SemanticChunker:

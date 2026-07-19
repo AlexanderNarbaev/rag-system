@@ -9,6 +9,7 @@
 rank=8, alpha=16, target_modules=[q_proj, v_proj]. Training data — из HITL feedback.
 
 **Критерий приёмки:**
+
 1. POST `/v1/admin/models/train` с `model_type=slm` — запускает training job
 2. Training job завершается успешно
 3. Adapter сохраняется в MinIO
@@ -27,6 +28,7 @@ rank=8, alpha=16, target_modules=[q_proj, v_proj]. Training data — из HITL f
 alpha=32. Для больших моделей (7B+) экономит память GPU.
 
 **Критерий приёмки:**
+
 1. POST `/v1/admin/models/train` с `model_type=llm` — запускает training job
 2. Training job завершается успешно
 3. Adapter сохраняется в MinIO
@@ -41,12 +43,14 @@ alpha=32. Для больших моделей (7B+) экономит памят
 
 **Описание:**
 Система поддерживает fine-tuning reranker двумя способами:
+
 - Full fine-tuning через CrossEncoder.fit()
 - LoRA fine-tuning (rank=4)
 
 Training data — positive/negative pairs из HITL feedback.
 
 **Критерий приёмки:**
+
 1. Training job завершается успешно
 2. Fine-tuned reranker показывает MRR ≥ baseline + 0.02
 3. Adapter/model сохраняется в MinIO
@@ -61,11 +65,13 @@ Training data — positive/negative pairs из HITL feedback.
 
 **Описание:**
 Все training jobs логируются в MLflow:
+
 - Parameters (model, rank, alpha, learning_rate, epochs)
 - Metrics (loss, accuracy, F1, BertScore)
 - Artifacts (adapter weights, training data)
 
 **Критерий приёмки:**
+
 1. MLflow UI показывает runs с parameters и metrics
 2. Artifacts загружаются в MLflow
 3. S3-хранилище (MinIO) содержит artifacts
@@ -83,6 +89,7 @@ MLflow Model Registry отслеживает версии моделей со st
 None → Staging → Production → Archived.
 
 **Критерий приёмки:**
+
 1. Новая модель — stage=None
 2. Promotion — stage=Production
 3. Rollback — stage=Archived, предыдущая → Production
@@ -97,6 +104,7 @@ None → Staging → Production → Archived.
 
 **Описание:**
 Перед promotion модель проходит quality gate:
+
 - SLM: F1 ≥ 0.85
 - LLM: BertScore ≥ 0.70, hallucination ≤ 0.05
 - Reranker: MRR ≥ baseline + 0.02, Rouge-L ≥ 0.35
@@ -104,6 +112,7 @@ None → Staging → Production → Archived.
 Модель, не прошедшая gate, блокируется от promotion.
 
 **Критерий приёмки:**
+
 1. Модель с F1=0.90 — проходит gate, можно promote
 2. Модель с F1=0.70 — блокируется, нельзя promote
 3. Gate логирует reason для блокировки
@@ -118,6 +127,7 @@ None → Staging → Production → Archived.
 
 **Описание:**
 При deployment новой модели трафик распределяется по фазам:
+
 - Phase 1: 5% на новую модель
 - Phase 2: 25%
 - Phase 3: 50%
@@ -127,6 +137,7 @@ None → Staging → Production → Archived.
 Каждая фаза длится configurable время. При деградации метрик — автоматический rollback.
 
 **Критерий приёмки:**
+
 1. Phase 1 — 5% запросов идут на новую модель
 2. Метрики OK — переход к следующей фазе
 3. Метрики деградировали — rollback к предыдущей модели
@@ -142,12 +153,14 @@ None → Staging → Production → Archived.
 
 **Описание:**
 AdapterManager загружает новые LoRA-адаптеры без перезапуска прокси:
+
 - Lifecycle: UNLOADED → LOADING → ACTIVE → DRAINING → RETIRING
 - In-flight запросы завершаются на старом адаптере
 - Новые запросы — на новом
 - File watcher обнаруживает новый адаптер в директории
 
 **Критерий приёмки:**
+
 1. Новый адаптер в директории — обнаруживается file watcher
 2. Hot-reload — прокси не перезапускается
 3. In-flight запросы — завершаются успешно

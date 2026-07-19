@@ -7,12 +7,14 @@
 ### FR-121. MCP tools: rag_search, rag_chat, rag_feedback
 
 **Описание:**
-MCP сервер暴露ывает 3 инструмента:
+MCP сервер обрабатывает 3 инструмента:
+
 - `rag_search` — поиск по knowledge base (параметр: query)
 - `rag_chat` — chat completion через RAG (параметр: messages)
 - `rag_feedback` — отправка feedback (параметр: feedback_id, type, correction)
 
 **Критерий приёмки:**
+
 1. MCP-клиент видит все 3 инструмента
 2. `rag_search("query")` — возвращает найденные чанки
 3. `rag_chat([{"role":"user","content":"..."}])` — возвращает ответ
@@ -27,9 +29,10 @@ MCP сервер暴露ывает 3 инструмента:
 ### FR-122. MCP resource: rag://collections
 
 **Описание:**
-MCP сервер暴露ывает ресурс `rag://collections` — список доступных коллекций.
+MCP сервер вызывает ресурс `rag://collections` — список доступных коллекций.
 
 **Критерий приёмки:**
+
 1. MCP-клиент может прочитать ресурс
 2. Возвращает список коллекций с метаданными
 
@@ -42,9 +45,10 @@ MCP сервер暴露ывает ресурс `rag://collections` — списо
 ### FR-123. MCP prompt: rag_help
 
 **Описание:**
-MCP сервер暴露ывает промпт `rag_help` с инструкциями по использованию.
+MCP сервер вызывает промпт `rag_help` с инструкциями по использованию.
 
 **Критерий приёмки:**
+
 1. MCP-клиент может получить промпт
 2. Промпт содержит описание всех инструментов и параметров
 
@@ -58,10 +62,12 @@ MCP сервер暴露ывает промпт `rag_help` с инструкция
 
 **Описание:**
 MCP сервер поддерживает два транспорта:
+
 - STDIO (по умолчанию) — для OpenCode, Claude Desktop
 - HTTP — для web-клиентов
 
 **Критерий приёмки:**
+
 1. STDIO mode — клиент подключается через stdin/stdout
 2. HTTP mode — клиент подключается по HTTP
 3. Оба транспорта работают одновременно
@@ -79,6 +85,7 @@ MCP сервер устанавливается как standalone pip-пакет
 Конфигурация через переменную окружения `RAG_PROXY_URL`.
 
 **Критерий приёмки:**
+
 1. `pip install` или `python mcp_server/server.py` — сервер запускается
 2. `RAG_PROXY_URL=http://proxy:8080` — подключается к прокси
 3. Без переменной — ошибка с инструкцией
@@ -98,6 +105,7 @@ MCP сервер устанавливается как standalone pip-пакет
 Redis, Neo4j (опционально), MinIO (опционально).
 
 **Критерий приёмки:**
+
 1. `docker compose up -d` — все сервисы запускаются
 2. `/v1/health` — все компоненты healthy
 3. `docker compose down` — чистое завершение
@@ -112,6 +120,7 @@ Redis, Neo4j (опционально), MinIO (опционально).
 
 **Описание:**
 Helm chart для K8s деплоя с:
+
 - Deployment (proxy)
 - StatefulSets (Qdrant, Neo4j, Redis, MinIO, PostgreSQL)
 - HPA (auto-scaling)
@@ -121,6 +130,7 @@ Helm chart для K8s деплоя с:
 - ServiceAccount, PDB
 
 **Критерий приёмки:**
+
 1. `helm lint deploy/k8s/helm/rag-system/` — без ошибок
 2. `helm template` — рендерит валидные манифесты
 3. `kubectl apply` — все ресурсы создаются
@@ -135,12 +145,14 @@ Helm chart для K8s деплоя с:
 
 **Описание:**
 ETL деплоится как отдельный Helm component:
+
 - CronJob для scheduled ETL
 - PVC для WAL state
 - ConfigMap для etl_config.yaml
 - Resource limits
 
 **Критерий приёмки:**
+
 1. `etl.enabled: true` в values.yaml — ETL CronJob создаётся
 2. CronJob запускается по расписанию
 3. WAL state сохраняется в PVC
@@ -155,12 +167,14 @@ ETL деплоится как отдельный Helm component:
 
 **Описание:**
 `docker-compose.distributed.yml` для multi-machine deployment:
+
 - Proxy на машине A
 - Qdrant на машине B
 - LLM на GPU-машине C
 - Redis/Neo4j на машине D
 
 **Критерий приёмки:**
+
 1. `docker compose -f docker-compose.distributed.yml config` — валидный
 2. Сервисы подключаются друг к другу по hostname
 3. Health checks работают
@@ -175,11 +189,13 @@ ETL деплоится как отдельный Helm component:
 
 **Описание:**
 MinIO деплоится через Helm для:
+
 - Model artifacts (LoRA adapters)
 - Backup storage (Qdrant snapshots, Neo4j dumps)
 - File uploads (rag-documents bucket)
 
 **Критерий приёмки:**
+
 1. MinIO PVC создаётся
 2. Buckets создаются автоматически (rag-documents, rag-artifacts, open-webui)
 3. Proxy подключается к MinIO
@@ -197,6 +213,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 Опционально: в single-node режиме используется SQLite.
 
 **Критерий приёмки:**
+
 1. PostgreSQL StatefulSet создаётся
 2. Proxy подключается к PostgreSQL
 3. Миграции применяются автоматически
@@ -211,6 +228,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 
 **Описание:**
 Интерактивный скрипт `setup.sh` выполняет:
+
 1. Проверку зависимостей (Python, Docker, etc.)
 2. Генерацию .env из .env.example
 3. Запуск Docker-сервисов
@@ -218,6 +236,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 5. Health verification
 
 **Критерий приёмки:**
+
 1. `bash setup.sh --full` — все шаги завершаются успешно
 2. После setup — `/v1/health` возвращает 200
 3. Ошибка на любом шаге — понятное сообщение
@@ -234,11 +253,13 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 
 **Описание:**
 Эндпоинт `GET /metrics` возвращает метрики в формате Prometheus:
+
 - Counters: `rag_requests_total`, `rag_errors_total`, `rag_cache_hits_total`
 - Histograms: `rag_request_duration_seconds`, `rag_retrieval_duration_seconds`
 - Gauges: `rag_active_requests`, `rag_confidence_score`
 
 **Критерий приёмки:**
+
 1. `/metrics` — валидный Prometheus text format
 2. Минимум 12 метрик
 3. Labels: method, path, status
@@ -255,6 +276,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 При `LOG_FORMAT=json` логи输出 в JSON-формате. Секреты маскируются.
 
 **Критерий приёмки:**
+
 1. `LOG_FORMAT=json` — логи в JSON
 2. Каждая строка — валидный JSON
 3. Секреты замаскированы
@@ -270,6 +292,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 
 **Описание:**
 JSON-файл для импорта в Grafana с панелями:
+
 - Request rate (RPS)
 - Latency percentiles (p50, p95, p99)
 - Error rate
@@ -279,6 +302,7 @@ JSON-файл для импорта в Grafana с панелями:
 - Feedback stats
 
 **Критерий приёмки:**
+
 1. JSON импортируется в Grafana без ошибок
 2. Все панели отображают данные
 3. Дашборд обновляется в реальном времени
@@ -293,6 +317,7 @@ JSON-файл для импорта в Grafana с панелями:
 
 **Описание:**
 Alert rules для Prometheus:
+
 - `HighLatency` — p95 > 5s
 - `HighErrorRate` — 5xx > 5%
 - `LLMUnavailable` — LLM down > 2 min
@@ -300,6 +325,7 @@ Alert rules для Prometheus:
 - `LowCacheHitRatio` — cache hit < 20%
 
 **Критерий приёмки:**
+
 1. `promtool check rules alerts.yml` — без ошибок
 2. Все 5 alert rules присутствуют
 3. Пороги настраиваемые
@@ -314,11 +340,13 @@ Alert rules для Prometheus:
 
 **Описание:**
 Система поддерживает distributed tracing через OpenTelemetry:
+
 - W3C traceparent propagation
 - Trace ID в логах и HTTP-заголовках
 - Spans для каждого этапа RAG pipeline
 
 **Критерий приёмки:**
+
 1. `OTEL_ENABLED=true` — tracing активен
 2. Trace ID присутствует в логах
 3. Trace ID в HTTP-заголовках ответа
@@ -335,6 +363,7 @@ Alert rules для Prometheus:
 
 **Описание:**
 Скрипты для автоматического бэкапа:
+
 - Qdrant snapshots — каждые 6 часов
 - Neo4j dumps — каждые 6 часов
 - Redis RDB — каждый час
@@ -343,6 +372,7 @@ Alert rules для Prometheus:
 Бэкапы сохраняются в S3/MinIO.
 
 **Критерий приёмки:**
+
 1. Скрипты выполняются по расписанию (cron)
 2. Бэкапы сохраняются в S3 bucket
 3. Лог: "Backup completed: X MB"
@@ -357,6 +387,7 @@ Alert rules для Prometheus:
 
 **Описание:**
 Runbook покрывает 8 сценариев:
+
 1. Потеря Qdrant — restore from snapshot
 2. Потеря Neo4j — restore from dump
 3. Потеря Redis — rebuild from source
@@ -367,6 +398,7 @@ Runbook покрывает 8 сценариев:
 8. Disk full — cleanup + expand
 
 **Критерий приёмки:**
+
 1. Для каждого сценария — пошаговая инструкция
 2. RTO < 30 минут
 3. RPO < 1 час
@@ -381,11 +413,13 @@ Runbook покрывает 8 сценариев:
 
 **Описание:**
 Скрипт `restore_all.sh` восстанавливает все сервисы из бэкапа:
+
 - `--latest` — последний бэкап
 - `--date YYYY-MM-DD` — бэкап на дату
 - Проверка целостности после restore
 
 **Критерий приёмки:**
+
 1. `restore_all.sh --latest` — все сервисы восстановлены
 2. Данные доступны после restore
 3. Health check проходит
@@ -405,6 +439,7 @@ Qdrant использует INT8 квантизацию для векторов,
 с минимальной потерей качества (MRR drop ≤ 2%).
 
 **Критерий приёмки:**
+
 1. Коллекция создана с quantization_config
 2. Потребление памяти ≤ 50% от неквантизированной
 3. MRR drop ≤ 2%
@@ -422,6 +457,7 @@ Qdrant использует INT8 квантизацию для векторов,
 HTTP используется как fallback.
 
 **Критерий приёмки:**
+
 1. `prefer_grpc=True` в настройках клиента
 2. Retrieval latency p50 < 130ms
 3. Fallback на HTTP при недоступности gRPC
@@ -439,6 +475,7 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 запросах с тем же system prompt.
 
 **Критерий приёмки:**
+
 1. `--enable-prefix-caching` включён на vLLM
 2. Gauge `rag_vllm_prefix_cache_hit_ratio` ≥ 40%
 3. TTFT снижается на ≥ 50%
@@ -453,11 +490,13 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 
 **Описание:**
 Параметры HNSW индекса настраиваются под размер коллекции:
+
 - < 100K vectors: m=16, ef_construct=128, ef_search=64
 - 100K-1M: m=24, ef_construct=192, ef_search=128
 - > 1M: m=32, ef_construct=256, ef_search=200
 
 **Критерий приёмки:**
+
 1. Параметры соответствуют размеру коллекции
 2. Recall@10 ≥ 0.95
 3. Latency в допустимых пределах
@@ -475,6 +514,7 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 для устранения cold-start latency.
 
 **Критерий приёмки:**
+
 1. Warm-up выполняется при старте (если `WARMUP_ON_STARTUP=true`)
 2. Первый реальный запрос — latency в пределах 100ms от 10-го
 3. Warm-up duration < 30s
@@ -491,11 +531,13 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 
 **Описание:**
 Исходный код разбивается по AST-структуре:
+
 - Python: по функциям и классам (через `ast` модуль)
 - JavaScript: по функциям и классам (через tree-sitter)
 - Java: по методам и классам
 
 **Критерий приёмки:**
+
 1. Python-файл с 5 функциями → 5 чанков
 2. Каждый чанк содержит полную функцию (не обрезанную)
 3. Контекст (имя файла, класса) добавляется в метаданные
@@ -513,6 +555,7 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 отдельно. Запрос «какая таблица X?» возвращает структурированные данные.
 
 **Критерий приёмки:**
+
 1. Confluence-страница с таблицей → таблица извлечена
 2. Таблица индексируется как отдельный чанк с type=table
 3. Поиск по таблице возвращает структурированные данные

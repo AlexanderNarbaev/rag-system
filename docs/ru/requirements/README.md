@@ -11,41 +11,41 @@
 
 ## Как читать этот документ
 
-| Поле | Описание |
-|------|----------|
-| **ID** | Уникальный идентификатор требования |
-| **Описание** | Что система должна делать |
-| **Критерий приёмки** | Конкретная проверка, после которой требование считается выполненным |
-| **Статус** | ✅ Подтверждено / ⚠️ Код есть, нужна верификация / ❌ Нужна реализация |
-| **Приоритет** | CRITICAL / HIGH / MEDIUM / LOW |
-| **Связь** | ADR, гайд или модуль, к которому относится |
+| Поле                 | Описание                                                             |
+|----------------------|----------------------------------------------------------------------|
+| **ID**               | Уникальный идентификатор требования                                  |
+| **Описание**         | Что система должна делать                                            |
+| **Критерий приёмки** | Конкретная проверка, после которой требование считается выполненным  |
+| **Статус**           | ✅ Подтверждено / ⚠️ Код есть, нужна верификация / ❌ Нужна реализация |
+| **Приоритет**        | CRITICAL / HIGH / MEDIUM / LOW                                       |
+| **Связь**            | ADR, гайд или модуль, к которому относится                           |
 
 ---
 
 ## Структура
 
-| Файл | Содержание |
-|------|------------|
-| [01-core-api.md](01-core-api.md) | FR-01 — FR-08: OpenAI-совместимый API |
-| [02-retrieval.md](02-retrieval.md) | FR-09 — FR-18: Гибридный поиск и ранжирование |
-| [03-knowledge-graph.md](03-knowledge-graph.md) | FR-19 — FR-25: Граф знаний (Neo4j) |
-| [04-agentic.md](04-agentic.md) | FR-26 — FR-31: Агентская оркестрация (LangGraph) |
-| [05-quality.md](05-quality.md) | FR-32 — FR-39: HyDE, CRAG, Self-Reflection, Grounding |
-| [06-etl.md](06-etl.md) | FR-40 — FR-57: ETL Pipeline |
-| [07-auth.md](07-auth.md) | FR-73 — FR-94: HITL, Auth, RBAC |
-| [08-model-evolution.md](08-model-evolution.md) | FR-95 — FR-102: Model Evolution |
-| [09-tools.md](09-tools.md) | FR-104 — FR-120: KB Management, Agentic Tools |
-| [10-mcp-deploy-obs.md](10-mcp-deploy-obs.md) | FR-121 — FR-175: MCP, Deployment, Observability, Performance |
-| [11-nfr.md](11-nfr.md) | NFR-P, NFR-A, NFR-S, NFR-D, NFR-M, NFR-Q, NFR-C |
+| Файл                                           | Содержание                                                   |
+|------------------------------------------------|--------------------------------------------------------------|
+| [01-core-api.md](01-core-api.md)               | FR-01 — FR-08: OpenAI-совместимый API                        |
+| [02-retrieval.md](02-retrieval.md)             | FR-09 — FR-18: Гибридный поиск и ранжирование                |
+| [03-knowledge-graph.md](03-knowledge-graph.md) | FR-19 — FR-25: Граф знаний (Neo4j)                           |
+| [04-agentic.md](04-agentic.md)                 | FR-26 — FR-31: Агентская оркестрация (LangGraph)             |
+| [05-quality.md](05-quality.md)                 | FR-32 — FR-39: HyDE, CRAG, Self-Reflection, Grounding        |
+| [06-etl.md](06-etl.md)                         | FR-40 — FR-57: ETL Pipeline                                  |
+| [07-auth.md](07-auth.md)                       | FR-73 — FR-94 (+FR-87b): HITL, Auth, RBAC                   |
+| [08-model-evolution.md](08-model-evolution.md) | FR-95 — FR-102: Model Evolution                              |
+| [09-tools.md](09-tools.md)                     | FR-104 — FR-120: KB Management, Agentic Tools                |
+| [10-mcp-deploy-obs.md](10-mcp-deploy-obs.md)   | FR-121 — FR-175: MCP, Deployment, Observability, Performance |
+| [11-nfr.md](11-nfr.md)                         | NFR-P, NFR-A, NFR-S, NFR-D, NFR-M, NFR-Q, NFR-C              |
 
 ---
 
 ## Итоговая статистика
 
-| Категория | Всего | ✅ Подтверждено | ⚠️ Код есть | ❌ Нужна реализация |
-|-----------|-------|----------------|-------------|-------------------|
-| FR (Functional) | 175 | 16 | 155 | 4 |
-| NFR (Non-Functional) | 63 | 8 | 50 | 5 |
-| CON (Constraints) | 28 | 28 | 0 | 0 |
-| DEC (Decisions) | 15 | 15 | 0 | 0 |
-| **ИТОГО** | **281** | **67** | **205** | **9** |
+| Категория            | Всего   | ✅ Подтверждено | ⚠️ Код есть | ❌ Нужна реализация |
+|----------------------|---------|----------------|-------------|--------------------|
+| FR (Functional)      | 176     | 16             | 155         | 5                  |
+| NFR (Non-Functional) | 63      | 8              | 50          | 5                  |
+| CON (Constraints)    | 29      | 29             | 0           | 0                  |
+| DEC (Decisions)      | 15      | 15             | 0           | 0                  |
+| **ИТОГО**            | **283** | **68**         | **205**     | **10**             |

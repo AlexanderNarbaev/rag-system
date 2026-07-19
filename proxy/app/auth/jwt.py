@@ -245,10 +245,22 @@ async def get_auth_context(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Check for API key (sk-* prefix)
-    if token.startswith("sk-"):
-        return _validate_api_key(token)
+    user_ctx = _validate_api_key(token) if token.startswith("sk-") else verify_token(token)
 
-    return verify_token(token)
+    # Override user identity from proxy headers (e.g., OpenWebUI multi-user)
+    header_user_id = request.headers.get("x-openwebui-user-id") or request.headers.get("x-forwarded-user")
+    if header_user_id:
+        user_ctx = UserContext(
+            user_id=header_user_id,
+            username=header_user_id,
+            roles=user_ctx.roles,
+            groups=user_ctx.groups,
+            access_level=user_ctx.access_level,
+            namespace=user_ctx.namespace,
+        )
+        logger.info("User identity from header: %s", header_user_id)
+
+    return user_ctx
 
 
 def _validate_api_key(key: str) -> UserContext:

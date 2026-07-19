@@ -135,7 +135,7 @@ class TestChatCompletionsSpanRecording:
             patch("proxy.app.api.chat.get_current_span", return_value=mock_span),
         ):
             request = ChatCompletionRequest(
-                model="test-model",
+                model="test-model+RAG",
                 messages=[ChatMessage(role="user", content="test query")],
             )
             response = asyncio.run(
@@ -214,7 +214,7 @@ class TestChatCompletionsErrorPaths:
 
         with patch("proxy.app.main", mock_main):
             request = ChatCompletionRequest(
-                model="test-model",
+                model="test-model+RAG",
                 messages=[ChatMessage(role="user", content="test")],
             )
             with pytest.raises(HTTPException) as exc_info:
@@ -240,7 +240,7 @@ class TestChatCompletionsErrorPaths:
 
         with patch("proxy.app.main", mock_main):
             request = ChatCompletionRequest(
-                model="test-model",
+                model="test-model+RAG",
                 messages=[ChatMessage(role="user", content="query")],
                 stream=False,
             )
@@ -277,7 +277,7 @@ class TestChatCompletionsErrorPaths:
 
         with patch("proxy.app.main", mock_main):
             request = ChatCompletionRequest(
-                model="test-model",
+                model="test-model+RAG",
                 messages=[ChatMessage(role="user", content="stream test")],
                 stream=True,
             )
@@ -305,7 +305,7 @@ class TestChatCompletionsErrorPaths:
 
         with patch("proxy.app.main", mock_main):
             request = ChatCompletionRequest(
-                model="test-model",
+                model="test-model+RAG",
                 messages=[ChatMessage(role="user", content="query")],
                 stream=False,
                 rag_skip_generation=True,
@@ -356,8 +356,8 @@ class TestStreamingRefusalPath:
 
         with patch("proxy.app.main", mock_main):
             request = ChatCompletionRequest(
-                model="test-model",
-                messages=[ChatMessage(role="user", content="obscure query")],
+                model="test-model+RAG",
+                messages=[ChatMessage(role="user", content="stream test")],
                 stream=True,
             )
             response = asyncio.run(

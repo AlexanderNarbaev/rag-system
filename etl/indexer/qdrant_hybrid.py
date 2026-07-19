@@ -217,6 +217,9 @@ class QdrantHybridIndexer:
             "chunk_hash": point_id_raw,
             "created_at": chunk.get("created_at", ""),
             "updated_at": chunk.get("updated_at", ""),
+            "access_level": chunk.get("access_level", "public"),
+            "allowed_groups": chunk.get("allowed_groups", []),
+            "allowed_users": chunk.get("allowed_users", []),
         }
         # Очищаем None значения
         payload = {k: v for k, v in payload.items() if v is not None}

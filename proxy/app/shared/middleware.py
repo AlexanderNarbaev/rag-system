@@ -36,6 +36,11 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
         RequestIdFilter.set_request_id(request_id)
 
+        # Extract user identity headers for multi-user proxy setups (e.g. OpenWebUI)
+        request.state.forwarded_user_id = (
+            request.headers.get("x-openwebui-user-id") or request.headers.get("x-forwarded-user") or None
+        )
+
         response: Response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         return response

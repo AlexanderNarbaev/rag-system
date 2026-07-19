@@ -9,9 +9,23 @@ from typing import Any
 from etl.extractors.base_extractor import BaseExtractor, ExtractedDocument, ExtractorConfig
 
 ALLOWED_TAGS = {
-    "p", "h1", "h2", "h3", "h4", "h5", "h6",
-    "ul", "ol", "li", "table", "tr", "td", "th",
-    "pre", "code", "blockquote",
+    "p",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "ul",
+    "ol",
+    "li",
+    "table",
+    "tr",
+    "td",
+    "th",
+    "pre",
+    "code",
+    "blockquote",
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

@@ -8,7 +8,11 @@
 Система поддерживает несколько изолированных knowledge bases (KB). Каждая KB —
 отдельная коллекция в Qdrant с собственными метаданными в SQLite.
 
+Каждая KB имеет настройки доступа (roles, departments). При поиске учитываются
+ACL текущего пользователя.
+
 **Критерий приёмки:**
+
 1. Создание KB — новая коллекция в Qdrant + запись в SQLite
 2. Запрос к конкретной KB — поиск только в её коллекции
 3. Удаление KB — коллекция удаляется из Qdrant + запись из SQLite
@@ -23,6 +27,7 @@
 
 **Описание:**
 RESTful API для управления knowledge bases:
+
 - `POST /v1/admin/kb` — создать KB
 - `GET /v1/admin/kb` — список KB
 - `GET /v1/admin/kb/{id}` — детали KB
@@ -30,6 +35,7 @@ RESTful API для управления knowledge bases:
 - `POST /v1/admin/kb/{id}/reindex` — переиндексация
 
 **Критерий приёмки:**
+
 1. CRUD-операции работают
 2. Reindex запускает ETL для указанной KB
 3. Только admin может управлять KB
@@ -47,6 +53,7 @@ RESTful API для управления knowledge bases:
 существует. Это позволяет работать «из коробки» без ручной инициализации.
 
 **Критерий приёмки:**
+
 1. Первый запуск — коллекция создаётся автоматически
 2. Повторный запуск — коллекция уже существует, пропускается
 3. Лог: "Qdrant collection 'X' created with indexes"
@@ -64,6 +71,7 @@ RESTful API для управления knowledge bases:
 Каждая задача имеет progress (%), start_time, end_time, error_message.
 
 **Критерий приёмки:**
+
 1. POST `/v1/admin/kb/{id}/reindex` — создаёт задачу со статусом pending
 2. GET `/v1/admin/tasks/{id}` — возвращает статус и progress
 3. Задача завершена — status=completed, progress=100%
@@ -78,6 +86,7 @@ RESTful API для управления knowledge bases:
 
 **Описание:**
 При старте система проверяет все обязательные настройки:
+
 - QDRANT_HOST — обязательно
 - LLM_ENDPOINT — обязательно
 - LLM_MODEL_NAME — обязательно
@@ -86,6 +95,7 @@ RESTful API для управления knowledge bases:
 Отсутствующие настройки — warning в логе, degraded mode.
 
 **Критерий приёмки:**
+
 1. Отсутствует QDRANT_HOST — warning, degraded mode
 2. Все настройки present — startup успешен
 3. Лог: "Configuration validated" или "Missing required setting: X"
@@ -100,21 +110,42 @@ RESTful API для управления knowledge bases:
 
 **Описание:**
 Health check `/v1/health` возвращает детальный статус:
+
 ```json
 {
   "status": "healthy",
   "components": {
-    "qdrant": {"status": "healthy", "latency_ms": 5},
-    "llm": {"status": "healthy", "latency_ms": 50},
-    "neo4j": {"status": "healthy", "latency_ms": 10},
-    "redis": {"status": "healthy", "latency_ms": 2},
-    "kb_manager": {"status": "healthy"}
+    "qdrant": {
+      "status": "healthy",
+      "latency_ms": 5
+    },
+    "llm": {
+      "status": "healthy",
+      "latency_ms": 50
+    },
+    "neo4j": {
+      "status": "healthy",
+      "latency_ms": 10
+    },
+    "redis": {
+      "status": "healthy",
+      "latency_ms": 2
+    },
+    "kb_manager": {
+      "status": "healthy"
+    }
   },
-  "collections": {"default": {"vectors": 1234, "indexed": true}}
+  "collections": {
+    "default": {
+      "vectors": 1234,
+      "indexed": true
+    }
+  }
 }
 ```
 
 **Критерий приёмки:**
+
 1. Ответ содержит все компоненты
 2. Latency для каждого компонента
 3. Количество векторов в коллекциях
@@ -129,14 +160,17 @@ Health check `/v1/health` возвращает детальный статус:
 
 **Описание:**
 Разработчики могут создавать инструменты с помощью декоратора `@tool`:
+
 ```python
 @tool(description="Search Confluence pages")
 def search_confluence(query: str, space: str = "DEFAULT") -> list[dict]:
     ...
 ```
+
 JSON Schema генерируется автоматически из type hints.
 
 **Критерий приёмки:**
+
 1. `@tool` декоратор — функция регистрируется как инструмент
 2. JSON Schema генерируется из type hints
 3. Инструмент доступен через `/v1/tools`
@@ -151,16 +185,18 @@ JSON Schema генерируется автоматически из type hints.
 
 **Описание:**
 Альтернативный способ создания инструментов через Builder pattern:
+
 ```python
 tool = (ToolBuilder("search_jira")
-    .description("Search Jira issues")
-    .param("query", str, required=True)
-    .param("project", str, default="ALL")
-    .handler(my_handler)
-    .build())
+        .description("Search Jira issues")
+        .param("query", str, required=True)
+        .param("project", str, default="ALL")
+        .handler(my_handler)
+        .build())
 ```
 
 **Критерий приёмки:**
+
 1. ToolBuilder создаёт валидный ToolDefinition
 2. JSON Schema соответствует определённым параметрам
 3. Handler вызывается при tool call
@@ -174,7 +210,8 @@ tool = (ToolBuilder("search_jira")
 ## FR-113. ToolContext injection
 
 **Описание:**
-При вызове инструмента автоматически注入 ToolContext:
+При вызове инструмента автоматически создается ToolContext:
+
 - user_id — ID пользователя
 - user_role — роль пользователя
 - request_id — ID запроса
@@ -182,6 +219,7 @@ tool = (ToolBuilder("search_jira")
 - streaming — флаг streaming mode
 
 **Критерий приёмки:**
+
 1. Handler получает ToolContext первым аргументом
 2. ToolContext содержит user_id, user_role, request_id
 3. shared_state доступен между последовательными tool calls
@@ -196,6 +234,7 @@ tool = (ToolBuilder("search_jira")
 
 **Описание:**
 Система поставляется с встроенными инструментами:
+
 - `confluence_search` — поиск по Confluence
 - `jira_search` — поиск по Jira
 - `gitlab_search` — поиск по GitLab
@@ -203,6 +242,7 @@ tool = (ToolBuilder("search_jira")
 Инструменты вызывают live API этих систем.
 
 **Критерий приёмки:**
+
 1. Инструменты зарегистрированы при старте
 2. Tool call — вызывает реальный API
 3. Результат возвращается в формате ToolResult
@@ -220,6 +260,7 @@ tool = (ToolBuilder("search_jira")
 Невалидные данные — ошибка с описанием, handler не вызывается.
 
 **Критерий приёмки:**
+
 1. Валидные данные — handler вызывается
 2. Невалидные данные — 400 с описанием ошибки
 3. Отсутствующие required параметры — 400
@@ -234,6 +275,7 @@ tool = (ToolBuilder("search_jira")
 
 **Описание:**
 Инструменты можно определять декларативно в YAML/JSON файлах:
+
 ```yaml
 name: search_docs
 description: Search internal documentation
@@ -247,6 +289,7 @@ params:
 ```
 
 **Критерий приёмки:**
+
 1. YAML-файл в директории — инструмент регистрируется при старте
 2. HTTP-вызов выполняется с параметрами из YAML
 3. Shell-инструмент выполняется с whitelist validation
@@ -261,10 +304,12 @@ params:
 
 **Описание:**
 Система автоматически создаёт инструменты из OpenAPI/Swagger специй:
+
 - AUTO mode: все endpoints → tools
 - LLM_DRIVEN mode: LLM выбирает релевантные endpoints
 
 **Критерий приёмки:**
+
 1. OpenAPI spec URL — все endpoints создаются как tools
 2. LLM-driven mode — LLM фильтрует endpoints
 3. Tools доступны через `/v1/tools`
@@ -279,12 +324,14 @@ params:
 
 **Описание:**
 Инструменты фильтруются по роли пользователя:
+
 - Admin — видит все инструменты
 - Expert — видит все кроме admin-only
 - User — видит публичные инструменты
 - Read_only — видит только read-only инструменты
 
 **Критерий приёмки:**
+
 1. GET `/v1/tools` с role=admin — все инструменты
 2. GET `/v1/tools` с role=user — только публичные
 3. Tool с visibility=admin — не видна обычному пользователю
@@ -299,6 +346,7 @@ params:
 
 **Описание:**
 Каждый tool call логирует метрики:
+
 - `rag_tool_calls_total` — количество вызовов
 - `rag_tool_duration_seconds` — latency
 - `rag_tool_active` — количество активных вызовов
@@ -306,6 +354,7 @@ params:
 - `rag_tool_input_bytes` / `rag_tool_output_bytes` — размер данных
 
 **Критерий приёмки:**
+
 1. Все 6 метрик присутствуют на `/metrics`
 2. После tool call — метрики обновляются
 3. Labels: tool_name, status
@@ -320,12 +369,14 @@ params:
 
 **Описание:**
 Каждый tool call логируется в audit log:
+
 - tool_name, user_id, request_id, timestamp
 - input params (SHA-256 hashed для безопасности)
 - output (SHA-256 hashed)
 - duration_ms, status
 
 **Критерий приёмки:**
+
 1. Audit log содержит запись для каждого tool call
 2. Params захешированы (не в открытом виде)
 3. Секреты замаскированы

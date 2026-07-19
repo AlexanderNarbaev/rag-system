@@ -59,6 +59,8 @@ from proxy.app.shared.cache import CacheManager, SemanticCache
 
 # Internal module imports
 from proxy.app.shared.config import (
+    ALLOW_UNGROUNDED_GENERATION,  # noqa: F401 — re-export for test patching
+    AVAILABLE_MODELS,
     COLLECTION_NAME,
     COMPRESSION_ENABLED,
     COMPRESSION_LEVEL,
@@ -66,7 +68,6 @@ from proxy.app.shared.config import (
     CORS_ORIGINS,
     GRACEFUL_SHUTDOWN_ENABLED,
     GRAPH_ENABLED,
-    LLM_MODEL_NAME,
     LOG_DIR,
     LOG_REQUESTS,  # noqa: F401 — re-export for test patching
     MAX_CHUNKS_AFTER_RERANK,
@@ -845,11 +846,18 @@ class ModelsResponse(BaseModel):
 
 @app.get("/v1/models")
 async def list_models() -> ModelsResponse:
-    """Return list of available models."""
-    models = [
-        ModelInfo(id=LLM_MODEL_NAME, created=int(time.time())),
-        ModelInfo(id="rag-proxy", created=int(time.time())),
-    ]
+    """Return list of available models.
+
+    For each model in AVAILABLE_MODELS, exposes both a ``model+RAG`` entry
+    (routes through the full RAG pipeline) and the raw ``model`` entry
+    (pass-through to the LLM without retrieval).
+    """
+    models: list[ModelInfo] = []
+    for model_name in AVAILABLE_MODELS:
+        models.append(ModelInfo(id=f"{model_name}+RAG", created=int(time.time())))
+        models.append(ModelInfo(id=model_name, created=int(time.time())))
+    # Keep rag-proxy as a convenience alias
+    models.append(ModelInfo(id="rag-proxy", created=int(time.time())))
     return ModelsResponse(data=models)
 
 

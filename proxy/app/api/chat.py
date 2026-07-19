@@ -164,6 +164,9 @@ async def chat_completions(
     if not validated_model:
         raise HTTPException(status_code=400, detail="Invalid model name")
 
+    # Model routing: "+RAG" suffix → RAG pipeline; raw name → LLM pass-through
+    use_rag = request.model.endswith("+RAG")
+
     # Extract last user query
     user_query = None
     other_messages = []
@@ -254,6 +257,46 @@ async def chat_completions(
                 metadata={"version": version, "model": request.model, "skip_generation": True},
             )
         return skip_response
+
+    # LLM pass-through: raw model name without "+RAG" — skip RAG pipeline entirely
+    if not use_rag:
+        pass_messages = [{"role": "system", "content": "You are a helpful assistant."}]
+        if other_messages:
+            for msg in other_messages:
+                if msg.get("role") != "system":
+                    pass_messages.append(msg)
+        pass_messages.append({"role": "user", "content": user_query})
+
+        if request.stream:
+
+            async def passthrough_stream() -> AsyncIterator[str]:
+                async for chunk in _main.stream_completion(  # type: ignore[attr-defined]
+                    pass_messages,
+                    request.temperature or 0.2,
+                    request.max_tokens or 4096,
+                ):
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(passthrough_stream(), media_type="text/event-stream")
+
+        response_text = await _main.non_stream_completion(  # type: ignore[attr-defined]
+            pass_messages,
+            temperature=request.temperature or 0.2,
+            max_tokens=request.max_tokens or 4096,
+        )
+        return ChatCompletionResponse(
+            id=request_id,
+            created=int(time.time()),
+            model=request.model,
+            choices=[
+                ChatCompletionResponseChoice(
+                    index=0,
+                    message=ChatMessage(role="assistant", content=response_text),
+                    finish_reason="stop",
+                ),
+            ],
+        )
 
     # LangGraph orchestrator path
     if _main.USE_LANGGRAPH and _main.orchestrator:  # type: ignore[attr-defined]
@@ -407,7 +450,11 @@ async def chat_completions(
                 from proxy.app.core.clarification import build_uncertainty_response, generate_clarifying_questions
                 from proxy.app.core.confidence import should_generate_answer
                 from proxy.app.core.knowledge_status import determine_knowledge_status
-                from proxy.app.shared.config import CLARIFICATION_ENABLED
+                from proxy.app.shared.config import (
+                    ALLOW_UNGROUNDED_GENERATION,
+                    CLARIFICATION_ENABLED,
+                    UNGROUNDED_NOTICE,
+                )
 
                 chunks_for_status = sources or []
                 chunks_with_score = [{"score": s.get("relevance", 0)} for s in chunks_for_status]
@@ -430,42 +477,57 @@ async def chat_completions(
 
                     conversation.summarize_older_turns(keep_recent=CONVERSATION_MAX_TURNS // 2)
 
-                # If retrieval failed and we got a refusal, return structured uncertainty response
+                # If retrieval failed and we got a refusal, handle based on config
                 if not messages_for_llm:
-                    add_event("rag.pipeline.refusal", {"reason": "no_messages_for_llm"})
-                    if rag_context and isinstance(rag_context, str):
-                        refusal_text = rag_context
+                    if ALLOW_UNGROUNDED_GENERATION:
+                        # Allow LLM to answer with ungrounded notice
+                        add_event("rag.pipeline.ungrounded", {"reason": "no_messages_for_llm"})
+                        from proxy.app.shared.i18n import get_system_prompt
+
+                        base_prompt = get_system_prompt(request.lang)
+                        system_prompt = f"{UNGROUNDED_NOTICE}\n\n{base_prompt}\n\nContext:\n"
+                        messages_for_llm = [{"role": "system", "content": system_prompt}]
+                        if other_messages:
+                            for msg in other_messages:
+                                if msg.get("role") != "system":
+                                    messages_for_llm.append(msg)
+                        messages_for_llm.append({"role": "user", "content": user_query})
                     else:
-                        refusal_text = build_uncertainty_response(
-                            query=user_query,
-                            status=knowledge_status.status,
-                            sources=chunks_for_status,
-                            clarification=clarification_result,
+                        # Refuse — no knowledge and ungrounded generation disabled
+                        add_event("rag.pipeline.refusal", {"reason": "no_messages_for_llm"})
+                        if rag_context and isinstance(rag_context, str):
+                            refusal_text = rag_context
+                        else:
+                            refusal_text = build_uncertainty_response(
+                                query=user_query,
+                                status=knowledge_status.status,
+                                sources=chunks_for_status,
+                                clarification=clarification_result,
+                            )
+                        conversation.add_turn("user", user_query)
+                        conversation.add_turn(
+                            "assistant",
+                            refusal_text,
+                            metadata={"knowledge_status": knowledge_status.status},
                         )
-                    conversation.add_turn("user", user_query)
-                    conversation.add_turn(
-                        "assistant",
-                        refusal_text,
-                        metadata={"knowledge_status": knowledge_status.status},
-                    )
-                    yield optimizer.format_chunk(
-                        {
-                            "choices": [{"delta": {"content": refusal_text}, "index": 0, "finish_reason": "stop"}],
-                        },
-                    )
-                    status_meta = {
-                        "rag_knowledge_status": knowledge_status.status,
-                        "rag_source_count": knowledge_status.source_count,
-                    }
-                    yield f"data: {json.dumps(status_meta)}\n\n"
-                    if clarification_result and clarification_result.clarification_needed:
-                        clar_meta = {
-                            "rag_clarification_needed": True,
-                            "rag_clarifying_questions": clarification_result.questions,
+                        yield optimizer.format_chunk(
+                            {
+                                "choices": [{"delta": {"content": refusal_text}, "index": 0, "finish_reason": "stop"}],
+                            },
+                        )
+                        status_meta = {
+                            "rag_knowledge_status": knowledge_status.status,
+                            "rag_source_count": knowledge_status.source_count,
                         }
-                        yield f"data: {json.dumps(clar_meta)}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
+                        yield f"data: {json.dumps(status_meta)}\n\n"
+                        if clarification_result and clarification_result.clarification_needed:
+                            clar_meta = {
+                                "rag_clarification_needed": True,
+                                "rag_clarifying_questions": clarification_result.questions,
+                            }
+                            yield f"data: {json.dumps(clar_meta)}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
                 assert isinstance(messages_for_llm, list), "messages_for_llm must be a list after RAG query"
                 async for chunk in _main.stream_completion(  # type: ignore[attr-defined]
                     messages_for_llm,

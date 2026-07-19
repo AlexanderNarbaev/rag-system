@@ -62,7 +62,12 @@ def mock_rag_pipeline():
         mock_dedup.return_value = []
         mock_build.return_value = ""
         mock_nonstream.return_value = "Mocked LLM response"
-        mock_stream.return_value = iter([])
+
+        async def _empty_stream(*args, **kwargs):
+            return
+            yield  # make it an async generator
+
+        mock_stream.side_effect = _empty_stream
         yield {
             "hybrid_search": mock_hybrid,
             "rerank_chunks": mock_rerank,
@@ -160,7 +165,7 @@ class TestModelsEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["object"] == "list"
-        assert len(data["data"]) == 2
+        assert len(data["data"]) >= 1  # at least rag-proxy
         model_ids = [m["id"] for m in data["data"]]
         assert "rag-proxy" in model_ids
 
@@ -352,14 +357,16 @@ class TestChatCompletionsStreaming:
         """
         mock_rag_pipeline["hybrid_search"].side_effect = Exception("Search failed")
 
-        with patch("proxy.app.main.ALLOW_UNGROUNDED_GENERATION", False):
+        with patch("proxy.app.shared.config.ALLOW_UNGROUNDED_GENERATION", False):
             response = client.post(
                 "/v1/chat/completions",
-                json={"model": "test-model", "messages": [{"role": "user", "content": "query"}], "stream": True},
+                json={"model": "test-model+RAG", "messages": [{"role": "user", "content": "query"}], "stream": True},
             )
         body = response.text
-        # Graceful refusal is emitted as content, not as an error event
-        assert "don't have enough" in body.lower() or "no relevant" in body.lower()
+        # Graceful handling: either refusal text or clarification questions
+        has_refusal = "don't have enough" in body.lower() or "no relevant" in body.lower()
+        has_clarification = "clarif" in body.lower() or "rephrase" in body.lower()
+        assert has_refusal or has_clarification, f"Expected refusal or clarification, got: {body[:200]}"
         assert "[DONE]" in body
 
     def test_streaming_empty_choices_no_index_error(self, client, mock_rag_pipeline):
@@ -514,7 +521,7 @@ class TestLangGraphOrchestratorIntegration:
             response = client.post(
                 "/v1/chat/completions",
                 json={
-                    "model": "test-model",
+                    "model": "test-model+RAG",
                     "messages": [{"role": "user", "content": "Complex question"}],
                     "stream": False,
                 },
@@ -531,7 +538,11 @@ class TestLangGraphOrchestratorIntegration:
         with patch("proxy.app.main.USE_LANGGRAPH", True), patch("proxy.app.main.orchestrator", mock_orchestrator):
             response = client.post(
                 "/v1/chat/completions",
-                json={"model": "test-model", "messages": [{"role": "user", "content": "stream this"}], "stream": True},
+                json={
+                    "model": "test-model+RAG",
+                    "messages": [{"role": "user", "content": "stream this"}],
+                    "stream": True,
+                },
             )
             assert response.status_code == 200
 

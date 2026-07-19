@@ -57,6 +57,11 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 RETRY_DELAY = float(os.getenv("RETRY_DELAY", "1.0"))
 
+# ============ Available Models ============
+# Comma-separated list of model names served by the LLM backend.
+# Defaults to LLM_MODEL_NAME if not set.
+AVAILABLE_MODELS = [m.strip() for m in os.getenv("AVAILABLE_MODELS", LLM_MODEL_NAME).split(",") if m.strip()]
+
 # ============ SLM / Small Language Model (routing, decomposition) ============
 # Leave SLM_ENDPOINT empty to disable SLM features (heuristic fallback will be used)
 # Examples: gemma-2b-it, Qwen/Qwen2.5-1.5B-Instruct, microsoft/Phi-3-mini-4k-instruct
