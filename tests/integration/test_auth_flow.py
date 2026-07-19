@@ -457,3 +457,175 @@ class TestTokenValidation:
         admin = UserContext(user_id="a1", username="admin", roles=["admin", "user"])
         assert admin.is_admin is True
         assert admin.is_authenticated is True
+
+
+# ─── RBAC Integration Tests ──────────────────────────────────────────────────
+
+
+class TestRBACEnforcement:
+    """Integration tests for RBAC enforcement on endpoints (FR-88)."""
+
+    def test_expert_can_access_feedback_endpoint(self, auth_enabled_client):
+        """FR-88 AC2: Expert role can access /v1/feedback."""
+        from proxy.app.auth.jwt import create_token
+
+        with patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"):
+            expert_token = create_token(
+                user_id="expert-001",
+                username="expert",
+                roles=["expert"],
+                groups=["experts"],
+                secret="test-secret-key-for-integration-tests",
+            )
+
+        with (
+            patch("proxy.app.api.feedback._get_feedback_rate_limiter") as mock_limiter,
+            patch("proxy.app.core.hitl.get_logger", return_value=MagicMock()),
+            patch("proxy.app.core.feedback_store.get_feedback_store", return_value=MagicMock()),
+            patch("proxy.app.shared.metrics.record_enrichment"),
+            patch("proxy.app.shared.metrics.record_feedback"),
+            patch("proxy.app.core.ragas_eval.evaluate_rag_response", return_value={}),
+        ):
+            mock_rl = MagicMock()
+            from unittest.mock import AsyncMock
+
+            mock_rl.is_allowed = AsyncMock(return_value=(True, 0.0))
+            mock_limiter.return_value = mock_rl
+
+            response = auth_enabled_client.post(
+                "/v1/feedback",
+                json={"feedback_id": "fb-expert-1", "rating": "positive"},
+                headers={"Authorization": f"Bearer {expert_token}"},
+            )
+            # Expert should get 200 or success
+            assert response.status_code in (200, 201)
+
+    def test_user_cannot_submit_correction(self, auth_enabled_client):
+        """FR-88 AC3: User role cannot submit corrections (requires expert)."""
+        from proxy.app.auth.jwt import create_token
+
+        with patch("proxy.app.auth.jwt.JWT_ALGORITHM", "HS256"):
+            user_token = create_token(
+                user_id="user-001",
+                username="basicuser",
+                roles=["user"],
+                groups=["everyone"],
+                secret="test-secret-key-for-integration-tests",
+            )
+
+        with (
+            patch("proxy.app.api.feedback._get_feedback_rate_limiter") as mock_limiter,
+            patch("proxy.app.core.hitl.get_logger", return_value=MagicMock()),
+            patch("proxy.app.core.feedback_store.get_feedback_store", return_value=MagicMock()),
+            patch("proxy.app.shared.metrics.record_enrichment"),
+            patch("proxy.app.shared.metrics.record_feedback"),
+            patch("proxy.app.core.ragas_eval.evaluate_rag_response", return_value={}),
+            patch("proxy.app.shared.config.AUTH_ENABLED", True),
+            patch("proxy.app.shared.config.RBAC_ENABLED", True),
+        ):
+            mock_rl = MagicMock()
+            from unittest.mock import AsyncMock
+
+            mock_rl.is_allowed = AsyncMock(return_value=(True, 0.0))
+            mock_limiter.return_value = mock_rl
+
+            response = auth_enabled_client.post(
+                "/v1/feedback",
+                json={
+                    "feedback_id": "fb-user-1",
+                    "rating": "negative",
+                    "correction": "The correct answer is X",
+                },
+                headers={"Authorization": f"Bearer {user_token}"},
+            )
+            # User with correction should get 403
+            assert response.status_code == 403
+
+
+class TestAPIKeyAuth:
+    """Integration tests for API key authentication (FR-87)."""
+
+    def test_api_key_authenticates_user(self, auth_enabled_client):
+        """FR-87 AC1: API key (sk-xxx) authenticates the user."""
+        from proxy.app.auth.api_keys import ApiKeyManager
+
+        manager = ApiKeyManager()
+        api_key = manager.generate_key(user_id="apikey-user-1", roles=["user"])
+
+        with (
+            patch("proxy.app.auth.api_keys.api_key_manager", manager),
+            patch("proxy.app.auth.jwt.api_key_manager", manager, create=True),
+        ):
+            search_results = [MagicMock()]
+            search_results[0].id = "h"
+            search_results[0].score = 0.95
+            search_results[0].payload = {
+                "text": "Ctx",
+                "source_type": "t",
+                "source_id": "1",
+                "version": "1.0",
+                "title": "T",
+                "doc_title": "D",
+            }
+
+            async def mock_llm(messages, **kwargs):
+                return "API key response."
+
+            with (
+                patch("proxy.app.main.hybrid_search", return_value=search_results),
+                patch("proxy.app.main.rerank_chunks", return_value=[0]),
+                patch("proxy.app.main.non_stream_completion", side_effect=mock_llm),
+            ):
+                response = auth_enabled_client.post(
+                    "/v1/chat/completions",
+                    json={"model": "test-model+RAG", "messages": [{"role": "user", "content": "Hello"}]},
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                assert response.status_code == 200
+
+    def test_revoked_api_key_rejected(self, auth_enabled_client):
+        """FR-87 AC3: Revoked API key returns 401."""
+        from proxy.app.auth.api_keys import ApiKeyManager
+
+        manager = ApiKeyManager()
+        api_key = manager.generate_key(user_id="apikey-user-2", roles=["user"])
+        api_key_obj = manager.validate_key(api_key)
+        assert api_key_obj is not None
+        manager.revoke_key(api_key_obj.key_id)
+
+        with patch("proxy.app.auth.api_keys.api_key_manager", manager):
+            response = auth_enabled_client.post(
+                "/v1/chat/completions",
+                json={"model": "test-model+RAG", "messages": [{"role": "user", "content": "Hello"}]},
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            assert response.status_code == 401
+
+
+class TestCORSIntegration:
+    """Integration tests for CORS configuration (FR-94)."""
+
+    def test_cors_preflight_returns_200(self):
+        """FR-94 AC3: Preflight OPTIONS returns 200 with CORS headers."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from proxy.app.shared.middleware import add_cors_middleware
+
+        app = FastAPI()
+
+        @app.get("/test")
+        def test_endpoint():
+            return {"ok": True}
+
+        add_cors_middleware(app, origins="https://example.com,https://app.example.com")
+
+        client = TestClient(app)
+        response = client.options(
+            "/test",
+            headers={
+                "Origin": "https://example.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.status_code in (200, 204)
