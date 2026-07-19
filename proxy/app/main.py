@@ -68,6 +68,7 @@ from proxy.app.shared.config import (
     CORS_ORIGINS,
     GRACEFUL_SHUTDOWN_ENABLED,
     GRAPH_ENABLED,
+    LLM_MODEL_NAME,  # noqa: F401 — re-export for test patching
     LOG_DIR,
     LOG_REQUESTS,  # noqa: F401 — re-export for test patching
     MAX_CHUNKS_AFTER_RERANK,
