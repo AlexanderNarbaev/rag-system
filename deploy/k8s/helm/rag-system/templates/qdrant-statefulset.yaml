@@ -73,6 +73,7 @@ spec:
                 topologyKey: kubernetes.io/hostname
           {{- end }}
       {{- end }}
+  {{- if .Values.qdrant.persistence.enabled }}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -89,6 +90,11 @@ spec:
         resources:
           requests:
             storage: {{ .Values.qdrant.persistence.size }}
+  {{- else }}
+      volumes:
+        - name: data
+          emptyDir: {}
+  {{- end }}
 {{- end }}
 
 ---

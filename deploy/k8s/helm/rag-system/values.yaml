@@ -427,7 +427,7 @@ qdrant:
   # -- Liveness probe
   livenessProbe:
     httpGet:
-      path: /health
+      path: /
       port: 6333
     initialDelaySeconds: 30
     periodSeconds: 15
@@ -437,7 +437,7 @@ qdrant:
   # -- Readiness probe
   readinessProbe:
     httpGet:
-      path: /health
+      path: /
       port: 6333
     initialDelaySeconds: 15
     periodSeconds: 10

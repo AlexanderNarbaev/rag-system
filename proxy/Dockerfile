@@ -16,8 +16,8 @@ WORKDIR /app
 COPY proxy/requirements_proxy.txt .
 RUN pip install --no-cache-dir -r requirements_proxy.txt
 
-# Копирование исходного кода прокси
-COPY proxy/app /app/app
+# Копирование исходного кода прокси (сохраняем структуру proxy/app для импортов)
+COPY proxy/ /app/proxy/
 # Если есть дополнительные файлы (например, .env.example), можно скопировать
 COPY .env.example /app/.env.example
 

@@ -1,0 +1,124 @@
+# minikube-values.yaml — Local development values for minikube
+proxy:
+  replicaCount: 1
+  image:
+    repository: rag-proxy
+    tag: v2
+    pullPolicy: Never  # Use local images in minikube
+  service:
+    type: NodePort
+    port: 8080
+    targetPort: 8080
+  env:
+    host: "0.0.0.0"
+    port: "8080"
+    workers: "1"
+    threads: "4"
+    qdrantHost: "rag-system-qdrant"
+    qdrantPort: "6333"
+    llmEndpoint: "http://host.minikube.internal:8000/v1"
+    llmModelName: "test-model"
+    llmProvider: "openai_compatible"
+    useLanggraph: "false"
+    useRedis: "true"
+    graphEnabled: "false"
+    rateLimitEnabled: "false"
+    metricsEnabled: "true"
+    authEnabled: "false"
+    logFormat: "json"
+    logLevel: "INFO"
+    corsOrigins: "*"
+    toolsEnabled: "false"
+    liveSourcesEnabled: "false"
+    i18nEnabled: "true"
+    progressiveRetrievalEnabled: "false"
+    semanticCacheEnabled: "false"
+    warmupEnabled: "false"
+    warmupOnStartup: "false"
+    otelEnabled: "false"
+    gracefulShutdownEnabled: "true"
+    shutdownTimeout: "30"
+    maxChunksRetrieval: "20"
+    maxChunksAfterRerank: "10"
+    compressionEnabled: "true"
+    compressionLevel: "6"
+    compressionMinSize: "1024"
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  livenessProbe:
+    httpGet:
+      path: /v1/health/live
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readinessProbe:
+    httpGet:
+      path: /v1/health/ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+qdrant:
+  enabled: true
+  persistence:
+    enabled: false  # No persistence in minikube
+    size: 1Gi
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  securityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 0
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+redis:
+  enabled: true
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+neo4j:
+  enabled: false
+
+minio:
+  enabled: false
+
+postgresql:
+  enabled: false
+
+auth:
+  enabled: false
+
+etl:
+  enabled: false
+
+ingress:
+  enabled: false
+
+networkPolicy:
+  enabled: false  # Simplified networking in minikube
+
+serviceAccount:
+  create: true
