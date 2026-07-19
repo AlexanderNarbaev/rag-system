@@ -92,8 +92,8 @@ class TestReadinessProbe:
     def test_ready_returns_200_when_all_components_ok(self, app_client):
         """Readiness probe returns 200 when Qdrant and LLM are reachable."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health/ready")
             assert response.status_code == 200
@@ -105,8 +105,8 @@ class TestReadinessProbe:
     def test_ready_returns_503_when_qdrant_unavailable(self, app_client):
         """Readiness probe returns 503 when Qdrant is unreachable."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_fail()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("unavailable", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health/ready")
             assert response.status_code == 503
@@ -117,8 +117,8 @@ class TestReadinessProbe:
     def test_ready_returns_503_when_llm_unavailable(self, app_client):
         """Readiness probe returns 503 when LLM endpoint is unreachable."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", side_effect=Exception("Connection refused")),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("unavailable", {})),
         ):
             response = app_client.get("/v1/health/ready")
             assert response.status_code == 503
@@ -129,8 +129,8 @@ class TestReadinessProbe:
     def test_ready_returns_503_when_both_down(self, app_client):
         """Readiness probe returns 503 when both Qdrant and LLM are down."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_fail()),
-            patch("requests.get", side_effect=Exception("No route to host")),
+            patch("proxy.app.api.health._check_qdrant", return_value=("unavailable", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("unavailable", {})),
         ):
             response = app_client.get("/v1/health/ready")
             assert response.status_code == 503
@@ -142,8 +142,8 @@ class TestReadinessProbe:
     def test_ready_includes_timestamp(self, app_client):
         """Readiness probe response includes a timestamp."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health/ready")
             data = response.json()
@@ -156,8 +156,10 @@ class TestHealthEndpoint:
     def test_health_ok_when_all_services_up(self, app_client):
         """Health returns 200 with status='ok' when Qdrant and LLM respond."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             assert response.status_code == 200
@@ -169,37 +171,38 @@ class TestHealthEndpoint:
     def test_health_degraded_when_qdrant_unavailable(self, app_client):
         """Health returns 503 with status='degraded' when Qdrant check fails."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_fail("Timeout")),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("Qdrant service unavailable", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             assert response.status_code == 503
             data = response.json()
             assert data["status"] == "degraded"
-            assert "error" in data["components"]["qdrant"]
+            assert "unavailable" in data["components"]["qdrant"].lower()
 
     def test_health_degraded_when_llm_unavailable(self, app_client):
         """Health returns 503 with status='degraded' when LLM check fails."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", side_effect=Exception("LLM unreachable")),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("LLM service unavailable", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             assert response.status_code == 503
             data = response.json()
             assert data["status"] == "degraded"
-            assert "error" in data["components"]["llm"]
+            assert "unavailable" in data["components"]["llm"].lower()
 
     def test_health_degraded_when_llm_returns_non_200(self, app_client):
-        """Health reports LLM as unhealthy when it returns a non-200 status.
-
-        Note: the health endpoint only sets status='degraded' on exceptions.
-        A non-200 LLM response marks the component as 'unhealthy' but keeps
-        overall status 'ok' (no exception raised).
-        """
+        """Health reports LLM as unhealthy when it returns a non-200 status."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(503)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("unhealthy", {"status_code": 503})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             data = response.json()
@@ -208,8 +211,10 @@ class TestHealthEndpoint:
     def test_health_includes_timestamp(self, app_client):
         """Health response includes an ISO-formatted timestamp."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             data = response.json()
@@ -219,8 +224,10 @@ class TestHealthEndpoint:
     def test_health_has_components_dict(self, app_client):
         """Health response always includes a components dictionary."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_fail()),
-            patch("requests.get", side_effect=Exception("down")),
+            patch("proxy.app.api.health._check_qdrant", return_value=("Qdrant service unavailable", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("LLM service unavailable", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             data = response.json()
@@ -241,13 +248,23 @@ class TestHealthEndpointAuthBypass:
 
     def test_health_bypasses_auth(self, app_client):
         """GET /v1/health works without auth."""
-        response = app_client.get("/v1/health")
-        assert response.status_code in (200, 503)
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
+            response = app_client.get("/v1/health")
+            assert response.status_code in (200, 503)
 
     def test_health_ready_bypasses_auth(self, app_client):
         """GET /v1/health/ready works without auth."""
-        response = app_client.get("/v1/health/ready")
-        assert response.status_code in (200, 503)
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+        ):
+            response = app_client.get("/v1/health/ready")
+            assert response.status_code in (200, 503)
 
 
 class TestHealthEndpointFormats:
@@ -255,15 +272,23 @@ class TestHealthEndpointFormats:
 
     def test_all_health_endpoints_return_json(self, app_client):
         """All health endpoints return JSON content type."""
-        for path in ["/v1/health", "/v1/health/live", "/v1/health/ready"]:
-            response = app_client.get(path)
-            assert "application/json" in response.headers.get("content-type", "")
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
+            for path in ["/v1/health", "/v1/health/live", "/v1/health/ready"]:
+                response = app_client.get(path)
+                assert "application/json" in response.headers.get("content-type", "")
 
     def test_health_response_schema(self, app_client):
         """Health response has consistent schema with required fields."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health")
             data = response.json()
@@ -291,8 +316,8 @@ class TestHealthEndpointFormats:
     def test_ready_response_schema(self, app_client):
         """Ready response has consistent schema with components."""
         with (
-            patch("proxy.app.core.retrieval.qdrant_client", _mock_qdrant_ok()),
-            patch("requests.get", return_value=_mock_llm_response(200)),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
         ):
             response = app_client.get("/v1/health/ready")
             data = response.json()

@@ -24,9 +24,28 @@ _modules_to_mock = [
     "bcrypt",
 ]
 
+# Save originals so we can restore after tests to avoid polluting other test modules
+_original_modules: dict[str, object] = {}
 for mod in _modules_to_mock:
     if mod not in sys.modules:
+        _original_modules[mod] = None  # Mark for cleanup (was not present)
         sys.modules[mod] = MagicMock()
+    else:
+        _original_modules[mod] = sys.modules[mod]  # Save existing
+
+
+def _restore_mocked_modules():
+    """Undo sys.modules pollution so later test files get real modules."""
+    for mod, original in _original_modules.items():
+        if original is None:
+            sys.modules.pop(mod, None)
+        else:
+            sys.modules[mod] = original
+
+
+import atexit
+
+atexit.register(_restore_mocked_modules)
 
 # Now we can import the app
 from proxy.app.main import (
@@ -118,18 +137,11 @@ class TestHealthEndpoint:
 
     def test_health_mocked_components(self, client):
         with (
-            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
-            patch("requests.get") as mock_get,
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
             patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
             patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
-            # _check_qdrant() calls qdrant_client.get_collections().collections
-            # so the mock must return an object with a .collections attribute
-            mock_collections_resp = MagicMock()
-            mock_collections_resp.collections = []
-            mock_qdrant.get_collections.return_value = mock_collections_resp
-            mock_get.return_value.status_code = 200
-            mock_get.return_value.json.return_value = {}
             response = client.get("/v1/health")
             assert response.status_code == 200
             data = response.json()
@@ -137,21 +149,24 @@ class TestHealthEndpoint:
             assert "components" in data
 
     def test_health_qdrant_error(self, client):
-        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant, patch("requests.get") as mock_get:
-            mock_qdrant.get_collections.side_effect = Exception("down")
-            mock_get.return_value.status_code = 200
-            mock_get.return_value.json.return_value = {}
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("Qdrant service unavailable", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
             response = client.get("/v1/health")
             data = response.json()
             assert data["status"] == "degraded"
-            assert "error" in data["components"]["qdrant"]
+            assert "unavailable" in data["components"]["qdrant"].lower()
 
     def test_health_llm_error(self, client):
         with (
-            patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant,
-            patch("requests.get", side_effect=Exception("refused")),
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("LLM service unavailable", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
         ):
-            mock_qdrant.get_collections.return_value = {}
             response = client.get("/v1/health")
             data = response.json()
             assert data["status"] == "degraded"

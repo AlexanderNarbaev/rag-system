@@ -85,6 +85,7 @@ class TestScoreChunks:
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = json.dumps(mock_response).encode("utf-8")
+            mock_resp.status = 200
             mock_urlopen.return_value.__enter__.return_value = mock_resp
 
             scores = qf.score_chunks("test query", ["chunk1", "chunk2", "chunk3"])

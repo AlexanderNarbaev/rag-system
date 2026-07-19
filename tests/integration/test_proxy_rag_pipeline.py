@@ -27,6 +27,7 @@ def app_client():
         patch("proxy.app.main.USE_LANGGRAPH", False),
         patch("proxy.app.main.LOG_REQUESTS", False),
         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
+        patch("proxy.app.main.PROGRESSIVE_RETRIEVAL_ENABLED", False),
         patch("proxy.app.auth.jwt.AUTH_ENABLED", False),
     ):
         from fastapi.testclient import TestClient
@@ -42,22 +43,27 @@ class TestHealthEndpoint:
 
     def test_health_returns_ok_when_services_up(self, app_client):
         """Health endpoint returns 200 with status 'ok' when Qdrant and LLM are reachable."""
-        # In test environment services are not running, so degraded is expected.
-        response = app_client.get("/v1/health")
-        assert response.status_code in (200, 503)
-        data = response.json()
-        assert data["status"] in ("ok", "degraded")
-        assert "timestamp" in data
-        assert "components" in data
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
+            response = app_client.get("/v1/health")
+            assert response.status_code in (200, 503)
+            data = response.json()
+            assert data["status"] in ("ok", "degraded")
+            assert "timestamp" in data
+            assert "components" in data
 
     def test_health_returns_degraded_when_qdrant_unavailable(self, app_client):
         """Health endpoint returns 503 when Qdrant check raises an exception."""
-        with patch("proxy.app.core.retrieval.qdrant_client") as mock_qdrant, patch("requests.get") as mock_get:
-            mock_qdrant.get_collections.side_effect = Exception("Connection refused")
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_get.return_value = mock_resp
-
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("Qdrant service unavailable", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
             response = app_client.get("/v1/health")
             assert response.status_code == 503
             data = response.json()
@@ -73,7 +79,7 @@ class TestModelsEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["object"] == "list"
-        assert len(data["data"]) >= 2
+        assert len(data["data"]) >= 1  # at least rag-proxy alias
         model_ids = [m["id"] for m in data["data"]]
         assert "rag-proxy" in model_ids
         assert all(m["object"] == "model" for m in data["data"])

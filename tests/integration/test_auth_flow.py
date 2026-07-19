@@ -59,6 +59,7 @@ def auth_disabled_client():
         patch("proxy.app.main.USE_LANGGRAPH", False),
         patch("proxy.app.main.LOG_REQUESTS", False),
         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
+        patch("proxy.app.main.PROGRESSIVE_RETRIEVAL_ENABLED", False),
         patch("proxy.app.auth.jwt.AUTH_ENABLED", False),
     ):
         from fastapi.testclient import TestClient
@@ -77,6 +78,7 @@ def auth_enabled_client():
         patch("proxy.app.main.USE_LANGGRAPH", False),
         patch("proxy.app.main.LOG_REQUESTS", False),
         patch("proxy.app.main.LLM_MODEL_NAME", "test-model"),
+        patch("proxy.app.main.PROGRESSIVE_RETRIEVAL_ENABLED", False),
         patch("proxy.app.shared.config.AUTH_ENABLED", True),
         patch("proxy.app.shared.config.JWT_SECRET", "test-secret-key-for-integration-tests"),
         patch("proxy.app.shared.config.JWT_ALGORITHM", "HS256"),
@@ -108,9 +110,15 @@ class TestPublicEndpointsNoAuth:
 
     def test_health_endpoint_no_auth_required(self, auth_disabled_client):
         """GET /v1/health works without any authentication."""
-        response = auth_disabled_client.get("/v1/health")
-        assert response.status_code in (200, 503)  # 503 if services down, but not 401
-        assert "status" in response.json()
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
+            response = auth_disabled_client.get("/v1/health")
+            assert response.status_code in (200, 503)  # 503 if services down, but not 401
+            assert "status" in response.json()
 
     def test_health_live_no_auth_required(self, auth_disabled_client):
         """GET /v1/health/live works without authentication."""
@@ -120,8 +128,12 @@ class TestPublicEndpointsNoAuth:
 
     def test_health_ready_no_auth_required(self, auth_disabled_client):
         """GET /v1/health/ready works without authentication."""
-        response = auth_disabled_client.get("/v1/health/ready")
-        assert response.status_code in (200, 503)
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+        ):
+            response = auth_disabled_client.get("/v1/health/ready")
+            assert response.status_code in (200, 503)
 
     def test_models_endpoint_no_auth_required(self, auth_disabled_client):
         """GET /v1/models works without authentication."""
@@ -203,15 +215,21 @@ class TestProtectedEndpointsWithAuth:
 
     def test_health_endpoints_work_with_auth_enabled(self, auth_enabled_client):
         """Health endpoints are public even when AUTH_ENABLED=true."""
-        # /v1/health/live should work without token (it's in _PUBLIC_PATHS)
-        response = auth_enabled_client.get("/v1/health/live")
-        assert response.status_code == 200
+        with (
+            patch("proxy.app.api.health._check_qdrant", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_llm", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_secret_rotation", return_value=("ok", {})),
+            patch("proxy.app.api.health._check_kb_manager", return_value=("ok", {})),
+        ):
+            # /v1/health/live should work without token (it's in _PUBLIC_PATHS)
+            response = auth_enabled_client.get("/v1/health/live")
+            assert response.status_code == 200
 
-        response = auth_enabled_client.get("/v1/health")
-        assert response.status_code in (200, 503)
+            response = auth_enabled_client.get("/v1/health")
+            assert response.status_code in (200, 503)
 
-        response = auth_enabled_client.get("/v1/health/ready")
-        assert response.status_code in (200, 503)
+            response = auth_enabled_client.get("/v1/health/ready")
+            assert response.status_code in (200, 503)
 
     def test_models_endpoint_public_with_auth_enabled(self, auth_enabled_client):
         """GET /v1/models is public even when AUTH_ENABLED=true."""

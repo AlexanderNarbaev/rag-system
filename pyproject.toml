@@ -13,6 +13,11 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 # PEP 695 [T] syntax requires Python 3.12+; we use TypeVar for 3.11 compat in CI
 "proxy/app/shared/retry.py" = ["UP047"]
+# NFR test classes use NFR-XX prefix for traceability to spec requirements
+"tests/proxy/test_nfr_*.py" = ["N801"]
+"tests/performance/test_nfr_*.py" = ["N801"]
+"tests/resilience/test_nfr_*.py" = ["N801"]
+"tests/deploy/test_nfr_deploy.py" = ["N801"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -46,6 +51,7 @@ markers = [
     "slow: Tests that take longer than 5 seconds to complete",
     "integration: Tests that require external services (Qdrant, Neo4j, Redis)",
     "regression: Quality regression tests for retrieval and evaluation metrics",
+    "bdd: Behavior-driven development feature tests (require RAG_PROXY_URL)",
 ]
 filterwarnings = [
     # Persistent SQLite user database singleton — connections live for app lifetime,

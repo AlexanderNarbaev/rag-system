@@ -1,0 +1,9 @@
+# tests/requirements-test.txt
+# Test dependencies for the RAG system test suite
+# Install: pip install -r tests/requirements-test.txt
+
+# ── BDD testing ──────────────────────────────────────────────────────────────
+pytest-bdd>=6.0,<8.0
+
+# ── HTTP client for integration tests ────────────────────────────────────────
+httpx>=0.27.0

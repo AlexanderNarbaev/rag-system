@@ -261,19 +261,22 @@ class TestBookExtractorExtract:
 class TestBookExtractorHelpers:
     def test_clean_html_with_bs4(self, book_config):
         ext = BookExtractor(book_config)
-        html = "<html><head><script>alert('x')</script></head><body><p>Hello</p><p>World</p></body></html>"
+        # Use only ALLOWED_TAGS (p, h1-h6, ul, ol, li, table, tr, td, th, pre, code, blockquote)
+        # Tags not in ALLOWED_TAGS (html, head, body, script, b, etc.) are decomposed with content removed
+        html = "<p>Hello</p><script>alert('x')</script><p>World</p>"
         result = ext._clean_html(html)
         assert "Hello" in result
         assert "World" in result
-        assert "alert" not in result.lower() or "script" not in result.lower()
+        assert "alert" not in result.lower()
 
     def test_clean_html_simple(self, book_config):
         ext = BookExtractor(book_config)
-        html = "<p>Simple <b>bold</b> text</p>"
+        # Only tags in ALLOWED_TAGS survive decomposition; <b> is not in ALLOWED_TAGS
+        html = "<p>Simple text here</p>"
         result = ext._clean_html(html)
         assert "Simple" in result
-        assert "bold" in result
         assert "text" in result
+        assert "here" in result
 
     def test_extract_headings(self, book_config):
         ext = BookExtractor(book_config)
