@@ -25,6 +25,7 @@ import urllib3
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
 
+from etl.extractors.acl_extractor import extract_confluence_acl
 from etl.extractors.base_extractor import SyncExtractor
 
 # Подавление SSL warnings для самоподписанных сертификатов
@@ -485,6 +486,9 @@ class ConfluenceExtractor(SyncExtractor):
         labels = page.get("metadata", {}).get("labels", [])
         restrictions = page.get("metadata", {}).get("restrictions", {})
 
+        # ACL extraction from page restrictions and space metadata
+        acl = extract_confluence_acl(page)
+
         # Хеш контента для инкрементальных обновлений на этапе эмбеддингов
         content_hash = hashlib.sha256(body_markdown.encode("utf-8")).hexdigest()
 
@@ -511,6 +515,12 @@ class ConfluenceExtractor(SyncExtractor):
             "attachments": attachment_data,
             "macros": macros,
             "extracted_at": datetime.now(UTC).isoformat(),
+            "acl": {
+                "access_level": acl.access_level,
+                "allowed_groups": acl.allowed_groups,
+                "allowed_users": acl.allowed_users,
+                "source_permissions": acl.source_permissions,
+            },
         }
         return page_data
 

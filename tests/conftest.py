@@ -231,3 +231,14 @@ def mock_stream_completion():
 
         mock.side_effect = _mock_stream
         yield mock
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip minikube tests unless RAG_PROXY_URL is set."""
+    import os
+
+    if not os.getenv("RAG_PROXY_URL"):
+        skip_marker = pytest.mark.skip(reason="RAG_PROXY_URL not set")
+        for item in items:
+            if "minikube" in item.nodeid:
+                item.add_marker(skip_marker)

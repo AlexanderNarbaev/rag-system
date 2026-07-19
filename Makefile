@@ -2,7 +2,7 @@
 # Primary entry point for development, testing, and deployment workflows.
 
 .PHONY: help install install-dev install-one-line setup wizard \
-        test test-proxy test-etl test-integration \
+        test test-proxy test-etl test-integration test-minikube \
         test-performance test-e2e test-resilience benchmark \
         benchmark-baselines benchmark-compare \
         lint helm-lint format format-check typecheck clean \
@@ -80,6 +80,14 @@ test-etl: ## Run ETL unit tests
 
 test-integration: ## Run integration tests
 	@cd $(ROOT) && python -m pytest tests/integration/ -v
+
+test-minikube: ## Run integration tests against minikube deployment
+	@echo "Ensure minikube is running and port-forward is active:"
+	@echo "  kubectl port-forward svc/rag-system-proxy 9080:8080 -n rag-system &"
+	@echo "  python3 scripts/mock_llm_server.py &"
+	@echo ""
+	RAG_PROXY_URL=http://localhost:9080 MOCK_LLM_URL=http://localhost:8010 \
+		python -m pytest tests/integration/test_minikube_e2e.py -v
 
 test-performance: ## Run performance and benchmark tests
 	@cd $(ROOT) && python -m pytest tests/performance/ -v -m benchmark

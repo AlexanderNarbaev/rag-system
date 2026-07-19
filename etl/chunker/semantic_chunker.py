@@ -583,6 +583,9 @@ class SemanticChunker:
             doc_title=source_metadata.get("doc_title", ""),
             position=position,
             tokens_approx=self._estimate_tokens(text),
+            access_level=source_metadata.get("access_level", "public"),
+            allowed_groups=list(source_metadata.get("allowed_groups", [])),
+            allowed_users=list(source_metadata.get("allowed_users", [])),
         )
         return chunk
 
@@ -733,6 +736,13 @@ class MDKeyChunker:
             chunk.source_id = source_metadata.get("source_id", "")
             chunk.version = source_metadata.get("version", "")
             chunk.doc_title = source_metadata.get("doc_title", "")
+
+            # Propagate ACL from document metadata to chunk
+            chunk.access_level = source_metadata.get("access_level", chunk.access_level)
+            if source_metadata.get("allowed_groups"):
+                chunk.allowed_groups = list(source_metadata["allowed_groups"])
+            if source_metadata.get("allowed_users"):
+                chunk.allowed_users = list(source_metadata["allowed_users"])
 
             if not self.enricher:
                 continue

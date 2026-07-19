@@ -35,6 +35,8 @@ class ExtractedDocument:
     content_type: str  # html, markdown, text
     metadata: dict[str, Any] = field(default_factory=dict)
     access_level: str = "internal"
+    allowed_groups: list[str] = field(default_factory=list)
+    allowed_users: list[str] = field(default_factory=list)
     version: str = ""
     extracted_at: str = ""
     links: list[dict[str, Any]] = field(default_factory=list)

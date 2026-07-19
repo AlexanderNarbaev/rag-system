@@ -112,6 +112,33 @@ services:
     networks:
       - rag-network
 
+  # ── Model Evolution (training + registry) ───────────────────────────────────
+  model-evolution:
+    build: ../model_evolution_service
+    container_name: rag-model-evolution
+    ports:
+      - "8090:8090"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-CHANGE_ME}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-CHANGE_ME}
+      - MODEL_REGISTRY_PATH=/app/data/model_registry.json
+    volumes:
+      - model_evolution_data:/app/data
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8090/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
   # ── RAG proxy (FastAPI + Swagger UI) ────────────────────────────────────────
   rag-proxy:
     image: rag-proxy:latest
@@ -157,6 +184,7 @@ volumes:
   neo4j_data:
   redis_data:
   minio_data:
+  model_evolution_data:
 
 networks:
   rag-network:

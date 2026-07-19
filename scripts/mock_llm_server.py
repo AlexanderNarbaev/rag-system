@@ -5,11 +5,11 @@ Provides:
 - POST /v1/chat/completions — returns a mock response
 - POST /v1/completions — returns a mock response
 """
+
 import json
 import time
 import uuid
-
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 
 class MockLLMHandler(BaseHTTPRequestHandler):
@@ -17,10 +17,13 @@ class MockLLMHandler(BaseHTTPRequestHandler):
         if self.path == "/v1/health":
             self._respond(200, {"status": "ok"})
         elif self.path == "/v1/models":
-            self._respond(200, {
-                "object": "list",
-                "data": [{"id": "mock-llm", "object": "model", "created": int(time.time()), "owned_by": "mock"}],
-            })
+            self._respond(
+                200,
+                {
+                    "object": "list",
+                    "data": [{"id": "mock-llm", "object": "model", "created": int(time.time()), "owned_by": "mock"}],
+                },
+            )
         else:
             self._respond(404, {"error": "not found"})
 
@@ -47,11 +50,13 @@ class MockLLMHandler(BaseHTTPRequestHandler):
             "object": "chat.completion",
             "created": int(time.time()),
             "model": body.get("model", "mock-llm"),
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": f"Mock response to: {last_msg[:100]}"},
-                "finish_reason": "stop",
-            }],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": f"Mock response to: {last_msg[:100]}"},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20},
         }
         self._respond(200, response)

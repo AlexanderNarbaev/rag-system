@@ -24,6 +24,7 @@ import requests
 import urllib3
 from requests.auth import HTTPBasicAuth
 
+from etl.extractors.acl_extractor import extract_jira_acl
 from etl.extractors.base_extractor import SyncExtractor
 
 # Подавление SSL warnings для самоподписанных сертификатов
@@ -339,6 +340,9 @@ class JiraExtractor(SyncExtractor):
         # RBAC metadata
         project_key = fields.get("project", {}).get("key", "")
 
+        # ACL extraction from issue security and project metadata
+        acl = extract_jira_acl(issue)
+
         # Извлечение ссылок из описания
         description_links = self._extract_links_from_text(description)
 
@@ -367,6 +371,12 @@ class JiraExtractor(SyncExtractor):
             "subtasks": subtasks,
             "description_links": description_links,
             "extracted_at": datetime.now(UTC).isoformat(),
+            "acl": {
+                "access_level": acl.access_level,
+                "allowed_groups": acl.allowed_groups,
+                "allowed_users": acl.allowed_users,
+                "source_permissions": acl.source_permissions,
+            },
         }
         return result
 

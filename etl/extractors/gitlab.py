@@ -22,6 +22,7 @@ from urllib.parse import urljoin
 import requests
 import urllib3
 
+from etl.extractors.acl_extractor import extract_gitlab_acl
 from etl.extractors.base_extractor import SyncExtractor
 
 # Подавление SSL warnings для самоподписанных сертификатов
@@ -291,6 +292,15 @@ class GitLabExtractor(SyncExtractor):
         project_id = str(project["id"])
         proj_dir = self.output_dir / project_id
         proj_dir.mkdir(parents=True, exist_ok=True)
+
+        # ACL extraction from project visibility and membership
+        acl = extract_gitlab_acl(project)
+        project["acl"] = {
+            "access_level": acl.access_level,
+            "allowed_groups": acl.allowed_groups,
+            "allowed_users": acl.allowed_users,
+            "source_permissions": acl.source_permissions,
+        }
 
         # Метаданные проекта
         with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
