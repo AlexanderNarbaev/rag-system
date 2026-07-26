@@ -1,0 +1,45 @@
+# Prometheus scrape configuration for the RAG system.
+# Use Docker service names in Compose; override targets for bare metal.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: rag-proxy
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["rag-proxy:8080"]
+        labels:
+          component: proxy
+
+  - job_name: qdrant
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["rag-qdrant:6333"]
+        labels:
+          component: qdrant
+
+  - job_name: redis-exporter
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          component: redis
+
+  - job_name: neo4j-exporter
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["neo4j-exporter:2004"]
+        labels:
+          component: neo4j
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

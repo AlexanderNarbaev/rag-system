@@ -20,7 +20,7 @@ ETL-пайплайн извлекает данные из:
 2. Каждый документ имеет: id, title, content, source_type, metadata
 3. Инкрементальное извлечение — только изменённые документы
 
-**Статус:** ⚠️ Код есть (6 экстракторов в `etl/extractors/`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR40Extractors`, `tests/etl/test_extractors.py`)
 **Приоритет:** CRITICAL
 **Связь:** AGENTS.md
 
@@ -47,7 +47,7 @@ ETL-пайплайн извлекает данные из:
 2. Каждый чанк содержит контекст (заголовок секции, имя документа)
 3. Overlap между соседними чанками — 50-100 токенов
 
-**Статус:** ⚠️ Код есть (`etl/chunker/semantic_chunker.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR41SemanticChunking`, `tests/etl/test_semantic_chunker.py`)
 **Приоритет:** CRITICAL
 **Связь:** AGENTS.md
 
@@ -102,7 +102,7 @@ Write-Ahead Log отслеживает состояние каждого эта�
 2. WAL-файл содержит checkpoint для каждого этапа
 3. Успешное завершение — WAL очищается
 
-**Статус:** ⚠️ Код есть (`etl/indexer/wal_manager.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR44WALIncremental`, `tests/etl/test_wal_manager.py`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-005, ADR-011
 
@@ -123,7 +123,7 @@ Write-Ahead Log отслеживает состояние каждого эта�
 2. Изменённый контент → другой хеш → новая точка в Qdrant
 3. Хеш используется как Point ID в Qdrant
 
-**Статус:** ⚠️ Код есть (`etl/chunker/hash_versioning.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR45ContentAddressable`, `tests/etl/test_hash_versioning.py`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-005
 
@@ -143,7 +143,7 @@ Write-Ahead Log отслеживает состояние каждого эта�
 2. Старая версия — в Parquet (cold)
 3. `rag_version="v1"` — находит чанки даже если v1 в cold storage
 
-**Статус:** ⚠️ Код есть (`etl/indexer/live_vector_lake.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR46HotColdStorage`, `tests/etl/test_live_vector_lake.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-005
 
@@ -162,7 +162,7 @@ Write-Ahead Log отслеживает состояние каждого эта�
 2. Запрос `rag_version` — возвращает чанки только указанной версии
 3. Без `rag_version` — возвращает чанки текущей версии
 
-**Статус:** ⚠️ Код есть (`etl/chunker/hash_versioning.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR47VersionTracking`)
 **Приоритет:** HIGH
 **Связь:** ADR-005
 
@@ -181,7 +181,7 @@ summary. Summary кластеров снова кластеризуются — 
 2. Поиск на верхнем уровне — возвращает общие summary
 3. Поиск на нижнем уровне — возвращает конкретные чанки
 
-**Статус:** ⚠️ Код есть (`etl/indexer/tree_builder.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR48RaptorTree`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 2
 
@@ -204,7 +204,7 @@ summary. Summary кластеров снова кластеризуются — 
 2. Каждый чанк содержит имя функции в метаданных
 3. Импорты дублируются в каждом чанке (для контекста)
 
-**Статус:** ⚠️ Код есть (`etl/chunker/code_chunker.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR49CodeChunking`, `tests/etl/test_code_chunker.py`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 5.2
 
@@ -222,7 +222,7 @@ summary. Summary кластеров снова кластеризуются — 
 2. PDF со сканами → текст извлечён
 3. Качество OCR ≥ 90% для чётких изображений
 
-**Статус:** ⚠️ Код есть (`etl/extractors/image_extractor.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR50ImageOCR`, `tests/etl/test_image_extractor.py`, `tests/etl/test_ocr.py`)
 **Приоритет:** HIGH
 **Связь:** NFR-P09
 
@@ -243,7 +243,7 @@ summary. Summary кластеров снова кластеризуются — 
 2. Чанки с quality_score < порога — фильтруются или обогащаются
 3. Метрики логируются
 
-**Статус:** ⚠️ Код есть (`etl/indexer/chunk_quality.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR51QualityMetrics`, `tests/etl/test_chunk_quality.py`)
 **Приоритет:** HIGH
 **Связь:** quality_metrics.py
 
@@ -266,7 +266,7 @@ SLM обогащает чанки метаданными:
 2. Каждый чанк имеет `entities` (извлечённые SLM)
 3. Обогащение не ломает существующие метаданные
 
-**Статус:** ⚠️ Код есть (`etl/indexer/chunk_enricher.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR52ChunkEnrichment`, `tests/etl/test_chunk_enricher.py`)
 **Приоритет:** HIGH
 **Связь:** chunk_enricher.py
 
@@ -285,7 +285,7 @@ ETL работает в streaming-режиме: документы обраба�
 2. Обработанный чанк доступен для поиска немедленно
 3. Ошибка обработки — retry с exponential backoff
 
-**Статус:** ⚠️ Код есть (`etl/scheduler/streaming_pipeline.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR53StreamingPipeline`, `tests/etl/test_streaming_pipeline.py`)
 **Приоритет:** HIGH
 **Связь:** NFR-P10
 
@@ -308,7 +308,7 @@ ETL работает в streaming-режиме: документы обраба�
 2. Событие page_removed → чанки удаляются из Qdrant
 3. Неизвестное событие — логируется, не падает
 
-**Статус:** ⚠️ Код есть (`etl/scheduler/event_pipeline.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR54EventPipeline`, `tests/etl/test_event_pipeline.py`)
 **Приоритет:** HIGH
 **Связь:** event_pipeline.py
 
@@ -329,7 +329,7 @@ HTTP-сервер принимает webhook-уведомления от вне�
 2. POST-запрос с невалидным payload — 400 Bad Request
 3. Webhook-секрет проверяется (HMAC signature)
 
-**Статус:** ⚠️ Код есть (`etl/scheduler/webhook_server.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR55WebhookServer`, `tests/etl/test_webhook_server.py`)
 **Приоритет:** HIGH
 **Связь:** webhook_server.py
 
@@ -350,7 +350,7 @@ HTTP-сервер принимает webhook-уведомления от вне�
 2. Инкрементальная — каждые 15 минут
 3. Ошибка задачи — retry до 3 раз
 
-**Статус:** ⚠️ Код есть (`etl/scheduler/task_scheduler.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR56TaskScheduler`, `tests/etl/test_task_scheduler.py`)
 **Приоритет:** HIGH
 **Связь:** task_scheduler.py
 
@@ -371,6 +371,6 @@ HTTP-сервер принимает webhook-уведомления от вне�
 2. Версии 30-90 дней — архивируются в S3
 3. Лог содержит количество обработанных записей
 
-**Статус:** ⚠️ Код есть (`etl/scheduler/cold_storage_cleanup.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR57ColdStorageCleanup`, `tests/etl/test_cold_storage_cleanup.py`)
 **Приоритет:** MEDIUM
 **Связь:** performance-quality 6.4

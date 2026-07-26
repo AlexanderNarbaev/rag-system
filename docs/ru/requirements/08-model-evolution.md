@@ -15,7 +15,7 @@ rank=8, alpha=16, target_modules=[q_proj, v_proj]. Training data — из HITL f
 3. Adapter сохраняется в MinIO
 4. Metrics логируются в MLflow
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/slm_trainer.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/trainers/slm_trainer.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-010
 
@@ -33,7 +33,7 @@ alpha=32. Для больших моделей (7B+) экономит памят
 2. Training job завершается успешно
 3. Adapter сохраняется в MinIO
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/llm_trainer.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/trainers/llm_trainer.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-010
 
@@ -55,7 +55,7 @@ Training data — positive/negative pairs из HITL feedback.
 2. Fine-tuned reranker показывает MRR ≥ baseline + 0.02
 3. Adapter/model сохраняется в MinIO
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/reranker_trainer.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/trainers/reranker_trainer.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-010
 
@@ -76,7 +76,7 @@ Training data — positive/negative pairs из HITL feedback.
 2. Artifacts загружаются в MLflow
 3. S3-хранилище (MinIO) содержит artifacts
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/experiment_tracker.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/experiment_tracker.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-ME-001
 
@@ -94,7 +94,7 @@ None → Staging → Production → Archived.
 2. Promotion — stage=Production
 3. Rollback — stage=Archived, предыдущая → Production
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/model_registry.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/model_registry.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-ME-001
 
@@ -117,7 +117,7 @@ None → Staging → Production → Archived.
 2. Модель с F1=0.70 — блокируется, нельзя promote
 3. Gate логирует reason для блокировки
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/eval_gate.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/eval_gate.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-010 3.4
 
@@ -143,7 +143,7 @@ None → Staging → Production → Archived.
 3. Метрики деградировали — rollback к предыдущей модели
 4. Prometheus-метрики отслеживают canary status
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/canary_controller.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/canary_controller.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-ME-004
 
@@ -166,6 +166,6 @@ AdapterManager загружает новые LoRA-адаптеры без пер
 3. In-flight запросы — завершаются успешно
 4. Новые запросы — используют новый адаптер
 
-**Статус:** ⚠️ Код есть (`proxy/app/model_evolution/adapter_manager.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (вынесено в `model_evolution_service/adapter_manager.py`)
 **Приоритет:** HIGH
 **Связь:** ADR-ME-003

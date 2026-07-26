@@ -20,7 +20,7 @@ MCP сервер обрабатывает 3 инструмента:
 3. `rag_chat([{"role":"user","content":"..."}])` — возвращает ответ
 4. `rag_feedback(...)` — отправляет feedback
 
-**Статус:** ⚠️ Код есть (`mcp_server/server.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/mcp_server/test_mcp_requirements.py::TestFR121MCPTools`)
 **Приоритет:** HIGH
 **Связь:** ADR-013
 
@@ -36,7 +36,7 @@ MCP сервер вызывает ресурс `rag://collections` — спис�
 1. MCP-клиент может прочитать ресурс
 2. Возвращает список коллекций с метаданными
 
-**Статус:** ⚠️ Код есть (`mcp_server/server.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/mcp_server/test_mcp_requirements.py::TestFR122MCPResource`)
 **Приоритет:** MEDIUM
 **Связь:** ADR-013
 
@@ -52,7 +52,7 @@ MCP сервер вызывает промпт `rag_help` с инструкци�
 1. MCP-клиент может получить промпт
 2. Промпт содержит описание всех инструментов и параметров
 
-**Статус:** ⚠️ Код есть (`mcp_server/server.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/mcp_server/test_mcp_requirements.py::TestFR123MCPPrompt`)
 **Приоритет:** MEDIUM
 **Связь:** ADR-013
 
@@ -72,7 +72,7 @@ MCP сервер поддерживает два транспорта:
 2. HTTP mode — клиент подключается по HTTP
 3. Оба транспорта работают одновременно
 
-**Статус:** ⚠️ Код есть (`mcp_server/server.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/mcp_server/test_mcp_requirements.py::TestFR124DualTransport`)
 **Приоритет:** HIGH
 **Связь:** ADR-013
 
@@ -90,7 +90,7 @@ MCP сервер устанавливается как standalone pip-пакет
 2. `RAG_PROXY_URL=http://proxy:8080` — подключается к прокси
 3. Без переменной — ошибка с инструкцией
 
-**Статус:** ⚠️ Код есть (`mcp_server/server.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/mcp_server/test_mcp_requirements.py::TestFR125StandaloneInstall`)
 **Приоритет:** HIGH
 **Связь:** ADR-013
 
@@ -110,7 +110,7 @@ Redis, Neo4j (опционально), MinIO (опционально).
 2. `/v1/health` — все компоненты healthy
 3. `docker compose down` — чистое завершение
 
-**Статус:** ⚠️ Код есть (`proxy/docker-compose.yml`), нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestDockerCompose`)
 **Приоритет:** CRITICAL
 **Связь:** AGENTS.md
 
@@ -135,7 +135,7 @@ Helm chart для K8s деплоя с:
 2. `helm template` — рендерит валидные манифесты
 3. `kubectl apply` — все ресурсы создаются
 
-**Статус:** ⚠️ Код есть (16 templates), нужен `helm lint` + smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestHelmChart`)
 **Приоритет:** CRITICAL
 **Связь:** best-practices-checklist 7.4
 
@@ -157,7 +157,7 @@ ETL деплоится как отдельный Helm component:
 2. CronJob запускается по расписанию
 3. WAL state сохраняется в PVC
 
-**Статус:** ⚠️ Код есть, нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestETLHelmComponent`)
 **Приоритет:** HIGH
 **Связь:** FR-151
 
@@ -179,7 +179,7 @@ ETL деплоится как отдельный Helm component:
 2. Сервисы подключаются друг к другу по hostname
 3. Health checks работают
 
-**Статус:** ⚠️ Код есть, нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestDistributedCompose`)
 **Приоритет:** HIGH
 **Связь:** FR-152
 
@@ -200,7 +200,7 @@ MinIO деплоится через Helm для:
 2. Buckets создаются автоматически (rag-documents, rag-artifacts, open-webui)
 3. Proxy подключается к MinIO
 
-**Статус:** ⚠️ Код есть, нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestMinIOHelm`)
 **Приоритет:** HIGH
 **Связь:** ADR-014
 
@@ -218,7 +218,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 2. Proxy подключается к PostgreSQL
 3. Миграции применяются автоматически
 
-**Статус:** ⚠️ Код есть, нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestPostgreSQLHelm`)
 **Приоритет:** HIGH
 **Связь:** FR-154
 
@@ -241,7 +241,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 2. После setup — `/v1/health` возвращает 200
 3. Ошибка на любом шаге — понятное сообщение
 
-**Статус:** ⚠️ Код есть (`scripts/setup_wizard.py`), нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestDockerCompose`, `scripts/setup_wizard.py`)
 **Приоритет:** HIGH
 **Связь:** deployment-guide
 
@@ -264,7 +264,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 2. Минимум 12 метрик
 3. Labels: method, path, status
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/metrics.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_observability.py::TestPrometheusMetrics`)
 **Приоритет:** CRITICAL
 **Связь:** best-practices-checklist 4.1
 
@@ -282,7 +282,7 @@ PostgreSQL для structured data (user DB, feedback store) в K8s deployment.
 3. Секреты замаскированы
 4. request_id propagируется через все логи запроса
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/logging.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_observability.py::TestStructuredLogging`)
 **Приоритет:** CRITICAL
 **Связь:** best-practices-checklist 4.2
 
@@ -307,7 +307,7 @@ JSON-файл для импорта в Grafana с панелями:
 2. Все панели отображают данные
 3. Дашборд обновляется в реальном времени
 
-**Статус:** ⚠️ Код есть (`config/monitoring/ragas-dashboard.json`), нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestGrafanaDashboard`)
 **Приоритет:** HIGH
 **Связь:** best-practices-checklist 4.6
 
@@ -330,7 +330,7 @@ Alert rules для Prometheus:
 2. Все 5 alert rules присутствуют
 3. Пороги настраиваемые
 
-**Статус:** ⚠️ Код есть (`config/monitoring/alerts.yml`), нужен `promtool check`
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestAlertRules`)
 **Приоритет:** HIGH
 **Связь:** best-practices-checklist 4.5
 
@@ -351,7 +351,7 @@ Alert rules для Prometheus:
 2. Trace ID присутствует в логах
 3. Trace ID в HTTP-заголовках ответа
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/tracing.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_observability.py::TestOpenTelemetryTracing`)
 **Приоритет:** HIGH
 **Связь:** best-practices-checklist 4.4
 
@@ -377,7 +377,7 @@ Alert rules для Prometheus:
 2. Бэкапы сохраняются в S3 bucket
 3. Лог: "Backup completed: X MB"
 
-**Статус:** ⚠️ Код есть (`scripts/ops/`), нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestBackupScripts`)
 **Приоритет:** CRITICAL
 **Связь:** disaster-recovery-runbook
 
@@ -424,7 +424,7 @@ Runbook покрывает 8 сценариев:
 2. Данные доступны после restore
 3. Health check проходит
 
-**Статус:** ⚠️ Код есть (`scripts/ops/restore_all.sh`), нужен smoke test
+**Статус:** ✅ Подтверждено (`tests/deploy/test_helm_chart.py::TestRestoreScript`)
 **Приоритет:** CRITICAL
 **Связь:** disaster-recovery-runbook
 
@@ -519,7 +519,7 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 2. Первый реальный запрос — latency в пределах 100ms от 10-го
 3. Warm-up duration < 30s
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/warmup.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/performance/test_nfr_benchmarks.py::TestModelWarmup`)
 **Приоритет:** HIGH
 **Связь:** NFR-P12
 
@@ -542,7 +542,7 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 2. Каждый чанк содержит полную функцию (не обрезанную)
 3. Контекст (имя файла, класса) добавляется в метаданные
 
-**Статус:** ⚠️ Код есть (`etl/chunker/code_chunker.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR49CodeChunking`, `tests/etl/test_code_chunker.py`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 5.2
 
@@ -560,6 +560,6 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 2. Таблица индексируется как отдельный чанк с type=table
 3. Поиск по таблице возвращает структурированные данные
 
-**Статус:** ⚠️ Код есть (`etl/chunker/table_extractor.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/etl/test_table_extractor.py`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 5.3

@@ -11,7 +11,10 @@ Implements:
 
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
+
+from proxy.app.domain.value_objects import TokenBudget
 
 logger = logging.getLogger(__name__)
 
@@ -480,3 +483,74 @@ def compress_with_perplexity(text: str, budget: int, strategy: str = "keyword") 
     """Standalone function for perplexity-based compression."""
     optimizer = TokenOptimizer()
     return optimizer.compress_with_perplexity(text, budget, strategy=strategy)
+
+
+# ---------------------------------------------------------------------
+# Domain TokenBudget wiring — provide a value-object facade alongside
+# the existing integer-based budget math. The orchestrator and audit
+# log consume TokenBudget; the existing ``smart_token_budget`` API
+# keeps its integer-based return type for backward compatibility.
+# ---------------------------------------------------------------------
+
+
+def build_token_budget(available_tokens: int, reserved: int = 0) -> TokenBudget:
+    """Wrap a raw integer token budget in a domain ``TokenBudget``.
+
+    The returned value object carries the same information as the
+    existing ``smart_token_budget`` output but exposes it through a
+    typed, immutable value object (``used``, ``reserved``, ``remaining``,
+    ``utilization``). Existing callers that need the dict form can
+    keep using ``smart_token_budget`` directly.
+    """
+    return TokenBudget(total=available_tokens, used=0, reserved=reserved)
+
+
+def fit_chunks_into_budget(
+    chunks: list[dict[str, Any]],
+    budget: TokenBudget,
+    estimate_cost: Callable[[str], int] | None = None,
+) -> tuple[list[dict[str, Any]], TokenBudget]:
+    """Greedy pack ``chunks`` into ``budget`` using a domain ``TokenBudget``.
+
+    Iterates ``chunks`` in order, accumulating the estimated token cost
+    (via ``TokenOptimizer.estimate_token_cost`` unless a custom
+    ``estimate_cost`` is provided). Chunks are appended while they fit;
+    the loop stops at the first chunk that does not. The returned
+    ``TokenBudget`` reflects the new ``used`` counter.
+
+    Args:
+        chunks: List of chunk dicts (each must have ``text``).
+        budget: Starting ``TokenBudget`` (typically from
+            ``build_token_budget``).
+        estimate_cost: Optional cost estimator; defaults to
+            ``TokenOptimizer.estimate_token_cost``.
+
+    Returns:
+        Tuple of (selected_chunks, updated_budget).
+    """
+    optimizer = TokenOptimizer()
+    estimate = estimate_cost or optimizer.estimate_token_cost
+
+    used = budget.used
+    selected: list[dict[str, Any]] = []
+    for chunk in chunks:
+        text = chunk.get("text", "") if isinstance(chunk, dict) else ""
+        cost = estimate(text)
+        if used + cost > budget.remaining:
+            break
+        selected.append(chunk)
+        used += cost
+
+    return selected, budget.allocate(used - budget.used)
+
+
+def token_budget_from_dict(alloc: dict[str, int]) -> TokenBudget:
+    """Convert a ``smart_token_budget`` allocation dict into a ``TokenBudget``.
+
+    The dict form (``{system_prompt, context_total, history, response}``)
+    is treated as a fully *reserved* budget — i.e. ``used = 0`` and
+    ``reserved = total``. Callers can then ``allocate`` against it.
+    """
+    total = sum(int(v) for v in alloc.values())
+    reserved = total
+    return TokenBudget(total=total, used=0, reserved=reserved)

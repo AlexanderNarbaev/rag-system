@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from proxy.app.domain.value_objects import ConfidenceScore
+
 logger = logging.getLogger(__name__)
 
 
@@ -356,6 +358,22 @@ def compute_confidence(
         recommendation=recommendation,
     )
 
+    # Mirror the value into a domain ConfidenceScore value object so the
+    # DDD layer (audit log, pipeline orchestrator, downstream services)
+    # can consume the same confidence as a structured value rather than
+    # an unstructured dict. The dataclass ``ConfidenceReport`` above
+    # remains the public return type — the domain object is purely an
+    # internal side-channel for code that already speaks DDD.
+    report.domain_confidence = ConfidenceScore(  # type: ignore[attr-defined]
+        value=report.score,
+        factors={
+            "nli": float(nli_score) if nli_score is not None else 0.0,
+            "context_heuristic": float(score),
+            "needs_review": 1.0 if needs_review else 0.0,
+        },
+        action="USE" if report.score >= 0.6 else ("REWRITE" if report.score >= 0.4 else "FALLBACK"),
+    )
+
     _dispatch_low_confidence_alert_sync(
         query=query,
         confidence_score=report.score,
@@ -364,6 +382,63 @@ def compute_confidence(
     )
 
     return report
+
+
+def compute_confidence_score(
+    *,
+    context_length: int,
+    answer_length: int,
+    nli_score: float | None,
+    uncertainty_hits: int,
+) -> ConfidenceScore:
+    """Compute a domain ``ConfidenceScore`` from raw inputs.
+
+    Thin wrapper that returns the same value object the orchestrator
+    and audit log consume, without going through the full
+    ``compute_confidence`` heuristics pipeline. Useful for callers
+    that already have the signal breakdown.
+
+    Args:
+        context_length: Length of retrieved context (chars).
+        answer_length: Length of generated answer (chars).
+        nli_score: Optional NLI grounding score in [0, 1].
+        uncertainty_hits: Number of uncertainty phrases detected in answer.
+
+    Returns:
+        ``ConfidenceScore`` with value and recommended action.
+    """
+    score = 0.7
+    if context_length < 20:
+        score -= 0.4
+    if context_length and context_length < answer_length * 0.5:
+        score -= 0.2
+    if uncertainty_hits > 0:
+        score -= 0.2
+    if answer_length < 20:
+        score -= 0.15
+    if nli_score is not None:
+        score = 0.6 * score + 0.4 * nli_score
+
+    score = max(0.0, min(1.0, score))
+
+    if score >= 0.6:
+        action = "USE"
+    elif score >= 0.4:
+        action = "REWRITE"
+    elif score >= 0.2:
+        action = "EXPAND"
+    else:
+        action = "FALLBACK"
+
+    return ConfidenceScore(
+        value=round(score, 2),
+        factors={
+            "nli": float(nli_score) if nli_score is not None else 0.0,
+            "context_heuristic": score,
+            "uncertainty_hits": float(uncertainty_hits),
+        },
+        action=action,
+    )
 
 
 # ── F2: CRAG Retrieval Quality Evaluator ──

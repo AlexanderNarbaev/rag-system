@@ -20,7 +20,7 @@
 3. Итоговый список отсортирован по RRF-скору (убывание)
 4. Функция `hybrid_search()` возвращает Qdrant ScoredPoint-ы с payload
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR09HybridSearch`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-001, ADR-002
 
@@ -61,7 +61,7 @@
 2. Два похожих (но не идентичных) чанка — оба остаются
 3. Функция `deduplicate_chunks()` уменьшает количество чанков при наличии дубликатов
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/context/builder.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR11Deduplication`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-005
 
@@ -81,7 +81,7 @@ allowed_users).
 1. `rag_version="v1"` — все возвращённые чанки имеют `version="v1"`
 2. Без параметра — возвращаются чанки с любой версией (последняя приоритетнее)
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR12VersionFiltering`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-005
 
@@ -103,7 +103,7 @@ allowed_users).
 1. Повторный запрос того же текста — эмбеддинг берётся из кэша (лог: "Embedding cache hit")
 2. Метрика `rag_cache_hit_ratio{cache_type="embedding"}` ≥ 60% при повторных запросах
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR13EmbeddingCache`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-001
 
@@ -123,7 +123,7 @@ BGE-M3 производит не только dense-эмбеддинги (1024-d
 1. ColBERT-поиск возвращает результаты
 2. Результаты комбинируются с dense/sparse через RRF
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR14ColBERT`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 1
 
@@ -142,7 +142,7 @@ BGE-M3 производит не только dense-эмбеддинги (1024-d
 2. При равномерном распределении — все результаты сохраняются
 3. Количество результатов после pruning ≤ количества до pruning
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR15KneePointPruning`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 2
 
@@ -162,7 +162,7 @@ BGE-M3 производит не только dense-эмбеддинги (1024-d
 2. Генерация продолжается с новыми чанками
 3. Финальный ответ содержит информацию из дополнительных чанков
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/flare.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR16FLARE`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 5
 
@@ -183,7 +183,7 @@ BGE-M3 производит не только dense-эмбеддинги (1024-d
 1. nDCG@10 двухэтапного ранжирования ≥ nDCG@10 однопроходного
 2. Latency двухэтапного < latency однопроходного (при top-100 входе)
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/rerank.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR17TwoStageReranking`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 5
 
@@ -207,6 +207,6 @@ SLM классифицирует сложность запроса (simple/mediu
 2. Сложный запрос (например, "сравни архитектуру X и Y") — извлекается ≥ 15 чанков
 3. Лог содержит "Query classified as 'simple'/'complex'"
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/query_router.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR18DynamicTopK`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 3

@@ -24,18 +24,33 @@
         "mimo"
       ]
     },
+    "opencode-go": {
+      "fallback": [
+        "deepseek",
+        "moonshotai",
+        "minimax",
+        "mimo"
+      ]
+    },
     "moonshotai": {
+      "base_url": "http://127.0.0.1:9876/v1",
+      "api_key": "not-needed-proxy-injects-key",
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Moonshot Kimi",
-      "options": {
-        "timeout": 600000,
-        "chunkTimeout": 60000,
-        "setCacheKey": true,
-        "baseURL": "https://api.moonshot.ai/v1"
-      },
+      "name": "Moonshot Kimi (via local proxy)",
       "models": {
         "kimi-k3": {
           "name": "Kimi K3",
+          "temperature": true,
+          "reasoning": true,
+          "tool_call": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
           "limit": {
             "context": 1000000,
             "output": 65536
@@ -43,6 +58,17 @@
         },
         "kimi-k2.7-code": {
           "name": "Kimi K2.7 Code",
+          "temperature": true,
+          "reasoning": true,
+          "tool_call": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
           "limit": {
             "context": 262144,
             "output": 65536
@@ -50,6 +76,17 @@
         },
         "kimi-k2.7-code-highspeed": {
           "name": "Kimi K2.7 Code Highspeed",
+          "temperature": true,
+          "reasoning": true,
+          "tool_call": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
           "limit": {
             "context": 262144,
             "output": 65536
@@ -57,35 +94,38 @@
         }
       },
       "fallback": [
-        "deepseek",
-        "opencode"
-      ]
+        "deepseek"
+      ],
+      "default_model": "moonshotai/kimi-k3",
+      "small_model": "moonshotai/kimi-k2.7-code",
+      "options": {
+        "baseURL": "http://127.0.0.1:9876/v1",
+        "apiKey": "not-needed-proxy-injects-key"
+      }
     },
     "minimax": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "MiniMax",
       "options": {
         "timeout": 600000,
         "chunkTimeout": 60000,
         "setCacheKey": true,
-        "baseURL": "https://api.minimax.io/v1"
+        "baseURL": "https://api.minimax.io/v1",
+        "apiKey": "{env:MINIMAX_API_KEY}"
       },
       "fallback": [
         "deepseek",
-        "opencode"
+        "opencode-go"
       ]
     },
     "mimo": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "MiMo",
       "options": {
         "timeout": 600000,
         "chunkTimeout": 60000,
-        "setCacheKey": true
+        "setCacheKey": true,
+        "apiKey": "{env:MIMO_API_KEY}"
       },
       "fallback": [
         "deepseek",
-        "opencode"
+        "opencode-go"
       ]
     }
   },
@@ -201,5 +241,13 @@
       ],
       "enabled": true
     }
-  }
+  },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "deepseek/deepseek-v4-pro",
+      "temperature": 0.2
+    }
+  },
+  "default_agent": "build"
 }

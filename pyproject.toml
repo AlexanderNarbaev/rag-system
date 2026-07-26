@@ -87,10 +87,8 @@ omit = [
     "proxy/app/core/flare.py",
     # RAGAS evaluation — requires running models
     "proxy/app/core/ragas_eval.py",
-    # Query router — not yet tested
-    "proxy/app/core/query_router.py",
-    # RAPTOR tree builder — not yet tested
-    "etl/indexer/tree_builder.py",
+    # Query router — covered by tests/proxy/test_core_api.py (FR-18)
+    # RAPTOR tree builder — covered by tests/etl/test_raptor_integration.py
     # GraphRAG community detection — not yet tested
     "etl/graph_builder/community.py",
 ]

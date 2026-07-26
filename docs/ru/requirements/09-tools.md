@@ -17,7 +17,7 @@ ACL текущего пользователя.
 2. Запрос к конкретной KB — поиск только в её коллекции
 3. Удаление KB — коллекция удаляется из Qdrant + запись из SQLite
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/kb_manager.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR104MultipleKBs`)
 **Приоритет:** HIGH
 **Связь:** admin_kb.py
 
@@ -76,7 +76,7 @@ RESTful API для управления knowledge bases:
 2. GET `/v1/admin/tasks/{id}` — возвращает статус и progress
 3. Задача завершена — status=completed, progress=100%
 
-**Статус:** ⚠️ Код есть, нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR107TaskTracking`)
 **Приоритет:** HIGH
 **Связь:** admin_kb.py
 
@@ -100,7 +100,7 @@ RESTful API для управления knowledge bases:
 2. Все настройки present — startup успешен
 3. Лог: "Configuration validated" или "Missing required setting: X"
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/config_validator.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR108ConfigValidation`)
 **Приоритет:** HIGH
 **Связь:** config_validator.py
 
@@ -150,7 +150,7 @@ Health check `/v1/health` возвращает детальный статус:
 2. Latency для каждого компонента
 3. Количество векторов в коллекциях
 
-**Статус:** ⚠️ Код есть (`proxy/app/api/health.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR109EnhancedHealth`)
 **Приоритет:** HIGH
 **Связь:** health.py
 
@@ -175,7 +175,7 @@ JSON Schema генерируется автоматически из type hints.
 2. JSON Schema генерируется из type hints
 3. Инструмент доступен через `/v1/tools`
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/sdk.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR111ToolDecorator`)
 **Приоритет:** HIGH
 **Связь:** ADR-009
 
@@ -201,7 +201,7 @@ tool = (ToolBuilder("search_jira")
 2. JSON Schema соответствует определённым параметрам
 3. Handler вызывается при tool call
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/sdk.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR112ToolBuilder`)
 **Приоритет:** HIGH
 **Связь:** ADR-009
 
@@ -224,7 +224,7 @@ tool = (ToolBuilder("search_jira")
 2. ToolContext содержит user_id, user_role, request_id
 3. shared_state доступен между последовательными tool calls
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/sdk.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR113ToolContext`)
 **Приоритет:** HIGH
 **Связь:** ADR-009 2.3.2
 
@@ -247,7 +247,7 @@ tool = (ToolBuilder("search_jira")
 2. Tool call — вызывает реальный API
 3. Результат возвращается в формате ToolResult
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/builtin.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR114BuiltinTools`)
 **Приоритет:** HIGH
 **Связь:** ADR-009
 
@@ -265,7 +265,7 @@ tool = (ToolBuilder("search_jira")
 2. Невалидные данные — 400 с описанием ошибки
 3. Отсутствующие required параметры — 400
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/security.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR115InputValidation`)
 **Приоритет:** HIGH
 **Связь:** ADR-009
 
@@ -294,7 +294,7 @@ params:
 2. HTTP-вызов выполняется с параметрами из YAML
 3. Shell-инструмент выполняется с whitelist validation
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/declarative.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR116DeclarativeTools`)
 **Приоритет:** HIGH
 **Связь:** ADR-009 2.3.3
 
@@ -314,7 +314,7 @@ params:
 2. LLM-driven mode — LLM фильтрует endpoints
 3. Tools доступны через `/v1/tools`
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/openapi/`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR117OpenAPIDiscovery`)
 **Приоритет:** HIGH
 **Связь:** ADR-009 2.3.4
 
@@ -336,7 +336,7 @@ params:
 2. GET `/v1/tools` с role=user — только публичные
 3. Tool с visibility=admin — не видна обычному пользователю
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/registry.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR118ToolVisibility`)
 **Приоритет:** HIGH
 **Связь:** ADR-009 2.3.7
 
@@ -359,7 +359,7 @@ params:
 2. После tool call — метрики обновляются
 3. Labels: tool_name, status
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/metrics.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR119ToolMetrics`)
 **Приоритет:** HIGH
 **Связь:** ADR-009 2.3.8
 
@@ -381,6 +381,6 @@ params:
 2. Params захешированы (не в открытом виде)
 3. Секреты замаскированы
 
-**Статус:** ⚠️ Код есть (`proxy/app/tools/audit.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_tools_kb.py::TestFR120ToolAudit`)
 **Приоритет:** HIGH
 **Связь:** ADR-009 2.3.9

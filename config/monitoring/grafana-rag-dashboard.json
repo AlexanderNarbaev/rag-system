@@ -1,0 +1,21 @@
+{
+  "annotations": {"list": [{"builtIn": 1, "enable": true, "hide": true, "name": "Annotations", "type": "dashboard"}]},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {"id": 1, "type": "timeseries", "title": "Request rate", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "sum(rate(rag_requests_total[5m]))", "legendFormat": "requests/sec"}]},
+    {"id": 2, "type": "timeseries", "title": "Latency p50 / p95 / p99", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "histogram_quantile(0.50, sum(rate(rag_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50"}, {"expr": "histogram_quantile(0.95, sum(rate(rag_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}, {"expr": "histogram_quantile(0.99, sum(rate(rag_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}]},
+    {"id": 3, "type": "stat", "title": "5xx error rate", "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8}, "targets": [{"expr": "sum(rate(rag_requests_total{status=~\"5..\"}[5m])) / sum(rate(rag_requests_total[5m]))"}]},
+    {"id": 4, "type": "stat", "title": "Cache hit ratio", "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8}, "targets": [{"expr": "sum(rate(rag_cache_hits_total[5m])) / sum(rate(rag_requests_total[5m]))"}]},
+    {"id": 5, "type": "timeseries", "title": "Retrieval and LLM latency", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}, "targets": [{"expr": "histogram_quantile(0.95, sum(rate(rag_retrieval_duration_seconds_bucket[5m])) by (le))", "legendFormat": "retrieval p95"}, {"expr": "histogram_quantile(0.95, sum(rate(rag_llm_duration_seconds_bucket[5m])) by (le))", "legendFormat": "LLM p95"}]}
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["rag", "sre", "nfr"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "RAG System SRE",
+  "uid": "rag-sre-v1",
+  "version": 1
+}

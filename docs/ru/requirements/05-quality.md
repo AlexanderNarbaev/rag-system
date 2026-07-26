@@ -16,7 +16,7 @@
 2. Объединение результатов (HyDE + обычный) даёт более полный контекст
 3. Лог содержит "HyDE expansion: N additional results"
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/hyde.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_quality_pipeline.py::TestFR32HyDE`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5.3
 
@@ -42,7 +42,7 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 3. Очень низкий confidence → FALLBACK → система сообщает о недостаточности
 4. Лог содержит "Retrieval quality: confidence=X.XXX, action=USE/REWRITE/EXPAND/FALLBACK"
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval_evaluator.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_quality_pipeline.py::TestFR33CRAG`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5.1
 
@@ -61,7 +61,7 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Ответ, не подтверждённый контекстом — self-reflection score < 5, лог: "Self-critique failed"
 3. Self-reflection score записывается в метрики
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/confidence.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_quality_pipeline.py::TestFR34SelfReflection`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5.4
 
@@ -83,7 +83,7 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Ответ, противоречащий контексту — grounding score < 0.70, помечен для review
 3. Лог содержит "Grounding score: X.XXX"
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/grounding.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_quality_pipeline.py::TestFR35NLIGrounding`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5.5
 
@@ -101,7 +101,7 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Ответ без галлюцинаций — hallucination_score = 0
 3. Флагированные утверждения записываются в лог
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/hallucination.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_quality_pipeline.py::TestFR36HallucinationDetection`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5.5
 
@@ -124,13 +124,13 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Re-generated ответ — проходит проверку (или система сообщает о неудаче)
 3. Максимум 2 попытки re-generation
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/confidence.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_quality_pipeline.py::TestFR37CorrectiveRegeneration`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5.6
 
 ---
 
-## FR-38. LLMLingua token-level compression ❌
+## FR-38. LLMLingua token-level compression ✅
 
 **Описание:**
 Система сжимает контекст на уровне токенов, удаляя «малозначимые» токены с
@@ -142,13 +142,13 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Ключевые факты сохранены (проверка: LLM отвечает корректно на сжатом контексте)
 3. Latency сжатия < 100ms для контекста 10K токенов
 
-**Статус:** ❌ Нужна реализация
+**Статус:** ✅ Подтверждено (`proxy/app/core/compression.py`, `tests/proxy/test_quality_pipeline.py::TestFR38LLMLinguaCompression`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5
 
 ---
 
-## FR-39. LongContextReorder ❌
+## FR-39. LongContextReorder ✅
 
 **Описание:**
 Для борьбы с эффектом «lost in the middle» (LLM хуже запоминает информацию в середине
@@ -161,6 +161,6 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Второй по релевантности — последний
 3. Остальные — в середине, отсортированные по релевантности
 
-**Статус:** ❌ Нужна реализация
+**Статус:** ✅ Подтверждено (`proxy/app/core/reorder.py`, `tests/proxy/test_quality_pipeline.py::TestFR39LongContextReorder`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5

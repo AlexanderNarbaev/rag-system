@@ -147,6 +147,124 @@ def load_eval_dataset(dataset_path: str) -> list[dict[str, Any]]:
     return pairs
 
 
+class RetrievalEvaluator:
+    """Class wrapper around the module-level retrieval metric helpers.
+
+    Provides a single entry point that downstream scripts (CLI, CI, notebooks)
+    can use without re-implementing the metric pipeline.
+
+    Usage:
+        evaluator = RetrievalEvaluator()
+        results = evaluator.evaluate_dataset(dataset_records, top_k=20)
+
+    The ``results`` dict exposes ``mrr``, ``recall_at_k``, ``ndcg_at_k`` and
+    ``precision_at_k`` keyed by their ``k`` value, plus ``num_queries``.
+    """
+
+    DEFAULT_K_VALUES = (5, 10, 20)
+
+    def __init__(
+        self,
+        k_recall: tuple[int, ...] = (5, 10, 20),
+        k_ndcg: tuple[int, ...] = (5, 10),
+        k_precision: tuple[int, ...] = (5,),
+    ) -> None:
+        self.k_recall = tuple(k_recall)
+        self.k_ndcg = tuple(k_ndcg)
+        self.k_precision = tuple(k_precision)
+
+    @staticmethod
+    def _extract_relevant(record: dict[str, Any]) -> set[str]:
+        """Extract a relevant-docs set from a dataset record.
+
+        Accepts either ``relevant_docs`` or ``relevant_chunks`` keys for
+        compatibility with both legacy and newer eval fixtures.
+        """
+        for key in ("relevant_docs", "relevant_chunks"):
+            value = record.get(key)
+            if value:
+                return {str(item) for item in value}
+        return set()
+
+    @staticmethod
+    def _extract_retrieved(record: dict[str, Any]) -> list[str]:
+        """Extract retrieved IDs from a record if present."""
+        retrieved = record.get("retrieved_docs") or record.get("retrieved_chunks") or []
+        return [str(item) for item in retrieved]
+
+    def compute(
+        self,
+        retrieved_lists: list[list[str]],
+        relevant_sets: list[set[str]],
+    ) -> dict[str, Any]:
+        """Compute all retrieval metrics from parallel retrieved/relevant lists."""
+        flat_metrics = compute_all_metrics(retrieved_lists, relevant_sets)
+        return self._split_by_k(flat_metrics)
+
+    def evaluate_dataset(
+        self,
+        dataset: list[dict[str, Any]] | str,
+        top_k: int = 20,
+    ) -> dict[str, Any]:
+        """Evaluate a labeled dataset.
+
+        Args:
+            dataset: Either a list of records ``{"query": str, "relevant_docs": [...]}``
+                or a path to such a dataset on disk.
+            top_k: Number of chunks to truncate retrieved lists to.
+
+        Returns:
+            Dict with ``mrr``, ``recall_at_k``, ``ndcg_at_k``, ``precision_at_k``
+            and ``num_queries``.  ``recall_at_k``/``ndcg_at_k``/``precision_at_k``
+            are themselves dicts keyed by ``k``.
+        """
+        import json
+        from pathlib import Path
+
+        if isinstance(dataset, (str, Path)):
+            path = Path(dataset)
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                data = [data]
+            records = list(data)
+        else:
+            records = list(dataset)
+
+        retrieved_lists: list[list[str]] = []
+        relevant_sets: list[set[str]] = []
+        for record in records:
+            retrieved = self._extract_retrieved(record)
+            if retrieved:
+                retrieved_lists.append(retrieved[:top_k])
+            else:
+                # No retrieval available — assume empty list (will score 0)
+                retrieved_lists.append([])
+            relevant_sets.append(self._extract_relevant(record))
+
+        return self.compute(retrieved_lists, relevant_sets)
+
+    def _split_by_k(self, flat_metrics: dict[str, float]) -> dict[str, Any]:
+        """Split flat metric dicts (e.g. ``recall@10``) into ``k``-keyed dicts."""
+        recall: dict[int, float] = {}
+        for k in self.k_recall:
+            recall[k] = float(flat_metrics.get(f"recall@{k}", 0.0))
+        ndcg: dict[int, float] = {}
+        for k in self.k_ndcg:
+            ndcg[k] = float(flat_metrics.get(f"ndcg@{k}", 0.0))
+        precision: dict[int, float] = {}
+        for k in self.k_precision:
+            precision[k] = float(flat_metrics.get(f"precision@{k}", 0.0))
+
+        return {
+            "mrr": float(flat_metrics.get("mrr", 0.0)),
+            "recall_at_k": recall,
+            "ndcg_at_k": ndcg,
+            "precision_at_k": precision,
+            "num_queries": int(flat_metrics.get("num_queries", 0)),
+        }
+
+
 # ── F6: Cross-Lingual Benchmarks ──
 
 _CROSS_LINGUAL_SAMPLE_QUERIES: dict[str, list[str]] = {

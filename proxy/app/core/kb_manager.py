@@ -21,6 +21,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from proxy.app.domain.entities import Chunk as DomainChunk
+from proxy.app.domain.entities import Document as DomainDocument
+from proxy.app.domain.event_bus import bus
+from proxy.app.domain.events import (
+    ChunkCreated,
+    DocumentIndexed,
+    DocumentUpdated,
+)
+
 logger = logging.getLogger(__name__)
 
 # Default KB database path
@@ -355,6 +364,149 @@ class KnowledgeBaseManager:
             return self._row_to_task(row)
         finally:
             conn.close()
+
+    # -----------------------------------------------------------------------
+    # Domain event hooks — wire DDD Document/Chunk entities + EventBus
+    #
+    # These methods are thin shims that build domain entities, fire
+    # domain events, and return them. They do not replace the SQLite
+    # CRUD — callers continue to use kb_manager for persistence.
+    # -----------------------------------------------------------------------
+
+    def index_document(
+        self,
+        kb_id: str,
+        title: str,
+        source_type: str,
+        source_id: str,
+        chunks: list[DomainChunk] | None = None,
+        content_hash: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> DomainDocument:
+        """Build a Document entity for an indexed KB document and publish events.
+
+        Constructs a domain ``Document`` (and any provided ``Chunk``s),
+        fires ``ChunkCreated`` for each chunk and ``DocumentIndexed``
+        once the document is registered with the KB.
+
+        This does not insert rows into SQLite — it operates alongside
+        the existing CRUD methods as the domain-aware facade that
+        consumers (e.g. ETL loaders) call before persisting.
+
+        Args:
+            kb_id: Knowledge base the document belongs to.
+            title: Human-readable document title.
+            source_type: Origin system (confluence, jira, gitlab, ...).
+            source_id: Original ID in the source system.
+            chunks: Optional pre-built domain chunks to attach.
+            content_hash: SHA-256 of the document body.
+            metadata: Arbitrary document metadata.
+
+        Returns:
+            The constructed ``DomainDocument`` entity.
+        """
+        doc = DomainDocument(
+            title=title,
+            source_type=source_type,
+            source_id=source_id,
+            content_hash=content_hash,
+            metadata={**(metadata or {}), "kb_id": kb_id},
+        )
+        for chunk in chunks or []:
+            doc.add_chunk(chunk)
+            bus.publish(
+                ChunkCreated(
+                    chunk_id=chunk.id,
+                    document_id=doc.id,
+                    text_length=len(chunk.text),
+                ),
+            )
+        bus.publish(
+            DocumentIndexed(
+                document_id=doc.id,
+                chunk_count=len(doc.chunks),
+                source_type=source_type,
+            ),
+        )
+        logger.debug(
+            "index_document: kb=%s doc=%s chunks=%d",
+            kb_id,
+            doc.id,
+            len(doc.chunks),
+        )
+        return doc
+
+    def update_document(
+        self,
+        document: DomainDocument,
+        new_version: str,
+    ) -> DocumentUpdated:
+        """Update a domain Document's version and publish DocumentUpdated.
+
+        Args:
+            document: The document entity to update (mutated in place).
+            new_version: Version string to bump to.
+
+        Returns:
+            The published ``DocumentUpdated`` event.
+        """
+        old_version = document.version
+        document.update_version(new_version)
+        event = DocumentUpdated(
+            document_id=document.id,
+            old_version=old_version,
+            new_version=new_version,
+        )
+        bus.publish(event)
+        logger.debug(
+            "update_document: doc=%s %s -> %s",
+            document.id,
+            old_version,
+            new_version,
+        )
+        return event
+
+    def create_chunk(
+        self,
+        document: DomainDocument,
+        text: str,
+        access_level: str = "public",
+        allowed_groups: list[str] | None = None,
+        allowed_users: list[str] | None = None,
+        content_hash: str = "",
+        version: str = "v1",
+    ) -> DomainChunk:
+        """Build a Chunk entity, attach to a Document, and publish ChunkCreated.
+
+        Args:
+            document: Parent document (chunk is appended to ``document.chunks``).
+            text: Chunk text content.
+            access_level: ACL level — public, internal, confidential, restricted.
+            allowed_groups: Groups allowed to read this chunk.
+            allowed_users: Users allowed to read this chunk.
+            content_hash: SHA-256 of the chunk text.
+            version: Chunk version tag.
+
+        Returns:
+            The constructed and attached ``DomainChunk`` entity.
+        """
+        chunk = DomainChunk(
+            text=text,
+            content_hash=content_hash,
+            version=version,
+            access_level=access_level,
+            allowed_groups=list(allowed_groups or []),
+            allowed_users=list(allowed_users or []),
+        )
+        document.add_chunk(chunk)
+        bus.publish(
+            ChunkCreated(
+                chunk_id=chunk.id,
+                document_id=document.id,
+                text_length=len(text),
+            ),
+        )
+        return chunk
 
     # -----------------------------------------------------------------------
     # Statistics

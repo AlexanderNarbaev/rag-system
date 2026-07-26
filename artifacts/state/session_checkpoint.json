@@ -1,8 +1,13 @@
 {
   "last_commit": "fe1b65d",
-  "timestamp": "2026-07-18T19:11:00+03:00",
+  "timestamp": "2026-07-26T20:52:00+03:00",
   "wave": 20,
-  "tests_passed": 5025,
-  "coverage": 84.29,
-  "status": "active"
+  "tests_passed": 27,
+  "coverage": null,
+  "status": "active",
+  "active_task": "ETL integration and smoke tests",
+  "verification": {
+    "ruff": "passed for tests/etl and tests/integration/test_etl_e2e.py; shell validated with bash -n",
+    "pytest": "27 passed with --no-cov"
+  }
 }

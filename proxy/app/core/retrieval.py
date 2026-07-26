@@ -34,6 +34,7 @@ except ImportError:
     QDRANT_AVAILABLE = False
 
 # Импорт конфигурации (будет создан отдельно)
+from proxy.app.domain.services import AccessControlService, RetrievalScoringService
 from proxy.app.shared.cache import CacheManager
 from proxy.app.shared.config import (
     COLLECTION_NAME,
@@ -52,6 +53,13 @@ from proxy.app.shared.config import (
 from proxy.app.shared.tracing import add_event, tracer
 
 logger = logging.getLogger(__name__)
+
+# Domain service singletons — wire DDD into the retrieval core alongside
+# the existing numpy/torch-based implementations. Public functions below
+# delegate to these where the algorithm matches and add complementary
+# helpers where it doesn't.
+_scoring_service = RetrievalScoringService()
+_acl_service = AccessControlService()
 
 # Two-level score filtering thresholds (from DRAG research)
 STRONG_SCORE_THRESHOLD = 0.32
@@ -338,12 +346,29 @@ def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
 def reciprocal_rank_fusion(results_dense: list[Any], results_sparse: list[Any], k: int = 60) -> list[Any]:
     """RRF слияние двух списков результатов (каждый элемент должен иметь .id и .score).
     Возвращает объединённый список, отсортированный по RRF-скорy.
+
+    The RRF formula ``score = 1/(k+dense_rank) + 1/(k+sparse_rank)`` is
+    delegated to ``RetrievalScoringService.compute_rrf_score`` so the
+    canonical algorithm lives in one place. For items that appear in
+    only one list, we use a sentinel rank of ``k + len(list)`` so the
+    absent list's contribution is ~0 (it never meaningfully shifts
+    ordering since both terms share the same ``k`` baseline).
     """
+    sparse_sentinel = k + max(len(results_sparse), 1)
+    dense_sentinel = k + max(len(results_dense), 1)
     scores: dict[Any, float] = {}
     for rank, hit in enumerate(results_dense, start=1):
-        scores[hit.id] = scores.get(hit.id, 0) + 1.0 / (k + rank)
+        scores[hit.id] = scores.get(hit.id, 0) + _scoring_service.compute_rrf_score(
+            dense_rank=rank,
+            sparse_rank=sparse_sentinel,
+            k=k,
+        )
     for rank, hit in enumerate(results_sparse, start=1):
-        scores[hit.id] = scores.get(hit.id, 0) + 1.0 / (k + rank)
+        scores[hit.id] = scores.get(hit.id, 0) + _scoring_service.compute_rrf_score(
+            dense_rank=dense_sentinel,
+            sparse_rank=rank,
+            k=k,
+        )
     # Сортировка по убыванию RRF score
     sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
     # Восстанавливаем объекты из первого списка (или второго) – лучше по id достать из dense первым
@@ -357,6 +382,11 @@ def knee_point_pruning(results: list[Any], sensitivity: float = 0.5) -> list[Any
 
     Finds the optimal cutoff point where score drops significantly.
     Based on DRAG with KNEE research: https://habr.com/ru/articles/1016438/
+
+    Uses a perpendicular-distance knee detection that is more robust
+    than the simple largest-drop heuristic in
+    ``RetrievalScoringService.find_knee_point`` — for that simpler
+    algorithm, see ``domain_find_knee_point`` below.
 
     Args:
         results: List of results with 'score' field, sorted by score desc
@@ -413,6 +443,167 @@ def knee_point_pruning(results: list[Any], sensitivity: float = 0.5) -> list[Any
     knee_idx = max(knee_idx_raw, 1)
 
     return results[: knee_idx + 1]
+
+
+# ---------------------------------------------------------------------
+# Domain-service helpers — wire DDD alongside the existing implementations.
+# These are additive: callers continue to use ``reciprocal_rank_fusion`` and
+# ``knee_point_pruning`` unchanged. The helpers expose the simpler
+# domain-service algorithms for callers that prefer them (tests, new code).
+# ---------------------------------------------------------------------
+
+
+def domain_find_knee_point(results: list[Any]) -> list[Any]:
+    """Prune ``results`` using the domain ``RetrievalScoringService``.
+
+    Uses the simple largest-drop heuristic from
+    ``RetrievalScoringService.find_knee_point`` instead of the more
+    sophisticated perpendicular-distance algorithm in
+    ``knee_point_pruning``. Useful when you want a fast, deterministic
+    boundary that mirrors what the domain layer would compute in
+    isolation.
+
+    Args:
+        results: List of result objects exposing ``.score`` (desc-sorted).
+
+    Returns:
+        Pruned prefix of ``results`` (always at least 2 items if available).
+    """
+    if len(results) <= 2:
+        return results
+    scores = [r.score for r in results]
+    knee = _scoring_service.find_knee_point(scores)
+    knee = max(knee, 2)  # mirror existing minimum of 2
+    return results[:knee]
+
+
+def domain_build_access_filter(
+    user_id: str = "",
+    username: str = "",
+    roles: list[str] | None = None,
+    groups: list[str] | None = None,
+    is_admin: bool = False,
+) -> dict[str, Any] | None:
+    """Build a Qdrant filter dict using ``AccessControlService``.
+
+    Convenience wrapper around ``AccessControlService.build_access_filter``
+    that accepts the user attributes flatly instead of requiring a
+    ``User`` entity. Useful when callers already have the fields in
+    hand and don't want to construct an entity.
+
+    Returns ``None`` for admins/anonymous users (no filter applied).
+    """
+    from proxy.app.domain.entities import User
+
+    if is_admin or not user_id:
+        # Anonymous or admin — pass through the domain service which
+        # already handles the admin/None case.
+        if is_admin:
+            admin_user = User(
+                id=user_id,
+                username=username,
+                roles=["admin"],
+                groups=groups or [],
+            )
+            return _acl_service.build_access_filter(admin_user)
+        return None
+
+    user = User(
+        id=user_id,
+        username=username,
+        roles=roles or [],
+        groups=groups or [],
+    )
+    return _acl_service.build_access_filter(user)
+
+
+def domain_filter_chunks_by_access(
+    chunks: list[Any],
+    user_id: str = "",
+    username: str = "",
+    roles: list[str] | None = None,
+    groups: list[str] | None = None,
+    is_admin: bool = False,
+) -> list[Any]:
+    """Filter ``chunks`` using ``AccessControlService.filter_chunks_by_access``.
+
+    Each chunk in ``chunks`` must expose ``access_level``,
+    ``allowed_groups`` and ``allowed_users`` attributes — domain
+    ``Chunk`` instances satisfy this directly. Returns the subset of
+    chunks the user is authorized to read.
+    """
+    from proxy.app.domain.entities import User
+
+    if is_admin:
+        return list(chunks)
+    if not user_id:
+        return list(chunks)  # anonymous — surface all public content
+
+    user = User(
+        id=user_id,
+        username=username,
+        roles=roles or [],
+        groups=groups or [],
+    )
+    domain_chunks = [DomainChunkAdapter.to_domain(c) for c in chunks]
+    filtered = _acl_service.filter_chunks_by_access(domain_chunks, user)
+    # Map back to the original objects (preserves payload/order).
+    by_id = {c.id: c for c in chunks}
+    return [by_id[d.id] for d in filtered if d.id in by_id]
+
+
+class DomainChunkAdapter:
+    """Adapter that converts raw retrieval hits into domain ``Chunk`` entities.
+
+    The Qdrant ``ScoredPoint`` payload exposes ``access_level``,
+    ``allowed_groups``, ``allowed_users`` — these are mirrored into a
+    lightweight domain ``Chunk`` so the ACL service can apply the same
+    rules used in the rest of the codebase.
+    """
+
+    @staticmethod
+    def to_domain(hit: Any) -> Any:
+        from proxy.app.domain.entities import Chunk as DomainChunk
+
+        payload = getattr(hit, "payload", None) or {}
+        text = ""
+        access_level = "public"
+        allowed_groups_raw: list[Any] = []
+        allowed_users_raw: list[Any] = []
+
+        if isinstance(payload, dict):
+            text = str(payload.get("text", "") or "")
+            payload_level = payload.get("access_level")
+            if payload_level is not None:
+                access_level = str(payload_level)
+            else:
+                access_level = str(getattr(hit, "access_level", "public"))
+            payload_groups = payload.get("allowed_groups")
+            if payload_groups is not None:
+                allowed_groups_raw = list(payload_groups)
+            else:
+                allowed_groups_raw = list(getattr(hit, "allowed_groups", []) or [])
+            payload_users = payload.get("allowed_users")
+            if payload_users is not None:
+                allowed_users_raw = list(payload_users)
+            else:
+                allowed_users_raw = list(getattr(hit, "allowed_users", []) or [])
+        else:
+            access_level = str(getattr(hit, "access_level", "public"))
+            allowed_groups_raw = list(getattr(hit, "allowed_groups", []) or [])
+            allowed_users_raw = list(getattr(hit, "allowed_users", []) or [])
+
+        chunk_id = getattr(hit, "id", "") or ""
+        if not isinstance(chunk_id, str):
+            chunk_id = str(chunk_id)
+
+        return DomainChunk(
+            id=chunk_id,
+            text=text,
+            access_level=access_level or "public",
+            allowed_groups=[str(g) for g in allowed_groups_raw],
+            allowed_users=[str(u) for u in allowed_users_raw],
+        )
 
 
 def filter_results_by_score(results: list[Any]) -> tuple[list[Any], str]:

@@ -3,8 +3,8 @@
 
 .PHONY: help install install-dev install-one-line setup wizard \
         test test-proxy test-etl test-integration test-minikube \
-        test-performance test-e2e test-resilience benchmark \
-        benchmark-baselines benchmark-compare \
+        test-performance test-e2e test-resilience chaos-test benchmark \
+        benchmark-baselines benchmark-compare backup-verify \
         lint helm-lint format format-check typecheck clean \
         docker-build docker-up docker-down docker-logs run run-dev docs all \
         etl etl-run-streaming etl-run-batch etl-test-connection etl-cleanup \
@@ -98,8 +98,12 @@ test-e2e: ## Run end-to-end tests (requires running services)
 test-resilience: ## Run chaos and resilience tests
 	@cd $(ROOT) && python -m pytest tests/resilience/ -v -m chaos
 
-benchmark: ## Run performance benchmarks (pytest-benchmark micro-benchmarks)
-	@cd $(ROOT) && python -m pytest tests/performance/test_benchmarks.py -v --benchmark-only
+benchmark: ## Run performance benchmarks against the local proxy
+	@echo "Running benchmarks against http://localhost:8080..."
+	@cd $(ROOT) && python3 scripts/benchmark.py --proxy-url http://localhost:8080
+
+chaos-test: ## Run Docker-backed graceful-degradation tests
+	@cd $(ROOT) && python3 -m pytest tests/resilience/test_chaos_full.py -v
 
 benchmark-baselines: ## Run latency baseline benchmarks and generate reports
 	@cd $(ROOT) && python scripts/run_benchmarks.py
@@ -176,6 +180,9 @@ backup: ## Run all backups (Qdrant, Neo4j, Redis)
 
 restore: ## Run restore from latest backups
 	@bash $(ROOT)/scripts/ops/restore_all.sh
+
+backup-verify: ## Verify that Qdrant, Neo4j, and Redis backups exist
+	@cd $(ROOT) && bash scripts/verify_backup.sh
 
 verify-backups: ## Verify backup integrity
 	@bash $(ROOT)/scripts/ops/verify_restore.sh

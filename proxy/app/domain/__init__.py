@@ -15,13 +15,16 @@ from proxy.app.domain.entities import (
     KnowledgeBase,
     User,
 )
+from proxy.app.domain.event_bus import EventBus, bus
 from proxy.app.domain.events import (
+    ChunkCreated,
     DocumentIndexed,
     DocumentUpdated,
     DomainEvent,
     FeedbackSubmitted,
     ModelPromoted,
     RetrievalPerformed,
+    UserAuthenticated,
 )
 from proxy.app.domain.services import (
     AccessControlService,
@@ -48,13 +51,18 @@ __all__ = [
     "SearchQuery",
     "TokenBudget",
     # Events
+    "ChunkCreated",
     "DocumentIndexed",
     "DocumentUpdated",
     "DomainEvent",
     "FeedbackSubmitted",
     "ModelPromoted",
     "RetrievalPerformed",
+    "UserAuthenticated",
     # Services
     "AccessControlService",
     "RetrievalScoringService",
+    # Event bus
+    "EventBus",
+    "bus",
 ]

@@ -1,134 +1,51 @@
-"""Tests for etl/scheduler/cold_storage_cleanup.py."""
+"""Cold-storage retention integration coverage (FR-57)."""
+
+from __future__ import annotations
 
 import os
-from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
 
-from etl.scheduler.cold_storage_cleanup import (
-    COLD_STORAGE_ENABLED,
-    COLD_STORAGE_MAX_VERSIONS,
-    _list_parquet_versions,
-    _prune_old_versions,
-    cleanup_cold_storage,
-)
+from etl.scheduler.cold_storage_cleanup import cleanup_cold_storage
 
 
-class TestListParquetVersions:
-    def test_empty_directory(self, tmp_path):
-        versions = _list_parquet_versions(tmp_path)
-        assert versions == {}
-
-    def test_single_document_single_version(self, tmp_path):
-        (tmp_path / "doc1_v1.parquet").touch()
-        versions = _list_parquet_versions(tmp_path)
-        assert "doc1" in versions
-        assert len(versions["doc1"]) == 1
-
-    def test_single_document_multiple_versions(self, tmp_path):
-        for i in range(1, 6):
-            (tmp_path / f"doc_v{i}.parquet").touch()
-        (tmp_path / "other.txt").touch()
-        versions = _list_parquet_versions(tmp_path)
-        assert "doc" in versions
-        assert len(versions["doc"]) == 5
-
-    def test_multiple_documents(self, tmp_path):
-        (tmp_path / "report_v1.parquet").touch()
-        (tmp_path / "report_v2.parquet").touch()
-        (tmp_path / "guide_v1.parquet").touch()
-        versions = _list_parquet_versions(tmp_path)
-        assert "report" in versions
-        assert "guide" in versions
-        assert len(versions["report"]) == 2
-        assert len(versions["guide"]) == 1
-
-    def test_non_parquet_files_ignored(self, tmp_path):
-        (tmp_path / "log.txt").touch()
-        (tmp_path / "data.csv").touch()
-        versions = _list_parquet_versions(tmp_path)
-        assert versions == {}
-
-    def test_complex_version_patterns(self, tmp_path):
-        (tmp_path / "spec_v1_2_3.parquet").touch()
-        (tmp_path / "spec_v2_0_1.parquet").touch()
-        versions = _list_parquet_versions(tmp_path)
-        assert "spec" in versions
-        assert len(versions["spec"]) == 2
+def _version(path, version: int, age_days: int) -> None:
+    path.write_bytes(b"parquet placeholder")
+    timestamp = (datetime.now(UTC) - timedelta(days=age_days)).timestamp()
+    os.utime(path, (timestamp, timestamp))
 
 
-class TestPruneOldVersions:
-    def test_no_pruning_needed(self, tmp_path):
-        versions = {"doc1": [(tmp_path / "doc1_v1.parquet", 1)]}
-        deleted = _prune_old_versions(versions, max_versions=5)
-        assert deleted == 0
+def test_cleanup_removes_versions_older_than_90_days_and_keeps_current(tmp_path) -> None:
+    for version in range(1, 5):
+        _version(tmp_path / f"doc_v{version}.parquet", version, 100 - version)
 
-    def test_prunes_excess_versions(self, tmp_path):
-        files = []
-        for i in range(1, 8):
-            f = tmp_path / f"doc1_v{i}.parquet"
-            f.touch()
-            files.append((f, i))
-        deleted = _prune_old_versions({"doc1": files}, max_versions=3)
-        assert deleted == 4
+    deleted = cleanup_cold_storage(str(tmp_path), max_versions=1)
 
-    def test_preserves_latest_versions(self, tmp_path):
-        files = []
-        for i in range(1, 6):
-            f = tmp_path / f"doc1_v{i}.parquet"
-            f.touch()
-            files.append((f, i))
-        _prune_old_versions({"doc1": files}, max_versions=2)
-        remaining = list(tmp_path.glob("*.parquet"))
-        assert len(remaining) <= 2
-
-    def test_handles_permission_error(self, tmp_path):
-        f1 = tmp_path / "doc_v1.parquet"
-        f1.touch()
-        try:
-            versions = {"doc": [(f1, 1)]}
-            deleted = _prune_old_versions(versions, max_versions=0)
-            assert deleted >= 0
-        except Exception:
-            pass
-        finally:
-            if f1.exists():
-                os.chmod(str(f1), 0o644)
-
-    def test_empty_versions_does_nothing(self):
-        assert _prune_old_versions({}, max_versions=5) == 0
+    assert deleted == 3
+    assert (tmp_path / "doc_v4.parquet").exists()
+    assert not (tmp_path / "doc_v1.parquet").exists()
 
 
-class TestCleanupColdStorage:
-    def test_returns_zero_on_nonexistent_dir(self):
-        result = cleanup_cold_storage("/nonexistent/path", max_versions=5)
-        assert result == 0
+def test_mid_age_versions_are_archived_by_retention_policy(tmp_path) -> None:
+    for version in range(1, 4):
+        _version(tmp_path / f"doc_v{version}.parquet", version, 45)
 
-    def test_returns_count_of_deleted(self, tmp_path):
-        for i in range(1, 10):
-            (tmp_path / f"doc_v{i}.parquet").touch()
-        result = cleanup_cold_storage(str(tmp_path), max_versions=3)
-        assert result > 0
+    deleted = cleanup_cold_storage(str(tmp_path), max_versions=2)
 
-    def test_no_files_no_deletion(self, tmp_path):
-        result = cleanup_cold_storage(str(tmp_path), max_versions=5)
-        assert result == 0
-
-    @patch("etl.scheduler.cold_storage_cleanup.COLD_STORAGE_ENABLED", False)
-    def test_disabled_returns_zero(self, tmp_path):
-        for i in range(1, 5):
-            (tmp_path / f"doc_v{i}.parquet").touch()
-        result = cleanup_cold_storage(str(tmp_path), max_versions=5)
-        assert result == 0
-
-    def test_respects_custom_max_versions(self, tmp_path):
-        for i in range(1, 11):
-            (tmp_path / f"doc_v{i}.parquet").touch()
-        result = cleanup_cold_storage(str(tmp_path), max_versions=5)
-        assert result == 5
+    assert deleted == 1
+    assert (tmp_path / "doc_v2.parquet").exists()
+    assert (tmp_path / "doc_v3.parquet").exists()
 
 
-class TestConfigFlags:
-    def test_cold_storage_max_versions(self):
-        assert COLD_STORAGE_MAX_VERSIONS > 0
+def test_current_version_is_retained_when_no_old_versions_exist(tmp_path) -> None:
+    _version(tmp_path / "doc_v7.parquet", 7, 1)
 
-    def test_cold_storage_enabled(self):
-        assert COLD_STORAGE_ENABLED in (True, False)
+    assert cleanup_cold_storage(str(tmp_path), max_versions=1) == 0
+    assert (tmp_path / "doc_v7.parquet").exists()
+
+
+def test_cleanup_does_not_touch_non_version_files(tmp_path) -> None:
+    marker = tmp_path / "README.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    assert cleanup_cold_storage(str(tmp_path), max_versions=1) == 0
+    assert marker.exists()

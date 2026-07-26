@@ -17,7 +17,7 @@
 2. POST `/v1/feedback` с `feedback_type=negative, correction="..."` — 200 OK
 3. Feedback без `correction` при `negative` — 400 Bad Request
 
-**Статус:** ⚠️ Код есть (`proxy/app/api/feedback.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR73FeedbackSubmission`)
 **Приоритет:** HIGH
 **Связь:** ADR-007
 
@@ -35,7 +35,7 @@ feedback_type, correction, timestamp. Поддерживает экспорт в
 2. Экспорт в JSONL — валидный формат для fine-tuning
 3. Запрос feedback по feedback_id — возвращает запись
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/feedback_store.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR74FeedbackStorage`)
 **Приоритет:** HIGH
 **Связь:** ADR-007
 
@@ -57,7 +57,7 @@ feedback_type, correction, timestamp. Поддерживает экспорт в
 2. Статистика включает count_positive, count_negative, avg_confidence
 3. Фильтрация по дате работает
 
-**Статус:** ⚠️ Код есть (`proxy/app/api/admin_analytics.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR75FeedbackAnalytics`)
 **Приоритет:** HIGH
 **Связь:** ADR-007
 
@@ -78,7 +78,7 @@ feedback_type, correction, timestamp. Поддерживает экспорт в
 2. Positive feedback → positive pair в экспорте
 3. Negative feedback → negative pair с correction в экспорте
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/feedback_store.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR76FeedbackExport`)
 **Приоритет:** HIGH
 **Связь:** ADR-007, ADR-010
 
@@ -94,7 +94,7 @@ feedback_type, correction, timestamp. Поддерживает экспорт в
 1. 100 feedback/час — все обрабатываются
 2. 101-й feedback — 429 Too Many Requests
 
-**Статус:** ⚠️ Код есть (`proxy/app/api/feedback.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR77FeedbackRateLimiting`)
 **Приоритет:** MEDIUM
 **Связь:** NFR-S12
 
@@ -112,7 +112,7 @@ feedback_type, correction, timestamp. Поддерживает экспорт в
 2. Feedback привязывается к новому chunk_id (если контент тот же)
 3. Полностью изменённый контент — feedback отвязывается
 
-**Статус:** ⚠️ Код есть, нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR78FeedbackPreservation`)
 **Приоритет:** MEDIUM
 **Связь:** NFR-M05
 
@@ -156,7 +156,7 @@ roles из Keycloak в локальные роли.
 2. Roles из Keycloak маппятся в локальные (admin/expert/user/read_only)
 3. Невалидный Keycloak token — 401
 
-**Статус:** ⚠️ Код есть (`proxy/app/auth/ldap.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR85KeycloakOIDC`)
 **Приоритет:** HIGH
 **Связь:** access-control-rbac
 
@@ -174,7 +174,7 @@ roles из Keycloak в локальные роли.
 2. Невалидные credentials — 401
 3. LDAP недоступен — fallback к локальной БД
 
-**Статус:** ⚠️ Код есть (`proxy/app/auth/ldap.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR86LDAPAuth`)
 **Приоритет:** HIGH
 **Связь:** access-control-rbac
 
@@ -192,7 +192,7 @@ roles из Keycloak в локальные роли.
 2. Невалидный ключ — 401
 3. Отозванный ключ — 401
 
-**Статус:** ⚠️ Код есть (`proxy/app/auth/api_keys.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR87APIKeys`)
 **Приоритет:** HIGH
 **Связь:** access-control-rbac
 
@@ -237,7 +237,7 @@ roles из Keycloak в локальные роли.
 3. User — доступ к `/v1/chat/completions`, 403 на `/v1/feedback`
 4. Read_only — доступ к `/v1/chat/completions`, 403 на `/v1/feedback`
 
-**Статус:** ⚠️ Код есть (`proxy/app/auth/rbac.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR88RBAC`, `tests/integration/test_auth_flow.py::TestRBACEnforcement`)
 **Приоритет:** CRITICAL
 **Связь:** access-control-rbac
 
@@ -255,7 +255,7 @@ roles из Keycloak в локальные роли.
 2. User с role=admin — видит все чанки
 3. Запрос без аутентификации — видит только public чанки
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/access_control.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR89ACLQdrant`)
 **Приоритет:** CRITICAL
 **Связь:** NFR-S03
 
@@ -273,7 +273,7 @@ roles из Keycloak в локальные роли.
 2. После grace period — старые токены невалидны
 3. Ротация API key — старый ключ валиден в течение grace period
 
-**Статус:** ⚠️ Код есть (`proxy/app/auth/secret_rotation.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR90SecretRotation`)
 **Приоритет:** HIGH
 **Связь:** secrets-rotation.md
 
@@ -340,7 +340,7 @@ roles из Keycloak в локальные роли.
 3. Audit log — валидный JSONL
 4. Секреты замаскированы (не в открытом виде)
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/audit.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR93AuditLogging`)
 **Приоритет:** CRITICAL
 **Связь:** best-practices-checklist 3.10
 
@@ -358,6 +358,6 @@ CORS-заголовки настраиваются через `CORS_ORIGINS` (с
 2. `CORS_ORIGINS=https://example.com` — заголовок `Access-Control-Allow-Origin: https://example.com`
 3. Preflight OPTIONS — возвращает 200 с CORS-заголовками
 
-**Статус:** ⚠️ Код есть (`proxy/app/shared/middleware.py`), нужен интеграционный тест
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR94CORS`, `tests/integration/test_auth_flow.py::TestCORSIntegration`)
 **Приоритет:** HIGH
 **Связь:** middleware.py
