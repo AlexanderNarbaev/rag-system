@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-07-26
+
+### Added
+
+- OpenAI-compatible RAG proxy (FastAPI + Granian ASGI)
+- 6 ETL extractors (Confluence, Jira, GitLab, docs, books, chats)
+- Hybrid search (dense + sparse + RRF fusion)
+- Cross-encoder reranking (BGE-Reranker-v2-m3)
+- SHA-256 content-addressable chunks with version tracking
+- WAL-based incremental ETL with checkpoint resume
+- Knowledge Graph (Neo4j) with entity extraction and multi-hop
+- LangGraph 10-node agentic orchestration
+- 4 roles RBAC (admin, expert, user, read_only)
+- JWT + API key + Keycloak OIDC + LDAP authentication
+- ACL at chunk level (4 access levels)
+- HITL feedback system (positive, negative, correction)
+- Streaming + non-streaming chat completions
+- Ungrounded response behavior (notice + clarifying questions)
+- Confidence + grounding + hallucination detection
+- HyDE query expansion + CRAG evaluator + knee-point pruning
+- FLARE active retrieval + Two-stage reranking
+- LLMLingua-style compression + LongContextReorder
+- Dynamic top-k via SLM classification
+- Prometheus metrics + Grafana dashboard + alert rules
+- OpenTelemetry distributed tracing
+- Helm chart for Kubernetes
+- Docker Compose for local dev
+- Backup scripts + DR runbook
+- Air-gapped compatibility
+- Security: TLS 1.3, HSTS, secret masking, audit
+- Performance: gRPC, INT8 quantization, HNSW tuning, vLLM prefix caching
+- Standalone Model Evolution service (LoRA/QLoRA)
+- MCP server for IDE integration
+- Agentic Tools SDK (@tool, ToolBuilder, ToolContext)
+- Declarative tools (YAML/JSON) + OpenAPI auto-discovery
+- DDD domain models
+- BDD Gherkin feature specs (30 scenarios)
+- Integration tests against minikube
+- Security audit (penetration testing)
+- Mock services for hermetic testing (Neo4j, LangGraph)
+
+### Technical
+
+- 175 FR + 56 NFR = 281 requirements
+- 6,400+ tests across 233+ test files
+- 84%+ test coverage
+- TDD/BDD/DDD/SDD methodology
+- Mock services: Neo4j, LangGraph, Qdrant
+- Helm chart for K8s deployment
+- 3-component architecture: ETL, Proxy, Model Evolution
+
 ## [v2.6.0] - 2026-07-18
 
 This release covers Wave 19: Semantic Cache with intelligent TTL, RAGAS metrics

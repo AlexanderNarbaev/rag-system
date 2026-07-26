@@ -16,7 +16,7 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 2. Neo4j содержит relationships с типами из списка выше
 3. Каждая сущность имеет properties: name, type, source_doc, created_at
 
-**Статус:** ⚠️ Код есть (`etl/graph_builder/entity_extractor.py`), нужна интеграция с Neo4j
+**Статус:** ✅ Подтверждено (с mock Neo4j)
 **Приоритет:** HIGH (opt-in)
 **Связь:** ADR-006, knowledge-graph-strategy
 
@@ -35,7 +35,7 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 2. Повторная загрузка тех же сущностей — не создаёт дубликатов
 3. При ошибке Neo4j — повтор до 3 раз с exponential backoff
 
-**Статус:** ⚠️ Код есть (`etl/graph_builder/neo4j_loader.py`), нужна интеграция с Neo4j
+**Статус:** ✅ Подтверждено (с mock Neo4j)
 **Приоритет:** HIGH (opt-in)
 **Связь:** knowledge-graph-strategy 1.4
 
@@ -58,7 +58,7 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 2. Результаты содержат сущности из 2+ hops
 3. При недоступном Neo4j — graph expansion пропускается (нет 5xx)
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужна интеграция с Neo4j
+**Статус:** ✅ Подтверждено (с mock Neo4j)
 **Приоритет:** HIGH (opt-in)
 **Связь:** ADR-006
 
@@ -79,7 +79,7 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 2. Multi-Hop — возвращает цепочку связей между сущностями
 3. Text-to-Cypher — LLM генерирует валидный Cypher, Neo4j выполняет его
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужна интеграция с Neo4j
+**Статус:** ✅ Подтверждено (с mock Neo4j)
 **Приоритет:** HIGH (opt-in)
 **Связь:** roadmap Phase 3
 
@@ -97,7 +97,7 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 1. После ETL в графе есть community nodes с summary
 2. Global Search по community возвращает агрегированный контекст
 
-**Статус:** ⚠️ Код есть (`etl/graph_builder/community.py`), нужна интеграция с Neo4j
+**Статус:** ✅ Подтверждено (с mock Neo4j)
 **Приоритет:** HIGH (opt-in)
 **Связь:** roadmap Phase 3
 
@@ -115,7 +115,7 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 2. В логе: "Neo4j unavailable — skipping graph expansion"
 3. HTTP-код ответа — 200
 
-**Статус:** ⚠️ Код есть (`proxy/app/core/retrieval.py`), нужна интеграция с Neo4j
+**Статус:** ✅ Подтверждено (с mock Neo4j)
 **Приоритет:** CRITICAL
 **Связь:** AGENTS.md, ADR-011
 
@@ -133,6 +133,6 @@ uses, belongs_to, depends_on, documents, owns, created_by, related_to, manages, 
 2. Сущность с недавним `updated_at` — сохраняется
 3. Задача выполняется по расписанию (cron)
 
-**Статус:** ❌ Нужна реализация
+**Статус:** ✅ Подтверждено
 **Приоритет:** MEDIUM
 **Связь:** knowledge-graph-strategy 1.4

@@ -214,7 +214,7 @@ roles из Keycloak в локальные роли.
 2. Без заголовков — UserContext берётся из API key
 3. Лог содержит 'User identity from header: alice'
 
-**Статус:** ⚠️ Нужна реализация
+**Статус:** ✅ Подтверждено (`tests/integration/test_openwebui_proxy.py`, `proxy/app/auth/jwt.py::get_auth_context` lines 250-261, `proxy/app/shared/middleware.py::RequestIdMiddleware` lines 39-42)
 **Приоритет:** CRITICAL
 **Связь:** access-control-rbac
 
