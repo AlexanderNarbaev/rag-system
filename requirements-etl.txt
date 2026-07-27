@@ -19,6 +19,7 @@ spacy>=3.8.13
 # ── Data processing ───────────────────────────────────────────────────────────
 pandas>=2.0.0
 pyarrow>=24.0.0
+numpy>=1.26.0          # vector math in remote embedder
 
 # ── Graph database (optional) ─────────────────────────────────────────────────
 neo4j>=5.14.0,<6.0.0

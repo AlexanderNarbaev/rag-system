@@ -54,6 +54,16 @@ logs/
 # Models
 models/
 *.gguf
+*.pt
+*.bin
+*.onnx
+*.safetensors
+
+# Benchmarks (pytest-benchmark, perf runs)
+.benchmarks/
+
+# Minikube (local k8s dev)
+.minikube/
 
 # Docs build
 site/
