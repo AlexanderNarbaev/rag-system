@@ -399,13 +399,16 @@ class JiraExtractor(SyncExtractor):
 
     def run(self) -> None:
         """Основной процесс выгрузки задач."""
+        # Инициализируем список обработанных задач, если его нет
+        if "processed_issues" not in self.wal_data:
+          self.wal_data["processed_issues"] = []
         jql = self._build_jql()
         logger.info(f"Executing JQL: {jql}")
         total_processed = 0
         for issue in self._paginated_issues(jql):
             self._check_shutdown()
             key = issue["key"]
-            if key in self.wal_data["processed_issues"] and self.incremental:
+            if key in self.wal_data.get("processed_issues",[]) and self.incremental:
                 logger.debug(f"Skipping already processed issue {key}")
                 continue
 
@@ -418,7 +421,7 @@ class JiraExtractor(SyncExtractor):
                     json.dump(processed, f, ensure_ascii=False, indent=2)
 
                 # Обновляем WAL
-                if key not in self.wal_data["processed_issues"]:
+                if key not in self.wal_data.get("processed_issues",[]):
                     self.wal_data["processed_issues"].append(key)
                 self.wal_data["last_run"] = datetime.now(UTC).isoformat()
                 self._save_wal()

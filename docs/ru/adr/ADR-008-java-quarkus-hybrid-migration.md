@@ -247,19 +247,20 @@ self-correction. LangChain4j does not have a first-class `StateGraph` equivalent
 with:
 
 ```java
+
 @AiService
 interface RagOrchestrator {
     @SystemMessage("""
-        You are a RAG orchestration engine. Follow these steps:
-        1. Rewrite the user query for better retrieval
-        2. Determine if retrieved context is sufficient
-        3. If insufficient, rewrite and re-retrieve (max 3 loops)
-        4. Rerank results with cross-encoder
-        5. Expand with knowledge graph if available
-        6. Build final context
-        7. Generate answer
-        8. Self-reflect on answer quality
-        """)
+            You are a RAG orchestration engine. Follow these steps:
+            1. Rewrite the user query for better retrieval
+            2. Determine if retrieved context is sufficient
+            3. If insufficient, rewrite and re-retrieve (max 3 loops)
+            4. Rerank results with cross-encoder
+            5. Expand with knowledge graph if available
+            6. Build final context
+            7. Generate answer
+            8. Self-reflect on answer quality
+            """)
     String execute(@UserMessage String query, @V("context") String context);
 }
 
@@ -269,36 +270,36 @@ class RagStateGraph {
 
     RagStateGraph() {
         graph = new StateGraph<>(ConversationalState::new)
-            .addNode("rewrite", this::rewriteQuery)
-            .addNode("retrieve", this::retrieve)
-            .addNode("check_sufficiency", this::checkSufficiency)
-            .addNode("rerank", this::rerank)
-            .addNode("graph_expand", this::graphExpand)
-            .addNode("build_context", this::buildContext)
-            .addNode("generate", this::generate)
-            .addNode("self_reflection", this::selfReflect)
-            .addNode("check_confidence", this::checkConfidence)
-            .addNode("self_critique", this::selfCritique)
-            .addNode("call_tools", this::callTools)
-            .setEntryPoint("rewrite")
-            .addEdge("rewrite", "retrieve")
-            .addEdge("retrieve", "check_sufficiency")
-            .addConditionalEdges("check_sufficiency",
-                ctx -> ctx.isSufficient() ? "rerank" : "rewrite")
-            .addEdge("rerank", "graph_expand")
-            .addEdge("graph_expand", "build_context")
-            .addEdge("build_context", "generate")
-            .addConditionalEdges("generate",
-                ctx -> ctx.hasToolCalls() ? "call_tools" : "self_reflection")
-            .addEdge("call_tools", "generate")
-            .addConditionalEdges("self_reflection",
-                ctx -> ctx.needsReflection() ? "retrieve" : "check_confidence")
-            .addConditionalEdges("check_confidence",
-                ctx -> ctx.needsEscalation() ? "rewrite"
-                     : ctx.needsSelfCritique() ? "self_critique" : END)
-            .addConditionalEdges("self_critique",
-                ctx -> ctx.needsRewrite() ? "rewrite" : END)
-            .compile(checkpointer);
+                .addNode("rewrite", this::rewriteQuery)
+                .addNode("retrieve", this::retrieve)
+                .addNode("check_sufficiency", this::checkSufficiency)
+                .addNode("rerank", this::rerank)
+                .addNode("graph_expand", this::graphExpand)
+                .addNode("build_context", this::buildContext)
+                .addNode("generate", this::generate)
+                .addNode("self_reflection", this::selfReflect)
+                .addNode("check_confidence", this::checkConfidence)
+                .addNode("self_critique", this::selfCritique)
+                .addNode("call_tools", this::callTools)
+                .setEntryPoint("rewrite")
+                .addEdge("rewrite", "retrieve")
+                .addEdge("retrieve", "check_sufficiency")
+                .addConditionalEdges("check_sufficiency",
+                        ctx -> ctx.isSufficient() ? "rerank" : "rewrite")
+                .addEdge("rerank", "graph_expand")
+                .addEdge("graph_expand", "build_context")
+                .addEdge("build_context", "generate")
+                .addConditionalEdges("generate",
+                        ctx -> ctx.hasToolCalls() ? "call_tools" : "self_reflection")
+                .addEdge("call_tools", "generate")
+                .addConditionalEdges("self_reflection",
+                        ctx -> ctx.needsReflection() ? "retrieve" : "check_confidence")
+                .addConditionalEdges("check_confidence",
+                        ctx -> ctx.needsEscalation() ? "rewrite"
+                                : ctx.needsSelfCritique() ? "self_critique" : END)
+                .addConditionalEdges("self_critique",
+                        ctx -> ctx.needsRewrite() ? "rewrite" : END)
+                .compile(checkpointer);
     }
 }
 ```
@@ -310,6 +311,7 @@ migration stays readable and auditable against the Python origin.
 ### gRPC Client Integration
 
 ```java
+
 @GrpcClient("ml-sidecar")
 MutinyMLServiceGrpc.MutinyMLServiceStub mlService;
 
@@ -317,9 +319,9 @@ MutinyMLServiceGrpc.MutinyMLServiceStub mlService;
 @Fallback(fallbackMethod = "embedLocalFallback")
 public Uni<EmbedResponse> embed(List<String> texts) {
     return mlService.embed(EmbedRequest.newBuilder()
-        .addAllTexts(texts)
-        .setReturnSparse(true)
-        .build());
+            .addAllTexts(texts)
+            .setReturnSparse(true)
+            .build());
 }
 
 // Circuit breaker for ML sidecar failures

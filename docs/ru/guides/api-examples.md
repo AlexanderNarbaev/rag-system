@@ -855,19 +855,19 @@ curl http://localhost:8080/v1/widget.js
 <!DOCTYPE html>
 <html>
 <head>
-  <title>RAG Чат</title>
+    <title>RAG Чат</title>
 </head>
 <body>
-  <div id="rag-widget"></div>
-  <script src="http://localhost:8080/v1/widget.js"></script>
-  <script>
+<div id="rag-widget"></div>
+<script src="http://localhost:8080/v1/widget.js"></script>
+<script>
     RAGWidget.init({
       container: "#rag-widget",
       apiUrl: "http://localhost:8080",
       model: "rag-proxy",
       theme: "light",
     });
-  </script>
+</script>
 </body>
 </html>
 ```
@@ -909,20 +909,17 @@ curl http://localhost:8080/v1/widget.js
 import httpx
 
 try:
-    response = httpx.post(
-        "http://localhost:8080/v1/chat/completions",
-        json={"model": "rag-proxy", "messages": []},
-        timeout=30.0,
-    )
-    response.raise_for_status()
-    data = response.json()
+  response = httpx.post ("http://localhost:8080/v1/chat/completions", json = {"model": "rag-proxy", "messages": []},
+      timeout = 30.0, )
+  response.raise_for_status ()
+  data = response.json ()
 except httpx.HTTPStatusError as e:
-    error = e.response.json().get("error", {})
-    print(f"Ошибка API {e.response.status_code}: {error.get('message')}")
+  error = e.response.json ().get ("error", {})
+  print (f"Ошибка API {e.response.status_code}: {error.get ('message')}")
 except httpx.ConnectError:
-    print("Не удалось подключиться к RAG-прокси. Он запущен?")
+  print ("Не удалось подключиться к RAG-прокси. Он запущен?")
 except httpx.TimeoutException:
-    print("Таймаут запроса. LLM-бэкенд может работать медленно.")
+  print ("Таймаут запроса. LLM-бэкенд может работать медленно.")
 ```
 
 ### Обработка ошибок в JavaScript
@@ -958,27 +955,25 @@ async function chatCompletion(messages) {
 import httpx
 import time
 
-def chat_with_retry(messages, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            response = httpx.post(
-                "http://localhost:8080/v1/chat/completions",
-                json={"model": "rag-proxy", "messages": messages},
-                timeout=60.0,
-            )
-            if response.status_code == 429:
-                wait = 2 ** attempt
-                print(f"Превышен лимит. Повтор через {wait}с...")
-                time.sleep(wait)
-                continue
-            response.raise_for_status()
-            return response.json()
-        except httpx.TimeoutException:
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-                continue
-            raise
-    raise Exception("Превышено максимальное количество попыток")
+
+def chat_with_retry (messages, max_retries = 3):
+  for attempt in range (max_retries):
+    try:
+      response = httpx.post ("http://localhost:8080/v1/chat/completions",
+          json = {"model": "rag-proxy", "messages": messages}, timeout = 60.0, )
+      if response.status_code == 429:
+        wait = 2 ** attempt
+        print (f"Превышен лимит. Повтор через {wait}с...")
+        time.sleep (wait)
+        continue
+      response.raise_for_status ()
+      return response.json ()
+    except httpx.TimeoutException:
+      if attempt < max_retries - 1:
+        time.sleep (2 ** attempt)
+        continue
+      raise
+  raise Exception ("Превышено максимальное количество попыток")
 ```
 
 ---

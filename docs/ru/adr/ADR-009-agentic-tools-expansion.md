@@ -134,39 +134,42 @@
 ```python
 @dataclass
 class ToolDefinition:
-    """Unified tool definition — canonical representation."""
-    name: str
-    description: str
-    parameters: list[ToolParam]                          # Replaces raw dict
-    handler: Callable[..., Any] | None = None            # Sync handler
-    async_handler: Callable[..., Any] | None = None      # Async handler
-    category: str = "general"
-    tags: list[str] = field(default_factory=list)
-    version: str = "1.0.0"
-    visibility: ToolVisibility = ToolVisibility.PUBLIC   # PUBLIC, ADMIN, EXPERT, USER
-    timeout_seconds: float = 30.0
-    retry_policy: RetryPolicy | None = None
-    depends_on: list[str] = field(default_factory=list)  # Tool dependency graph
-    output_schema: dict | None = None                    # JSON Schema for return value
-    provider: str = "sdk"                                # "sdk", "declarative", "openapi"
-    metadata: dict = field(default_factory=dict)
+  """Unified tool definition — canonical representation."""
+  name: str
+  description: str
+  parameters: list [ToolParam]  # Replaces raw dict
+  handler: Callable [..., Any] | None = None  # Sync handler
+  async_handler: Callable [..., Any] | None = None  # Async handler
+  category: str = "general"
+  tags: list [str] = field (default_factory = list)
+  version: str = "1.0.0"
+  visibility: ToolVisibility = ToolVisibility.PUBLIC  # PUBLIC, ADMIN, EXPERT, USER
+  timeout_seconds: float = 30.0
+  retry_policy: RetryPolicy | None = None
+  depends_on: list [str] = field (default_factory = list)  # Tool dependency graph
+  output_schema: dict | None = None  # JSON Schema for return value
+  provider: str = "sdk"  # "sdk", "declarative", "openapi"
+  metadata: dict = field (default_factory = dict)
+  
+  def to_openai_format (self) -> dict: ...
+  
+  def to_anthropic_format (self) -> dict: ...
+  
+  def to_json_schema (self) -> dict: ...
 
-    def to_openai_format(self) -> dict: ...
-    def to_anthropic_format(self) -> dict: ...
-    def to_json_schema(self) -> dict: ...
 
 @dataclass
 class ToolParam:
-    """Single tool parameter with JSON Schema generation."""
-    name: str
-    type: type | str
-    description: str = ""
-    required: bool = True
-    default: Any = _UNSET
-    enum: list[str] | None = None
-    items_type: type | None = None       # For array params
-    
-    def to_json_schema_property(self) -> dict: ...
+  """Single tool parameter with JSON Schema generation."""
+  name: str
+  type: type | str
+  description: str = ""
+  required: bool = True
+  default: Any = _UNSET
+  enum: list [str] | None = None
+  items_type: type | None = None  # For array params
+  
+  def to_json_schema_property (self) -> dict: ...
 ```
 
 #### 2.3.2 `sdk.py` — Python SDK для инструментов
@@ -174,20 +177,13 @@ class ToolParam:
 **Декораторный API:**
 
 ```python
-@tool(
-    name=None,                    # Auto-derived from func name
-    description=None,             # Auto-derived from docstring
-    category="general",
-    tags=None,
-    version="1.0.0",
-    timeout=30.0,
-    retry_policy=None,
-    visibility=ToolVisibility.PUBLIC,
-    depends_on=None,
-)
-async def my_tool(param1: str, param2: int = 5, ctx: ToolContext = None) -> str:
-    """Optional docstring becomes description if not overridden."""
-    ...
+@tool (name = None,  # Auto-derived from func name
+    description = None,  # Auto-derived from docstring
+    category = "general", tags = None, version = "1.0.0", timeout = 30.0, retry_policy = None,
+    visibility = ToolVisibility.PUBLIC, depends_on = None, )
+async def my_tool (param1: str, param2: int = 5, ctx: ToolContext = None) -> str:
+  """Optional docstring becomes description if not overridden."""
+  ...
 ```
 
 Декоратор:
@@ -203,54 +199,52 @@ async def my_tool(param1: str, param2: int = 5, ctx: ToolContext = None) -> str:
 ```python
 @dataclass
 class ToolContext:
-    """Context injected into tool handlers automatically."""
-    user_id: str | None
-    user_role: str | None
-    request_id: str
-    tool_call_id: str
-    metrics: "ToolMetrics"
-    
-    async def get_state(self, key: str) -> Any: ...     # Cross-tool shared state
-    async def set_state(self, key: str, value: Any): ... 
-    async def stream_partial(self, data: str) -> None: ...  # For streaming tools
+  """Context injected into tool handlers automatically."""
+  user_id: str | None
+  user_role: str | None
+  request_id: str
+  tool_call_id: str
+  metrics: "ToolMetrics"
+  
+  async def get_state (self, key: str) -> Any: ...  # Cross-tool shared state
+  
+  async def set_state (self, key: str, value: Any): ...
+  
+  async def stream_partial (self, data: str) -> None: ...  # For streaming tools
 ```
 
 **Builder API:**
 
 ```python
-tool = (ToolBuilder("search_confluence")
-    .with_description("Search Confluence pages by CQL query")
-    .with_param("query", str, "CQL query text", required=True)
-    .with_param("max_results", int, "Max results", default=5)
-    .with_param("space_key", str, "Optional space filter", default=None)
-    .with_handler(lambda query, max_results, space_key: ...)
-    .with_async_handler(async_handler)
-    .with_category("live_source")
-    .with_tags(["confluence", "live"])
-    .with_timeout(15.0)
-    .with_retry_policy(RetryPolicy(max_retries=2, backoff="exponential"))
-    .with_visibility(ToolVisibility.USER)
-    .build())
+tool = (
+  ToolBuilder ("search_confluence").with_description ("Search Confluence pages by CQL query").with_param ("query", str,
+                                                                                                          "CQL query text",
+                                                                                                          required = True).with_param (
+    "max_results", int, "Max results", default = 5).with_param ("space_key", str, "Optional space filter",
+                                                                default = None).with_handler (
+    lambda query, max_results, space_key: ...).with_async_handler (async_handler).with_category (
+    "live_source").with_tags (["confluence", "live"]).with_timeout (15.0).with_retry_policy (
+    RetryPolicy (max_retries = 2, backoff = "exponential")).with_visibility (ToolVisibility.USER).build ())
 ```
 
 **Генерация JSON Schema:**
 
 ```python
-def json_schema_from_func(func: Callable) -> dict:
-    """Generate JSON Schema from Python function type hints.
-    
-    Mapping:
-    - str → {"type": "string"}
-    - int → {"type": "integer"}
-    - float → {"type": "number"}
-    - bool → {"type": "boolean"}
-    - list[X] → {"type": "array", "items": type_of(X)}
-    - Optional[X] → allOf: [type_of(X)], not in required
-    - Literal["a", "b"] → {"type": "string", "enum": ["a", "b"]}
-    - Annotated[T, Field(description="...")] → with description
-    - BaseModel subclass → $ref to nested schema
-    - dict → {"type": "object"}
-    """
+def json_schema_from_func (func: Callable) -> dict:
+  """Generate JSON Schema from Python function type hints.
+  
+  Mapping:
+  - str → {"type": "string"}
+  - int → {"type": "integer"}
+  - float → {"type": "number"}
+  - bool → {"type": "boolean"}
+  - list[X] → {"type": "array", "items": type_of(X)}
+  - Optional[X] → allOf: [type_of(X)], not in required
+  - Literal["a", "b"] → {"type": "string", "enum": ["a", "b"]}
+  - Annotated[T, Field(description="...")] → with description
+  - BaseModel subclass → $ref to nested schema
+  - dict → {"type": "object"}
+  """
 ```
 
 **Соответствие аннотаций типов и JSON Schema:**
@@ -280,73 +274,200 @@ def json_schema_from_func(func: Callable) -> dict:
   "properties": {
     "tools": {
       "type": "array",
-      "items": { "$ref": "#/$defs/DeclarativeTool" }
+      "items": {
+        "$ref": "#/$defs/DeclarativeTool"
+      }
     }
   },
   "$defs": {
     "DeclarativeTool": {
       "type": "object",
-      "required": ["name", "type", "description"],
+      "required": [
+        "name",
+        "type",
+        "description"
+      ],
       "properties": {
-        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
-        "type": { "enum": ["http", "shell"] },
-        "description": { "type": "string" },
-        "category": { "type": "string", "default": "declarative" },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "version": { "type": "string", "default": "1.0.0" },
-        "visibility": { "enum": ["public", "admin", "expert", "user"], "default": "public" },
-        "timeout": { "type": "number", "default": 30 },
-        "retry_policy": { "$ref": "#/$defs/RetryPolicy" },
-        "parameters": { "$ref": "#/$defs/Parameters" },
-        "http": { "$ref": "#/$defs/HttpConfig" },
-        "shell": { "$ref": "#/$defs/ShellConfig" }
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "type": {
+          "enum": [
+            "http",
+            "shell"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "default": "declarative"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "string",
+          "default": "1.0.0"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "admin",
+            "expert",
+            "user"
+          ],
+          "default": "public"
+        },
+        "timeout": {
+          "type": "number",
+          "default": 30
+        },
+        "retry_policy": {
+          "$ref": "#/$defs/RetryPolicy"
+        },
+        "parameters": {
+          "$ref": "#/$defs/Parameters"
+        },
+        "http": {
+          "$ref": "#/$defs/HttpConfig"
+        },
+        "shell": {
+          "$ref": "#/$defs/ShellConfig"
+        }
       }
     },
     "HttpConfig": {
       "type": "object",
-      "required": ["method", "url_template"],
+      "required": [
+        "method",
+        "url_template"
+      ],
       "properties": {
-        "method": { "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
-        "url_template": { "type": "string" },
-        "headers": { "type": "object" },
-        "body_template": { "type": "string" },
-        "response_path": { "type": "string", "description": "JSONPath to extract from response" },
-        "allowed_hosts": { "type": "array", "items": { "type": "string" }, "description": "Security: restrict to these hosts" }
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "PATCH"
+          ]
+        },
+        "url_template": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object"
+        },
+        "body_template": {
+          "type": "string"
+        },
+        "response_path": {
+          "type": "string",
+          "description": "JSONPath to extract from response"
+        },
+        "allowed_hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Security: restrict to these hosts"
+        }
       }
     },
     "ShellConfig": {
       "type": "object",
-      "required": ["command"],
+      "required": [
+        "command"
+      ],
       "properties": {
-        "command": { "type": "string" },
-        "working_dir": { "type": "string", "default": "/tmp" },
-        "allowed_commands": { "type": "array", "items": { "type": "string" }, "description": "Whitelist of allowed binaries" },
-        "allowed_paths": { "type": "array", "items": { "type": "string" }, "description": "Whitelist of accessible paths" },
-        "env_whitelist": { "type": "array", "items": { "type": "string" }, "description": "Environment variables to pass through" }
+        "command": {
+          "type": "string"
+        },
+        "working_dir": {
+          "type": "string",
+          "default": "/tmp"
+        },
+        "allowed_commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Whitelist of allowed binaries"
+        },
+        "allowed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Whitelist of accessible paths"
+        },
+        "env_whitelist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Environment variables to pass through"
+        }
       }
     },
     "Parameters": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/$defs/Parameter" }
+      "additionalProperties": {
+        "$ref": "#/$defs/Parameter"
+      }
     },
     "Parameter": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "type": "string" },
-        "description": { "type": "string" },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "default": {},
-        "enum": { "type": "array" },
-        "required": { "type": "boolean", "default": false }
+        "enum": {
+          "type": "array"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        }
       }
     },
     "RetryPolicy": {
       "type": "object",
       "properties": {
-        "max_retries": { "type": "integer", "default": 3 },
-        "backoff": { "enum": ["fixed", "exponential"], "default": "exponential" },
-        "initial_delay_seconds": { "type": "number", "default": 1.0 },
-        "retryable_errors": { "type": "array", "items": { "type": "string" } }
+        "max_retries": {
+          "type": "integer",
+          "default": 3
+        },
+        "backoff": {
+          "enum": [
+            "fixed",
+            "exponential"
+          ],
+          "default": "exponential"
+        },
+        "initial_delay_seconds": {
+          "type": "number",
+          "default": 1.0
+        },
+        "retryable_errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   }
@@ -361,7 +482,7 @@ tools:
     type: "http"
     description: "Search Jira issues live via REST API"
     category: "live_source"
-    tags: ["jira", "live"]
+    tags: [ "jira", "live" ]
     visibility: "user"
     timeout: 15
     retry_policy:
@@ -394,7 +515,7 @@ tools:
     timeout: 5
     shell:
       command: "echo 'Disk: $(df -h / | tail -1)' && echo 'Memory: $(free -h | grep Mem)'"
-      allowed_commands: ["echo", "df", "free", "grep", "tail"]
+      allowed_commands: [ "echo", "df", "free", "grep", "tail" ]
       working_dir: "/tmp"
 ```
 
@@ -424,37 +545,34 @@ tools:
 
 ```python
 class OpenAPIDiscovery:
-    def discover(self, spec: dict, mode: DiscoveryMode) -> list[ToolDefinition]:
-        """Parse OpenAPI spec and generate tool definitions."""
+  def discover (self, spec: dict, mode: DiscoveryMode) -> list [ToolDefinition]:
+    """Parse OpenAPI spec and generate tool definitions."""
+  
+  def _endpoint_to_tool (self, path: str, method: str, operation: dict) -> ToolDefinition:
+    """Convert a single OpenAPI operation to a tool definition.
     
-    def _endpoint_to_tool(self, path: str, method: str, operation: dict) -> ToolDefinition:
-        """Convert a single OpenAPI operation to a tool definition.
-        
-        Rules:
-        - GET → "search" category, idempotent
-        - POST → "action" category, non-idempotent
-        - PUT/PATCH → "action" category, idempotent
-        - DELETE → "action" category, confirmable
-        - Tool name: {operationId} or {method}_{path_slug}
-        - Parameters from path/query/header → ToolParam
-        - Request body (JSON) → ToolParam type "object"
-        - Security schemes → injected via ToolContext
-        """
+    Rules:
+    - GET → "search" category, idempotent
+    - POST → "action" category, non-idempotent
+    - PUT/PATCH → "action" category, idempotent
+    - DELETE → "action" category, confirmable
+    - Tool name: {operationId} or {method}_{path_slug}
+    - Parameters from path/query/header → ToolParam
+    - Request body (JSON) → ToolParam type "object"
+    - Security schemes → injected via ToolContext
+    """
 ```
 
 **Конфигурация:**
 
 ```python
 # In config.py
-TOOLS_OPENAPI_SPECS: list[dict] = [
+TOOLS_OPENAPI_SPECS: list [dict] = [
     {
-        "name": "internal_hr_api",
-        "url": "https://hr.internal/api/openapi.json",
-        "mode": "auto",                    # or "llm_driven"
-        "include_tags": ["employee"],      # Filter: only include these tags
-        "exclude_tags": ["admin"],         # Filter: exclude these tags
-        "visibility": "user",
-        "auth_header": "{{HR_API_TOKEN}}",
+        "name": "internal_hr_api", "url": "https://hr.internal/api/openapi.json", "mode": "auto",  # or "llm_driven"
+        "include_tags": ["employee"],  # Filter: only include these tags
+        "exclude_tags": ["admin"],  # Filter: exclude these tags
+        "visibility": "user", "auth_header": "{{HR_API_TOKEN}}",
     },
 ]
 ```
@@ -465,258 +583,247 @@ TOOLS_OPENAPI_SPECS: list[dict] = [
 
 ```python
 class ParallelExecutor:
-    """Execute multiple tool calls in parallel with concurrency control."""
+  """Execute multiple tool calls in parallel with concurrency control."""
+  
+  def __init__ (self, max_concurrency: int = 10, timeout: float = 120.0):
+    self._semaphore = asyncio.Semaphore (max_concurrency)
+    self._timeout = timeout
+  
+  async def execute_all (
+      self, tool_calls: list [ToolCall], registry: EnhancedToolRegistry, context: ToolContext, ) -> list [ToolResult]:
+    """Execute all tool calls concurrently.
     
-    def __init__(self, max_concurrency: int = 10, timeout: float = 120.0):
-        self._semaphore = asyncio.Semaphore(max_concurrency)
-        self._timeout = timeout
-    
-    async def execute_all(
-        self,
-        tool_calls: list[ToolCall],
-        registry: EnhancedToolRegistry,
-        context: ToolContext,
-    ) -> list[ToolResult]:
-        """Execute all tool calls concurrently.
-        
-        Algorithm:
-        1. Group tool calls by dependencies (respect depends_on)
-        2. Execute independent groups in parallel
-        3. Within each group, use asyncio.gather with semaphore
-        4. Collect results, preserving order
-        5. Handle individual failures gracefully (one failure ≠ all failure)
-        """
-    
-    async def execute_single(
-        self, tool_call: ToolCall, registry, context
-    ) -> ToolResult:
-        """Execute one tool call with retry + error handling."""
+    Algorithm:
+    1. Group tool calls by dependencies (respect depends_on)
+    2. Execute independent groups in parallel
+    3. Within each group, use asyncio.gather with semaphore
+    4. Collect results, preserving order
+    5. Handle individual failures gracefully (one failure ≠ all failure)
+    """
+  
+  async def execute_single (
+      self, tool_call: ToolCall, registry, context
+  ) -> ToolResult:
+    """Execute one tool call with retry + error handling."""
 ```
 
 **Потоковое исполнение:**
 
 ```python
 class StreamingExecutor:
-    """Execute tools that produce streaming results (SSE)."""
+  """Execute tools that produce streaming results (SSE)."""
+  
+  async def execute_streaming (
+      self, tool_call: ToolCall, registry, context
+  ) -> AsyncIterator [str]:
+    """Yields partial results as they become available.
     
-    async def execute_streaming(
-        self, tool_call: ToolCall, registry, context
-    ) -> AsyncIterator[str]:
-        """Yields partial results as they become available.
-        
-        Used for long-running tools (e.g., large data exports, progressive search).
-        """
+    Used for long-running tools (e.g., large data exports, progressive search).
+    """
 ```
 
 **Паттерны композиции:**
 
 ```python
 class ToolComposer:
-    """Compose tools into workflows."""
+  """Compose tools into workflows."""
+  
+  @staticmethod
+  def chain (tools: list [str], input_mapper: Callable) -> CompositionPattern:
+    """Sequential chain: Tool A output → Tool B input.
     
-    @staticmethod
-    def chain(tools: list[str], input_mapper: Callable) -> CompositionPattern:
-        """Sequential chain: Tool A output → Tool B input.
-        
-        Example:
-            chain(["search_documents", "get_document_metadata"],
-                  lambda prev_result: {"doc_id": prev_result["id"]})
-        """
+    Example:
+        chain(["search_documents", "get_document_metadata"],
+              lambda prev_result: {"doc_id": prev_result["id"]})
+    """
+  
+  @staticmethod
+  def fan_out (tool: str, inputs: list [dict]) -> CompositionPattern:
+    """Run same tool with N different inputs in parallel.
     
-    @staticmethod
-    def fan_out(tool: str, inputs: list[dict]) -> CompositionPattern:
-        """Run same tool with N different inputs in parallel.
-        
-        Example:
-            fan_out("get_document_metadata", [{"doc_id": i} for i in ids])
-        """
+    Example:
+        fan_out("get_document_metadata", [{"doc_id": i} for i in ids])
+    """
+  
+  @staticmethod
+  def conditional (condition: Callable, true_tool: str, false_tool: str) -> CompositionPattern:
+    """Conditional branching based on context.
     
-    @staticmethod
-    def conditional(condition: Callable, true_tool: str, false_tool: str) -> CompositionPattern:
-        """Conditional branching based on context.
-        
-        Example:
-            conditional(lambda ctx: ctx.get_state("has_jira"),
-                       "search_jira", "search_documents")
-        """
+    Example:
+        conditional(lambda ctx: ctx.get_state("has_jira"),
+                   "search_jira", "search_documents")
+    """
 ```
 
 **Интеграция исполнителя с `call_tools` в LangGraph:**
 
 ```python
 # In orchestrator.py (updated)
-async def call_tools_async(state: RAGState) -> dict[str, Any]:
-    """Async parallel tool execution node."""
-    tool_calls = state.get("tool_calls", [])
-    tool_results = state.get("tool_results", [])
-    tool_loop_count = state.get("tool_loop_count", 0)
-    
-    registry = get_tool_registry()
-    context = ToolContext(
-        user_id=state.get("user_id"),
-        user_role=state.get("user_role"),
-        request_id=state.get("request_id", ""),
-        tool_call_id="",
-    )
-    
-    executor = ParallelExecutor(max_concurrency=TOOLS_MAX_CONCURRENCY)
-    
-    # Parse ToolCall objects from state
-    calls = [_tool_call_from_dict(tc) for tc in tool_calls]
-    
-    # Execute in parallel (respecting dependencies)
-    results = await executor.execute_all(calls, registry, context)
-    
-    tool_results = [
-        {
-            "tool_call_id": r.tool_call_id,
-            "name": r.tool_name,
-            "content": r.content,
-            "error": r.error,
-        }
-        for r in results
-    ]
-    
-    return {
-        "tool_results": tool_results,
-        "tool_loop_count": tool_loop_count + 1,
-        "tool_calls": [],
-    }
+async def call_tools_async (state: RAGState) -> dict [str, Any]:
+  """Async parallel tool execution node."""
+  tool_calls = state.get ("tool_calls", [])
+  tool_results = state.get ("tool_results", [])
+  tool_loop_count = state.get ("tool_loop_count", 0)
+  
+  registry = get_tool_registry ()
+  context = ToolContext (user_id = state.get ("user_id"), user_role = state.get ("user_role"),
+      request_id = state.get ("request_id", ""), tool_call_id = "", )
+  
+  executor = ParallelExecutor (max_concurrency = TOOLS_MAX_CONCURRENCY)
+  
+  # Parse ToolCall objects from state
+  calls = [_tool_call_from_dict (tc) for tc in tool_calls]
+  
+  # Execute in parallel (respecting dependencies)
+  results = await executor.execute_all (calls, registry, context)
+  
+  tool_results = [{
+      "tool_call_id": r.tool_call_id, "name": r.tool_name, "content": r.content, "error": r.error,
+  } for r in results]
+  
+  return {
+      "tool_results": tool_results, "tool_loop_count": tool_loop_count + 1, "tool_calls": [],
+  }
 ```
 
 #### 2.3.6 `errors.py` — Таксономия ошибок
 
 ```python
-class ToolError(RAGError):
-    """Base class for all tool-related errors."""
-    tool_name: str
-    tool_call_id: str
-    retryable: bool = False
+class ToolError (RAGError):
+  """Base class for all tool-related errors."""
+  tool_name: str
+  tool_call_id: str
+  retryable: bool = False
 
-class ToolNotFoundError(ToolError):
-    """Tool not found in registry."""
-    retryable: bool = False
 
-class ToolExecutionError(ToolError):
-    """Tool handler raised an exception."""
-    original_error: str
-    retryable: bool = True
+class ToolNotFoundError (ToolError):
+  """Tool not found in registry."""
+  retryable: bool = False
 
-class ToolTimeoutError(ToolError):
-    """Tool exceeded its timeout."""
-    timeout_seconds: float
-    retryable: bool = True
 
-class ToolPermissionError(ToolError):
-    """User lacks permission to call this tool."""
-    required_visibility: str
-    user_role: str
-    retryable: bool = False
+class ToolExecutionError (ToolError):
+  """Tool handler raised an exception."""
+  original_error: str
+  retryable: bool = True
 
-class ToolValidationError(ToolError):
-    """Tool parameters failed validation."""
-    validation_errors: list[str]
-    retryable: bool = False
 
-class ToolDependencyError(ToolError):
-    """A tool dependency returned an error."""
-    dependency_name: str
-    retryable: bool = False
+class ToolTimeoutError (ToolError):
+  """Tool exceeded its timeout."""
+  timeout_seconds: float
+  retryable: bool = True
+
+
+class ToolPermissionError (ToolError):
+  """User lacks permission to call this tool."""
+  required_visibility: str
+  user_role: str
+  retryable: bool = False
+
+
+class ToolValidationError (ToolError):
+  """Tool parameters failed validation."""
+  validation_errors: list [str]
+  retryable: bool = False
+
+
+class ToolDependencyError (ToolError):
+  """A tool dependency returned an error."""
+  dependency_name: str
+  retryable: bool = False
 ```
 
 **Функция классификации ошибок:**
 
 ```python
-def classify_error(tool_name: str, error: Exception) -> ToolError:
-    """Map Python exceptions to tool error types."""
+def classify_error (tool_name: str, error: Exception) -> ToolError:
+  """Map Python exceptions to tool error types."""
 ```
 
 #### 2.3.7 `security.py` — RBAC-видимость
 
 ```python
 class ToolVisibilityFilter:
-    """Filter tools based on user role."""
-    
-    ROLE_HIERARCHY = {
-        "admin": ["public", "admin", "expert", "user"],
-        "expert": ["public", "expert", "user"],
-        "user": ["public", "user"],
-        "read_only": ["public"],
-    }
-    
-    @staticmethod
-    def filter(tools: list[ToolDefinition], user_role: str) -> list[ToolDefinition]:
-        """Return tools visible to the given role."""
-        allowed = ROLE_HIERARCHY.get(user_role, ["public"])
-        return [t for t in tools if t.visibility.value in allowed]
+  """Filter tools based on user role."""
+  
+  ROLE_HIERARCHY = {
+      "admin": ["public", "admin", "expert", "user"], "expert": ["public", "expert", "user"],
+      "user": ["public", "user"], "read_only": ["public"],
+  }
+  
+  @staticmethod
+  def filter (tools: list [ToolDefinition], user_role: str) -> list [ToolDefinition]:
+    """Return tools visible to the given role."""
+    allowed = ROLE_HIERARCHY.get (user_role, ["public"])
+    return [t for t in tools if t.visibility.value in allowed]
+
 
 class ToolInputSanitizer:
-    """Sanitize tool input parameters."""
-    
-    MAX_STRING_LENGTH = 10_000
-    MAX_ARRAY_LENGTH = 1_000
-    
-    @staticmethod
-    def sanitize(tool: ToolDefinition, params: dict) -> dict:
-        """Validate and sanitize parameters. Truncate oversized strings."""
+  """Sanitize tool input parameters."""
+  
+  MAX_STRING_LENGTH = 10_000
+  MAX_ARRAY_LENGTH = 1_000
+  
+  @staticmethod
+  def sanitize (tool: ToolDefinition, params: dict) -> dict:
+    """Validate and sanitize parameters. Truncate oversized strings."""
 ```
 
 #### 2.3.8 `metrics.py` — Prometheus-инструментирование
 
 ```python
 class ToolMetrics:
-    """Prometheus metrics for tool calls.
-    
-    Metrics emitted:
-    - tool_calls_total{tool_name, category, status}          # Counter
-    - tool_call_duration_seconds{tool_name, category}        # Histogram
-    - tool_call_active{tool_name}                            # Gauge
-    - tool_call_retries_total{tool_name}                     # Counter
-    - tool_call_input_bytes{tool_name}                       # Histogram
-    - tool_call_output_bytes{tool_name}                      # Histogram
-    """
-    
-    TOOL_CALL_COUNTER = Counter("tool_calls_total", "...", ["tool_name", "category", "status"])
-    TOOL_CALL_DURATION = Histogram("tool_call_duration_seconds", "...", ["tool_name", "category"])
-    TOOL_CALL_ACTIVE = Gauge("tool_call_active", "...", ["tool_name"])
-    TOOL_CALL_RETRIES = Counter("tool_call_retries_total", "...", ["tool_name"])
-    TOOL_CALL_INPUT_BYTES = Histogram("tool_call_input_bytes", "...", ["tool_name"])
-    TOOL_CALL_OUTPUT_BYTES = Histogram("tool_call_output_bytes", "...", ["tool_name"])
-    
-    @contextmanager
-    def measure(self, tool_name: str, category: str): ...
+  """Prometheus metrics for tool calls.
+  
+  Metrics emitted:
+  - tool_calls_total{tool_name, category, status}          # Counter
+  - tool_call_duration_seconds{tool_name, category}        # Histogram
+  - tool_call_active{tool_name}                            # Gauge
+  - tool_call_retries_total{tool_name}                     # Counter
+  - tool_call_input_bytes{tool_name}                       # Histogram
+  - tool_call_output_bytes{tool_name}                      # Histogram
+  """
+  
+  TOOL_CALL_COUNTER = Counter ("tool_calls_total", "...", ["tool_name", "category", "status"])
+  TOOL_CALL_DURATION = Histogram ("tool_call_duration_seconds", "...", ["tool_name", "category"])
+  TOOL_CALL_ACTIVE = Gauge ("tool_call_active", "...", ["tool_name"])
+  TOOL_CALL_RETRIES = Counter ("tool_call_retries_total", "...", ["tool_name"])
+  TOOL_CALL_INPUT_BYTES = Histogram ("tool_call_input_bytes", "...", ["tool_name"])
+  TOOL_CALL_OUTPUT_BYTES = Histogram ("tool_call_output_bytes", "...", ["tool_name"])
+  
+  @contextmanager
+  def measure (self, tool_name: str, category: str): ...
 ```
 
 #### 2.3.9 `audit.py` — Аудиторское логирование
 
 ```python
 class ToolAuditLogger:
-    """Structured audit logging for tool calls.
-    
-    Log format (JSON):
-    {
-        "timestamp": "2026-07-05T12:00:00Z",
-        "event": "tool_call",
-        "tool_name": "search_documents",
-        "tool_category": "search",
-        "tool_version": "1.0.0",
-        "user_id": "user@corp.com",
-        "user_role": "expert",
-        "request_id": "req-abc123",
-        "tool_call_id": "call-xyz789",
-        "params_hash": "sha256:abc...",
-        "result_hash": "sha256:def...",
-        "duration_ms": 150,
-        "status": "success" | "error" | "timeout",
-        "error_type": "ToolTimeoutError" | null,
-        "retry_count": 0,
-        "input_bytes": 42,
-        "output_bytes": 1024
-    }
-    
-    Note: params_hash and result_hash use SHA-256 for verifiability
-    without storing sensitive parameter values directly.
-    """
+  """Structured audit logging for tool calls.
+  
+  Log format (JSON):
+  {
+      "timestamp": "2026-07-05T12:00:00Z",
+      "event": "tool_call",
+      "tool_name": "search_documents",
+      "tool_category": "search",
+      "tool_version": "1.0.0",
+      "user_id": "user@corp.com",
+      "user_role": "expert",
+      "request_id": "req-abc123",
+      "tool_call_id": "call-xyz789",
+      "params_hash": "sha256:abc...",
+      "result_hash": "sha256:def...",
+      "duration_ms": 150,
+      "status": "success" | "error" | "timeout",
+      "error_type": "ToolTimeoutError" | null,
+      "retry_count": 0,
+      "input_bytes": 42,
+      "output_bytes": 1024
+  }
+  
+  Note: params_hash and result_hash use SHA-256 for verifiability
+  without storing sensitive parameter values directly.
+  """
 ```
 
 ---
@@ -727,76 +834,73 @@ class ToolAuditLogger:
 
 ```python
 class EnhancedToolRegistry:
-    """Enhanced tool registry with multi-provider support."""
-    
-    def register(self, tool: ToolDefinition) -> None:
-        """Register a tool definition."""
-    
-    def unregister(self, name: str) -> bool:
-        """Unregister a tool."""
-    
-    def get_tool(self, name: str) -> ToolDefinition | None:
-        """Get a tool by name."""
-    
-    def list_tools(
-        self,
-        category: str | None = None,
-        tags: list[str] | None = None,
-        visibility_filter: str | None = None,  # user role
-        provider: str | None = None,
-    ) -> list[ToolDefinition]:
-        """Filter tools by criteria."""
-    
-    def discover(self, provider: ToolProvider) -> list[ToolDefinition]:
-        """Discover tools from a provider and register them."""
-    
-    def reload_provider(self, provider_name: str) -> list[ToolDefinition]:
-        """Reload tools from a specific provider (hot-reload)."""
-    
-    def get_tools_for_llm(
-        self, provider_type: str = "openai", user_role: str | None = None
-    ) -> list[dict]:
-        """Get tools formatted for LLM provider."""
-    
-    def execute(
-        self, name: str, params: dict, context: ToolContext | None = None
-    ) -> ToolResult:
-        """Execute a tool synchronously (backward compat)."""
-    
-    async def execute_async(
-        self, name: str, params: dict, context: ToolContext | None = None
-    ) -> ToolResult:
-        """Execute a tool asynchronously."""
-    
-    def validate_tool(self, tool: ToolDefinition) -> list[str]:
-        """Validate tool definition, returns list of issues."""
-    
-    def get_dependency_graph(self) -> dict[str, list[str]]:
-        """Return the tool dependency DAG."""
+  """Enhanced tool registry with multi-provider support."""
+  
+  def register (self, tool: ToolDefinition) -> None:
+    """Register a tool definition."""
+  
+  def unregister (self, name: str) -> bool:
+    """Unregister a tool."""
+  
+  def get_tool (self, name: str) -> ToolDefinition | None:
+    """Get a tool by name."""
+  
+  def list_tools (
+      self, category: str | None = None, tags: list [str] | None = None, visibility_filter: str | None = None,
+      # user role
+      provider: str | None = None, ) -> list [ToolDefinition]:
+    """Filter tools by criteria."""
+  
+  def discover (self, provider: ToolProvider) -> list [ToolDefinition]:
+    """Discover tools from a provider and register them."""
+  
+  def reload_provider (self, provider_name: str) -> list [ToolDefinition]:
+    """Reload tools from a specific provider (hot-reload)."""
+  
+  def get_tools_for_llm (
+      self, provider_type: str = "openai", user_role: str | None = None
+  ) -> list [dict]:
+    """Get tools formatted for LLM provider."""
+  
+  def execute (
+      self, name: str, params: dict, context: ToolContext | None = None
+  ) -> ToolResult:
+    """Execute a tool synchronously (backward compat)."""
+  
+  async def execute_async (
+      self, name: str, params: dict, context: ToolContext | None = None
+  ) -> ToolResult:
+    """Execute a tool asynchronously."""
+  
+  def validate_tool (self, tool: ToolDefinition) -> list [str]:
+    """Validate tool definition, returns list of issues."""
+  
+  def get_dependency_graph (self) -> dict [str, list [str]]:
+    """Return the tool dependency DAG."""
 ```
 
 ### 3.2 Абстрактный интерфейс `ToolProvider`
 
 ```python
-class ToolProvider(ABC):
-    """Abstract base for tool providers."""
-    
-    @abstractmethod
-    async def discover(self) -> list[ToolDefinition]:
-        """Discover and return tool definitions."""
-    
-    @property
-    @abstractmethod
-    def provider_name(self) -> str:
-        """Unique provider identifier."""
-    
-    async def validate(self) -> list[str]:
-        """Validate all tools from this provider. Returns issues."""
-        return []
-    
-    async def reload(self) -> list[ToolDefinition]:
-        """Reload (hot-reload) tools."""
-        return await self.discover()
+class ToolProvider (ABC):
+  """Abstract base for tool providers."""
+  
+  @abstractmethod
+  async def discover (self) -> list [ToolDefinition]:
+    """Discover and return tool definitions."""
+  
+  @property
+  @abstractmethod
+  def provider_name (self) -> str:
+    """Unique provider identifier."""
+  
+  async def validate (self) -> list [str]:
+    """Validate all tools from this provider. Returns issues."""
+    return []
+  
+  async def reload (self) -> list [ToolDefinition]:
+    """Reload (hot-reload) tools."""
+    return await self.discover ()
 ```
 
 **Конкретные провайдеры:**
@@ -823,15 +927,27 @@ class ToolProvider(ABC):
       "name": "search_documents",
       "description": "Search indexed documents",
       "category": "search",
-      "tags": ["search", "internal"],
+      "tags": [
+        "search",
+        "internal"
+      ],
       "version": "1.0.0",
       "parameters": {
         "type": "object",
         "properties": {
-          "query": {"type": "string", "description": "Search query"},
-          "top_k": {"type": "integer", "description": "Max results", "default": 5}
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "top_k": {
+            "type": "integer",
+            "description": "Max results",
+            "default": 5
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       },
       "provider": "sdk"
     }
@@ -848,11 +964,16 @@ class ToolProvider(ABC):
   "name": "search_documents",
   "description": "Search indexed documents using hybrid search",
   "category": "search",
-  "tags": ["search", "internal"],
+  "tags": [
+    "search",
+    "internal"
+  ],
   "version": "1.0.0",
   "visibility": "public",
   "timeout_seconds": 30,
-  "parameters": { ... },
+  "parameters": {
+    ...
+  },
   "provider": "sdk",
   "depends_on": []
 }
@@ -1073,11 +1194,11 @@ LangGraph: узел call_tools
 """DEPRECATED: Import from proxy.app.tools instead."""
 import warnings
 from proxy.app.tools import (
-    ToolDefinition, ToolResult, ToolRegistry, ToolError,
-    execute_tool, handle_function_call, format_tools_for_llm,
-    get_tool_registry,
+  ToolDefinition, ToolResult, ToolRegistry, ToolError, execute_tool, handle_function_call, format_tools_for_llm,
+  get_tool_registry,
 )
-warnings.warn("proxy.app.tools is deprecated, use proxy.app.tools package", DeprecationWarning)
+
+warnings.warn ("proxy.app.tools is deprecated, use proxy.app.tools package", DeprecationWarning)
 ```
 
 Существующие импорты продолжают работать. Тесты проходят. Без поломок.
@@ -1379,14 +1500,9 @@ tests/proxy/tools/
 ```python
 from proxy.app.tools import ToolRegistry, ToolDefinition, get_tool_registry
 
-registry = get_tool_registry()
-registry.register(ToolDefinition(
-    name="my_tool",
-    description="My tool",
-    parameters_schema={"type": "object", "properties": {...}},
-    handler=my_handler,
-    category="custom",
-))
+registry = get_tool_registry ()
+registry.register (ToolDefinition (name = "my_tool", description = "My tool",
+    parameters_schema = {"type": "object", "properties": {...}}, handler = my_handler, category = "custom", ))
 ```
 
 **После (рекомендуемое):**
@@ -1394,10 +1510,11 @@ registry.register(ToolDefinition(
 ```python
 from proxy.app.tools.sdk import tool
 
-@tool(name="my_tool", description="My tool", category="custom")
-def my_tool(param1: str, param2: int = 5) -> str:
-    """Tool description."""
-    ...
+
+@tool (name = "my_tool", description = "My tool", category = "custom")
+def my_tool (param1: str, param2: int = 5) -> str:
+  """Tool description."""
+  ...
 ```
 
 **После (работает, предупреждение об устаревании):**
@@ -1446,13 +1563,8 @@ from proxy.app.tools.definition import ToolDefinition  # canonical dataclass
 ```python
 # Complete mapping table
 TYPE_MAP = {
-    str: {"type": "string"},
-    int: {"type": "integer"},
-    float: {"type": "number"},
-    bool: {"type": "boolean"},
-    type(None): {"type": "null"},
-    list: {"type": "array"},
-    dict: {"type": "object"},
+    str: {"type": "string"}, int: {"type": "integer"}, float: {"type": "number"}, bool: {"type": "boolean"},
+    type (None): {"type": "null"}, list: {"type": "array"}, dict: {"type": "object"},
 }
 
 # Special handling:
@@ -1470,15 +1582,14 @@ TYPE_MAP = {
 ```python
 @dataclass
 class RetryPolicy:
-    max_retries: int = 3
-    backoff: str = "exponential"       # "fixed" | "exponential"
-    initial_delay_seconds: float = 1.0
-    max_delay_seconds: float = 60.0
-    retryable_errors: list[str] = field(default_factory=lambda: [
-        "ToolExecutionError",
-        "ToolTimeoutError",
-    ])
-    jitter: bool = True                 # Random jitter to prevent thundering herd
+  max_retries: int = 3
+  backoff: str = "exponential"  # "fixed" | "exponential"
+  initial_delay_seconds: float = 1.0
+  max_delay_seconds: float = 60.0
+  retryable_errors: list [str] = field (default_factory = lambda: [
+      "ToolExecutionError", "ToolTimeoutError",
+  ])
+  jitter: bool = True  # Random jitter to prevent thundering herd
 ```
 
 ## Приложение C: CompositionPatterns
@@ -1486,30 +1597,34 @@ class RetryPolicy:
 ```python
 @dataclass
 class ChainPattern:
-    """Chain: A → B → C. Each step receives previous step's output."""
-    steps: list[str]
-    input_mapper: Callable[[ToolResult], dict] | None  # Transform output→input
+  """Chain: A → B → C. Each step receives previous step's output."""
+  steps: list [str]
+  input_mapper: Callable [[ToolResult], dict] | None  # Transform output→input
+
 
 @dataclass
 class FanOutPattern:
-    """Fan-out: Run same tool with N different inputs, merge results."""
-    tool_name: str
-    inputs: list[dict]
-    merge_strategy: str = "concat"  # "concat" | "first" | "best_score"
+  """Fan-out: Run same tool with N different inputs, merge results."""
+  tool_name: str
+  inputs: list [dict]
+  merge_strategy: str = "concat"  # "concat" | "first" | "best_score"
+
 
 @dataclass
 class FanInPattern:
-    """Fan-in: Run N different tools with same input, merge results."""
-    tool_names: list[str]
-    input_params: dict
-    merge_strategy: str = "concat"
+  """Fan-in: Run N different tools with same input, merge results."""
+  tool_names: list [str]
+  input_params: dict
+  merge_strategy: str = "concat"
+
 
 @dataclass
 class ConditionalPattern:
-    """Conditional: If condition → tool_a else tool_b."""
-    condition: Callable[[ToolContext], bool]
-    true_tool: str
-    false_tool: str
+  """Conditional: If condition → tool_a else tool_b."""
+  condition: Callable [[ToolContext], bool]
+  true_tool: str
+  false_tool: str
+
 
 CompositionPattern = ChainPattern | FanOutPattern | FanInPattern | ConditionalPattern
 ```

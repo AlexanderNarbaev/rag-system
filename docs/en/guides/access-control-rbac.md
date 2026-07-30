@@ -43,15 +43,8 @@ Default mode when `AUTH_ENABLED=true` and no external IdP is configured. The pro
 ```python
 from proxy.app.auth import create_token
 
-token = create_token(
-    user_id="usr-alice-001",
-    username="alice",
-    roles=["user"],
-    groups=["engineering"],
-    access_level="internal",
-    namespace="engineering",
-)
-# Returns: "eyJhbGciOiJIUzI1NiIs..."
+token = create_token (user_id = "usr-alice-001", username = "alice", roles = ["user"], groups = ["engineering"],
+    access_level = "internal", namespace = "engineering", )  # Returns: "eyJhbGciOiJIUzI1NiIs..."
 ```
 
 **Token payload structure:**
@@ -60,8 +53,12 @@ token = create_token(
 {
   "sub": "usr-alice-001",
   "preferred_username": "alice",
-  "roles": ["user"],
-  "groups": ["engineering"],
+  "roles": [
+    "user"
+  ],
+  "groups": [
+    "engineering"
+  ],
   "access_level": "internal",
   "namespace": "engineering",
   "iat": 1719000000,
@@ -95,8 +92,16 @@ Keycloak's JWKS endpoint.
 {
   "sub": "f47ac10b-58cc-4372-e567-0e02b2c3d479",
   "preferred_username": "alice",
-  "realm_access": {"roles": ["user", "expert"]},
-  "groups": ["engineering", "platform"],
+  "realm_access": {
+    "roles": [
+      "user",
+      "expert"
+    ]
+  },
+  "groups": [
+    "engineering",
+    "platform"
+  ],
   "access_level": "internal",
   "namespace": "engineering"
 }
@@ -127,8 +132,7 @@ API keys follow the format `rag_<random_base64>`. Generated via:
 ```python
 from proxy.app.security import SecretsManager
 
-api_key = SecretsManager.generate_api_key()
-# Returns: "rag_Xk7mPq2VwN9aBtRcLfJh3YsDgEoKpMnQ"
+api_key = SecretsManager.generate_api_key ()  # Returns: "rag_Xk7mPq2VwN9aBtRcLfJh3YsDgEoKpMnQ"
 ```
 
 API keys are included in the `Authorization: Bearer` header. Rate-limiting middleware
@@ -267,8 +271,8 @@ For internal tokens: `roles`. If a user has multiple roles, the **highest** wins
 ```python
 from proxy.app.rbac import get_user_role, Role
 
-user = UserContext(user_id="1", username="alice", roles=["user", "admin"])
-assert get_user_role(user) == Role.ADMIN  # highest wins
+user = UserContext (user_id = "1", username = "alice", roles = ["user", "admin"])
+assert get_user_role (user) == Role.ADMIN  # highest wins
 ```
 
 ### 3.2 Permission Matrix
@@ -295,24 +299,25 @@ assert get_user_role(user) == Role.ADMIN  # highest wins
 from fastapi import Depends
 from proxy.app.rbac import Role, require_role
 
+
 # Admin-only endpoint
-@app.post("/v1/admin/warmup")
-async def warmup(user: UserContext = Depends(require_role(Role.ADMIN))):
-    ...
+@app.post ("/v1/admin/warmup")
+async def warmup (user: UserContext = Depends (require_role (Role.ADMIN))):
+  ...
+
 
 # Expert+ endpoint
-@app.post("/v1/feedback")
-async def submit_feedback(
-    user: UserContext = Depends(require_role(Role.EXPERT)),
-):
-    ...
+@app.post ("/v1/feedback")
+async def submit_feedback (
+    user: UserContext = Depends (require_role (Role.EXPERT)), ):
+  ...
+
 
 # Authenticated user endpoint
-@app.post("/v1/chat/completions")
-async def chat_completions(
-    user: UserContext = Depends(get_auth_context),
-):
-    ...
+@app.post ("/v1/chat/completions")
+async def chat_completions (
+    user: UserContext = Depends (get_auth_context), ):
+  ...
 ```
 
 When RBAC check fails, the response is:
@@ -358,8 +363,13 @@ Every document and chunk in Qdrant carries an `access_level` field:
   "chunk_id": "doc-123-chunk-5",
   "text": "...",
   "access_level": "confidential",
-  "allowed_groups": ["engineering", "security"],
-  "allowed_users": ["alice"],
+  "allowed_groups": [
+    "engineering",
+    "security"
+  ],
+  "allowed_users": [
+    "alice"
+  ],
   "namespace": "engineering",
   "source": "confluence.engineering-space"
 }
@@ -371,27 +381,25 @@ The access filter is built per-request and pushed down to Qdrant as a payload fi
 This means restricted documents never leave the database:
 
 ```python
-def build_access_filter(auth: UserContext) -> Filter:
-    """Admins see everything. Others get filtered by access_level + groups/users."""
-    if auth.is_admin:
-        return None  # no filter → see everything
-
-    return Filter(should=[
-        # Public + Internal: always visible
-        Filter(must=[
-            FieldCondition(key="access_level", match=MatchAny(any=["public", "internal"]))
-        ]),
-        # Confidential: visible if user is in allowed_groups
-        Filter(must=[
-            FieldCondition(key="access_level", match=MatchValue(value="confidential")),
-            FieldCondition(key="allowed_groups", match=MatchAny(any=auth.groups)),
-        ]),
-        # Restricted: visible if user is in allowed_users
-        Filter(must=[
-            FieldCondition(key="access_level", match=MatchValue(value="restricted")),
-            FieldCondition(key="allowed_users", match=MatchValue(value=auth.username)),
-        ]),
-    ])
+def build_access_filter (auth: UserContext) -> Filter:
+  """Admins see everything. Others get filtered by access_level + groups/users."""
+  if auth.is_admin:
+    return None  # no filter → see everything
+  
+  return Filter (should = [
+      # Public + Internal: always visible
+      Filter (must = [
+          FieldCondition (key = "access_level", match = MatchAny (any = ["public", "internal"]))
+      ]), # Confidential: visible if user is in allowed_groups
+      Filter (must = [
+          FieldCondition (key = "access_level", match = MatchValue (value = "confidential")),
+          FieldCondition (key = "allowed_groups", match = MatchAny (any = auth.groups)),
+      ]), # Restricted: visible if user is in allowed_users
+      Filter (must = [
+          FieldCondition (key = "access_level", match = MatchValue (value = "restricted")),
+          FieldCondition (key = "allowed_users", match = MatchValue (value = auth.username)),
+      ]),
+  ])
 ```
 
 ### 4.4 Namespace Isolation
@@ -404,7 +412,7 @@ namespace. This is enforced via an additional Qdrant filter:
 #   1. Explicit namespace from JWT claim
 #   2. First group if namespace is empty
 #   3. Empty string (global) if neither is set
-FieldCondition(key="namespace", match=MatchValue(value=auth.effective_namespace))
+FieldCondition (key = "namespace", match = MatchValue (value = auth.effective_namespace))
 ```
 
 This provides multi-tenant isolation at the vector DB level.
@@ -416,8 +424,8 @@ assembled context before they reach the LLM:
 
 ```python
 # In orchestrator.py:
-visible_chunks = trim_restricted_context(retrieved_chunks, auth)
-context = build_context(visible_chunks)
+visible_chunks = trim_restricted_context (retrieved_chunks, auth)
+context = build_context (visible_chunks)
 ```
 
 ---
@@ -609,11 +617,8 @@ The sanitizer strips SQL/DQL keywords from queries:
 
 ```python
 # Blocked patterns (case-insensitive):
-_SQL_KEYWORDS = re.compile(
-    r"\b(SELECT|INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|EXEC|EXECUTE"
-    r"|UNION|MERGE|REPLACE|GRANT|REVOKE|DECLARE|FETCH|OPEN)\b",
-    re.IGNORECASE,
-)
+_SQL_KEYWORDS = re.compile (r"\b(SELECT|INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|EXEC|EXECUTE"
+                            r"|UNION|MERGE|REPLACE|GRANT|REVOKE|DECLARE|FETCH|OPEN)\b", re.IGNORECASE, )
 
 # Also blocked:
 # - SQL comments (--)
@@ -633,24 +638,24 @@ Output: "  *   users    users"
 
 ```python
 # Stripped from all input:
-_HTML_TAG_RE        = re.compile(r"<[^>]*>")           # All HTML tags
-_SCRIPT_TAG_RE      = re.compile(r"<script[\s>].*?</script>")  # Script blocks
-_IFRAME_RE          = re.compile(r"<iframe[\s>].*?</iframe>")  # Iframe blocks
-_JS_PROTOCOL_RE     = re.compile(r"javascript\s*:", re.IGNORECASE)
-_VB_PROTOCOL_RE     = re.compile(r"vbscript\s*:", re.IGNORECASE)
-_DATA_PROTOCOL_RE   = re.compile(r"data\s*:.*?base64", re.IGNORECASE)
-_EVENT_HANDLER_RE   = re.compile(r"\bon(click|load|error|...)\s*=")
-_CSS_EXPRESSION_RE  = re.compile(r"expression\s*\(", re.IGNORECASE)
-_ENTITY_ENCODED_RE  = re.compile(r"&#x?[0-9a-f]+;", re.IGNORECASE)
-_CONTROL_CHARS_RE   = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_HTML_TAG_RE = re.compile (r"<[^>]*>")  # All HTML tags
+_SCRIPT_TAG_RE = re.compile (r"<script[\s>].*?</script>")  # Script blocks
+_IFRAME_RE = re.compile (r"<iframe[\s>].*?</iframe>")  # Iframe blocks
+_JS_PROTOCOL_RE = re.compile (r"javascript\s*:", re.IGNORECASE)
+_VB_PROTOCOL_RE = re.compile (r"vbscript\s*:", re.IGNORECASE)
+_DATA_PROTOCOL_RE = re.compile (r"data\s*:.*?base64", re.IGNORECASE)
+_EVENT_HANDLER_RE = re.compile (r"\bon(click|load|error|...)\s*=")
+_CSS_EXPRESSION_RE = re.compile (r"expression\s*\(", re.IGNORECASE)
+_ENTITY_ENCODED_RE = re.compile (r"&#x?[0-9a-f]+;", re.IGNORECASE)
+_CONTROL_CHARS_RE = re.compile (r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 ```
 
 ### 7.4 Path Traversal Prevention
 
 ```python
-def validate_path_traversal(path: str) -> bool:
-    dangerous = ["..", "~", "\x00"]
-    return not any(d in path for d in dangerous)
+def validate_path_traversal (path: str) -> bool:
+  dangerous = ["..", "~", "\x00"]
+  return not any (d in path for d in dangerous)
 ```
 
 ### 7.5 Log Sanitization
@@ -1037,7 +1042,10 @@ head -c 32 /dev/urandom | base64 | tr -d '='
 **Decoded header:**
 
 ```json
-{"alg": "HS256", "typ": "JWT"}
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
 ```
 
 **Decoded payload:**
@@ -1046,8 +1054,13 @@ head -c 32 /dev/urandom | base64 | tr -d '='
 {
   "sub": "usr-alice-001",
   "preferred_username": "alice",
-  "roles": ["user"],
-  "groups": ["engineering", "platform"],
+  "roles": [
+    "user"
+  ],
+  "groups": [
+    "engineering",
+    "platform"
+  ],
   "access_level": "internal",
   "namespace": "engineering",
   "iat": 1719000000,

@@ -99,7 +99,9 @@ JWT_EXPIRATION_HOURS=24
   "top_p": "number (0-1, по умолчанию: 0.95)",
   "max_tokens": "integer (по умолчанию: 4096)",
   "stream": "boolean (по умолчанию: false)",
-  "stop": ["string (опционально)"],
+  "stop": [
+    "string (опционально)"
+  ],
   "presence_penalty": "number (-2.0 до 2.0, опционально)",
   "frequency_penalty": "number (-2.0 до 2.0, опционально)",
   "tools": [
@@ -241,11 +243,30 @@ JWT_EXPIRATION_HOURS=24
 {
   "model": "your-model-name",
   "messages": [
-    {"role": "user", "content": "Как развернуть прокси?"},
-    {"role": "assistant", "content": null, "tool_calls": [
-      {"id": "call_abc123", "type": "function", "function": {"name": "search_knowledge_base", "arguments": "{\"query\":\"развёртывание\"}"}}
-    ]},
-    {"role": "tool", "tool_call_id": "call_abc123", "name": "search_knowledge_base", "content": "Прокси разворачивается через docker-compose up -d из директории proxy/..."}
+    {
+      "role": "user",
+      "content": "Как развернуть прокси?"
+    },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_abc123",
+          "type": "function",
+          "function": {
+            "name": "search_knowledge_base",
+            "arguments": "{\"query\":\"развёртывание\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_abc123",
+      "name": "search_knowledge_base",
+      "content": "Прокси разворачивается через docker-compose up -d из директории proxy/..."
+    }
   ]
 }
 ```
@@ -483,8 +504,12 @@ Prometheus-метрики в формате OpenMetrics.
   "expires_in": "integer (секунд)",
   "user_id": "string",
   "username": "string",
-  "roles": ["string"],
-  "groups": ["string"]
+  "roles": [
+    "string"
+  ],
+  "groups": [
+    "string"
+  ]
 }
 ```
 
@@ -508,8 +533,12 @@ Prometheus-метрики в формате OpenMetrics.
 {
   "user_id": "string",
   "username": "string",
-  "roles": ["string"],
-  "groups": ["string"],
+  "roles": [
+    "string"
+  ],
+  "groups": [
+    "string"
+  ],
   "access_level": "string (internal | external | restricted)",
   "is_admin": "boolean",
   "is_authenticated": "boolean"
@@ -878,45 +907,34 @@ HTTP-заголовки в каждом ответе (при активном о
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://localhost:8080/v1",
-    api_key="not-needed"  # заглушка, если аутентификация отключена
+client = OpenAI (base_url = "http://localhost:8080/v1", api_key = "not-needed"
+    # заглушка, если аутентификация отключена
 )
 
 # Без потоковой передачи с RAG-расширениями
-response = client.chat.completions.create(
-    model="rag-proxy",
-    messages=[
-        {"role": "system", "content": "Ты — ассистент технической документации."},
-        {"role": "user", "content": "Какова структура проекта и как работает ETL-пайплайн?"}
-    ],
-    temperature=0.2,
-    max_tokens=4096,
-    extra_body={
-        "rag_version": "2026-01-15",
-        "rag_force_refresh": False
-    }
-)
+response = client.chat.completions.create (model = "rag-proxy", messages = [
+    {"role": "system", "content": "Ты — ассистент технической документации."},
+    {"role": "user", "content": "Какова структура проекта и как работает ETL-пайплайн?"}
+], temperature = 0.2, max_tokens = 4096, extra_body = {
+    "rag_version": "2026-01-15", "rag_force_refresh": False
+})
 
-print(f"Ответ: {response.choices[0].message.content}")
-print(f"Уверенность: {response.rag_confidence}")
-print(f"ID обратной связи: {response.rag_feedback_id}")
+print (f"Ответ: {response.choices [0].message.content}")
+print (f"Уверенность: {response.rag_confidence}")
+print (f"ID обратной связи: {response.rag_feedback_id}")
 
 # Потоковая передача
-stream = client.chat.completions.create(
-    model="your-model-name",
-    messages=[{"role": "user", "content": "Опиши процесс развёртывания."}],
-    stream=True
-)
+stream = client.chat.completions.create (model = "your-model-name",
+    messages = [{"role": "user", "content": "Опиши процесс развёртывания."}], stream = True)
 for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
+  if chunk.choices [0].delta.content:
+    print (chunk.choices [0].delta.content, end = "")
 
 # Отправка обратной связи
 import requests
-requests.post("http://localhost:8080/v1/feedback", json={
-    "feedback_id": response.rag_feedback_id,
-    "rating": "positive",
+
+requests.post ("http://localhost:8080/v1/feedback", json = {
+    "feedback_id": response.rag_feedback_id, "rating": "positive",
     "comment": "Точный ответ с хорошими ссылками на источники."
 })
 ```

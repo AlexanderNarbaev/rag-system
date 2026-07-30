@@ -444,7 +444,9 @@ Qdrant использует INT8 квантизацию для векторов,
 2. Потребление памяти ≤ 50% от неквантизированной
 3. MRR drop ≤ 2%
 
-**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR168QdrantQuantization`, `proxy/app/shared/config.py::QDRANT_QUANTIZATION_ENABLED`, `proxy/app/core/kb_manager.py::KnowledgeBaseManager._ensure_qdrant_collection` lines 563-570)
+**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR168QdrantQuantization`,
+`proxy/app/shared/config.py::QDRANT_QUANTIZATION_ENABLED`,
+`proxy/app/core/kb_manager.py::KnowledgeBaseManager._ensure_qdrant_collection` lines 563-570)
 **Приоритет:** HIGH
 **Связь:** NFR-P07, NFR-P13
 
@@ -462,7 +464,9 @@ HTTP используется как fallback.
 2. Retrieval latency p50 < 130ms
 3. Fallback на HTTP при недоступности gRPC
 
-**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR169QdrantGRPC`, `proxy/app/shared/config.py::QDRANT_GRPC_ENABLED`, `proxy/app/core/retrieval.py::initialize_retrieval` lines 241-244, `proxy/app/core/enricher.py` lines 91-94)
+**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR169QdrantGRPC`,
+`proxy/app/shared/config.py::QDRANT_GRPC_ENABLED`, `proxy/app/core/retrieval.py::initialize_retrieval` lines 241-244,
+`proxy/app/core/enricher.py` lines 91-94)
 **Приоритет:** HIGH
 **Связь:** NFR-P02
 
@@ -480,7 +484,9 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 2. Gauge `rag_vllm_prefix_cache_hit_ratio` ≥ 40%
 3. TTFT снижается на ≥ 50%
 
-**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR170VLLMPrefixCache`, `proxy/app/shared/metrics.py::rag_vllm_prefix_cache_hit_ratio` line 316, `deploy/docker/docker-compose.prod.yml` vLLM service line 221 `--enable-prefix-caching`)
+**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR170VLLMPrefixCache`,
+`proxy/app/shared/metrics.py::rag_vllm_prefix_cache_hit_ratio` line 316, `deploy/docker/docker-compose.prod.yml` vLLM
+service line 221 `--enable-prefix-caching`)
 **Приоритет:** HIGH
 **Связь:** NFR-P08
 
@@ -501,7 +507,9 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 2. Recall@10 ≥ 0.95
 3. Latency в допустимых пределах
 
-**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR171HNSWTuning`, `proxy/app/shared/config.py::QDRANT_HNSW_M`/`QDRANT_HNSW_EF_CONSTRUCT`, `proxy/app/core/kb_manager.py::KnowledgeBaseManager._ensure_qdrant_collection` lines 557-560)
+**Статус:** ✅ Подтверждено (`tests/performance/test_qdrant_config.py::TestFR171HNSWTuning`,
+`proxy/app/shared/config.py::QDRANT_HNSW_M`/`QDRANT_HNSW_EF_CONSTRUCT`,
+`proxy/app/core/kb_manager.py::KnowledgeBaseManager._ensure_qdrant_collection` lines 557-560)
 **Приоритет:** HIGH
 **Связь:** NFR-P13
 
@@ -542,7 +550,8 @@ vLLM кэширует prefix (system prompt) для снижения TTFT на 5
 2. Каждый чанк содержит полную функцию (не обрезанную)
 3. Контекст (имя файла, класса) добавляется в метаданные
 
-**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR49CodeChunking`, `tests/etl/test_code_chunker.py`)
+**Статус:** ✅ Подтверждено (`tests/etl/test_etl_requirements.py::TestFR49CodeChunking`,
+`tests/etl/test_code_chunker.py`)
 **Приоритет:** HIGH
 **Связь:** roadmap Phase 5.2
 

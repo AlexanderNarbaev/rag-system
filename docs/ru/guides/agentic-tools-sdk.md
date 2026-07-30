@@ -26,11 +26,12 @@ SDK агентных инструментов позволяет разрабо�
 ```python
 from proxy.app.tools.sdk import tool
 
-@tool(category="search", tags=["fast"])
-async def search_confluence(query: str, max_results: int = 5) -> str:
-    """Search Confluence pages by CQL query."""
-    # ... implementation
-    return f"Found {max_results} results for '{query}'"
+
+@tool (category = "search", tags = ["fast"])
+async def search_confluence (query: str, max_results: int = 5) -> str:
+  """Search Confluence pages by CQL query."""
+  # ... implementation
+  return f"Found {max_results} results for '{query}'"
 ```
 
 Декоратор автоматически:
@@ -47,20 +48,14 @@ async def search_confluence(query: str, max_results: int = 5) -> str:
 from proxy.app.tools.sdk import tool
 from proxy.app.tools.definition import ToolVisibility, RetryPolicy
 
-@tool(
-    name="jira_search",
-    description="Search Jira issues by JQL query",
-    category="live_source",
-    tags=["jira", "tickets"],
-    version="1.0.0",
-    timeout=15.0,
-    retry_policy=RetryPolicy(max_retries=3, backoff_s=2.0),
-    visibility=ToolVisibility.USER,
-    depends_on=["jira_auth"],
-)
-async def search_jira(jql: str, max_results: int = 10) -> str:
-    """Search Jira."""
-    ...
+
+@tool (name = "jira_search", description = "Search Jira issues by JQL query", category = "live_source",
+    tags = ["jira", "tickets"], version = "1.0.0", timeout = 15.0,
+    retry_policy = RetryPolicy (max_retries = 3, backoff_s = 2.0), visibility = ToolVisibility.USER,
+    depends_on = ["jira_auth"], )
+async def search_jira (jql: str, max_results: int = 10) -> str:
+  """Search Jira."""
+  ...
 ```
 
 | Параметр       | Тип              | По умолчанию        | Описание                                             |
@@ -84,14 +79,15 @@ async def search_jira(jql: str, max_results: int = 10) -> str:
 ```python
 from proxy.app.tools.sdk import tool, ToolContext
 
-@tool(category="search")
-async def stateful_search(ctx: ToolContext, query: str) -> str:
-    """Search with state."""
-    user_id = ctx.user_id
-    previous = ctx.get_state("last_query")
-    ctx.set_state("last_query", query)
-    ctx.stream_partial("Searching...")
-    return f"User {user_id} searched: {query}"
+
+@tool (category = "search")
+async def stateful_search (ctx: ToolContext, query: str) -> str:
+  """Search with state."""
+  user_id = ctx.user_id
+  previous = ctx.get_state ("last_query")
+  ctx.set_state ("last_query", query)
+  ctx.stream_partial ("Searching...")
+  return f"User {user_id} searched: {query}"
 ```
 
 Поля `ToolContext`:
@@ -128,12 +124,11 @@ async def stateful_search(ctx: ToolContext, query: str) -> str:
 ```python
 from typing import Annotated
 
-@tool(category="search")
-async def search(
-    query: Annotated[str, "The search query text"],
-    limit: Annotated[int, "Maximum number of results"] = 10,
-) -> str:
-    ...
+
+@tool (category = "search")
+async def search (
+    query: Annotated [str, "The search query text"], limit: Annotated [int, "Maximum number of results"] = 10, ) -> str:
+  ...
 ```
 
 ---
@@ -146,22 +141,15 @@ async def search(
 from proxy.app.tools.sdk import ToolBuilder
 from proxy.app.tools.definition import ToolVisibility
 
-tool = (
-    ToolBuilder("gitlab_search")
-    .with_description("Search GitLab merge requests")
-    .with_param("query", str, "Search query", required=True)
-    .with_param("project_id", int, "GitLab project ID", required=True)
-    .with_param("state", str, "MR state", required=False, default="opened",
-                enum=["opened", "closed", "merged"])
-    .with_param("labels", list, "Filter labels", required=False,
-                items_type=str)
-    .with_handler(handle_gitlab_search)
-    .with_category("live_source")
-    .with_tags(["gitlab", "merge-requests"])
-    .with_timeout(20.0)
-    .with_visibility(ToolVisibility.USER)
-    .build()
-)
+tool = (ToolBuilder ("gitlab_search").with_description ("Search GitLab merge requests").with_param ("query", str,
+                                                                                                    "Search query",
+                                                                                                    required = True).with_param (
+  "project_id", int, "GitLab project ID", required = True).with_param ("state", str, "MR state", required = False,
+                                                                       default = "opened", enum = [
+      "opened", "closed", "merged"
+  ]).with_param ("labels", list, "Filter labels", required = False, items_type = str).with_handler (
+  handle_gitlab_search).with_category ("live_source").with_tags (["gitlab", "merge-requests"]).with_timeout (
+  20.0).with_visibility (ToolVisibility.USER).build ())
 ```
 
 Методы `ToolBuilder` поддерживают цепочку вызовов и возвращают `self`:
@@ -191,8 +179,8 @@ tool = (
 from proxy.app.tools.sdk import _sdk_registered_tools
 
 # All @tool-decorated functions are available here
-for name, definition in _sdk_registered_tools.items():
-    print(f"Tool: {name} — {definition.description}")
+for name, definition in _sdk_registered_tools.items ():
+  print (f"Tool: {name} — {definition.description}")
 ```
 
 Инструменты, созданные через `ToolBuilder`, должны быть зарегистрированы вручную:
@@ -200,8 +188,8 @@ for name, definition in _sdk_registered_tools.items():
 ```python
 from proxy.app.tools.registry import EnhancedToolRegistry
 
-registry = EnhancedToolRegistry()
-registry.register(tool)
+registry = EnhancedToolRegistry ()
+registry.register (tool)
 ```
 
 ---
@@ -228,22 +216,17 @@ registry.register(tool)
 from proxy.app.tools.sdk import tool, ToolContext
 from proxy.app.tools.definition import ToolVisibility, RetryPolicy
 
-@tool(
-    category="live_source",
-    tags=["confluence", "live"],
-    visibility=ToolVisibility.USER,
-    retry_policy=RetryPolicy(max_retries=2, backoff_s=1.0),
-)
-async def confluence_page(ctx: ToolContext, page_id: str) -> str:
-    """Fetch a Confluence page by its page ID."""
-    import httpx
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://confluence.internal/rest/api/content/{page_id}",
-            params={"expand": "body.storage"},
-        )
-        resp.raise_for_status()
-        return resp.json()["body"]["storage"]["value"]
+
+@tool (category = "live_source", tags = ["confluence", "live"], visibility = ToolVisibility.USER,
+    retry_policy = RetryPolicy (max_retries = 2, backoff_s = 1.0), )
+async def confluence_page (ctx: ToolContext, page_id: str) -> str:
+  """Fetch a Confluence page by its page ID."""
+  import httpx
+  async with httpx.AsyncClient () as client:
+    resp = await client.get (f"https://confluence.internal/rest/api/content/{page_id}",
+        params = {"expand": "body.storage"}, )
+    resp.raise_for_status ()
+    return resp.json () ["body"] ["storage"] ["value"]
 ```
 
 ---

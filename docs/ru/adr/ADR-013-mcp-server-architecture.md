@@ -53,8 +53,13 @@ OpenCode/Claude Desktop → MCP Server (STDIO/HTTP) → RAG Proxy (8080)
   "mcp": {
     "rag-system": {
       "type": "local",
-      "command": ["python", "/path/to/mcp_server/server.py"],
-      "env": { "RAG_PROXY_URL": "http://localhost:8080" }
+      "command": [
+        "python",
+        "/path/to/mcp_server/server.py"
+      ],
+      "env": {
+        "RAG_PROXY_URL": "http://localhost:8080"
+      }
     }
   }
 }
@@ -67,8 +72,12 @@ OpenCode/Claude Desktop → MCP Server (STDIO/HTTP) → RAG Proxy (8080)
   "mcpServers": {
     "rag-system": {
       "command": "python",
-      "args": ["/path/to/mcp_server/server.py"],
-      "env": { "RAG_PROXY_URL": "http://localhost:8080" }
+      "args": [
+        "/path/to/mcp_server/server.py"
+      ],
+      "env": {
+        "RAG_PROXY_URL": "http://localhost:8080"
+      }
     }
   }
 }

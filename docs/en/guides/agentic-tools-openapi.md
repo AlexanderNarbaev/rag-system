@@ -22,25 +22,23 @@ Two discovery modes are supported:
 ```python
 from proxy.app.tools.openapi_discovery import OpenAPIDiscovery
 
-discovery = OpenAPIDiscovery()
+discovery = OpenAPIDiscovery ()
 
 # Auto-discover from a spec URL
-tools = await discovery.discover("https://api.internal/openapi.json")
+tools = await discovery.discover ("https://api.internal/openapi.json")
 
 # Auto-discover from a local file
-tools = await discovery.discover("/etc/rag/specs/confluence-v2.json")
+tools = await discovery.discover ("/etc/rag/specs/confluence-v2.json")
 
 # Filter by tag
-tools = await discovery.discover(
-    "https://api.internal/openapi.json",
-    tags=["search", "query"],
-)
+tools = await discovery.discover ("https://api.internal/openapi.json", tags = ["search", "query"], )
 
 # Register discovered tools
 from proxy.app.tools.registry import EnhancedToolRegistry
-registry = EnhancedToolRegistry()
+
+registry = EnhancedToolRegistry ()
 for tool in tools:
-    registry.register(tool)
+  registry.register (tool)
 ```
 
 ---
@@ -90,8 +88,8 @@ parameters:
 
 ```python
 # Generated ToolParams
-ToolParam(name="query", type="string", required=True, description="Search query text")
-ToolParam(name="limit", type="integer", required=False, default=10)
+ToolParam (name = "query", type = "string", required = True, description = "Search query text")
+ToolParam (name = "limit", type = "integer", required = False, default = 10)
 ```
 
 Parameter location (`in: query`, `in: path`, `in: header`) is reflected in the description but does not change the tool
@@ -106,15 +104,12 @@ For production use, integrate via the `OpenAPIProvider` class which implements `
 ```python
 from proxy.app.tools.openapi_discovery import OpenAPIProvider
 
-provider = OpenAPIProvider(
-    name="confluence_api",
-    spec_url="https://confluence.internal/rest/api/swagger.json",
-    refresh_interval_s=3600,   # Re-discover every hour
-    tags=["public"],
-)
+provider = OpenAPIProvider (name = "confluence_api", spec_url = "https://confluence.internal/rest/api/swagger.json",
+    refresh_interval_s = 3600,  # Re-discover every hour
+    tags = ["public"], )
 
 # Attach to the registry
-registry.add_provider(provider)
+registry.add_provider (provider)
 ```
 
 The provider automatically:
@@ -127,17 +122,15 @@ The provider automatically:
 ### Provider Configuration
 
 ```python
-OpenAPIProvider(
-    name="unique_provider_id",
-    spec_url="https://...",
-    spec_file=None,            # Alternative: local file path
-    refresh_interval_s=0,      # 0 = no periodic refresh
-    timeout_s=30,              # HTTP timeout for spec fetching
-    auth_header=None,          # "Bearer xxx" or "Basic xxx"
-    tags=None,                 # Filter endpoints by OpenAPI tag
-    mode=DiscoveryMode.AUTO,   # AUTO or LLM_DRIVEN
-    include_methods=["get", "post"],  # Restrict HTTP methods
-    visibility=ToolVisibility.USER,   # Default visibility for all tools
+OpenAPIProvider (name = "unique_provider_id", spec_url = "https://...", spec_file = None,
+    # Alternative: local file path
+    refresh_interval_s = 0,  # 0 = no periodic refresh
+    timeout_s = 30,  # HTTP timeout for spec fetching
+    auth_header = None,  # "Bearer xxx" or "Basic xxx"
+    tags = None,  # Filter endpoints by OpenAPI tag
+    mode = DiscoveryMode.AUTO,  # AUTO or LLM_DRIVEN
+    include_methods = ["get", "post"],  # Restrict HTTP methods
+    visibility = ToolVisibility.USER,  # Default visibility for all tools
 )
 ```
 
@@ -151,13 +144,10 @@ Use `OpenAPIToolGenerator` to convert individual endpoints:
 from proxy.app.tools.openapi_discovery import OpenAPIToolGenerator
 
 spec = {
-    "openapi": "3.0.0",
-    "info": {"title": "My API", "version": "1.0.0"},
-    "paths": {
+    "openapi": "3.0.0", "info": {"title": "My API", "version": "1.0.0"}, "paths": {
         "/users/search": {
             "get": {
-                "summary": "Search users",
-                "parameters": [
+                "summary": "Search users", "parameters": [
                     {"name": "q", "in": "query", "schema": {"type": "string"}}
                 ],
             }
@@ -165,8 +155,8 @@ spec = {
     }
 }
 
-generator = OpenAPIToolGenerator(spec)
-tool = generator.generate_tool("/users/search", "get")
+generator = OpenAPIToolGenerator (spec)
+tool = generator.generate_tool ("/users/search", "get")
 assert tool.name == "users_search"
 assert tool.description == "Search users"
 ```
@@ -179,11 +169,8 @@ Discovered tools respect the visibility setting:
 
 ```python
 # All discovered tools are ADMIN-only
-provider = OpenAPIProvider(
-    name="admin_apis",
-    spec_url="https://admin.internal/swagger.json",
-    visibility=ToolVisibility.ADMIN,
-)
+provider = OpenAPIProvider (name = "admin_apis", spec_url = "https://admin.internal/swagger.json",
+    visibility = ToolVisibility.ADMIN, )
 ```
 
 The `ToolVisibilityFilter` (in `proxy/app/tools/security.py`) enforces this at runtime — non-admin users cannot see or
@@ -198,11 +185,8 @@ converting every endpoint. This is a stub in the current implementation — the 
 future release.
 
 ```python
-provider = OpenAPIProvider(
-    name="smart_discovery",
-    spec_url="https://api.internal/openapi.json",
-    mode=DiscoveryMode.LLM_DRIVEN,
-    # Future: llm_params={"max_tools": 10, "min_relevance": 0.7}
+provider = OpenAPIProvider (name = "smart_discovery", spec_url = "https://api.internal/openapi.json",
+    mode = DiscoveryMode.LLM_DRIVEN, # Future: llm_params={"max_tools": 10, "min_relevance": 0.7}
 )
 ```
 

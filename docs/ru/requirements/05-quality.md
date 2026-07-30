@@ -142,7 +142,8 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Ключевые факты сохранены (проверка: LLM отвечает корректно на сжатом контексте)
 3. Latency сжатия < 100ms для контекста 10K токенов
 
-**Статус:** ✅ Подтверждено (`proxy/app/core/compression.py`, `tests/proxy/test_quality_pipeline.py::TestFR38LLMLinguaCompression`)
+**Статус:** ✅ Подтверждено (`proxy/app/core/compression.py`,
+`tests/proxy/test_quality_pipeline.py::TestFR38LLMLinguaCompression`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5
 
@@ -161,6 +162,7 @@ EXPAND (расширить поиск), FALLBACK (не отвечать).
 2. Второй по релевантности — последний
 3. Остальные — в середине, отсортированные по релевантности
 
-**Статус:** ✅ Подтверждено (`proxy/app/core/reorder.py`, `tests/proxy/test_quality_pipeline.py::TestFR39LongContextReorder`)
+**Статус:** ✅ Подтверждено (`proxy/app/core/reorder.py`,
+`tests/proxy/test_quality_pipeline.py::TestFR39LongContextReorder`)
 **Приоритет:** HIGH
 **Связь:** rag-maturity-assessment L5

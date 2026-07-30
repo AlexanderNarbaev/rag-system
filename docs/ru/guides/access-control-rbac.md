@@ -27,8 +27,14 @@ Qdrant до ролевого сокращения контекста.
 ```json
 {
   "access_level": "confidential",
-  "allowed_groups": ["engineering", "security"],
-  "allowed_users": ["alice", "bob"]
+  "allowed_groups": [
+    "engineering",
+    "security"
+  ],
+  "allowed_users": [
+    "alice",
+    "bob"
+  ]
 }
 ```
 
@@ -43,8 +49,15 @@ OIDC и получают **JWT**, содержащий:
 {
   "sub": "user-uuid",
   "preferred_username": "alice",
-  "groups": ["engineering", "platform"],
-  "realm_access": {"roles": ["developer"]},
+  "groups": [
+    "engineering",
+    "platform"
+  ],
+  "realm_access": {
+    "roles": [
+      "developer"
+    ]
+  },
   "access_level": "confidential"
 }
 ```
@@ -58,56 +71,49 @@ from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, List
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer (auto_error = False)
+
 
 class AuthContext:
-    def __init__(self, payload: dict):
-        self.user_id: str = payload["sub"]
-        self.username: str = payload.get("preferred_username", "")
-        self.groups: List[str] = payload.get("groups", [])
-        self.roles: List[str] = payload.get("realm_access", {}).get("roles", [])
-        self.access_level: str = payload.get("access_level", "internal")
+  def __init__ (self, payload: dict):
+    self.user_id: str = payload ["sub"]
+    self.username: str = payload.get ("preferred_username", "")
+    self.groups: List [str] = payload.get ("groups", [])
+    self.roles: List [str] = payload.get ("realm_access", {}).get ("roles", [])
+    self.access_level: str = payload.get ("access_level", "internal")
+  
+  @property
+  def is_admin (self) -> bool:
+    return "admin" in self.roles
+  
+  @property
+  def is_expert (self) -> bool:
+    return "expert" in self.roles or self.is_admin
 
-    @property
-    def is_admin(self) -> bool:
-        return "admin" in self.roles
 
-    @property
-    def is_expert(self) -> bool:
-        return "expert" in self.roles or self.is_admin
-
-
-async def get_auth_context(
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+async def get_auth_context (
+    request: Request, credentials: Optional [HTTPAuthorizationCredentials] = Depends (security)
 ) -> AuthContext:
-    """Извлечь AuthContext из JWT или вернуть анонимный контекст в режиме без аутентификации."""
-    AUTH_ENABLED = request.app.state.config.get("auth_enabled", False)
-
-    if not AUTH_ENABLED:
-        return AuthContext({
-            "sub": "anonymous",
-            "groups": ["everyone"],
-            "realm_access": {"roles": ["developer"]},
-            "access_level": "public"
-        })
-
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Отсутствует токен авторизации")
-
-    try:
-        payload = jwt.decode(
-            credentials.credentials,
-            key=request.app.state.config["jwt_public_key"],
-            algorithms=["RS256"],
-            options={"verify_exp": True}
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Срок действия токена истёк")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Недействительный токен")
-
-    return AuthContext(payload)
+  """Извлечь AuthContext из JWT или вернуть анонимный контекст в режиме без аутентификации."""
+  AUTH_ENABLED = request.app.state.config.get ("auth_enabled", False)
+  
+  if not AUTH_ENABLED:
+    return AuthContext ({
+        "sub": "anonymous", "groups": ["everyone"], "realm_access": {"roles": ["developer"]}, "access_level": "public"
+    })
+  
+  if not credentials:
+    raise HTTPException (status_code = 401, detail = "Отсутствует токен авторизации")
+  
+  try:
+    payload = jwt.decode (credentials.credentials, key = request.app.state.config ["jwt_public_key"],
+        algorithms = ["RS256"], options = {"verify_exp": True})
+  except jwt.ExpiredSignatureError:
+    raise HTTPException (status_code = 401, detail = "Срок действия токена истёк")
+  except jwt.InvalidTokenError:
+    raise HTTPException (status_code = 401, detail = "Недействительный токен")
+  
+  return AuthContext (payload)
 ```
 
 ---
@@ -125,82 +131,63 @@ from typing import List, Dict, Any, Optional
 from qdrant_client.models import Filter, FieldCondition, MatchAny, MatchValue, Range
 from proxy.app.auth import AuthContext
 
-def build_access_filter(auth: AuthContext) -> Optional[Filter]:
-    """Построить фильтр payload Qdrant для текущего пользователя."""
-    conditions = []
 
-    # Администраторы и эксперты видят всё
-    if auth.is_admin or auth.is_expert:
-        return None
-
-    # Построить разрешённые access_levels: public + internal всегда видны
-    allowed_levels = ["public", "internal"]
-
-    # Добавить confidential, если пользователь в какой-либо группе
-    if auth.groups:
-        allowed_levels.append("confidential")
-
-    conditions.append(FieldCondition(
-        key="access_level",
-        match=MatchAny(any=allowed_levels)
-    ))
-
-    # Для restricted-контента проверить allowed_users
-    if auth.username:
-        conditions.append(FieldCondition(
-            key="allowed_users",
-            match=MatchValue(value=auth.username)
-        ))
-
-    # Фильтрация на основе групп
-    if auth.groups:
-        conditions.append(FieldCondition(
-            key="allowed_groups",
-            match=MatchAny(any=auth.groups)
-        ))
-
-    return Filter(
-        should=[
-            Filter(
-                must=[
-                    FieldCondition(key="access_level", match=MatchAny(any=["public", "internal"])),
-                ]
-            ),
-            Filter(
-                must=[
-                    FieldCondition(key="access_level", match=MatchValue(value="confidential")),
-                    FieldCondition(key="allowed_groups", match=MatchAny(any=auth.groups)),
-                ]
-            ),
-            Filter(
-                must=[
-                    FieldCondition(key="access_level", match=MatchValue(value="restricted")),
-                    FieldCondition(key="allowed_users", match=MatchValue(value=auth.username)),
-                ]
-            ),
-        ]
-    )
+def build_access_filter (auth: AuthContext) -> Optional [Filter]:
+  """Построить фильтр payload Qdrant для текущего пользователя."""
+  conditions = []
+  
+  # Администраторы и эксперты видят всё
+  if auth.is_admin or auth.is_expert:
+    return None
+  
+  # Построить разрешённые access_levels: public + internal всегда видны
+  allowed_levels = ["public", "internal"]
+  
+  # Добавить confidential, если пользователь в какой-либо группе
+  if auth.groups:
+    allowed_levels.append ("confidential")
+  
+  conditions.append (FieldCondition (key = "access_level", match = MatchAny (any = allowed_levels)))
+  
+  # Для restricted-контента проверить allowed_users
+  if auth.username:
+    conditions.append (FieldCondition (key = "allowed_users", match = MatchValue (value = auth.username)))
+  
+  # Фильтрация на основе групп
+  if auth.groups:
+    conditions.append (FieldCondition (key = "allowed_groups", match = MatchAny (any = auth.groups)))
+  
+  return Filter (should = [
+      Filter (must = [
+          FieldCondition (key = "access_level", match = MatchAny (any = ["public", "internal"])),
+      ]), Filter (must = [
+          FieldCondition (key = "access_level", match = MatchValue (value = "confidential")),
+          FieldCondition (key = "allowed_groups", match = MatchAny (any = auth.groups)),
+      ]), Filter (must = [
+          FieldCondition (key = "access_level", match = MatchValue (value = "restricted")),
+          FieldCondition (key = "allowed_users", match = MatchValue (value = auth.username)),
+      ]),
+  ])
 
 
-def trim_restricted_context(
-    chunks: List[Dict[str, Any]],
-    auth: AuthContext
-) -> List[Dict[str, Any]]:
-    """Сокращение контекста после поиска: удалить чанки, которые пользователь не должен видеть."""
-    access_filter = build_access_filter(auth)
-    if access_filter is None:
-        return chunks
-
-    filtered = []
-    for chunk in chunks:
-        level = chunk.get("payload", {}).get("access_level", "public")
-        if level in ("public", "internal"):
-            filtered.append(chunk)
-        elif level == "confidential" and _user_in_allowed_groups(chunk, auth):
-            filtered.append(chunk)
-        elif level == "restricted" and _user_is_allowed(chunk, auth):
-            filtered.append(chunk)
-    return filtered
+def trim_restricted_context (
+    chunks: List [Dict [str, Any]], auth: AuthContext
+) -> List [Dict [str, Any]]:
+  """Сокращение контекста после поиска: удалить чанки, которые пользователь не должен видеть."""
+  access_filter = build_access_filter (auth)
+  if access_filter is None:
+    return chunks
+  
+  filtered = []
+  for chunk in chunks:
+    level = chunk.get ("payload", {}).get ("access_level", "public")
+    if level in ("public", "internal"):
+      filtered.append (chunk)
+    elif level == "confidential" and _user_in_allowed_groups (chunk, auth):
+      filtered.append (chunk)
+    elif level == "restricted" and _user_is_allowed (chunk, auth):
+      filtered.append (chunk)
+  return filtered
 ```
 
 ---
@@ -219,8 +206,8 @@ def trim_restricted_context(
 
 ```python
 # В orchestrator.py, перед сборкой промпта:
-visible_chunks = trim_restricted_context(retrieved_chunks, auth)
-context = build_context(visible_chunks)
+visible_chunks = trim_restricted_context (retrieved_chunks, auth)
+context = build_context (visible_chunks)
 ```
 
 ---

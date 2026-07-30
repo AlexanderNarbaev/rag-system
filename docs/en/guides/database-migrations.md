@@ -1,6 +1,7 @@
 # Database Migrations Guide
 
-This guide covers the database migration framework for the RAG System, which manages schema changes for both SQLite (user database) and Neo4j (knowledge graph).
+This guide covers the database migration framework for the RAG System, which manages schema changes for both SQLite (
+user database) and Neo4j (knowledge graph).
 
 ## Overview
 
@@ -22,6 +23,7 @@ python scripts/migrate.py status
 ```
 
 Output:
+
 ```
 ============================================================
   Database Migration Status
@@ -106,17 +108,12 @@ DROP TABLE IF EXISTS user_preferences;
 
 # ─── Migration Registration ──────────────────────────────────────────────────
 
-MIGRATION = MigrationInfo(
-    version=4,
-    name="add_user_preferences",
-    description="Add user preferences table for storing user settings",
-    up_sql=UP_SQL,
-    down_sql=DOWN_SQL,
-    backend="sqlite",
-)
+MIGRATION = MigrationInfo (version = 4, name = "add_user_preferences",
+    description = "Add user preferences table for storing user settings", up_sql = UP_SQL, down_sql = DOWN_SQL,
+    backend = "sqlite", )
 
 # Register when module is imported
-register_migration(MIGRATION)
+register_migration (MIGRATION)
 ```
 
 ### Async Migrations
@@ -126,35 +123,29 @@ For complex migrations that need Python logic:
 ```python
 from proxy.app.db.migrations import MigrationInfo, register_migration
 
-async def migrate_up(conn):
-    """Custom migration logic."""
-    # Get existing data
-    cursor = await conn.execute("SELECT id, roles FROM users")
-    rows = await cursor.fetchall()
-    
-    # Transform and update
-    for row in rows:
-        user_id, roles_json = row
-        # ... transformation logic ...
-        await conn.execute(
-            "UPDATE users SET roles = ? WHERE id = ?",
-            (new_roles, user_id)
-        )
 
-async def migrate_down(conn):
-    """Rollback logic."""
-    pass
+async def migrate_up (conn):
+  """Custom migration logic."""
+  # Get existing data
+  cursor = await conn.execute ("SELECT id, roles FROM users")
+  rows = await cursor.fetchall ()
+  
+  # Transform and update
+  for row in rows:
+    user_id, roles_json = row
+    # ... transformation logic ...
+    await conn.execute ("UPDATE users SET roles = ? WHERE id = ?", (new_roles, user_id))
 
-MIGRATION = MigrationInfo(
-    version=5,
-    name="migrate_roles",
-    description="Migrate roles to new format",
-    up_async=migrate_up,
-    down_async=migrate_down,
-    backend="sqlite",
-)
 
-register_migration(MIGRATION)
+async def migrate_down (conn):
+  """Rollback logic."""
+  pass
+
+
+MIGRATION = MigrationInfo (version = 5, name = "migrate_roles", description = "Migrate roles to new format",
+    up_async = migrate_up, down_async = migrate_down, backend = "sqlite", )
+
+register_migration (MIGRATION)
 ```
 
 ## Neo4j Migrations
@@ -164,32 +155,26 @@ For Neo4j schema changes:
 ```python
 from proxy.app.db.migrations import MigrationInfo, register_migration
 
-async def setup_schema(session):
-    """Apply Neo4j constraints and indexes."""
-    await session.run(
-        "CREATE CONSTRAINT entity_id IF NOT EXISTS "
-        "FOR (e:Entity) REQUIRE e.id IS UNIQUE"
-    )
-    await session.run(
-        "CREATE INDEX entity_name IF NOT EXISTS "
-        "FOR (e:Entity) ON (e.name)"
-    )
 
-async def teardown_schema(session):
-    """Remove schema elements."""
-    await session.run("DROP CONSTRAINT entity_id IF EXISTS")
-    await session.run("DROP INDEX entity_name IF EXISTS")
+async def setup_schema (session):
+  """Apply Neo4j constraints and indexes."""
+  await session.run ("CREATE CONSTRAINT entity_id IF NOT EXISTS "
+                     "FOR (e:Entity) REQUIRE e.id IS UNIQUE")
+  await session.run ("CREATE INDEX entity_name IF NOT EXISTS "
+                     "FOR (e:Entity) ON (e.name)")
 
-MIGRATION = MigrationInfo(
-    version=6,
-    name="neo4j_entity_schema",
-    description="Add Entity constraints and indexes",
-    up_async=setup_schema,
-    down_async=teardown_schema,
-    backend="neo4j",
-)
 
-register_migration(MIGRATION)
+async def teardown_schema (session):
+  """Remove schema elements."""
+  await session.run ("DROP CONSTRAINT entity_id IF EXISTS")
+  await session.run ("DROP INDEX entity_name IF EXISTS")
+
+
+MIGRATION = MigrationInfo (version = 6, name = "neo4j_entity_schema",
+    description = "Add Entity constraints and indexes", up_async = setup_schema, down_async = teardown_schema,
+    backend = "neo4j", )
+
+register_migration (MIGRATION)
 ```
 
 ## Automatic Migrations on Startup
@@ -200,14 +185,10 @@ The application automatically applies pending migrations during startup:
 # In proxy/app/main.py lifespan()
 from proxy.app.db.migrations import get_migration_manager
 
-migration_manager = get_migration_manager(
-    db_path=USER_DB_PATH,
-    neo4j_uri=NEO4J_URI if GRAPH_ENABLED else None,
-    neo4j_user=NEO4J_USER if GRAPH_ENABLED else None,
-    neo4j_password=NEO4J_PASSWORD if GRAPH_ENABLED else None,
-)
-await migration_manager.initialize()
-await migration_manager.upgrade()
+migration_manager = get_migration_manager (db_path = USER_DB_PATH, neo4j_uri = NEO4J_URI if GRAPH_ENABLED else None,
+    neo4j_user = NEO4J_USER if GRAPH_ENABLED else None, neo4j_password = NEO4J_PASSWORD if GRAPH_ENABLED else None, )
+await migration_manager.initialize ()
+await migration_manager.upgrade ()
 ```
 
 To disable automatic migrations, set environment variable:
@@ -282,19 +263,15 @@ python scripts/migrate.py upgrade
 ```python
 from proxy.app.db.migrations import MigrationManager
 
-manager = MigrationManager(
-    db_path="./data/users.db",
-    neo4j_uri="bolt://localhost:7687",
-    neo4j_user="neo4j",
-    neo4j_password="password",
-)
+manager = MigrationManager (db_path = "./data/users.db", neo4j_uri = "bolt://localhost:7687", neo4j_user = "neo4j",
+    neo4j_password = "password", )
 
-await manager.initialize()
-await manager.upgrade(dry_run=False, target_version=None)
-await manager.downgrade(target_version=1, dry_run=False)
-status = await manager.get_status()
-log = await manager.get_audit_log(limit=100)
-await manager.close()
+await manager.initialize ()
+await manager.upgrade (dry_run = False, target_version = None)
+await manager.downgrade (target_version = 1, dry_run = False)
+status = await manager.get_status ()
+log = await manager.get_audit_log (limit = 100)
+await manager.close ()
 ```
 
 ### MigrationInfo
@@ -302,27 +279,26 @@ await manager.close()
 ```python
 from proxy.app.db.migrations import MigrationInfo
 
-migration = MigrationInfo(
-    version=1,                    # Unique version number
-    name="initial_schema",        # Migration name
-    description="Description",    # Human-readable description
-    up_sql="SQL...",              # SQL for upgrade
-    down_sql="SQL...",            # SQL for rollback
-    up_async=None,                # Async callable for upgrade
-    down_async=None,              # Async callable for rollback
-    backend="sqlite",             # "sqlite" or "neo4j"
+migration = MigrationInfo (version = 1,  # Unique version number
+    name = "initial_schema",  # Migration name
+    description = "Description",  # Human-readable description
+    up_sql = "SQL...",  # SQL for upgrade
+    down_sql = "SQL...",  # SQL for rollback
+    up_async = None,  # Async callable for upgrade
+    down_async = None,  # Async callable for rollback
+    backend = "sqlite",  # "sqlite" or "neo4j"
 )
 ```
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `USER_DB_PATH` | `./data/users.db` | SQLite database path |
-| `NEO4J_URI` | `bolt://localhost:7687` | Neo4j connection URI |
-| `NEO4J_USER` | `neo4j` | Neo4j username |
-| `NEO4J_PASSWORD` | `neo4j` | Neo4j password |
-| `GRAPH_ENABLED` | `false` | Enable Neo4j migrations |
+| Variable         | Default                 | Description             |
+|------------------|-------------------------|-------------------------|
+| `USER_DB_PATH`   | `./data/users.db`       | SQLite database path    |
+| `NEO4J_URI`      | `bolt://localhost:7687` | Neo4j connection URI    |
+| `NEO4J_USER`     | `neo4j`                 | Neo4j username          |
+| `NEO4J_PASSWORD` | `neo4j`                 | Neo4j password          |
+| `GRAPH_ENABLED`  | `false`                 | Enable Neo4j migrations |
 
 ## Related Documentation
 

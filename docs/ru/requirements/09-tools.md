@@ -162,9 +162,9 @@ Health check `/v1/health` возвращает детальный статус:
 Разработчики могут создавать инструменты с помощью декоратора `@tool`:
 
 ```python
-@tool(description="Search Confluence pages")
-def search_confluence(query: str, space: str = "DEFAULT") -> list[dict]:
-    ...
+@tool (description = "Search Confluence pages")
+def search_confluence (query: str, space: str = "DEFAULT") -> list [dict]:
+  ...
 ```
 
 JSON Schema генерируется автоматически из type hints.
@@ -187,12 +187,11 @@ JSON Schema генерируется автоматически из type hints.
 Альтернативный способ создания инструментов через Builder pattern:
 
 ```python
-tool = (ToolBuilder("search_jira")
-        .description("Search Jira issues")
-        .param("query", str, required=True)
-        .param("project", str, default="ALL")
-        .handler(my_handler)
-        .build())
+tool = (
+  ToolBuilder ("search_jira").description ("Search Jira issues").param ("query", str, required = True).param ("project",
+                                                                                                              str,
+                                                                                                              default = "ALL").handler (
+    my_handler).build ())
 ```
 
 **Критерий приёмки:**

@@ -97,22 +97,20 @@ All public functions must have type annotations:
 ```python
 from typing import Optional
 
-async def retrieve_documents(
-    query: str,
-    top_k: int = 10,
-    collection: str = "default",
-) -> list[dict[str, Any]]:
-    """Retrieve relevant documents for a query.
 
-    Args:
-        query: The search query text.
-        top_k: Maximum number of results.
-        collection: Qdrant collection name.
+async def retrieve_documents (
+    query: str, top_k: int = 10, collection: str = "default", ) -> list [dict [str, Any]]:
+  """Retrieve relevant documents for a query.
 
-    Returns:
-        List of document dicts with 'content' and 'score' keys.
-    """
-    ...
+  Args:
+      query: The search query text.
+      top_k: Maximum number of results.
+      collection: Qdrant collection name.
+
+  Returns:
+      List of document dicts with 'content' and 'score' keys.
+  """
+  ...
 ```
 
 ---
@@ -169,14 +167,15 @@ python -m pytest tests/ --cov=proxy --cov=etl --cov-report=html
 import pytest
 from unittest.mock import AsyncMock, patch
 
+
 @pytest.mark.asyncio
-async def test_retrieve_returns_empty_when_qdrant_down(mock_qdrant):
-    """Retrieval returns empty list when Qdrant is unavailable."""
-    mock_qdrant.search.side_effect = ConnectionError("Qdrant unavailable")
-
-    results = await retrieve_documents(query="test", top_k=5)
-
-    assert results == []
+async def test_retrieve_returns_empty_when_qdrant_down (mock_qdrant):
+  """Retrieval returns empty list when Qdrant is unavailable."""
+  mock_qdrant.search.side_effect = ConnectionError ("Qdrant unavailable")
+  
+  results = await retrieve_documents (query = "test", top_k = 5)
+  
+  assert results == []
 ```
 
 ### Test Coverage
@@ -249,20 +248,24 @@ Return 401 instead of 500 when refresh token has expired.
 
 ```markdown
 ## Description
+
 Brief description of changes.
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
 
 ## Testing
+
 - [ ] Unit tests pass (`make test`)
 - [ ] Integration tests pass (`make test-integration`)
 - [ ] Manual testing performed
 
 ## Checklist
+
 - [ ] Code follows project style (`make lint`)
 - [ ] Self-review completed
 - [ ] Documentation updated
@@ -293,6 +296,7 @@ Brief description of changes.
 A clear description of what the bug is.
 
 **To reproduce**
+
 1. Start services with '...'
 2. Send request '...'
 3. See error
@@ -304,6 +308,7 @@ What you expected to happen.
 Include relevant logs from `docker compose logs rag-proxy`.
 
 **Environment**
+
 - OS: [e.g., Ubuntu 22.04]
 - Docker: [e.g., 27.0]
 - Python: [e.g., 3.12]

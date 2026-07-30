@@ -203,6 +203,7 @@ roles из Keycloak в локальные роли.
 **Описание:**
 Когда OpenWebUI подключается к прокси с единым API-ключом, система идентифицирует
 индивидуальных пользователей через HTTP-заголовки:
+
 - `X-OpenWebUI-User-Id` — ID пользователя из OpenWebUI
 - `X-Forwarded-User` — альтернативный заголовок
 - `user` поле в теле запроса — стандартное поле OpenAI API
@@ -210,11 +211,13 @@ roles из Keycloak в локальные роли.
 Цепочка приоритета: X-OpenWebUI-User-Id > X-Forwarded-User > JWT sub > user field > anonymous.
 
 **Критерий приёмки:**
+
 1. Запрос с `X-OpenWebUI-User-Id: alice` — UserContext.user_id = alice
 2. Без заголовков — UserContext берётся из API key
 3. Лог содержит 'User identity from header: alice'
 
-**Статус:** ✅ Подтверждено (`tests/integration/test_openwebui_proxy.py`, `proxy/app/auth/jwt.py::get_auth_context` lines 250-261, `proxy/app/shared/middleware.py::RequestIdMiddleware` lines 39-42)
+**Статус:** ✅ Подтверждено (`tests/integration/test_openwebui_proxy.py`, `proxy/app/auth/jwt.py::get_auth_context` lines
+250-261, `proxy/app/shared/middleware.py::RequestIdMiddleware` lines 39-42)
 **Приоритет:** CRITICAL
 **Связь:** access-control-rbac
 
@@ -237,7 +240,8 @@ roles из Keycloak в локальные роли.
 3. User — доступ к `/v1/chat/completions`, 403 на `/v1/feedback`
 4. Read_only — доступ к `/v1/chat/completions`, 403 на `/v1/feedback`
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR88RBAC`, `tests/integration/test_auth_flow.py::TestRBACEnforcement`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR88RBAC`,
+`tests/integration/test_auth_flow.py::TestRBACEnforcement`)
 **Приоритет:** CRITICAL
 **Связь:** access-control-rbac
 
@@ -358,6 +362,7 @@ CORS-заголовки настраиваются через `CORS_ORIGINS` (с
 2. `CORS_ORIGINS=https://example.com` — заголовок `Access-Control-Allow-Origin: https://example.com`
 3. Preflight OPTIONS — возвращает 200 с CORS-заголовками
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR94CORS`, `tests/integration/test_auth_flow.py::TestCORSIntegration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_auth_rbac.py::TestFR94CORS`,
+`tests/integration/test_auth_flow.py::TestCORSIntegration`)
 **Приоритет:** HIGH
 **Связь:** middleware.py

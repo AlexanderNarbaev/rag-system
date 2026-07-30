@@ -165,8 +165,12 @@ password verification. Falls back to LDAP/AD when `AD_ENABLED=true`. Rate-limite
   "expires_in": 3600,
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "username": "alice",
-  "roles": ["user"],
-  "groups": ["engineering"]
+  "roles": [
+    "user"
+  ],
+  "groups": [
+    "engineering"
+  ]
 }
 ```
 
@@ -315,8 +319,14 @@ Authorization: Bearer <access-token>
 {
   "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "username": "alice",
-  "roles": ["user", "expert"],
-  "groups": ["engineering", "platform"],
+  "roles": [
+    "user",
+    "expert"
+  ],
+  "groups": [
+    "engineering",
+    "platform"
+  ],
   "access_level": "internal",
   "is_admin": false,
   "is_authenticated": true
@@ -775,15 +785,26 @@ Each tool entry:
       "name": "search_knowledge_base",
       "description": "Search the indexed knowledge base using hybrid retrieval",
       "category": "retrieval",
-      "tags": ["search", "internal"],
+      "tags": [
+        "search",
+        "internal"
+      ],
       "version": "1.0.0",
       "parameters": {
         "type": "object",
         "properties": {
-          "query": {"type": "string", "description": "Search query"},
-          "max_results": {"type": "integer", "default": 5}
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "max_results": {
+            "type": "integer",
+            "default": 5
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       },
       "provider": "sdk"
     }
@@ -839,17 +860,28 @@ user's role.
   "name": "search_knowledge_base",
   "description": "Search the indexed knowledge base using hybrid retrieval",
   "category": "retrieval",
-  "tags": ["search", "internal"],
+  "tags": [
+    "search",
+    "internal"
+  ],
   "version": "1.0.0",
   "visibility": "read_only",
   "timeout_seconds": 30,
   "parameters": {
     "type": "object",
     "properties": {
-      "query": {"type": "string", "description": "Search query"},
-      "max_results": {"type": "integer", "default": 5}
+      "query": {
+        "type": "string",
+        "description": "Search query"
+      },
+      "max_results": {
+        "type": "integer",
+        "default": 5
+      }
     },
-    "required": ["query"]
+    "required": [
+      "query"
+    ]
   },
   "provider": "sdk",
   "depends_on": []
@@ -1019,11 +1051,11 @@ curl http://localhost:8080/v1/widget
 ```html
 <!-- Full-page embed via iframe -->
 <iframe
-  src="http://localhost:8080/v1/widget"
-  width="720"
-  height="560"
-  frameborder="0"
-  style="border-radius: 8px;">
+        src="http://localhost:8080/v1/widget"
+        width="720"
+        height="560"
+        frameborder="0"
+        style="border-radius: 8px;">
 </iframe>
 ```
 
@@ -1042,15 +1074,16 @@ Returns `application/javascript` — the widget initialization script.
 #### Embed Example
 
 ```html
+
 <script src="http://localhost:8080/v1/widget.js"></script>
 <div id="rag-chat"></div>
 <script>
-  RAGChatWidget.init({
-    container: 'rag-chat',
-    apiUrl: 'http://localhost:8080/v1',
-    placeholder: 'Ask me anything...',
-    theme: 'dark'
-  });
+    RAGChatWidget.init({
+      container: 'rag-chat',
+      apiUrl: 'http://localhost:8080/v1',
+      placeholder: 'Ask me anything...',
+      theme: 'dark'
+    });
 </script>
 ```
 
@@ -1160,7 +1193,11 @@ Check training job progress and final metrics.
   "job_id": "train-a1b2c3d4e5f6",
   "trainer_type": "slm",
   "status": "running",
-  "config": {"base_model": "Qwen/Qwen2.5-1.5B-Instruct", "profile": "dev", "epochs": 3},
+  "config": {
+    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "profile": "dev",
+    "epochs": 3
+  },
   "metrics": {},
   "started_at": "2026-07-06T14:30:00Z",
   "completed_at": null,
@@ -1175,8 +1212,16 @@ Check training job progress and final metrics.
   "job_id": "train-a1b2c3d4e5f6",
   "trainer_type": "slm",
   "status": "completed",
-  "config": {"base_model": "Qwen/Qwen2.5-1.5B-Instruct", "profile": "dev", "epochs": 3},
-  "metrics": {"accuracy": 0.923, "f1_score": 0.91, "eval_loss": 0.34},
+  "config": {
+    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "profile": "dev",
+    "epochs": 3
+  },
+  "metrics": {
+    "accuracy": 0.923,
+    "f1_score": 0.91,
+    "eval_loss": 0.34
+  },
   "artifact_uri": "./models/slm_train-a1b2c3d4e5f6",
   "started_at": "2026-07-06T14:30:00Z",
   "completed_at": "2026-07-06T14:45:30Z",
@@ -1228,14 +1273,20 @@ List all registered models with versions, statuses, and production version info.
           "version": "v1.0.0",
           "status": "production",
           "artifact_path": "s3://rag-artifacts/slm/v1.0.0",
-          "metrics": {"accuracy": 0.923, "f1_score": 0.91},
+          "metrics": {
+            "accuracy": 0.923,
+            "f1_score": 0.91
+          },
           "created_at": "2026-07-01T10:00:00Z"
         },
         {
           "version": "v1.1.0",
           "status": "staging",
           "artifact_path": "s3://rag-artifacts/slm/v1.1.0",
-          "metrics": {"accuracy": 0.941, "f1_score": 0.93},
+          "metrics": {
+            "accuracy": 0.941,
+            "f1_score": 0.93
+          },
           "created_at": "2026-07-06T14:45:30Z"
         }
       ],
@@ -1247,7 +1298,10 @@ List all registered models with versions, statuses, and production version info.
           "version": "v1.0.0",
           "status": "production",
           "artifact_path": "./models/reranker_v1",
-          "metrics": {"mrr": 0.85, "recall_at_10": 0.78},
+          "metrics": {
+            "mrr": 0.85,
+            "recall_at_10": 0.78
+          },
           "created_at": "2026-06-15T08:30:00Z"
         }
       ],
@@ -1824,75 +1878,55 @@ COMPRESSION_LEVEL=6         # Compression level (gzip: 1-9, brotli: 0-11)
 ```python
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="http://localhost:8080/v1",
-    api_key="not-needed"  # placeholder when auth is disabled
+client = OpenAI (base_url = "http://localhost:8080/v1", api_key = "not-needed"  # placeholder when auth is disabled
 )
 
 # Non-streaming with RAG extensions
-response = client.chat.completions.create(
-    model="rag-proxy",
-    messages=[
-        {"role": "system", "content": "You are a technical documentation assistant."},
-        {"role": "user", "content": "What is the project structure?"}
-    ],
-    temperature=0.2,
-    max_tokens=4096,
-    extra_body={
-        "rag_version": "2026-01-15",
-        "rag_force_refresh": False
-    }
-)
+response = client.chat.completions.create (model = "rag-proxy", messages = [
+    {"role": "system", "content": "You are a technical documentation assistant."},
+    {"role": "user", "content": "What is the project structure?"}
+], temperature = 0.2, max_tokens = 4096, extra_body = {
+    "rag_version": "2026-01-15", "rag_force_refresh": False
+})
 
-print(f"Answer: {response.choices[0].message.content}")
-print(f"Confidence: {response.rag_confidence}")
-print(f"Feedback ID: {response.rag_feedback_id}")
+print (f"Answer: {response.choices [0].message.content}")
+print (f"Confidence: {response.rag_confidence}")
+print (f"Feedback ID: {response.rag_feedback_id}")
 for src in response.rag_sources:
-    print(f"  Source: {src['title']} (relevance: {src['relevance']})")
+  print (f"  Source: {src ['title']} (relevance: {src ['relevance']})")
 
 # Streaming
-stream = client.chat.completions.create(
-    model="your-model-name",
-    messages=[{"role": "user", "content": "Explain the deployment process."}],
-    stream=True
-)
+stream = client.chat.completions.create (model = "your-model-name",
+    messages = [{"role": "user", "content": "Explain the deployment process."}], stream = True)
 for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
+  if chunk.choices [0].delta.content:
+    print (chunk.choices [0].delta.content, end = "")
 
 # Tool calling
-response = client.chat.completions.create(
-    model="rag-proxy",
-    messages=[{"role": "user", "content": "Search for authentication docs."}],
-    tools=[{
-        "type": "function",
-        "function": {
-            "name": "search_knowledge_base",
-            "description": "Search the RAG knowledge base",
-            "parameters": {
-                "type": "object",
-                "properties": {
+response = client.chat.completions.create (model = "rag-proxy",
+    messages = [{"role": "user", "content": "Search for authentication docs."}], tools = [
+        {
+            "type": "function", "function": {
+            "name": "search_knowledge_base", "description": "Search the RAG knowledge base", "parameters": {
+                "type": "object", "properties": {
                     "query": {"type": "string"},
                     "source_filter": {"type": "string", "enum": ["confluence", "jira", "gitlab", "all"]}
-                },
-                "required": ["query"]
+                }, "required": ["query"]
             }
         }
-    }],
-    tool_choice="auto"
-)
+        }
+    ], tool_choice = "auto")
 
-if response.choices[0].message.tool_calls:
-    for tc in response.choices[0].message.tool_calls:
-        print(f"Tool called: {tc.function.name}({tc.function.arguments})")
+if response.choices [0].message.tool_calls:
+  for tc in response.choices [0].message.tool_calls:
+    print (f"Tool called: {tc.function.name}({tc.function.arguments})")
 
 # Submit feedback
 import requests
-requests.post("http://localhost:8080/v1/feedback", json={
-    "feedback_id": response.rag_feedback_id,
-    "rating": "positive",
-    "comment": "Accurate and well-sourced answer."
-}, headers={"Authorization": "Bearer eyJhbGciOi..."})
+
+requests.post ("http://localhost:8080/v1/feedback", json = {
+    "feedback_id": response.rag_feedback_id, "rating": "positive", "comment": "Accurate and well-sourced answer."
+}, headers = {"Authorization": "Bearer eyJhbGciOi..."})
 ```
 
 ### JavaScript / TypeScript (openai package)
@@ -2136,8 +2170,8 @@ complete source of truth.
 | `MLFLOW_TRACKING_URI`             | string  | `http://localhost:5000` | MLflow tracking server URI                                         |
 | `MLFLOW_EXPERIMENT_NAME`          | string  | `rag-system`            | MLflow experiment name                                             |
 | `MINIO_ENDPOINT`                  | string  | `localhost:9000`        | MinIO S3 endpoint for artifact storage                             |
-| `MINIO_ACCESS_KEY`                | string  | `CHANGE_ME`            | MinIO access key                                                   |
-| `MINIO_SECRET_KEY`                | string  | `CHANGE_ME`            | MinIO secret key                                                   |
+| `MINIO_ACCESS_KEY`                | string  | `CHANGE_ME`             | MinIO access key                                                   |
+| `MINIO_SECRET_KEY`                | string  | `CHANGE_ME`             | MinIO secret key                                                   |
 | `MINIO_BUCKET`                    | string  | `rag-artifacts`         | MinIO bucket name                                                  |
 | `MINIO_SECURE`                    | boolean | `false`                 | Use HTTPS for MinIO                                                |
 | `TRAINING_PROFILE`                | string  | `dev`                   | Default training profile: `dev`, `ci`, `prod`                      |

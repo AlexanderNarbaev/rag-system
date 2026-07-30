@@ -64,21 +64,21 @@ integration, code quality hardening, and team state persistence.
 ### Added
 
 - **Wave 19 — Semantic Cache + RAGAS Metrics + Code Quality + Team State**
-  - Semantic Cache: intelligent caching with semantic similarity matching, configurable
-    TTL per cache tier (embedding, rerank, response), multi-tier invalidation, and
-    cache hit ratio metrics exposed via Prometheus
-  - RAGAS Metrics integration: automated evaluation pipeline computing Faithfulness,
-    Answer Relevancy, Context Precision, Context Recall, and Answer Correctness;
-    metrics stored in SQLite with API endpoint (`/v1/admin/metrics/ragas`)
-  - RAGAS regression testing: compare metrics across model versions to detect
-    quality regressions before production promotion
-  - Code quality hardening: ruff lint and format pass across all 165 source files,
-    type annotations hardened, dead code removed from cache and retrieval modules,
-    mypy strict 0 errors maintained
-  - Team state persistence: `.rag-team/state.json` updated with accurate wave
-    tracking, completed FRs, and project metrics snapshot
-  - AGENTS.md updated: Team Composition (16 roles), Wave-Based Development Process,
-    Development Rules (10 rules), and Key Verification Commands sections added
+    - Semantic Cache: intelligent caching with semantic similarity matching, configurable
+      TTL per cache tier (embedding, rerank, response), multi-tier invalidation, and
+      cache hit ratio metrics exposed via Prometheus
+    - RAGAS Metrics integration: automated evaluation pipeline computing Faithfulness,
+      Answer Relevancy, Context Precision, Context Recall, and Answer Correctness;
+      metrics stored in SQLite with API endpoint (`/v1/admin/metrics/ragas`)
+    - RAGAS regression testing: compare metrics across model versions to detect
+      quality regressions before production promotion
+    - Code quality hardening: ruff lint and format pass across all 165 source files,
+      type annotations hardened, dead code removed from cache and retrieval modules,
+      mypy strict 0 errors maintained
+    - Team state persistence: `.rag-team/state.json` updated with accurate wave
+      tracking, completed FRs, and project metrics snapshot
+    - AGENTS.md updated: Team Composition (16 roles), Wave-Based Development Process,
+      Development Rules (10 rules), and Key Verification Commands sections added
 
 ### Fixed
 
@@ -96,49 +96,49 @@ BGE-Reranker-v2-m3 upgrade, and code quality fixes.
 ### Added
 
 - **Wave 14 — Monitoring & Documentation**
-  - vLLM prefix cache gauge (`rag_vllm_prefix_cache_hit_ratio`) added to
-    Prometheus metrics for monitoring cache hit rates on vLLM inference
-    backends (FR-170 refinement)
-  - Zero-downtime deployment docs: WORKERS=1 limitation and recommended
-    workarounds documented in deployment guide (NFR-D04)
-  - Compliance requirements document synchronized with v2.4.0 scope
-    (13 FRs marked MET, 1 PARTIAL, status summary table)
+    - vLLM prefix cache gauge (`rag_vllm_prefix_cache_hit_ratio`) added to
+      Prometheus metrics for monitoring cache hit rates on vLLM inference
+      backends (FR-170 refinement)
+    - Zero-downtime deployment docs: WORKERS=1 limitation and recommended
+      workarounds documented in deployment guide (NFR-D04)
+    - Compliance requirements document synchronized with v2.4.0 scope
+      (13 FRs marked MET, 1 PARTIAL, status summary table)
 
 - **Wave 15 — Test Coverage & Hardening**
-  - Admin data quality endpoint tests added (`test_admin_data_quality.py`)
-  - Auth endpoints test coverage expanded (`test_auth_endpoints.py` — 58 tests)
-  - Orchestrator tests hardened (`test_orchestrator.py` — 136 tests)
-  - Security hardening: `.env.example` refreshed with all config variables,
-    docker-compose `depends_on` with healthcheck conditions on all services
-  - ETL_SECRET persistence: secret survives container restarts via durable
-    volume mount in ETL docker-compose configuration
+    - Admin data quality endpoint tests added (`test_admin_data_quality.py`)
+    - Auth endpoints test coverage expanded (`test_auth_endpoints.py` — 58 tests)
+    - Orchestrator tests hardened (`test_orchestrator.py` — 136 tests)
+    - Security hardening: `.env.example` refreshed with all config variables,
+      docker-compose `depends_on` with healthcheck conditions on all services
+    - ETL_SECRET persistence: secret survives container restarts via durable
+      volume mount in ETL docker-compose configuration
 
 - **Wave 16 — ETL Extractor Tests**
-  - Confluence extractor tests: 7 test functions covering page extraction,
-    attachment handling, incremental delta extraction, and error recovery
-  - GitLab extractor tests: 7 test functions covering repo file extraction,
-    MR/issue extraction, pagination, and rate limiting
-  - Jira extractor tests: extended coverage for issue extraction, comments,
-    attachments, custom fields, and pagination
-  - Chunker tests: 16 test functions covering semantic chunking quality,
-    HTML→Markdown conversion, overlap configuration, and heading detection
-  - Total: 71 new ETL test functions across extractors and chunker
+    - Confluence extractor tests: 7 test functions covering page extraction,
+      attachment handling, incremental delta extraction, and error recovery
+    - GitLab extractor tests: 7 test functions covering repo file extraction,
+      MR/issue extraction, pagination, and rate limiting
+    - Jira extractor tests: extended coverage for issue extraction, comments,
+      attachments, custom fields, and pagination
+    - Chunker tests: 16 test functions covering semantic chunking quality,
+      HTML→Markdown conversion, overlap configuration, and heading detection
+    - Total: 71 new ETL test functions across extractors and chunker
 
 - **Wave 17 — CI Stabilization & Documentation**
-  - CI green: ruff format applied across 13 files, lint errors reduced to 0
-  - Architecture overview document (`docs/en/guides/architecture-overview.md`)
-    — 314 lines covering all 6 layers, deployment topology, and data flow
-  - README updated with v2.5.0 scope and architecture overview link
+    - CI green: ruff format applied across 13 files, lint errors reduced to 0
+    - Architecture overview document (`docs/en/guides/architecture-overview.md`)
+      — 314 lines covering all 6 layers, deployment topology, and data flow
+    - README updated with v2.5.0 scope and architecture overview link
 
 - **Wave 18 — Contextual Retrieval, BGE-Reranker, Code Quality**
-  - Contextual Retrieval: chunks now include surrounding context (preceding and
-    following paragraphs) during ETL ingestion, improving retrieval relevance
-    for ambiguous queries (FR-42, FR-43)
-  - BGE-Reranker-v2-m3 upgrade: cross-encoder reranker upgraded from
-    MiniLM-L-6-v2 to BAAI/BGE-Reranker-v2-m3 for improved relevance scoring
-    across 100+ languages (FR-10)
-  - Code quality fixes: ruff lint and format pass across all modified files,
-    type annotations hardened, dead code removed from retrieval module
+    - Contextual Retrieval: chunks now include surrounding context (preceding and
+      following paragraphs) during ETL ingestion, improving retrieval relevance
+      for ambiguous queries (FR-42, FR-43)
+    - BGE-Reranker-v2-m3 upgrade: cross-encoder reranker upgraded from
+      MiniLM-L-6-v2 to BAAI/BGE-Reranker-v2-m3 for improved relevance scoring
+      across 100+ languages (FR-10)
+    - Code quality fixes: ruff lint and format pass across all modified files,
+      type annotations hardened, dead code removed from retrieval module
 
 ### Fixed
 
@@ -157,39 +157,39 @@ and vLLM monitoring.
 ### Added
 
 - **Wave 10 — Conversation & Context**
-  - Multi-turn conversational context via `ConversationMemory` with pronoun resolution
-    and topic tracking across sessions (FR-140)
-  - Session context bounding: configurable TTL (default 30 min) and last-N-turn token
-    cap to prevent unbounded growth (FR-141)
-  - Admin analytics endpoint (`GET /v1/admin/analytics`) returning 24h/7d/30d time-series
-    usage data from Prometheus with JSON fallback (FR-105)
-  - Admin data-quality endpoint (`GET /v1/admin/data-quality`) returning per-source
-    aggregated quality metrics for Streamlit dashboard consumption (FR-106)
-  - Knowledge status field (`rag_knowledge_status`) in every chat response with
-    status, chunks_found, chunks_used, and confidence_threshold_met (FR-144)
+    - Multi-turn conversational context via `ConversationMemory` with pronoun resolution
+      and topic tracking across sessions (FR-140)
+    - Session context bounding: configurable TTL (default 30 min) and last-N-turn token
+      cap to prevent unbounded growth (FR-141)
+    - Admin analytics endpoint (`GET /v1/admin/analytics`) returning 24h/7d/30d time-series
+      usage data from Prometheus with JSON fallback (FR-105)
+    - Admin data-quality endpoint (`GET /v1/admin/data-quality`) returning per-source
+      aggregated quality metrics for Streamlit dashboard consumption (FR-106)
+    - Knowledge status field (`rag_knowledge_status`) in every chat response with
+      status, chunks_found, chunks_used, and confidence_threshold_met (FR-144)
 
 - **Wave 11 — HITL, i18n & ETL**
-  - Feedback available to all authenticated users (not just experts) (FR-79)
-  - Feedback rate limiting at 100 submissions per user per hour (FR-81)
-  - Confidence-based alerting: low-confidence answers trigger admin alerts
-    tracked via `rag_low_confidence_alerts` Prometheus counter (FR-83)
-  - Full i18n support: response generation in RU, EN, DE, FR, ZH via `lang`
-    parameter (FR-146)
-  - ETL extraction quality reports with per-document OCR confidence, table
-    extraction metrics, and overall score (FR-60)
+    - Feedback available to all authenticated users (not just experts) (FR-79)
+    - Feedback rate limiting at 100 submissions per user per hour (FR-81)
+    - Confidence-based alerting: low-confidence answers trigger admin alerts
+      tracked via `rag_low_confidence_alerts` Prometheus counter (FR-83)
+    - Full i18n support: response generation in RU, EN, DE, FR, ZH via `lang`
+      parameter (FR-146)
+    - ETL extraction quality reports with per-document OCR confidence, table
+      extraction metrics, and overall score (FR-60)
 
 - **Wave 12 — Performance & Retrieval**
-  - Response compression: gzip level 6 (default) and brotli level 4 (optional)
-    with 60%+ JSON reduction and <5ms CPU overhead (FR-172)
-  - Progressive context gathering: HyDE expansion → sparse-only → live sources →
-    clarification when initial retrieval below `MIN_CHUNKS_THRESHOLD` (FR-143)
-  - Shared Redis namespacing: single Redis instance serves both proxy and
-    OpenWebUI with non-colliding key prefixes (FR-155)
+    - Response compression: gzip level 6 (default) and brotli level 4 (optional)
+      with 60%+ JSON reduction and <5ms CPU overhead (FR-172)
+    - Progressive context gathering: HyDE expansion → sparse-only → live sources →
+      clarification when initial retrieval below `MIN_CHUNKS_THRESHOLD` (FR-143)
+    - Shared Redis namespacing: single Redis instance serves both proxy and
+      OpenWebUI with non-colliding key prefixes (FR-155)
 
 - **Wave 13 — Monitoring**
-  - vLLM prefix cache monitoring: `rag_vllm_prefix_cache_hit_ratio` gauge added
-    to Prometheus metrics; actual scraping requires external job targeting vLLM
-    `/metrics` endpoint (FR-170, PARTIAL)
+    - vLLM prefix cache monitoring: `rag_vllm_prefix_cache_hit_ratio` gauge added
+      to Prometheus metrics; actual scraping requires external job targeting vLLM
+      `/metrics` endpoint (FR-170, PARTIAL)
 
 ### Changed
 
@@ -270,38 +270,38 @@ for the full sprint plan.
 ### Added
 
 - **Wave 1 — Foundation Fixes**
-  - Mypy strict mode: 313→0 errors across 139 source files
-  - Pytest collection fixes for MCP server test suites
-  - Dependabot PR triage: 7 PRs merged for dependency updates
-  - Production bugfixes: Qdrant connection recovery, LLM timeout handling
-  - Code quality cleanup: ruff auto-fix from 8,137 issues → 23
+    - Mypy strict mode: 313→0 errors across 139 source files
+    - Pytest collection fixes for MCP server test suites
+    - Dependabot PR triage: 7 PRs merged for dependency updates
+    - Production bugfixes: Qdrant connection recovery, LLM timeout handling
+    - Code quality cleanup: ruff auto-fix from 8,137 issues → 23
 
 - **Wave 2 — Quality Push**
-  - Retrieval eval dataset expanded: 20→452 Q&A pairs (+2160%)
-  - Coverage raised to 81% (meets 80% threshold)
-  - Dependency security audit: 6 packages fixed, 0 HIGH/CRITICAL CVEs
-  - Sprint documentation (S3 archived, S4 plan published, ADR indices updated)
+    - Retrieval eval dataset expanded: 20→452 Q&A pairs (+2160%)
+    - Coverage raised to 81% (meets 80% threshold)
+    - Dependency security audit: 6 packages fixed, 0 HIGH/CRITICAL CVEs
+    - Sprint documentation (S3 archived, S4 plan published, ADR indices updated)
 
 - **Wave 3 — Infrastructure**
-  - HTTPS/TLS automation for ingress endpoints
-  - Secrets rotation automation (kubectl + External Secrets Operator)
-  - Database migration framework for SQLite schema evolution
-  - K8s Helm chart validation
-  - Baseline latency benchmarks
+    - HTTPS/TLS automation for ingress endpoints
+    - Secrets rotation automation (kubectl + External Secrets Operator)
+    - Database migration framework for SQLite schema evolution
+    - K8s Helm chart validation
+    - Baseline latency benchmarks
 
 - **Wave 4 — Polish**
-  - C4 diagram gaps filled (L1, L2, L3 for remaining components)
-  - OpenAPI export automation (CI pipeline integration)
-  - ADR-008 POC: granian ASGI server migration from uvicorn
-  - OCR/audio/video RAG support (ingestion pipeline)
-  - Automated RAG maturity review
+    - C4 diagram gaps filled (L1, L2, L3 for remaining components)
+    - OpenAPI export automation (CI pipeline integration)
+    - ADR-008 POC: granian ASGI server migration from uvicorn
+    - OCR/audio/video RAG support (ingestion pipeline)
+    - Automated RAG maturity review
 
 - **Wave 5 — Final Validation & Hardening**
-  - Full regression suite: 4,340 tests passing (target: 3,000+)
-  - Performance benchmarks: latency p50/p95/p99 baselines
-  - Final security audit: bandit + trivy + dependabot, zero findings
-  - Documentation final pass: all 44 guides updated
-  - Sprint retrospective
+    - Full regression suite: 4,340 tests passing (target: 3,000+)
+    - Performance benchmarks: latency p50/p95/p99 baselines
+    - Final security audit: bandit + trivy + dependabot, zero findings
+    - Documentation final pass: all 44 guides updated
+    - Sprint retrospective
 
 - **ETL graceful shutdown** — WAL checkpoint on SIGTERM/SIGINT, in-flight task completion,
   Redis consumer group handoff, configurable `SHUTDOWN_TIMEOUT`

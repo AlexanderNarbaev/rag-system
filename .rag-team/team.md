@@ -3,51 +3,57 @@
 ## Roles & Members
 
 ### Strategic & Product Layer
-| Role | Member | Responsibilities |
-|------|--------|-----------------|
-| **Product Manager** | — | Backlog, priorities, release criteria, roadmap ownership |
-| **Business Analyst** | — | User scenarios, acceptance criteria (Gherkin), requirement traceability |
-| **Strategic Steering Committee** | Alexandr Narbaev | Wave planning, cross-wave prioritization, architectural governance |
-| **Domain Expert** | — | Golden dataset curation, answer quality verification, knowledge validation |
+
+| Role                             | Member           | Responsibilities                                                           |
+|----------------------------------|------------------|----------------------------------------------------------------------------|
+| **Product Manager**              | —                | Backlog, priorities, release criteria, roadmap ownership                   |
+| **Business Analyst**             | —                | User scenarios, acceptance criteria (Gherkin), requirement traceability    |
+| **Strategic Steering Committee** | Alexandr Narbaev | Wave planning, cross-wave prioritization, architectural governance         |
+| **Domain Expert**                | —                | Golden dataset curation, answer quality verification, knowledge validation |
 
 ### Architecture & Technical Leadership
-| Role | Member | Responsibilities |
-|------|--------|-----------------|
-| **Lead System Architect** | Alexandr Narbaev | Architecture design, ADRs, technology selection, system boundaries |
-| **Tech Lead** | — | Code review, technical debt management, tooling standards, merge gating |
-| **Tool Orchestrator** | — | MCP server coordination, tool SDK governance, parallel execution routing |
-| **Focus & Session Manager** | — | Context compaction, checkpoint management, session persistence |
+
+| Role                        | Member           | Responsibilities                                                         |
+|-----------------------------|------------------|--------------------------------------------------------------------------|
+| **Lead System Architect**   | Alexandr Narbaev | Architecture design, ADRs, technology selection, system boundaries       |
+| **Tech Lead**               | —                | Code review, technical debt management, tooling standards, merge gating  |
+| **Tool Orchestrator**       | —                | MCP server coordination, tool SDK governance, parallel execution routing |
+| **Focus & Session Manager** | —                | Context compaction, checkpoint management, session persistence           |
 
 ### Development & Engineering
-| Role | Member | Responsibilities |
-|------|--------|-----------------|
-| **Backend Developer** | — | API, ETL, Qdrant/Neo4j/Redis/LLM integration |
-| **ML Engineer** | — | Embeddings, reranking, HyDE, CRAG, hallucination detection, fine-tuning |
-| **Data Engineer** | — | ETL pipelines, data quality, incremental extraction, WAL management |
-| **Frontend Developer** | — | OpenWebUI, admin panel, widget embedding |
-| **UX/UI Designer** | — | User research, interaction design, accessibility, component library |
+
+| Role                   | Member | Responsibilities                                                        |
+|------------------------|--------|-------------------------------------------------------------------------|
+| **Backend Developer**  | —      | API, ETL, Qdrant/Neo4j/Redis/LLM integration                            |
+| **ML Engineer**        | —      | Embeddings, reranking, HyDE, CRAG, hallucination detection, fine-tuning |
+| **Data Engineer**      | —      | ETL pipelines, data quality, incremental extraction, WAL management     |
+| **Frontend Developer** | —      | OpenWebUI, admin panel, widget embedding                                |
+| **UX/UI Designer**     | —      | User research, interaction design, accessibility, component library     |
 
 ### Quality & Security
-| Role | Member | Responsibilities |
-|------|--------|-----------------|
-| **QA Engineer** | — | Unit/integration/e2e/performance tests |
-| **Security Engineer** | — | JWT, Keycloak, LDAP/AD, RBAC, vulnerability scanning |
-| **Dual-Guardian Validator (Code)** | — | Static analysis enforcement, type safety, lint rules |
-| **Dual-Guardian Validator (Domain)** | — | Business logic verification, acceptance criteria validation |
-| **Infrastructure Sentinel** | — | CI/CD health, K8s probes, backup integrity, resource alerts |
+
+| Role                                 | Member | Responsibilities                                            |
+|--------------------------------------|--------|-------------------------------------------------------------|
+| **QA Engineer**                      | —      | Unit/integration/e2e/performance tests                      |
+| **Security Engineer**                | —      | JWT, Keycloak, LDAP/AD, RBAC, vulnerability scanning        |
+| **Dual-Guardian Validator (Code)**   | —      | Static analysis enforcement, type safety, lint rules        |
+| **Dual-Guardian Validator (Domain)** | —      | Business logic verification, acceptance criteria validation |
+| **Infrastructure Sentinel**          | —      | CI/CD health, K8s probes, backup integrity, resource alerts |
 
 ### Operations & Integration
-| Role | Member | Responsibilities |
-|------|--------|-----------------|
-| **DevOps Engineer** | — | CI/CD, Docker, Kubernetes, monitoring, Helm charts |
-| **Integration Manager** | — | Module integration, staging coordination, contract validation |
+
+| Role                    | Member | Responsibilities                                              |
+|-------------------------|--------|---------------------------------------------------------------|
+| **DevOps Engineer**     | —      | CI/CD, Docker, Kubernetes, monitoring, Helm charts            |
+| **Integration Manager** | —      | Module integration, staging coordination, contract validation |
 
 ### Documentation & Analytics
-| Role | Member | Responsibilities |
-|------|--------|-----------------|
-| **Technical Writer** | — | API docs, architecture docs, runbooks, ADR authoring |
-| **Doc-Sync Reflector** | — | Bilingual doc sync (EN/RU), changelog alignment, compliance traceability |
-| **Data Analyst** | — | RAG quality metrics, dashboards, SLI/SLO monitoring |
+
+| Role                   | Member | Responsibilities                                                         |
+|------------------------|--------|--------------------------------------------------------------------------|
+| **Technical Writer**   | —      | API docs, architecture docs, runbooks, ADR authoring                     |
+| **Doc-Sync Reflector** | —      | Bilingual doc sync (EN/RU), changelog alignment, compliance traceability |
+| **Data Analyst**       | —      | RAG quality metrics, dashboards, SLI/SLO monitoring                      |
 
 ## Current Sprint — Wave 20
 
@@ -91,14 +97,14 @@
 
 ## Communication Protocols
 
-| Channel | Purpose | Frequency |
-|---------|---------|-----------|
-| GitHub Issues | Bug tracking, feature requests | On-demand |
-| GitHub PRs | Code review, CI gating | Per-change |
-| CHANGELOG.md | Release notes per wave | Per-wave |
-| `.rag-team/` | Team state, sprint status, role docs | Per-wave |
+| Channel            | Purpose                                               | Frequency  |
+|--------------------|-------------------------------------------------------|------------|
+| GitHub Issues      | Bug tracking, feature requests                        | On-demand  |
+| GitHub PRs         | Code review, CI gating                                | Per-change |
+| CHANGELOG.md       | Release notes per wave                                | Per-wave   |
+| `.rag-team/`       | Team state, sprint status, role docs                  | Per-wave   |
 | `artifacts/state/` | Session checkpoint, context compaction, wave tracking | Per-action |
-| Compliance Doc | FR/NFR traceability and MET status | Per-wave |
+| Compliance Doc     | FR/NFR traceability and MET status                    | Per-wave   |
 
 ## Decision Authority
 

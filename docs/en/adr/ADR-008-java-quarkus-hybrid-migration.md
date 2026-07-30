@@ -76,12 +76,12 @@ with hypothetical team preferences.
 
 The original proposal identified four structural limitations. Each has a Python-native mitigation:
 
-| Original Concern            | Python-Native Mitigation                                                        | Effort   |
-|-----------------------------|---------------------------------------------------------------------------------|----------|
-| GIL constraints             | `granian` (Rust-based ASGI server) with subprocess workers; `uvloop` event loop | Low      |
-| Memory footprint            | Model quantization (GPTQ/AWQ), lazy loading, model unloading for idle routes   | Medium   |
-| Startup time                | `granian` provides ~5x faster startup than uvicorn; model pre-warming on health | Low      |
-| Observability gap           | OpenTelemetry Python SDK + structured JSON logging + Prometheus                 | Medium   |
+| Original Concern  | Python-Native Mitigation                                                        | Effort |
+|-------------------|---------------------------------------------------------------------------------|--------|
+| GIL constraints   | `granian` (Rust-based ASGI server) with subprocess workers; `uvloop` event loop | Low    |
+| Memory footprint  | Model quantization (GPTQ/AWQ), lazy loading, model unloading for idle routes    | Medium |
+| Startup time      | `granian` provides ~5x faster startup than uvicorn; model pre-warming on health | Low    |
+| Observability gap | OpenTelemetry Python SDK + structured JSON logging + Prometheus                 | Medium |
 
 These mitigations deliver 80% of the benefit at 10% of the migration cost.
 
@@ -124,24 +124,24 @@ this overhead is pure waste compared to in-process Python calls that take <0.1 m
 
 ### Risks
 
-| Risk                                                        | Probability | Impact | Mitigation                                                       |
-|-------------------------------------------------------------|-------------|--------|------------------------------------------------------------------|
-| Python performance ceiling reached under production load     | Low         | Medium | Profile early; `granian` + model quantization; horizontal scaling |
-| Team member requests JVM work; morale impact of rejection    | Low         | Low    | Clear ADR rationale; Python optimization work is substantive     |
-| Future ML models require Java-only inference                 | Low         | High   | Revisit ADR if a concrete model with no Python support emerges   |
+| Risk                                                      | Probability | Impact | Mitigation                                                        |
+|-----------------------------------------------------------|-------------|--------|-------------------------------------------------------------------|
+| Python performance ceiling reached under production load  | Low         | Medium | Profile early; `granian` + model quantization; horizontal scaling |
+| Team member requests JVM work; morale impact of rejection | Low         | Low    | Clear ADR rationale; Python optimization work is substantive      |
+| Future ML models require Java-only inference              | Low         | High   | Revisit ADR if a concrete model with no Python support emerges    |
 
 ## Optimization Roadmap
 
 Since the migration is rejected, the following Python-native improvements are prioritized:
 
-| Phase | Improvement                                       | Target Sprint  |
-|-------|---------------------------------------------------|----------------|
-| Q3    | Migrate from uvicorn to `granian` ASGI server     | S4-2026 Wave 4 |
-| Q3    | Enable `mypy --strict` on `proxy/app/`            | S4-2026 Wave 4 |
-| Q3    | Structured JSON logging with OpenTelemetry        | S4-2026 Wave 4 |
-| Q4    | Model quantization (GPTQ/AWQ) for embedder/reranker | S1-2027       |
-| Q4    | Lazy model loading + idle route unloading          | S1-2027        |
-| Q4    | Async profiler integration for Python              | S1-2027        |
+| Phase | Improvement                                         | Target Sprint  |
+|-------|-----------------------------------------------------|----------------|
+| Q3    | Migrate from uvicorn to `granian` ASGI server       | S4-2026 Wave 4 |
+| Q3    | Enable `mypy --strict` on `proxy/app/`              | S4-2026 Wave 4 |
+| Q3    | Structured JSON logging with OpenTelemetry          | S4-2026 Wave 4 |
+| Q4    | Model quantization (GPTQ/AWQ) for embedder/reranker | S1-2027        |
+| Q4    | Lazy model loading + idle route unloading           | S1-2027        |
+| Q4    | Async profiler integration for Python               | S1-2027        |
 
 ## Status History
 

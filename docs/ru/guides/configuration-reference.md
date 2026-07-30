@@ -588,8 +588,8 @@ TOOLS_OPENAPI_SPECS='[{"name":"petstore","url":"https://example.com/openapi.json
 | Переменная          | Тип    | По умолчанию     | Описание                                       |
 |---------------------|--------|------------------|------------------------------------------------|
 | `MINIO_ENDPOINT`    | string | `localhost:9000` | Эндпоинт S3 API MinIO.                         |
-| `MINIO_ACCESS_KEY`  | string | `CHANGE_ME`     | Ключ доступа MinIO. **Смените в продакшне.**   |
-| `MINIO_SECRET_KEY`  | string | `CHANGE_ME`     | Секретный ключ MinIO. **Смените в продакшне.** |
+| `MINIO_ACCESS_KEY`  | string | `CHANGE_ME`      | Ключ доступа MinIO. **Смените в продакшне.**   |
+| `MINIO_SECRET_KEY`  | string | `CHANGE_ME`      | Секретный ключ MinIO. **Смените в продакшне.** |
 | `MINIO_BUCKET`      | string | `rag-artifacts`  | Бакет для артефактов моделей.                  |
 | `MINIO_DOCS_BUCKET` | string | `rag-documents`  | Бакет для загруженных документов.              |
 | `MINIO_SECURE`      | bool   | `false`          | HTTPS для подключения к MinIO.                 |
@@ -731,7 +731,7 @@ confluence:
   token: "your_personal_access_token"
   verify_ssl: false                  # False для самоподписанных сертификатов
   ca_bundle: ""                      # Путь к корпоративному CA bundle
-  space_keys:                        # Список пространств (null = все)
+  space_keys: # Список пространств (null = все)
     - "DEV"
     - "OPS"
   output_dir: "./raw_data/confluence"

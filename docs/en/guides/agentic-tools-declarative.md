@@ -65,8 +65,8 @@ parameters:
 
 shell:
   command: "df -h {{path}}"
-  allowed_commands: ["df", "du"]
-  allowed_paths: ["/var/log", "/data"]
+  allowed_commands: [ "df", "du" ]
+  allowed_paths: [ "/var/log", "/data" ]
   timeout: 15
 ```
 
@@ -110,7 +110,7 @@ shell:
 retry:
   max_retries: 3
   backoff_s: 2.0
-  retry_on: ["timeout", "http_5xx"]
+  retry_on: [ "timeout", "http_5xx" ]
 ```
 
 | Field         | Type            | Default       | Description                                     |
@@ -269,7 +269,9 @@ All the above examples also work in JSON:
   "http": {
     "method": "GET",
     "url_template": "https://{{service_name}}.internal/health",
-    "allowed_hosts": ["*.internal"]
+    "allowed_hosts": [
+      "*.internal"
+    ]
   }
 }
 ```

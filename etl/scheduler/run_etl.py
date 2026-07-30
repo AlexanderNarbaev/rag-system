@@ -240,8 +240,14 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                     with open(issue_file, encoding="utf-8") as f:
                         data = json.load(f)
                     content = data.get("description", "")
-                    for comment in data.get("comments", []):
-                        content += f"\n\nComment by {comment['author']}: {comment['body']}"
+                    comments = data.get("comments", [])
+                    if comments:
+                      for comment in comments:
+                        author = comment.get("author", "Unknown")
+                        body = comment.get("body", "")
+                        if body:
+                          author_str = str(author) if author else "Unknown"
+                          content += f"\n\nComment by {author_str}: {body}"
                     documents.append(
                         {
                             "id": f"jira_{data['key']}",

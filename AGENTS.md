@@ -383,89 +383,100 @@ See `proxy/app/config.py` for all available settings and defaults.
 
 ## Multi-Agent Continuous Development Framework v3.0
 
-The project is developed by an enhanced multi-agent team operating in wave-based sprints with checkpoint/resume capabilities
+The project is developed by an enhanced multi-agent team operating in wave-based sprints with checkpoint/resume
+capabilities
 and integrated tool ecosystem.
 
 ### Agent Team Composition (23 Roles)
 
 #### Strategic & Product Layer
-| Role | Responsibilities |
-|------|-----------------|
-| Product Manager | Backlog, priorities, release criteria, roadmap ownership |
-| Business Analyst | User scenarios, acceptance criteria (Gherkin), requirement traceability |
+
+| Role                         | Responsibilities                                                                    |
+|------------------------------|-------------------------------------------------------------------------------------|
+| Product Manager              | Backlog, priorities, release criteria, roadmap ownership                            |
+| Business Analyst             | User scenarios, acceptance criteria (Gherkin), requirement traceability             |
 | Strategic Steering Committee | Wave planning, cross-wave prioritization, architectural governance, risk assessment |
-| Domain Expert | Golden dataset curation, answer quality verification, knowledge validation |
+| Domain Expert                | Golden dataset curation, answer quality verification, knowledge validation          |
 
 #### Architecture & Technical Leadership
-| Role | Responsibilities |
-|------|-----------------|
-| System Architect | Architecture design, ADRs, technology selection, system boundaries |
-| Tech Lead | Code review, technical debt management, tooling standards, merge gating |
-| Tool Orchestrator | MCP server coordination, tool SDK governance, OpenAPI auto-discovery, parallel execution routing |
-| Focus & Session Manager | Context compaction, checkpoint management, session persistence, task continuity |
+
+| Role                    | Responsibilities                                                                                 |
+|-------------------------|--------------------------------------------------------------------------------------------------|
+| System Architect        | Architecture design, ADRs, technology selection, system boundaries                               |
+| Tech Lead               | Code review, technical debt management, tooling standards, merge gating                          |
+| Tool Orchestrator       | MCP server coordination, tool SDK governance, OpenAPI auto-discovery, parallel execution routing |
+| Focus & Session Manager | Context compaction, checkpoint management, session persistence, task continuity                  |
 
 #### Development & Engineering
-| Role | Responsibilities |
-|------|-----------------|
-| Backend Developer | API, ETL, Qdrant/Neo4j/Redis/LLM integration |
-| ML Engineer | Embeddings, reranking, HyDE, CRAG, hallucination detection, model fine-tuning |
-| Data Engineer | ETL pipelines, data quality, incremental extraction, WAL management |
-| Frontend Developer | OpenWebUI, admin panel, widget embedding |
-| UX/UI Designer | User research, interaction design, accessibility, component library maintenance |
+
+| Role               | Responsibilities                                                                |
+|--------------------|---------------------------------------------------------------------------------|
+| Backend Developer  | API, ETL, Qdrant/Neo4j/Redis/LLM integration                                    |
+| ML Engineer        | Embeddings, reranking, HyDE, CRAG, hallucination detection, model fine-tuning   |
+| Data Engineer      | ETL pipelines, data quality, incremental extraction, WAL management             |
+| Frontend Developer | OpenWebUI, admin panel, widget embedding                                        |
+| UX/UI Designer     | User research, interaction design, accessibility, component library maintenance |
 
 #### Quality & Security
-| Role | Responsibilities |
-|------|-----------------|
-| QA Engineer | Unit/integration/e2e/performance tests, test framework maintenance |
-| Security Engineer | JWT, Keycloak, LDAP/AD, RBAC, vulnerability scanning, secret management |
-| Dual-Guardian Validator (Code) | Static analysis enforcement, type safety, lint rules, code quality gates |
+
+| Role                             | Responsibilities                                                                      |
+|----------------------------------|---------------------------------------------------------------------------------------|
+| QA Engineer                      | Unit/integration/e2e/performance tests, test framework maintenance                    |
+| Security Engineer                | JWT, Keycloak, LDAP/AD, RBAC, vulnerability scanning, secret management               |
+| Dual-Guardian Validator (Code)   | Static analysis enforcement, type safety, lint rules, code quality gates              |
 | Dual-Guardian Validator (Domain) | Business logic verification, acceptance criteria validation, golden dataset alignment |
-| Infrastructure Sentinel | CI/CD health, K8s probe monitoring, backup integrity, resource utilization alerts |
+| Infrastructure Sentinel          | CI/CD health, K8s probe monitoring, backup integrity, resource utilization alerts     |
 
 #### Operations & Integration
-| Role | Responsibilities |
-|------|-----------------|
-| DevOps Engineer | CI/CD, Docker, Kubernetes, monitoring, Helm chart maintenance |
+
+| Role                | Responsibilities                                                            |
+|---------------------|-----------------------------------------------------------------------------|
+| DevOps Engineer     | CI/CD, Docker, Kubernetes, monitoring, Helm chart maintenance               |
 | Integration Manager | Module integration, staging coordination, inter-service contract validation |
 
 #### Documentation & Analytics
-| Role | Responsibilities |
-|------|-----------------|
-| Technical Writer | API docs, architecture docs, runbooks, ADR authoring |
+
+| Role               | Responsibilities                                                                       |
+|--------------------|----------------------------------------------------------------------------------------|
+| Technical Writer   | API docs, architecture docs, runbooks, ADR authoring                                   |
 | Doc-Sync Reflector | Bilingual documentation sync (EN/RU), changelog alignment, compliance doc traceability |
-| Data Analyst | RAG quality metrics, dashboards, SLI/SLO monitoring, regression analysis |
+| Data Analyst       | RAG quality metrics, dashboards, SLI/SLO monitoring, regression analysis               |
 
 ### Enhanced Wave-Based Development Process
 
-1. **Initiation** (PM + BA + Architect + Strategic Steering Committee) → goals, acceptance criteria, ADRs, risk assessment
+1. **Initiation** (PM + BA + Architect + Strategic Steering Committee) → goals, acceptance criteria, ADRs, risk
+   assessment
 2. **Detailing** (BA + Data Analyst + Domain Expert + UX/UI Designer) → test cases, golden dataset, UX research
 3. **Design** (Architect + Tech Lead + Tool Orchestrator + ML + Data Eng) → specs, APIs, schemas, tool definitions
-4. **Implementation** (all developers + DevOps + Tool Orchestrator) → parallel with mocks, CI gates, [STRATEGIC_NEEDED] blocking
+4. **Implementation** (all developers + DevOps + Tool Orchestrator) → parallel with mocks, CI gates, [STRATEGIC_NEEDED]
+   blocking
 5. **Testing** (QA + Integration + Security + Dual-Guardian Validators) → all test types, dual validation
 6. **Quality Assessment** (Data Analyst + Domain Expert + UX + Doc-Sync Reflector) → metrics, verification, doc sync
 7. **Acceptance** (PM + Tech Lead + DevOps + Infrastructure Sentinel) → final review, canary deploy, checkpoint commit
-8. **Reflection** (Focus & Session Manager + Strategic Steering Committee) → context compaction, session checkpoint, next-wave planning
+8. **Reflection** (Focus & Session Manager + Strategic Steering Committee) → context compaction, session checkpoint,
+   next-wave planning
 
 ### Checkpoint & Resume Mechanism
 
 - **Session state persisted after every action** via `artifacts/state/session_checkpoint.json`
-- **Context compaction** logged in `artifacts/state/context_compaction_log.md` — carried-forward context, decisions, open items
+- **Context compaction** logged in `artifacts/state/context_compaction_log.md` — carried-forward context, decisions,
+  open items
 - **Wave tracking** in `artifacts/state/current_wave.md` — active task, protected zones, status
 - **Protected zones** — critical files that require Strategic Steering Committee approval to modify
 - On session restart, load `artifacts/state/session_checkpoint.json` and `context_compaction_log.md` to resume state
 
 ### Tool Ecosystem
 
-| Tool | Category | Purpose |
-|------|----------|---------|
-| **CodeGraph** | Code Intelligence | AST-indexed knowledge graph, call path tracing, blast radius analysis |
-| **LSP** | Code Intelligence | Real-time diagnostics, type checking, symbol resolution |
-| **MCP Servers** | Protocol Integration | filesystem, context7, sequential-thinking, codegraph, agentic-tools, memorylayer, fetch, sqlite, github, excalidraw |
-| **Memory (MemoryLayer)** | Session Persistence | Semantic memory, episodic memory, working memory, chat thread persistence |
-| **ChromaDB** | Vector Memory | Embedding-based semantic recall, cross-session knowledge retrieval |
-| **Muninn** | Knowledge Management | Project context persistence, decision recording, next-step tracking |
-| **Multi-Model Router** | LLM Infrastructure | Provider-agnostic routing (vLLM, llama.cpp, OpenAI-compatible), SLM/LLM tiered inference |
-| **Session Compaction** | Context Management | Automatic context summarization, unnecessary detail pruning, state continuity |
+| Tool                     | Category             | Purpose                                                                                                             |
+|--------------------------|----------------------|---------------------------------------------------------------------------------------------------------------------|
+| **CodeGraph**            | Code Intelligence    | AST-indexed knowledge graph, call path tracing, blast radius analysis                                               |
+| **LSP**                  | Code Intelligence    | Real-time diagnostics, type checking, symbol resolution                                                             |
+| **MCP Servers**          | Protocol Integration | filesystem, context7, sequential-thinking, codegraph, agentic-tools, memorylayer, fetch, sqlite, github, excalidraw |
+| **Memory (MemoryLayer)** | Session Persistence  | Semantic memory, episodic memory, working memory, chat thread persistence                                           |
+| **ChromaDB**             | Vector Memory        | Embedding-based semantic recall, cross-session knowledge retrieval                                                  |
+| **Muninn**               | Knowledge Management | Project context persistence, decision recording, next-step tracking                                                 |
+| **Multi-Model Router**   | LLM Infrastructure   | Provider-agnostic routing (vLLM, llama.cpp, OpenAI-compatible), SLM/LLM tiered inference                            |
+| **Session Compaction**   | Context Management   | Automatic context summarization, unnecessary detail pruning, state continuity                                       |
 
 ### Strategic Blocking ([STRATEGIC_NEEDED])
 
@@ -492,13 +503,17 @@ and integrated tool ecosystem.
 8. **Compliance**: Every change must be traceable to a requirement in compliance-requirements.md
 9. **Graceful degradation** — every component must fail independently
 10. **Air-gapped first** — no external API calls at runtime
-11. **Session persistence** — update `artifacts/state/session_checkpoint.json` after every action; log context compactions
-12. **Protected zones** — no modification of `proxy/app/shared/config.py` or `etl/scheduler/run_etl.py` without Strategic Steering Committee approval
+11. **Session persistence** — update `artifacts/state/session_checkpoint.json` after every action; log context
+    compactions
+12. **Protected zones** — no modification of `proxy/app/shared/config.py` or `etl/scheduler/run_etl.py` without
+    Strategic Steering Committee approval
 13. **Bilingual docs** — all documentation must exist in EN and RU; Doc-Sync Reflector validates parity
-14. **Checkpoint on resume** — load `artifacts/state/session_checkpoint.json` and `context_compaction_log.md` at session start
+14. **Checkpoint on resume** — load `artifacts/state/session_checkpoint.json` and `context_compaction_log.md` at session
+    start
 15. **[STRATEGIC_NEEDED]** — tag blocking decisions; do not proceed past unacknowledged strategic gates
 
 ## Key Verification Commands
+
 - `ruff check proxy/ etl/ tests/` — lint
 - `ruff format --check proxy/ etl/ tests/` — format
 - `make typecheck` — mypy strict
@@ -508,12 +523,12 @@ and integrated tool ecosystem.
 
 ## AI Development Tools (via opencode_initializer)
 
-| Tool | IDE | License | Purpose |
-|------|-----|---------|---------|
-| DevoxxGenie | JetBrains | Apache 2.0 | Local LLMs, RAG, MCP, agent mode |
-| Cline | VS Code + JetBrains | Apache 2.0 | AI coding agent, Ollama, MCP |
-| Tabby | VS Code + JetBrains | Apache 2.0 | Self-hosted code completion |
-| Aider | CLI | Apache 2.0 | Git-aware multi-file AI edits |
-| Veai | JetBrains (RU) | Proprietary | On-prem, Memory Bank, sanctions-resilient |
+| Tool        | IDE                 | License     | Purpose                                   |
+|-------------|---------------------|-------------|-------------------------------------------|
+| DevoxxGenie | JetBrains           | Apache 2.0  | Local LLMs, RAG, MCP, agent mode          |
+| Cline       | VS Code + JetBrains | Apache 2.0  | AI coding agent, Ollama, MCP              |
+| Tabby       | VS Code + JetBrains | Apache 2.0  | Self-hosted code completion               |
+| Aider       | CLI                 | Apache 2.0  | Git-aware multi-file AI edits             |
+| Veai        | JetBrains (RU)      | Proprietary | On-prem, Memory Bank, sanctions-resilient |
 
 All installed via: `bash ~/Projects/opencode_initializer/setup.sh --full`

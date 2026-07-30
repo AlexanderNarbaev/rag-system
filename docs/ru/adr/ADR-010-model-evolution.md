@@ -331,69 +331,74 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Generic, TypeVar
 
-class TrainerType(Enum):
-    SLM = "slm"
-    LLM = "llm"
-    RERANKER = "reranker"
 
-class EnvProfile(Enum):
-    DEV = "dev"        # CPU only, small batch, fp32
-    PROD = "prod"      # GPU, full batch, bf16
-    CI = "ci"          # No GPU, smoke test, 1 epoch
+class TrainerType (Enum):
+  SLM = "slm"
+  LLM = "llm"
+  RERANKER = "reranker"
+
+
+class EnvProfile (Enum):
+  DEV = "dev"  # CPU only, small batch, fp32
+  PROD = "prod"  # GPU, full batch, bf16
+  CI = "ci"  # No GPU, smoke test, 1 epoch
+
 
 @dataclass
 class TrainingConfig:
-    trainer_type: TrainerType
-    env_profile: EnvProfile = EnvProfile.DEV
-    base_model: str = ""
-    output_dir: str = "./models/training"
-    epochs: int = 3
-    batch_size: int = 8
-    learning_rate: float = 2e-4
-    eval_split: float = 0.2
-    max_seq_length: int = 512
-    use_lora: bool = True
-    lora_r: int = 8
-    lora_alpha: int = 16
-    lora_dropout: float = 0.05
-    use_qlora: bool = False       # LLM only
-    load_in_4bit: bool = False    # LLM only
-    bnb_4bit_compute_dtype: str = "float16"
-    warmup_steps: int = 100
-    logging_steps: int = 10
-    save_steps: int = 500
-    eval_steps: int = 500
-    seed: int = 42
+  trainer_type: TrainerType
+  env_profile: EnvProfile = EnvProfile.DEV
+  base_model: str = ""
+  output_dir: str = "./models/training"
+  epochs: int = 3
+  batch_size: int = 8
+  learning_rate: float = 2e-4
+  eval_split: float = 0.2
+  max_seq_length: int = 512
+  use_lora: bool = True
+  lora_r: int = 8
+  lora_alpha: int = 16
+  lora_dropout: float = 0.05
+  use_qlora: bool = False  # LLM only
+  load_in_4bit: bool = False  # LLM only
+  bnb_4bit_compute_dtype: str = "float16"
+  warmup_steps: int = 100
+  logging_steps: int = 10
+  save_steps: int = 500
+  eval_steps: int = 500
+  seed: int = 42
+
 
 @dataclass
 class TrainingJob:
-    """Represents a training job tracked in MLflow."""
-    job_id: str
-    trainer_type: TrainerType
-    config: TrainingConfig
-    status: str = "pending"  # pending, running, completed, failed
-    mlflow_run_id: str | None = None
-    metrics: dict[str, float] = field(default_factory=dict)
-    artifact_uri: str | None = None
-    started_at: str | None = None
-    completed_at: str | None = None
-    error_message: str | None = None
+  """Represents a training job tracked in MLflow."""
+  job_id: str
+  trainer_type: TrainerType
+  config: TrainingConfig
+  status: str = "pending"  # pending, running, completed, failed
+  mlflow_run_id: str | None = None
+  metrics: dict [str, float] = field (default_factory = dict)
+  artifact_uri: str | None = None
+  started_at: str | None = None
+  completed_at: str | None = None
+  error_message: str | None = None
 
-class TrainerBase(ABC):
-    """Base class for all model trainers."""
-    
-    @abstractmethod
-    def prepare_data(self, *args, **kwargs) -> Any: ...
-    
-    @abstractmethod
-    def train(self, config: TrainingConfig) -> TrainingJob: ...
-    
-    @abstractmethod
-    def evaluate(self, model, eval_data) -> dict[str, float]: ...
-    
-    def save_adapter(self, model, output_path: str) -> str: ...
-    
-    def push_to_registry(self, job: TrainingJob) -> str: ...
+
+class TrainerBase (ABC):
+  """Base class for all model trainers."""
+  
+  @abstractmethod
+  def prepare_data (self, *args, **kwargs) -> Any: ...
+  
+  @abstractmethod
+  def train (self, config: TrainingConfig) -> TrainingJob: ...
+  
+  @abstractmethod
+  def evaluate (self, model, eval_data) -> dict [str, float]: ...
+  
+  def save_adapter (self, model, output_path: str) -> str: ...
+  
+  def push_to_registry (self, job: TrainingJob) -> str: ...
 ```
 
 #### 4.3.2 `adapter_manager.py` — Жизненный цикл адаптеров с горячей перезагрузкой
@@ -406,87 +411,95 @@ from typing import Any, Callable
 import threading
 import time
 
-class AdapterState(Enum):
-    UNLOADED = "unloaded"
-    LOADING = "loading"
-    ACTIVE = "active"
-    DRAINING = "draining"    # Serving existing requests, new go to warm adapter
-    RETIRING = "retiring"    # No active requests, can be unloaded
-    ERROR = "error"
+
+class AdapterState (Enum):
+  UNLOADED = "unloaded"
+  LOADING = "loading"
+  ACTIVE = "active"
+  DRAINING = "draining"  # Serving existing requests, new go to warm adapter
+  RETIRING = "retiring"  # No active requests, can be unloaded
+  ERROR = "error"
+
 
 @dataclass
 class ModelAdapter:
-    """Wraps a model with state, version, and hot-swap capability."""
-    name: str                       # "slm", "llm", "reranker"
-    state: AdapterState = AdapterState.UNLOADED
-    version: str = "base"           # Semantic version or MLflow run ID
-    model_path: str | None = None   # Path to model/adapter weights
-    adapter_type: str = "lora"      # "lora", "full", "base"
-    base_model: str = ""
-    loaded_at: str | None = None
-    request_count: int = 0          # Active in-flight requests
-    error_count: int = 0
-    metadata: dict = field(default_factory=dict)
+  """Wraps a model with state, version, and hot-swap capability."""
+  name: str  # "slm", "llm", "reranker"
+  state: AdapterState = AdapterState.UNLOADED
+  version: str = "base"  # Semantic version or MLflow run ID
+  model_path: str | None = None  # Path to model/adapter weights
+  adapter_type: str = "lora"  # "lora", "full", "base"
+  base_model: str = ""
+  loaded_at: str | None = None
+  request_count: int = 0  # Active in-flight requests
+  error_count: int = 0
+  metadata: dict = field (default_factory = dict)
+
 
 class HotReloadWatcher:
-    """Watches a directory or MLflow registry for new model versions.
-    
-    Supports two modes:
-    1. File watcher (inotify/polling) for local model directories
-    2. MLflow registry polling for staged model transitions
-    """
-    
-    def __init__(self, watch_path: str, callback: Callable, poll_interval: float = 5.0):
-        self._watch_path = watch_path
-        self._callback = callback
-        self._poll_interval = poll_interval
-        self._thread: threading.Thread | None = None
-        self._stop_event = threading.Event()
-    
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def _poll(self) -> None: ...
+  """Watches a directory or MLflow registry for new model versions.
+  
+  Supports two modes:
+  1. File watcher (inotify/polling) for local model directories
+  2. MLflow registry polling for staged model transitions
+  """
+  
+  def __init__ (self, watch_path: str, callback: Callable, poll_interval: float = 5.0):
+    self._watch_path = watch_path
+    self._callback = callback
+    self._poll_interval = poll_interval
+    self._thread: threading.Thread | None = None
+    self._stop_event = threading.Event ()
+  
+  def start (self) -> None: ...
+  
+  def stop (self) -> None: ...
+  
+  def _poll (self) -> None: ...
+
 
 class AdapterManager:
-    """Centralized manager for all model adapters.
-    
-    Responsibilities:
-    - Load/unload adapters without proxy restart
-    - Drain connections before swap
-    - Track adapter versions and state
-    - Coordinate canary traffic splitting
-    - Expose Prometheus metrics per adapter
-    """
-    
-    def __init__(self):
-        self._adapters: dict[str, ModelAdapter] = {}
-        self._watchers: dict[str, HotReloadWatcher] = {}
-        self._lock = threading.RLock()
-    
-    def register_adapter(self, name: str, adapter: ModelAdapter) -> None: ...
-    
-    def get_adapter(self, name: str) -> ModelAdapter: ...
-    
-    def reload_adapter(self, name: str, new_path: str, version: str) -> ModelAdapter:
-        """Hot-reload an adapter: load new, drain old, swap, retire old."""
-        ...
-    
-    def list_adapters(self) -> list[ModelAdapter]: ...
-    
-    def enable_watcher(self, name: str, path: str) -> None: ...
-    
-    def disable_watcher(self, name: str) -> None: ...
-    
-    def shutdown(self) -> None: ...
+  """Centralized manager for all model adapters.
+  
+  Responsibilities:
+  - Load/unload adapters without proxy restart
+  - Drain connections before swap
+  - Track adapter versions and state
+  - Coordinate canary traffic splitting
+  - Expose Prometheus metrics per adapter
+  """
+  
+  def __init__ (self):
+    self._adapters: dict [str, ModelAdapter] = {}
+    self._watchers: dict [str, HotReloadWatcher] = {}
+    self._lock = threading.RLock ()
+  
+  def register_adapter (self, name: str, adapter: ModelAdapter) -> None: ...
+  
+  def get_adapter (self, name: str) -> ModelAdapter: ...
+  
+  def reload_adapter (self, name: str, new_path: str, version: str) -> ModelAdapter:
+    """Hot-reload an adapter: load new, drain old, swap, retire old."""
+    ...
+  
+  def list_adapters (self) -> list [ModelAdapter]: ...
+  
+  def enable_watcher (self, name: str, path: str) -> None: ...
+  
+  def disable_watcher (self, name: str) -> None: ...
+  
+  def shutdown (self) -> None: ...
+
 
 # Singleton
 _adapter_manager: AdapterManager | None = None
 
-def get_adapter_manager() -> AdapterManager:
-    global _adapter_manager
-    if _adapter_manager is None:
-        _adapter_manager = AdapterManager()
-    return _adapter_manager
+
+def get_adapter_manager () -> AdapterManager:
+  global _adapter_manager
+  if _adapter_manager is None:
+    _adapter_manager = AdapterManager ()
+  return _adapter_manager
 ```
 
 #### 4.3.3 `canary.py` — Контроллер канареечного развёртывания
@@ -497,74 +510,80 @@ from enum import Enum
 from typing import Any
 import time
 
-class CanaryPhase(Enum):
-    IDLE = "idle"
-    RAMP_5 = "ramp_5"       # 5% traffic to canary
-    RAMP_25 = "ramp_25"     # 25% traffic
-    RAMP_50 = "ramp_50"     # 50% traffic
-    RAMP_75 = "ramp_75"     # 75% traffic
-    FULL = "full"           # 100% traffic (promoted)
-    ROLLBACK = "rollback"   # Canary failed, reverting
+
+class CanaryPhase (Enum):
+  IDLE = "idle"
+  RAMP_5 = "ramp_5"  # 5% traffic to canary
+  RAMP_25 = "ramp_25"  # 25% traffic
+  RAMP_50 = "ramp_50"  # 50% traffic
+  RAMP_75 = "ramp_75"  # 75% traffic
+  FULL = "full"  # 100% traffic (promoted)
+  ROLLBACK = "rollback"  # Canary failed, reverting
+
 
 @dataclass
 class CanaryConfig:
-    model_name: str                          # "slm", "llm", "reranker"
-    stable_version: str                      # Current production version
-    canary_version: str                      # New version under test
-    phases: list[tuple[CanaryPhase, float, int]] = field(default_factory=lambda: [
-        (CanaryPhase.RAMP_5, 0.05, 300),     # 5% for 5 minutes
-        (CanaryPhase.RAMP_25, 0.25, 600),    # 25% for 10 minutes
-        (CanaryPhase.RAMP_50, 0.50, 900),    # 50% for 15 minutes
-        (CanaryPhase.RAMP_75, 0.75, 1200),   # 75% for 20 minutes
-        (CanaryPhase.FULL, 1.0, 0),          # Full promotion
-    ])
-    metrics_window: int = 300               # Evaluation window in seconds
-    rollback_thresholds: dict[str, tuple[float, str]] = field(default_factory=lambda: {
-        "hallucination_rate": (0.10, "gt"),    # rollback if > 10%
-        "bertscore_f1": (0.60, "lt"),          # rollback if < 0.60
-        "p95_latency_ms": (10000, "gt"),       # rollback if > 10s
-        "error_rate": (0.05, "gt"),            # rollback if > 5%
-    })
-    cooldown_seconds: int = 3600            # Cooldown after rollback before retry
+  model_name: str  # "slm", "llm", "reranker"
+  stable_version: str  # Current production version
+  canary_version: str  # New version under test
+  phases: list [tuple [CanaryPhase, float, int]] = field (default_factory = lambda: [
+      (CanaryPhase.RAMP_5, 0.05, 300),  # 5% for 5 minutes
+      (CanaryPhase.RAMP_25, 0.25, 600),  # 25% for 10 minutes
+      (CanaryPhase.RAMP_50, 0.50, 900),  # 50% for 15 minutes
+      (CanaryPhase.RAMP_75, 0.75, 1200),  # 75% for 20 minutes
+      (CanaryPhase.FULL, 1.0, 0),  # Full promotion
+  ])
+  metrics_window: int = 300  # Evaluation window in seconds
+  rollback_thresholds: dict [str, tuple [float, str]] = field (default_factory = lambda: {
+      "hallucination_rate": (0.10, "gt"),  # rollback if > 10%
+      "bertscore_f1": (0.60, "lt"),  # rollback if < 0.60
+      "p95_latency_ms": (10000, "gt"),  # rollback if > 10s
+      "error_rate": (0.05, "gt"),  # rollback if > 5%
+  })
+  cooldown_seconds: int = 3600  # Cooldown after rollback before retry
+
 
 @dataclass
 class TrafficSplit:
-    stable_weight: float = 1.0
-    canary_weight: float = 0.0
+  stable_weight: float = 1.0
+  canary_weight: float = 0.0
+
 
 class CanaryController:
-    """Manages canary deployment lifecycle with automatic rollback.
-    
-    Integrates with Prometheus for metric-driven decisions and
-    AdapterManager for model swapping.
-    """
-    
-    def __init__(self, adapter_manager: "AdapterManager"):
-        self._adapter_manager = adapter_manager
-        self._active_canaries: dict[str, CanaryConfig] = {}
-        self._current_phase: dict[str, CanaryPhase] = {}
-        self._traffic_splits: dict[str, TrafficSplit] = {}
-        self._phase_started: dict[str, float] = {}
-        self._rollback_cooldown: dict[str, float] = {}
-    
-    def start_canary(self, config: CanaryConfig) -> None: ...
-    
-    def get_traffic_split(self, model_name: str) -> TrafficSplit: ...
-    
-    def evaluate_and_advance(self, model_name: str) -> CanaryPhase: ...
-    
-    def evaluate_metrics(self, model_name: str) -> dict[str, bool]: ...
-    
-    def promote(self, model_name: str) -> None: ...
-    
-    def rollback(self, model_name: str) -> None: ...
-    
-    def status(self) -> dict[str, Any]: ...
+  """Manages canary deployment lifecycle with automatic rollback.
+  
+  Integrates with Prometheus for metric-driven decisions and
+  AdapterManager for model swapping.
+  """
+  
+  def __init__ (self, adapter_manager: "AdapterManager"):
+    self._adapter_manager = adapter_manager
+    self._active_canaries: dict [str, CanaryConfig] = {}
+    self._current_phase: dict [str, CanaryPhase] = {}
+    self._traffic_splits: dict [str, TrafficSplit] = {}
+    self._phase_started: dict [str, float] = {}
+    self._rollback_cooldown: dict [str, float] = {}
+  
+  def start_canary (self, config: CanaryConfig) -> None: ...
+  
+  def get_traffic_split (self, model_name: str) -> TrafficSplit: ...
+  
+  def evaluate_and_advance (self, model_name: str) -> CanaryPhase: ...
+  
+  def evaluate_metrics (self, model_name: str) -> dict [str, bool]: ...
+  
+  def promote (self, model_name: str) -> None: ...
+  
+  def rollback (self, model_name: str) -> None: ...
+  
+  def status (self) -> dict [str, Any]: ...
+
 
 # Singleton
 _canary_controller: CanaryController | None = None
 
-def get_canary_controller() -> CanaryController: ...
+
+def get_canary_controller () -> CanaryController: ...
 ```
 
 #### 4.3.4 `eval_gate.py` — Eval-гейт CI/CD
@@ -574,67 +593,67 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-class GateStatus(Enum):
-    PASS = "pass"
-    FAIL = "fail"
-    WARN = "warn"    # Below threshold but within tolerance
+
+class GateStatus (Enum):
+  PASS = "pass"
+  FAIL = "fail"
+  WARN = "warn"  # Below threshold but within tolerance
+
 
 @dataclass
 class MetricThreshold:
-    metric_name: str
-    threshold: float
-    comparison: str      # "gt" (greater than), "lt" (less than), "gte", "lte"
-    severity: str = "fail"  # "fail" or "warn"
-    tolerance: float = 0.0 # Relative tolerance for "warn" status
+  metric_name: str
+  threshold: float
+  comparison: str  # "gt" (greater than), "lt" (less than), "gte", "lte"
+  severity: str = "fail"  # "fail" or "warn"
+  tolerance: float = 0.0  # Relative tolerance for "warn" status
+
 
 @dataclass
 class GateResult:
-    status: GateStatus
-    model_name: str
-    version: str
-    metrics: dict[str, float]
-    thresholds: list[MetricThreshold]
-    failures: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-    baseline_metrics: dict[str, float] = field(default_factory=dict)
-    delta_metrics: dict[str, float] = field(default_factory=dict)
-    mlflow_run_id: str | None = None
-    report_path: str | None = None
+  status: GateStatus
+  model_name: str
+  version: str
+  metrics: dict [str, float]
+  thresholds: list [MetricThreshold]
+  failures: list [str] = field (default_factory = list)
+  warnings: list [str] = field (default_factory = list)
+  baseline_metrics: dict [str, float] = field (default_factory = dict)
+  delta_metrics: dict [str, float] = field (default_factory = dict)
+  mlflow_run_id: str | None = None
+  report_path: str | None = None
+
 
 @dataclass
 class EvalGateConfig:
-    model_name: str
-    thresholds: list[MetricThreshold] = field(default_factory=list)
-    require_baseline_comparison: bool = True
-    baseline_regression_tolerance: float = 0.02  # Allow 2% regression on non-critical metrics
-    min_eval_samples: int = 50
+  model_name: str
+  thresholds: list [MetricThreshold] = field (default_factory = list)
+  require_baseline_comparison: bool = True
+  baseline_regression_tolerance: float = 0.02  # Allow 2% regression on non-critical metrics
+  min_eval_samples: int = 50
+
 
 class EvalGate:
-    """CI/CD evaluation gate for model promotion decisions.
-    
-    Reads metrics from MLflow run, compares against thresholds,
-    and produces a pass/fail/warn decision.
-    """
-    
-    @staticmethod
-    def evaluate(
-        metrics: dict[str, float],
-        config: EvalGateConfig,
-        baseline_metrics: dict[str, float] | None = None,
-    ) -> GateResult: ...
-    
-    @staticmethod
-    def from_mlflow_run(
-        run_id: str,
-        config: EvalGateConfig,
-        baseline_run_id: str | None = None,
-    ) -> GateResult: ...
-    
-    @staticmethod
-    def format_report(result: GateResult) -> str: ...
-    
-    @staticmethod
-    def is_passing(result: GateResult) -> bool: ...
+  """CI/CD evaluation gate for model promotion decisions.
+  
+  Reads metrics from MLflow run, compares against thresholds,
+  and produces a pass/fail/warn decision.
+  """
+  
+  @staticmethod
+  def evaluate (
+      metrics: dict [str, float], config: EvalGateConfig,
+      baseline_metrics: dict [str, float] | None = None, ) -> GateResult: ...
+  
+  @staticmethod
+  def from_mlflow_run (
+      run_id: str, config: EvalGateConfig, baseline_run_id: str | None = None, ) -> GateResult: ...
+  
+  @staticmethod
+  def format_report (result: GateResult) -> str: ...
+  
+  @staticmethod
+  def is_passing (result: GateResult) -> bool: ...
 ```
 
 #### 4.3.5 `metrics_gen.py` — Метрики качества генерации
@@ -650,43 +669,40 @@ Extends the existing retrieval metrics in evaluation.py with:
 - Perplexity: on held-out domain text
 """
 
-def compute_bleu(references: list[str], hypotheses: list[str], max_n: int = 4) -> dict[str, float]:
-    """Compute BLEU-1 through BLEU-4."""
-    ...
 
-def compute_rouge_l(references: list[str], hypotheses: list[str]) -> dict[str, float]:
-    """Compute ROUGE-L (longest common subsequence)."""
-    ...
+def compute_bleu (references: list [str], hypotheses: list [str], max_n: int = 4) -> dict [str, float]:
+  """Compute BLEU-1 through BLEU-4."""
+  ...
 
-def compute_bertscore(
-    references: list[str],
-    hypotheses: list[str],
-    model_type: str = "microsoft/deberta-xlarge-mnli",
-    device: str = "cpu",
-) -> dict[str, float]:
-    """Compute BertScore F1, precision, recall."""
-    ...
 
-def compute_hallucination_rate(
-    answers: list[str],
-    contexts: list[str],
-    nli_model,
-) -> float:
-    """Fraction of answers with entailment score below threshold."""
-    ...
+def compute_rouge_l (references: list [str], hypotheses: list [str]) -> dict [str, float]:
+  """Compute ROUGE-L (longest common subsequence)."""
+  ...
 
-def compute_perplexity(model, eval_texts: list[str]) -> float:
-    """Compute perplexity on evaluation texts."""
-    ...
 
-def compute_all_gen_metrics(
-    references: list[str],
-    hypotheses: list[str],
-    contexts: list[str] | None = None,
-    nli_model=None,
-) -> dict[str, float]:
-    """Compute all generation quality metrics in one pass."""
-    ...
+def compute_bertscore (
+    references: list [str], hypotheses: list [str], model_type: str = "microsoft/deberta-xlarge-mnli",
+    device: str = "cpu", ) -> dict [str, float]:
+  """Compute BertScore F1, precision, recall."""
+  ...
+
+
+def compute_hallucination_rate (
+    answers: list [str], contexts: list [str], nli_model, ) -> float:
+  """Fraction of answers with entailment score below threshold."""
+  ...
+
+
+def compute_perplexity (model, eval_texts: list [str]) -> float:
+  """Compute perplexity on evaluation texts."""
+  ...
+
+
+def compute_all_gen_metrics (
+    references: list [str], hypotheses: list [str], contexts: list [str] | None = None, nli_model = None, ) -> dict [
+  str, float]:
+  """Compute all generation quality metrics in one pass."""
+  ...
 ```
 
 ---
@@ -697,33 +713,34 @@ def compute_all_gen_metrics(
 
 ```python
 class ModelRegistry:
-    """Abstraction over MLflow Model Registry for versioned model management."""
-    
-    def register_model(self, name: str, run_id: str, artifact_path: str) -> "ModelVersion": ...
-    
-    def get_latest_version(self, name: str, stage: str = "Production") -> "ModelVersion": ...
-    
-    def get_version(self, name: str, version: str) -> "ModelVersion": ...
-    
-    def transition_stage(self, name: str, version: str, stage: str) -> None: ...
-    
-    def list_models(self) -> list[dict]: ...
-    
-    def download_artifact(self, name: str, version: str, dst_path: str) -> str: ...
-    
-    def tag_version(self, name: str, version: str, tags: dict[str, str]) -> None: ...
+  """Abstraction over MLflow Model Registry for versioned model management."""
+  
+  def register_model (self, name: str, run_id: str, artifact_path: str) -> "ModelVersion": ...
+  
+  def get_latest_version (self, name: str, stage: str = "Production") -> "ModelVersion": ...
+  
+  def get_version (self, name: str, version: str) -> "ModelVersion": ...
+  
+  def transition_stage (self, name: str, version: str, stage: str) -> None: ...
+  
+  def list_models (self) -> list [dict]: ...
+  
+  def download_artifact (self, name: str, version: str, dst_path: str) -> str: ...
+  
+  def tag_version (self, name: str, version: str, tags: dict [str, str]) -> None: ...
+
 
 @dataclass
 class ModelVersion:
-    name: str
-    version: str          # "1", "2", "3", ...
-    stage: str            # "None", "Staging", "Production", "Archived"
-    run_id: str
-    artifact_uri: str
-    metrics: dict[str, float]
-    tags: dict[str, str]
-    created_at: str
-    last_updated_at: str
+  name: str
+  version: str  # "1", "2", "3", ...
+  stage: str  # "None", "Staging", "Production", "Archived"
+  run_id: str
+  artifact_uri: str
+  metrics: dict [str, float]
+  tags: dict [str, str]
+  created_at: str
+  last_updated_at: str
 ```
 
 ### 5.2 Контракт eval-гейта
@@ -986,7 +1003,7 @@ jobs:
   train-slm:
     needs: export-data
     if: ${{ github.event.inputs.model == 'slm' || github.event.inputs.model == 'all' }}
-    runs-on: [self-hosted, gpu]  # Or ubuntu-latest for CI smoke
+    runs-on: [ self-hosted, gpu ]  # Or ubuntu-latest for CI smoke
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -1006,19 +1023,19 @@ jobs:
   train-llm:
     needs: export-data
     if: ${{ github.event.inputs.model == 'llm' || github.event.inputs.model == 'all' }}
-    runs-on: [self-hosted, gpu]
+    runs-on: [ self-hosted, gpu ]
     steps:
-      # ... same pattern as train-slm ...
+    # ... same pattern as train-slm ...
 
   train-reranker:
     needs: export-data
     if: ${{ github.event.inputs.model == 'reranker' || github.event.inputs.model == 'all' }}
-    runs-on: [self-hosted, gpu]
+    runs-on: [ self-hosted, gpu ]
     steps:
-      # ... same pattern as train-slm ...
+    # ... same pattern as train-slm ...
 
   integration-test:
-    needs: [train-slm, train-llm, train-reranker]
+    needs: [ train-slm, train-llm, train-reranker ]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -1065,55 +1082,21 @@ Staging ──(manual review)──▶ Production ──(canary)──▶ 100% T
 
 @dataclass
 class EnvProfiles:
-    """Pre-defined environment profiles for training."""
-    
-    DEV = TrainingConfig(
-        env_profile=EnvProfile.DEV,
-        epochs=1,
-        batch_size=2,
-        use_lora=True,
-        lora_r=4,
-        lora_alpha=8,
-        use_qlora=False,
-        load_in_4bit=False,
-        max_seq_length=256,
-        eval_split=0.2,
-        logging_steps=5,
-        eval_steps=50,
-    )
-    
-    PROD = TrainingConfig(
-        env_profile=EnvProfile.PROD,
-        epochs=5,
-        batch_size=16,
-        use_lora=True,
-        lora_r=16,
-        lora_alpha=32,
-        use_qlora=True,
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype="bfloat16",
-        max_seq_length=2048,
-        eval_split=0.2,
-        warmup_steps=100,
-        logging_steps=10,
-        eval_steps=500,
-        save_steps=500,
-    )
-    
-    CI = TrainingConfig(
-        env_profile=EnvProfile.CI,
-        epochs=1,
-        batch_size=1,
-        use_lora=True,
-        lora_r=2,
-        lora_alpha=4,
-        use_qlora=False,
-        load_in_4bit=False,
-        max_seq_length=128,
-        eval_split=0.5,          # More eval in CI to validate pipeline
-        logging_steps=1,
-        eval_steps=10,
-    )
+  """Pre-defined environment profiles for training."""
+  
+  DEV = TrainingConfig (env_profile = EnvProfile.DEV, epochs = 1, batch_size = 2, use_lora = True, lora_r = 4,
+      lora_alpha = 8, use_qlora = False, load_in_4bit = False, max_seq_length = 256, eval_split = 0.2,
+      logging_steps = 5, eval_steps = 50, )
+  
+  PROD = TrainingConfig (env_profile = EnvProfile.PROD, epochs = 5, batch_size = 16, use_lora = True, lora_r = 16,
+      lora_alpha = 32, use_qlora = True, load_in_4bit = True, bnb_4bit_compute_dtype = "bfloat16",
+      max_seq_length = 2048, eval_split = 0.2, warmup_steps = 100, logging_steps = 10, eval_steps = 500,
+      save_steps = 500, )
+  
+  CI = TrainingConfig (env_profile = EnvProfile.CI, epochs = 1, batch_size = 1, use_lora = True, lora_r = 2,
+      lora_alpha = 4, use_qlora = False, load_in_4bit = False, max_seq_length = 128, eval_split = 0.5,
+      # More eval in CI to validate pipeline
+      logging_steps = 1, eval_steps = 10, )
 ```
 
 ### 9.2 Переменные окружения
@@ -1564,25 +1547,38 @@ docker-compose restart proxy
 # proxy/app/model_evolution/metrics.py
 
 # Training metrics
-rag_training_jobs_total{model, status}          # Counter: completed/failed
-rag_training_duration_seconds{model}             # Histogram
-rag_training_gpu_utilization{model}              # Gauge (if available)
+rag_training_jobs_total
+{model, status}  # Counter: completed/failed
+rag_training_duration_seconds
+{model}  # Histogram
+rag_training_gpu_utilization
+{model}  # Gauge (if available)
 
 # Adapter metrics  
-rag_adapter_state{name, version}                 # Gauge: 0=unloaded, 1=loading, 2=active, 3=draining, 4=retiring, 5=error
-rag_adapter_load_errors_total{name, version}     # Counter
-rag_adapter_request_count{name, version}         # Gauge: in-flight requests
-rag_adapter_swap_duration_seconds{name}          # Histogram
+rag_adapter_state
+{name, version}  # Gauge: 0=unloaded, 1=loading, 2=active, 3=draining, 4=retiring, 5=error
+rag_adapter_load_errors_total
+{name, version}  # Counter
+rag_adapter_request_count
+{name, version}  # Gauge: in-flight requests
+rag_adapter_swap_duration_seconds
+{name}  # Histogram
 
 # Canary metrics
-rag_canary_phase{model}                          # Gauge: 0=idle, 1=ramp_5, ..., 5=full, -1=rollback
-rag_canary_traffic_ratio{model}                  # Gauge: 0.0-1.0
-rag_canary_metric_value{model, metric, version}  # Gauge: current metric value
-rag_canary_rollback_total{model}                 # Counter
+rag_canary_phase
+{model}  # Gauge: 0=idle, 1=ramp_5, ..., 5=full, -1=rollback
+rag_canary_traffic_ratio
+{model}  # Gauge: 0.0-1.0
+rag_canary_metric_value
+{model, metric, version}  # Gauge: current metric value
+rag_canary_rollback_total
+{model}  # Counter
 
 # Eval gate metrics
-rag_eval_gate_result{model, status}              # Counter: pass/fail/warn
-rag_eval_gate_metric_value{model, metric}        # Gauge
+rag_eval_gate_result
+{model, status}  # Counter: pass/fail/warn
+rag_eval_gate_metric_value
+{model, metric}  # Gauge
 ```
 
 ## Приложение B: Админские эндпоинты API

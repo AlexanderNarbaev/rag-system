@@ -613,8 +613,8 @@ TOOLS_OPENAPI_SPECS='[{"name":"petstore","url":"https://example.com/openapi.json
 | Variable            | Type   | Default          | Description                                 |
 |---------------------|--------|------------------|---------------------------------------------|
 | `MINIO_ENDPOINT`    | string | `localhost:9000` | MinIO S3 API endpoint.                      |
-| `MINIO_ACCESS_KEY`  | string | `CHANGE_ME`     | MinIO access key. **Change in production.** |
-| `MINIO_SECRET_KEY`  | string | `CHANGE_ME`     | MinIO secret key. **Change in production.** |
+| `MINIO_ACCESS_KEY`  | string | `CHANGE_ME`      | MinIO access key. **Change in production.** |
+| `MINIO_SECRET_KEY`  | string | `CHANGE_ME`      | MinIO secret key. **Change in production.** |
 | `MINIO_BUCKET`      | string | `rag-artifacts`  | Bucket for model artifacts.                 |
 | `MINIO_DOCS_BUCKET` | string | `rag-documents`  | Bucket for uploaded documents.              |
 | `MINIO_SECURE`      | bool   | `false`          | Use HTTPS for MinIO connection.             |
@@ -756,7 +756,7 @@ confluence:
   token: "your_personal_access_token"
   verify_ssl: false                  # False for self-signed certificates
   ca_bundle: ""                      # Path to corporate CA bundle
-  space_keys:                        # List of space keys (null = all)
+  space_keys: # List of space keys (null = all)
     - "DEV"
     - "OPS"
   output_dir: "./raw_data/confluence"

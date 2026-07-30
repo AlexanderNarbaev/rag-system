@@ -24,7 +24,8 @@ OpenAI Chat Completion.
 2. Тот же запрос с `"stream":true` возвращает SSE-поток, завершающийся `data: [DONE]`
 3. OpenAI Python SDK `OpenAI(base_url="http://localhost:8080/v1").chat.completions.create(...)` работает без ошибок
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR01ChatCompletions`, `tests/integration/test_core_api_e2e.py::TestFR01Integration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR01ChatCompletions`,
+`tests/integration/test_core_api_e2e.py::TestFR01Integration`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-004, `proxy/app/api/chat.py`
 
@@ -62,7 +63,8 @@ Neo4j (опционально), Redis (опционально), embedder, rerank
 2. При остановленном Qdrant — HTTP 503, Qdrant `down`, остальные `healthy`
 3. При остановленном Neo4j (GRAPH_ENABLED=true) — HTTP 200 (Neo4j не критичен), Neo4j `down`
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR03HealthCheck`, `tests/integration/test_core_api_e2e.py::TestFR03Integration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR03HealthCheck`,
+`tests/integration/test_core_api_e2e.py::TestFR03Integration`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-004, best-practices-checklist 4.3
 
@@ -82,7 +84,8 @@ Neo4j (опционально), Redis (опционально), embedder, rerank
 1. `/v1/health/live` всегда возвращает 200 пока процесс работает
 2. `/v1/health/ready` возвращает 503 при недоступном Qdrant
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR04KubernetesProbes`, `tests/integration/test_core_api_e2e.py::TestFR04Integration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR04KubernetesProbes`,
+`tests/integration/test_core_api_e2e.py::TestFR04Integration`)
 **Приоритет:** CRITICAL
 **Связь:** roadmap Phase 3, best-practices-checklist 4.7
 
@@ -109,7 +112,8 @@ Neo4j (опционально), Redis (опционально), embedder, rerank
 4. `rag_return_chunks=true` — в ответе есть поле `rag_sources` с чанками
 5. `rag_top_k=5` — после ранжирования не более 5 чанков
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR05RAGParameters`, `tests/integration/test_core_api_e2e.py::TestFR05FR06Integration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR05RAGParameters`,
+`tests/integration/test_core_api_e2e.py::TestFR05FR06Integration`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-004
 
@@ -134,7 +138,8 @@ Neo4j (опционально), Redis (опционально), embedder, rerank
 2. Ответ содержит `rag_confidence` (float от 0 до 1)
 3. Ответ содержит `rag_sources` (массив, может быть пустым если нет результатов поиска)
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR06RAGResponseFields`, `tests/integration/test_core_api_e2e.py::TestFR05FR06Integration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR06RAGResponseFields`,
+`tests/integration/test_core_api_e2e.py::TestFR05FR06Integration`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-004
 
@@ -174,6 +179,7 @@ Neo4j (опционально), Redis (опционально), embedder, rerank
 3. Последняя строка — `data: [DONE]`
 4. Каждый промежуточный JSON парсится и содержит `choices[0].delta.content`
 
-**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR08SSEStreaming`, `tests/integration/test_core_api_e2e.py::TestFR08Integration`)
+**Статус:** ✅ Подтверждено (`tests/proxy/test_core_api.py::TestFR08SSEStreaming`,
+`tests/integration/test_core_api_e2e.py::TestFR08Integration`)
 **Приоритет:** CRITICAL
 **Связь:** ADR-004

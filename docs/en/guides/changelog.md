@@ -7,6 +7,7 @@ All notable changes to the RAG System project.
 ## v2.0.0 (2026-07-16)
 
 ### RAG Pipeline
+
 - **Hybrid Retrieval** — dense (BGE-M3) + sparse (BM25) + ColBERT multi-vectors with RRF fusion
 - **Cross-Encoder Reranking** — MiniLM-L-6-v2 with two-stage filtering and fine-tuning support
 - **Knowledge Graph** — Neo4j entity extraction (10 types, 9 relations), text-to-Cypher, global search
@@ -17,6 +18,7 @@ All notable changes to the RAG System project.
 - **Token Optimizer** — BPE-aware counting, 4 compression strategies, smart budget allocation
 
 ### Agentic Tools
+
 - **Tools SDK** — `@tool` decorator with automatic JSON Schema from type hints
 - **Declarative Tools** — YAML/JSON definitions for HTTP and shell commands
 - **OpenAPI Auto-Discovery** — convert REST APIs to tools automatically
@@ -24,6 +26,7 @@ All notable changes to the RAG System project.
 - **Security** — tool sandboxing, permission checks, audit logging
 
 ### Model Evolution
+
 - **LoRA/QLoRA Fine-tuning** — SLM, LLM, and Reranker training pipeline
 - **EvalGate CI/CD** — quality gating for model promotion
 - **Canary Controller** — gradual rollout with traffic splitting
@@ -31,11 +34,13 @@ All notable changes to the RAG System project.
 - **MLflow Tracking** — experiment tracking and model registry
 
 ### MCP Server
+
 - **STDIO Transport** — IDE integration (OpenCode, Claude Desktop)
 - **Streamable HTTP Transport** — remote agent integration
 - **Tools/Resources/Prompts** — full MCP protocol support
 
 ### Production
+
 - **Authentication** — JWT (access+refresh pairs), Keycloak OIDC, LDAP/AD, API keys
 - **RBAC** — 4 roles (admin, expert, user, read-only)
 - **Multi-KB Support** — isolated Qdrant collections per knowledge base, SQLite metadata
@@ -46,6 +51,7 @@ All notable changes to the RAG System project.
 - **Air-Gapped** — all models pre-downloaded, fully offline operation
 
 ### ETL Pipeline
+
 - **Source Extractors** — Confluence, Jira, GitLab, books, docs, chats, images, tables
 - **Semantic Chunker** — adaptive chunking, contextual chunking, hash versioning
 - **WAL-Based Incremental** — checkpointing for resume capability
@@ -53,6 +59,7 @@ All notable changes to the RAG System project.
 - **Graph Builder** — spaCy NER, entity extraction, Neo4j loading
 
 ### Infrastructure
+
 - **Backup Automation** — Qdrant snapshots, Neo4j dumps, Redis RDB, MinIO replication
 - **Secrets Rotation** — automated credential rotation scripts
 - **TLS Setup** — automated certificate management
@@ -60,6 +67,7 @@ All notable changes to the RAG System project.
 - **Operations Scripts** — health check, status, backup, restore, verification
 
 ### Documentation
+
 - **14 ADRs** — architecture decisions covering all major design choices
 - **44 EN Guides** — comprehensive documentation across all feature areas
 - **30 RU Guides** — full Russian translations
@@ -67,6 +75,7 @@ All notable changes to the RAG System project.
 - **OpenAPI Spec** — auto-generated v3.1 spec with 35+ endpoints
 
 ### Security
+
 - Input sanitization (XSS, SQLi, injection, length limits)
 - Password policy enforcement (min 10 chars, uppercase, lowercase, digit, special)
 - Rate limiting on all auth endpoints
@@ -76,6 +85,7 @@ All notable changes to the RAG System project.
 - Dependency vulnerability scanning (pip-audit, CodeQL)
 
 ### S4-2026 Sprint (2026-07-10 to 2026-07-16)
+
 - **Wave 1** — mypy strict mode (0 errors), test collection fix, Dependabot triage, production bugfixes
 - **Wave 2** — coverage 80%, eval dataset expansion, security audit, docs completeness
 - **Wave 3** — TLS automation, secrets rotation, database migrations, K8s benchmarks
@@ -83,6 +93,7 @@ All notable changes to the RAG System project.
 - **Wave 5** — integration tests fixed, coverage verified at 80%
 
 ### Previous Sprints (S3-2026)
+
 - Self-critique verification loop, CRAG evaluator wiring, embedding cache
 - Text-to-Cypher for Neo4j, adaptive query routing, global search mode
 - Multi-hop reasoning, knee-point pruning, multi-query rewriting
@@ -92,6 +103,7 @@ All notable changes to the RAG System project.
 ## v2.0.0-rc (2026-06-26)
 
 ### Initial Release
+
 - Core RAG pipeline (hybrid search, reranking, generation)
 - OpenAI-compatible proxy API
 - Dual-LLM (SLM + LLM) architecture
