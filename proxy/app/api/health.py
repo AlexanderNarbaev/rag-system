@@ -20,7 +20,8 @@ router = APIRouter(tags=["health"])
 def _check_qdrant() -> tuple[str, dict[str, Any]]:
     """Check Qdrant connectivity, collection metadata, and sample query."""
     try:
-        from proxy.app.core.retrieval import COLLECTION_NAME, qdrant_client
+        from proxy.app.core.retrieval import COLLECTION_NAME  # type: ignore[attr-defined]
+        from proxy.app.core.retrieval import qdrant_client
 
         if qdrant_client is None:
             return "unavailable", {"reason": "client not initialized"}
