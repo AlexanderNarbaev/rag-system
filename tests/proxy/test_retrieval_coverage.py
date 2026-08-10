@@ -797,12 +797,8 @@ class TestInitializeRetrievalGraphEnabled:
         import proxy.app.core.retrieval as ret_mod
 
         mock_embedder = object()
-        mock_neo4j = MagicMock()
         mock_graph_db = MagicMock()
-        mock_driver = MagicMock()
-        mock_driver.verify_connectivity.side_effect = Exception("Neo4j unreachable")
-        mock_graph_db.driver.return_value = mock_driver
-        mock_neo4j.GraphDatabase = mock_graph_db
+        mock_graph_db.driver.side_effect = Exception("Neo4j unreachable")
 
         with (
             patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
@@ -810,7 +806,7 @@ class TestInitializeRetrievalGraphEnabled:
             patch("proxy.app.core.retrieval.QdrantClient"),
             patch("proxy.app.core.retrieval.USE_REDIS", False),
             patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
-            patch.dict("sys.modules", {"neo4j": mock_neo4j}),
+            patch("proxy.app.core.retrieval.GraphDatabase", mock_graph_db),
         ):
             ret_mod.initialize_retrieval()
             assert ret_mod._GRAPH_ENABLED is False
