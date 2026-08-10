@@ -57,10 +57,35 @@ def _check_qdrant() -> tuple[str, dict[str, Any]]:
             info["collection_error"] = str(coll_exc)
             logger.warning("Could not inspect collection %s: %s", COLLECTION_NAME, coll_exc)
 
-        return "ok", info
+        # Strip MagicMock objects (test stubs / unconfigured clients) so the
+        # response never contains non-JSON-serialisable values.
+        return "ok", _sanitize_info(info)
     except Exception as e:
         logger.error("Qdrant health check failed: %s", e)
         return "Qdrant service unavailable", {}
+
+
+def _sanitize_info(info: dict[str, Any]) -> dict[str, Any]:
+    """Recursively replace MagicMock sentinel values with ``None``.
+
+    Health-check fields are best-effort diagnostics; if a value is not a
+    primitive type we drop it down to ``None`` (or ``str`` for exceptions)
+    so the response can always be JSON-encoded, even when the underlying
+    client is a mocked double in tests.
+    """
+    from unittest.mock import MagicMock
+
+    sanitized: dict[str, Any] = {}
+    for key, value in info.items():
+        if isinstance(value, MagicMock):
+            sanitized[key] = None
+        elif isinstance(value, dict):
+            sanitized[key] = _sanitize_info(value)
+        elif isinstance(value, (str, int, float, bool, type(None))):
+            sanitized[key] = value
+        else:
+            sanitized[key] = str(value)
+    return sanitized
 
 
 def _check_llm() -> tuple[str, dict[str, Any]]:
