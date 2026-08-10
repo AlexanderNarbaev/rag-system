@@ -59,9 +59,9 @@ try:
 
     _PEFT_AVAILABLE = True
 except ImportError:
-    LoraConfig = None
-    TaskType = None
-    get_peft_model = None
+    LoraConfig = None  # type: ignore[assignment,misc]  # noqa: B008
+    TaskType = None  # type: ignore[assignment,misc]  # noqa: B008
+    get_peft_model = None  # type: ignore[assignment]  # noqa: B008
     _PEFT_AVAILABLE = False
 
 INTENT_LABELS: list[str] = [

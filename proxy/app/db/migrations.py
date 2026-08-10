@@ -198,7 +198,7 @@ class MigrationManager:
 
                     self._neo4j_driver = AsyncGraphDatabase.driver(
                         self._neo4j_uri,
-                        auth=(self._neo4j_user, self._neo4j_password) if self._neo4j_user else None,
+                        auth=(self._neo4j_user, self._neo4j_password) if self._neo4j_user and self._neo4j_password else None,  # noqa: E501
                     )
                     logger.info("Neo4j driver initialized for migrations")
                 else:
