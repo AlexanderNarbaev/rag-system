@@ -23,12 +23,10 @@ import pytest
 # time pollutes sys.modules and breaks sibling integration suites
 # (e.g. test_proxy_rag_pipeline.py) that need real submodule access
 # via attribute lookup on already-imported modules.
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from proxy.app.api.chat import router as chat_router
-
 
 _HEAVY_DEPS = (
     "qdrant_client",
@@ -43,7 +41,6 @@ _HEAVY_DEPS = (
 @pytest.fixture(autouse=True)
 def _isolate_heavy_deps():
     """Patch heavy deps for this file only and clean up after."""
-    import sys
 
     backups = {}
     for _mod in _HEAVY_DEPS:
@@ -58,6 +55,8 @@ def _isolate_heavy_deps():
                 sys.modules.pop(_mod, None)
             else:
                 sys.modules[_mod] = backup
+
+
 from proxy.app.api.health import router as health_router
 from proxy.app.auth import UserContext
 
