@@ -1,5 +1,6 @@
 # proxy/app/core/orchestrator/graph.py
 """LangGraph state graph construction for RAG orchestration."""
+# mypy: disable-error-code="import-untyped,attr-defined,misc,assignment"
 
 import logging
 from typing import Any, TypedDict

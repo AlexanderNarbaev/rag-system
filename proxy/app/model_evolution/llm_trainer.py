@@ -164,7 +164,7 @@ class LLMTrainer(TrainerBase):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        model = prepare_model_for_kbit_training(model)
+        model = prepare_model_for_kbit_training(model)  # type: ignore[no-untyped-call]
 
         peft_config = LoraConfig(
             r=self.config.lora_r,
@@ -175,7 +175,7 @@ class LLMTrainer(TrainerBase):
             target_modules=self._find_lora_target_modules(model),
         )
 
-        model = get_peft_model(model, peft_config)
+        model = get_peft_model(model, peft_config)  # type: ignore[assignment]
 
         tokenized = self._tokenize_dataset(tokenizer, prepared)
 
