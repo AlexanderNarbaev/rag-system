@@ -74,7 +74,7 @@ except ImportError:
 try:
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 except ImportError:
-    OTLPSpanExporter = None
+    OTLPSpanExporter = None  # type: ignore[assignment,misc]  # noqa: B008
 
 if _OTEL_AVAILABLE and TracerProvider is not None and OTLPSpanExporter is not None:
     _OTEL_SDK_AVAILABLE = True
