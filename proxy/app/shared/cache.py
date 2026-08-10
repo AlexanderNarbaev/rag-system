@@ -346,8 +346,8 @@ class SemanticCache:
         try:
             emb = embedder.encode(text, normalize_embeddings=True)
             if isinstance(emb, np.ndarray):
-                return emb.tolist()
-            return list(emb)
+                return emb.tolist()  # type: ignore[no-any-return]
+            return list(emb)  # type: ignore[no-any-return]  # pragma: no cover
         except Exception:
             logger.debug("Failed to compute embedding for semantic cache", exc_info=True)
             return None
@@ -393,7 +393,9 @@ class SemanticCache:
                     sim,
                     self._threshold,
                 )
-                return entry.get("r")
+                response_val = entry.get("r")
+                if response_val is not None:
+                    return str(response_val)
         return None
 
     async def set(self, query: str, response: str) -> bool:
