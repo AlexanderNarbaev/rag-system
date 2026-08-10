@@ -347,7 +347,7 @@ class SemanticCache:
             emb = embedder.encode(text, normalize_embeddings=True)
             if isinstance(emb, np.ndarray):
                 return emb.tolist()  # type: ignore[no-any-return]
-            return list(emb)  # type: ignore[no-any-return]  # pragma: no cover
+            return list(emb)  # pragma: no cover
         except Exception:
             logger.debug("Failed to compute embedding for semantic cache", exc_info=True)
             return None
