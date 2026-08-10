@@ -18,22 +18,46 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Mock heavy dependencies
-for _mod in (
+# Mock heavy dependencies via per-file autouse fixture instead of
+# module-level sys.modules injection. Loading these mocks at import
+# time pollutes sys.modules and breaks sibling integration suites
+# (e.g. test_proxy_rag_pipeline.py) that need real submodule access
+# via attribute lookup on already-imported modules.
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from proxy.app.api.chat import router as chat_router
+
+
+_HEAVY_DEPS = (
     "qdrant_client",
     "qdrant_client.http",
     "qdrant_client.http.models",
     "sentence_transformers",
     "neo4j",
     "torch",
-):
-    if _mod not in sys.modules:
-        sys.modules[_mod] = MagicMock()
+)
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
-from proxy.app.api.chat import router as chat_router
+@pytest.fixture(autouse=True)
+def _isolate_heavy_deps():
+    """Patch heavy deps for this file only and clean up after."""
+    import sys
+
+    backups = {}
+    for _mod in _HEAVY_DEPS:
+        backups[_mod] = sys.modules.get(_mod)
+        if _mod not in sys.modules:
+            sys.modules[_mod] = MagicMock()
+    try:
+        yield
+    finally:
+        for _mod, backup in backups.items():
+            if backup is None:
+                sys.modules.pop(_mod, None)
+            else:
+                sys.modules[_mod] = backup
 from proxy.app.api.health import router as health_router
 from proxy.app.auth import UserContext
 
