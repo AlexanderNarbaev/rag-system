@@ -81,6 +81,10 @@ def mock_rag_pipeline():
         patch("proxy.app.main.extract_version_from_query", return_value=None),
         patch("proxy.app.main.cache_manager", None),
         patch("proxy.app.main.log_interaction") as mock_log,
+        # Force the retrieval pipeline to actually invoke hybrid_search
+        # rather than bailing because the embedder isn't loaded in tests.
+        patch("proxy.app.core.retrieval.embedder", object()),
+        patch("proxy.app.core.retrieval._QDRANT_DEGRADED", False),
     ):
         mock_hybrid.return_value = []
         mock_rerank.return_value = []
@@ -127,6 +131,12 @@ def mock_rag_pipeline_with_context():
         patch("proxy.app.main.extract_version_from_query", return_value=None),
         patch("proxy.app.main.cache_manager", None),
         patch("proxy.app.main.log_interaction") as mock_log,
+        # The retrieval pipeline bails out early if the embedder is None
+        # (the embedder is loaded at app startup, not in unit tests). Stub
+        # both the embedder and the Qdrant-degraded flag so hybrid_search
+        # is actually invoked.
+        patch("proxy.app.core.retrieval.embedder", object()),
+        patch("proxy.app.core.retrieval._QDRANT_DEGRADED", False),
     ):
         mock_hybrid.return_value = [
             MagicMock(payload=chunk_a, score=0.95),

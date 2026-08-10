@@ -95,6 +95,18 @@ class TestChatCompletionsNonStreaming:
         """Mock hybrid_search and non_stream_completion for all chat tests."""
         self.search_results = sample_search_results
         self.mock_llm = mock_non_stream_completion
+        # The retrieval pipeline bails out early if the embedder is None
+        # (the embedder is loaded at app startup, not in unit tests). Force
+        # the embedder to be "present" so hybrid_search is actually invoked.
+        patcher_eb = patch("proxy.app.core.retrieval.embedder", object())
+        patcher_qd = patch("proxy.app.core.retrieval._QDRANT_DEGRADED", False)
+        patcher_eb.start()
+        patcher_qd.start()
+        self._patchers = (patcher_eb, patcher_qd)
+
+    def teardown_method(self, method):
+        for p in getattr(self, "_patchers", ()):
+            p.stop()
 
     def test_chat_completion_returns_openai_format(self, app_client):
         """Chat completion response follows OpenAI format with expected fields."""
@@ -305,6 +317,21 @@ class TestChatCompletionsStreaming:
 
 class TestErrorHandling:
     """Tests for error handling in the proxy pipeline."""
+
+    @pytest.fixture(autouse=True)
+    def setup_mocks(self):
+        """Force the embedder to be 'present' so the retrieval pipeline
+        actually invokes the mocked hybrid_search instead of bailing out
+        with the 'no_embedder' short-circuit."""
+        patcher_eb = patch("proxy.app.core.retrieval.embedder", object())
+        patcher_qd = patch("proxy.app.core.retrieval._QDRANT_DEGRADED", False)
+        patcher_eb.start()
+        patcher_qd.start()
+        self._patchers = (patcher_eb, patcher_qd)
+
+    def teardown_method(self, method):
+        for p in getattr(self, "_patchers", ()):
+            p.stop()
 
     def test_chat_completion_handles_rerank_exception(self, app_client):
         """Pipeline raises exception during reranking phase — returns503 error."""
