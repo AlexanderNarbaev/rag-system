@@ -36,6 +36,12 @@ def app_client():
         patch("proxy.app.main.PROGRESSIVE_RETRIEVAL_ENABLED", False),
         patch("proxy.app.main.SEMANTIC_CACHE_ENABLED", False),
         patch("proxy.app.main.semantic_cache", None),
+        # The retrieval pipeline short-circuits when the embedder is None
+        # (the embedder is loaded at app startup, not in unit tests). Stub
+        # the embedder and the Qdrant-degraded flag so hybrid_search mocks
+        # actually fire.
+        patch("proxy.app.core.retrieval.embedder", object()),
+        patch("proxy.app.core.retrieval._QDRANT_DEGRADED", False),
     ):
         from fastapi.testclient import TestClient
 
