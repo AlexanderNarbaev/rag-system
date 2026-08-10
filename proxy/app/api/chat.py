@@ -164,8 +164,12 @@ async def chat_completions(
     if not validated_model:
         raise HTTPException(status_code=400, detail="Invalid model name")
 
-    # Model routing: "+RAG" suffix → RAG pipeline; raw name → LLM pass-through
-    use_rag = request.model.endswith("+RAG")
+    # Model routing:
+    #   - "<anything>+RAG"     → RAG pipeline (explicit opt-in suffix)
+    #   - "rag-proxy"          → RAG pipeline (documented virtual alias;
+    #                            resolves the configured LLM under the hood)
+    #   - anything else        → LLM pass-through (no retrieval, no RAG fields)
+    use_rag = request.model.endswith("+RAG") or request.model == "rag-proxy"
 
     # Extract last user query
     user_query = None
