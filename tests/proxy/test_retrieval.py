@@ -270,12 +270,18 @@ class TestInitializeRetrieval:
             initialize_retrieval()
 
     def test_raises_if_st_not_available(self):
+        """When embedder creation fails, initialize_retrieval logs an error
+        and sets embedder=None instead of crashing (graceful degradation)."""
         with (
             patch("proxy.app.core.retrieval.QDRANT_AVAILABLE", True),
             patch("proxy.app.llm.remote_services.create_embedder", side_effect=ImportError("no st")),
+            patch("proxy.app.core.retrieval.QdrantClient"),
+            patch("proxy.app.core.retrieval._GRAPH_ENABLED", False),
         ):
-            with pytest.raises(ImportError):
-                initialize_retrieval()
+            initialize_retrieval()
+            import proxy.app.core.retrieval as ret_mod
+
+            assert ret_mod.embedder is None
 
     def test_initializes_in_memory_cache(self):
         mock_embedder = object()
@@ -305,7 +311,7 @@ class TestInitializeRetrieval:
             patch("proxy.app.core.retrieval.QdrantClient"),
             patch("proxy.app.core.retrieval.USE_REDIS", False),
             patch("proxy.app.core.retrieval._GRAPH_ENABLED", True),
-            patch.dict("sys.modules", {"neo4j": mock_neo4j}),
+            patch("proxy.app.core.retrieval.GraphDatabase", mock_graph),
         ):
             initialize_retrieval()
             import proxy.app.core.retrieval as ret_mod

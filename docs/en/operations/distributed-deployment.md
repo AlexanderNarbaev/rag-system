@@ -50,9 +50,12 @@
 | Open WebUI → Proxy        | 8080  | B → B            | HTTP           | Yes         |
 | Proxy → Qdrant            | 6333, 6334 | B → B         | HTTP / gRPC    | Yes         |
 | Proxy → Redis             | 6379  | B → B            | TCP            | Yes         |
+| Proxy → Neo4j             | 7687  | B → B            | Bolt           | Yes         |
+| Browser → Neo4j Browser   | 7474  | User → B         | HTTP           | Optional    |
 | Proxy → GPUStack          | 8080  | B → A            | HTTPS          | Yes         |
 | Browser → Open WebUI      | 3000  | User → B         | HTTP           | Yes         |
 | ETL → Qdrant              | 6333  | Laptop → B       | HTTPS (VPN)    | Yes         |
+| ETL → Neo4j               | 7687  | Laptop → B       | Bolt (VPN)     | Optional    |
 | ETL → GPUStack            | 8080  | Laptop → A       | HTTPS          | Yes         |
 | Proxy → Prometheus        | 9090  | B → B            | HTTP           | Optional    |
 | Proxy → S3/MinIO          | 9000  | B → B            | HTTPS          | Optional    |
@@ -157,9 +160,14 @@ MAX_CHUNKS_AFTER_RERANK=20
 PROGRESSIVE_RETRIEVAL_ENABLED=true
 PROGRESSIVE_RETRIEVAL_STAGES=5,10,20
 
+# === Graph (Neo4j) ===
+GRAPH_ENABLED=true
+USE_GRAPH_EXPANSION=true
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<password>
+
 # === Optional features (disabled by default) ===
-GRAPH_ENABLED=false
-USE_GRAPH_EXPANSION=false
 USE_LANGGRAPH=false
 TOOLS_ENABLED=false
 LIVE_SOURCES_ENABLED=false
@@ -230,6 +238,8 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -266,6 +276,25 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [rag-net]
+
+  neo4j:
+    image: neo4j:5
+    container_name: rag-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/<neo4j-password>
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -320,6 +349,7 @@ services:
 
 volumes:
   qdrant_data:
+  neo4j_data:
   redis_data:
   openwebui_data:
   prometheus_data:

@@ -125,3 +125,15 @@ class DLQError(RAGError):
 
     def __init__(self, message: str = "", component: str = "dlq"):
         super().__init__(message, component=component, recoverable=True)
+
+
+class RetrievalDegradedError(RetrievalError):
+    """Raised when retrieval subsystem is degraded (Qdrant unavailable, no embedder, etc.).
+
+    Signals to callers that the knowledge base cannot be queried and the
+    response should be generated without retrieval context (ungrounded).
+    """
+
+    def __init__(self, message: str = "", reason: str = "unknown"):
+        super().__init__(message, component="retrieval")
+        self.reason = reason

@@ -242,12 +242,12 @@ def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
                     content = data.get("description", "")
                     comments = data.get("comments", [])
                     if comments:
-                      for comment in comments:
-                        author = comment.get("author", "Unknown")
-                        body = comment.get("body", "")
-                        if body:
-                          author_str = str(author) if author else "Unknown"
-                          content += f"\n\nComment by {author_str}: {body}"
+                        for comment in comments:
+                            author = comment.get("author", "Unknown")
+                            body = comment.get("body", "")
+                            if body:
+                                author_str = str(author) if author else "Unknown"
+                                content += f"\n\nComment by {author_str}: {body}"
                     documents.append(
                         {
                             "id": f"jira_{data['key']}",

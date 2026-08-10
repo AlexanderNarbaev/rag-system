@@ -101,7 +101,11 @@ class TestHybridSearchEdgeCases:
         return mock
 
     def test_qdrant_unavailable_after_init(self):
-        """Cover line 437-442 - Qdrant unavailable returns empty list."""
+        """Cover line 437-442 - Qdrant unavailable raises RetrievalDegradedError."""
+        import pytest
+
+        from proxy.app.shared.exceptions import RetrievalDegradedError
+
         with (
             patch("proxy.app.core.retrieval.qdrant_client", None),
             patch("proxy.app.core.retrieval.embedder", MagicMock()),
@@ -109,8 +113,8 @@ class TestHybridSearchEdgeCases:
         ):
             from proxy.app.core.retrieval import hybrid_search
 
-            result = hybrid_search("query")
-            assert result == []
+            with pytest.raises(RetrievalDegradedError):
+                hybrid_search("query")
 
     def test_dense_with_circuit_breaker_open(self):
         """Cover lines 474-479 - CircuitBreakerOpenError for dense search."""

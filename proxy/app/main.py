@@ -99,6 +99,7 @@ from proxy.app.shared.config import (
     WARMUP_ENABLED,
     WARMUP_ON_STARTUP,
 )
+from proxy.app.shared.exceptions import RetrievalDegradedError
 from proxy.app.shared.logging import setup_logging
 from proxy.app.shared.metrics import init_metrics
 from proxy.app.shared.middleware import add_cors_middleware, setup_all_middleware
@@ -491,8 +492,24 @@ async def process_rag_query(
 
     # 3. Progressive or standard hybrid search
     retrieval_stage = "direct"
+    retrieval_degraded = False
+    retrieval_reason = ""
     try:
-        if PROGRESSIVE_RETRIEVAL_ENABLED and not top_k_override:
+        # Fix 3: Check if embedder is available before attempting retrieval
+        from proxy.app.core.retrieval import _QDRANT_DEGRADED
+        from proxy.app.core.retrieval import embedder as _embedder
+
+        if _embedder is None:
+            logger.warning("No embedder — skipping retrieval, will use LLM directly")
+            retrieval_degraded = True
+            retrieval_reason = "no_embedder"
+            search_results = None
+        elif _QDRANT_DEGRADED:
+            logger.warning("Qdrant degraded — skipping retrieval, will use LLM directly")
+            retrieval_degraded = True
+            retrieval_reason = "qdrant_unavailable"
+            search_results = None
+        elif PROGRESSIVE_RETRIEVAL_ENABLED and not top_k_override:
             _raw_stages = [int(s.strip()) for s in PROGRESSIVE_RETRIEVAL_STAGES.split(",") if s.strip().isdigit()]
             _stages = _raw_stages if _raw_stages else [5, 10, 20]
             search_results, retrieval_stage = await progressive_retrieve(
@@ -509,12 +526,30 @@ async def process_rag_query(
                 top_k=top_k_override or MAX_CHUNKS_RETRIEVAL,
                 access_filter=_access_filter,
             )
+    except RetrievalDegradedError as degraded_err:
+        # Fix 1: Catch degraded error from hybrid_search (Qdrant down, no embedder)
+        logger.error("Retrieval degraded: %s — answering from general knowledge", degraded_err.reason)
+        retrieval_degraded = True
+        retrieval_reason = degraded_err.reason
+        search_results = None
     except Exception as e:
         logger.warning(f"Hybrid search failed (degraded mode): {e}")
+        retrieval_degraded = True
+        retrieval_reason = "search_exception"
         search_results = None
+
+    # Fix 4: Explicit logging for empty results — different causes
     sources: list[dict[str, Any]] = []
     chunks_for_eval: list[dict[str, Any]] = []
     if not search_results:
+        if retrieval_degraded:
+            logger.warning(
+                "No retrieval results — cause: %s. Will generate ungrounded response.",
+                retrieval_reason,
+            )
+        elif search_results is not None:
+            # search_results was not None but was empty — collection may be empty
+            logger.warning("Qdrant returned 0 results — collection may be empty or query has no matches")
         context = ""
         chunks_metadata = []
     else:

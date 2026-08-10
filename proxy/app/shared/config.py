@@ -114,7 +114,7 @@ ADAPTIVE_ROUTING_ENABLED = os.getenv("ADAPTIVE_ROUTING_ENABLED", "false").lower(
 MAX_RETRIEVAL_LOOPS = int(os.getenv("MAX_RETRIEVAL_LOOPS", "3"))
 
 # ============ Граф знаний (Neo4j) ============
-GRAPH_ENABLED = os.getenv("GRAPH_ENABLED", "false").lower() == "true"
+GRAPH_ENABLED = os.getenv("GRAPH_ENABLED", "true").lower() == "true"
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")

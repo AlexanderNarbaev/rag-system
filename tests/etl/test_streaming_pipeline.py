@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -137,3 +137,193 @@ async def test_multiple_events_can_be_processed_concurrently() -> None:
     assert [result.doc_id for result in results] == [f"event-{index}" for index in range(4)]
     assert all(result.chunks_indexed == 1 for result in results)
     assert len(indexer.indexed) == 0
+
+
+# ── Graph building tests ──
+
+
+def _pipeline_with_graph(graph_config: dict[str, Any] | None = None) -> StreamingPipeline:
+    """Create a pipeline with graph config and all components mocked."""
+    config: dict[str, Any] = {
+        "streaming": {"max_concurrent_api_calls": 2},
+        "graph": graph_config or {},
+    }
+    wal = FakeWal()
+    pipeline = StreamingPipeline(config, wal)
+    pipeline._embedder = FakeEmbedder()
+    pipeline._indexer = FakeIndexer()
+    pipeline._chunker = FakeChunker()
+    pipeline._chunker.base = FakeChunker.Base
+    pipeline._enricher = None
+    pipeline._quality_filter = None
+    pipeline._semaphore = asyncio.Semaphore(2)
+    return pipeline
+
+
+@dataclass
+class FakeEntity:
+    id: str = "ent-1"
+    name: str = "TestEntity"
+    type: str = "CONCEPT"
+    source_id: str = ""
+    properties: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class FakeRelation:
+    source: str = "ent-1"
+    target: str = "ent-2"
+    type: str = "RELATES_TO"
+    properties: dict[str, Any] = field(default_factory=dict)
+
+
+@pytest.mark.asyncio
+async def test_build_graph_noop_when_graph_disabled() -> None:
+    """Graph disabled (default) → _build_graph returns immediately without errors."""
+    pipeline = _pipeline_with_graph({})
+    chunks = [{"text": "some text", "hash": "h1"}]
+    # Should not raise
+    await pipeline._build_graph(chunks, "doc-1")
+
+
+@pytest.mark.asyncio
+async def test_build_graph_noop_when_neo4j_disabled() -> None:
+    """Graph enabled but neo4j disabled → _build_graph returns immediately."""
+    pipeline = _pipeline_with_graph({"enabled": True, "neo4j": {"enabled": False}})
+    chunks = [{"text": "some text", "hash": "h1"}]
+    await pipeline._build_graph(chunks, "doc-1")
+
+
+@pytest.mark.asyncio
+async def test_build_graph_extracts_and_loads_entities() -> None:
+    """Graph enabled with neo4j → extract entities and load to Neo4j."""
+    mock_entity = FakeEntity()
+    mock_relation = FakeRelation()
+
+    mock_extractor = MagicMock()
+    mock_extractor.extract_from_chunk.return_value = ([mock_entity], [mock_relation])
+
+    mock_loader = MagicMock()
+
+    graph_config = {
+        "enabled": True,
+        "use_spacy": False,
+        "use_slm": False,
+        "neo4j": {
+            "enabled": True,
+            "uri": "bolt://localhost:7687",
+            "user": "neo4j",
+            "password": "test",
+        },
+    }
+    pipeline = _pipeline_with_graph(graph_config)
+
+    with (
+        patch(
+            "etl.graph_builder.entity_extractor.EntityRelationExtractor",
+            return_value=mock_extractor,
+        ),
+        patch(
+            "etl.graph_builder.neo4j_loader.Neo4jLoader",
+            return_value=mock_loader,
+        ),
+    ):
+        chunks = [
+            {"text": "chunk one", "hash": "h1", "metadata": {"key": "val"}},
+            {"text": "", "hash": "h2"},  # empty text — should be skipped
+            {"text": "chunk three", "hash": "h3"},
+        ]
+        await pipeline._build_graph(chunks, "doc-42")
+
+    # extract_from_chunk called for non-empty chunks only (2 times)
+    assert mock_extractor.extract_from_chunk.call_count == 2
+    mock_extractor.extract_from_chunk.assert_any_call("chunk one", "doc-42", {"key": "val"})
+    mock_extractor.extract_from_chunk.assert_any_call("chunk three", "doc-42", {})
+
+    # Loader connected, constraints created, entities/relations loaded, closed
+    mock_loader.connect.assert_called_once()
+    mock_loader.create_constraints_and_indexes.assert_called_once()
+    assert mock_loader.load_entities.call_count == 2
+    assert mock_loader.load_relations.call_count == 2
+    mock_loader.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_build_graph_noop_when_chunks_empty() -> None:
+    """No chunks → _build_graph returns without calling extract."""
+    pipeline = _pipeline_with_graph({"enabled": True, "neo4j": {"enabled": True}})
+    await pipeline._build_graph([], "doc-empty")
+
+
+@pytest.mark.asyncio
+async def test_build_graph_catches_exceptions_gracefully() -> None:
+    """Graph failure should be caught and not propagate (non-blocking)."""
+    graph_config = {
+        "enabled": True,
+        "use_spacy": False,
+        "use_slm": False,
+        "neo4j": {
+            "enabled": True,
+            "uri": "bolt://localhost:7687",
+            "user": "neo4j",
+            "password": "test",
+        },
+    }
+    pipeline = _pipeline_with_graph(graph_config)
+
+    with patch(
+        "etl.graph_builder.entity_extractor.EntityRelationExtractor",
+        side_effect=RuntimeError("Neo4j unreachable"),
+    ):
+        # Should not raise — graph failure is non-blocking
+        chunks = [{"text": "content", "hash": "h1"}]
+        await pipeline._build_graph(chunks, "doc-fail")
+
+
+@pytest.mark.asyncio
+async def test_build_graph_loads_entities_only_when_no_relations() -> None:
+    """Only entities extracted (no relations) → loader.load_entities called, load_relations skipped."""
+    mock_entity = FakeEntity()
+
+    mock_extractor = MagicMock()
+    mock_extractor.extract_from_chunk.return_value = ([mock_entity], [])
+
+    mock_loader = MagicMock()
+
+    graph_config = {
+        "enabled": True,
+        "use_spacy": False,
+        "use_slm": False,
+        "neo4j": {"enabled": True, "uri": "bolt://localhost:7687", "user": "neo4j", "password": ""},
+    }
+    pipeline = _pipeline_with_graph(graph_config)
+
+    with (
+        patch(
+            "etl.graph_builder.entity_extractor.EntityRelationExtractor",
+            return_value=mock_extractor,
+        ),
+        patch(
+            "etl.graph_builder.neo4j_loader.Neo4jLoader",
+            return_value=mock_loader,
+        ),
+    ):
+        await pipeline._build_graph([{"text": "text", "hash": "h1"}], "doc-1")
+
+    mock_loader.load_entities.assert_called_once()
+    mock_loader.load_relations.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_document_calls_build_graph() -> None:
+    """process_document invokes _build_graph with chunks and doc_id."""
+    pipeline, _, _ = _pipeline()
+
+    with patch.object(pipeline, "_build_graph") as mock_build:
+        await pipeline.process_document(
+            {"id": "doc-g1", "source_type": "confluence", "title": "Test", "content": "content"},
+        )
+        mock_build.assert_called_once()
+        call_args = mock_build.call_args
+        assert call_args[0][1] == "doc-g1"  # doc_id
+        assert len(call_args[0][0]) > 0  # chunks list not empty

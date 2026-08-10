@@ -225,18 +225,21 @@ schedule:
 
 # Граф знаний (Neo4j) – опционально
 graph:
-  enabled: false                         # включить построение графа (set to true to enable)
+  enabled: true                          # включить построение графа (set to true to enable)
   use_spacy: true                        # использовать spaCy для NER
   spacy_model: "ru_core_news_sm"         # spaCy модель для извлечения сущностей
-  use_slm: false                         # использовать SLM для извлечения отношений
+  use_slm: false                         # использовать SLM для извлечения отношений (optional)
   slm_endpoint: "http://localhost:8080/v1/completions"
   cache_dir: "./entity_cache"            # кэш сущностей
   neo4j:
-    enabled: false                       # включить загрузку в Neo4j (set to true to enable)
+    enabled: true                        # включить загрузку в Neo4j (set to true to enable)
     uri: "bolt://localhost:7687"
     user: "neo4j"
-    password: "your_password_here"       # CHANGE THIS to your Neo4j password
+    password: ""                         # Set via NEO4J_PASSWORD env var
     database: "neo4j"
+    batch_size: 500
+    max_retries: 3
+    retry_delay: 1.0
 
 # Multimodal extraction (FR-09, FR-10, FR-11)
 multimodal:

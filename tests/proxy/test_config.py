@@ -20,7 +20,7 @@ class TestConfigDefaults:
     def test_boolean_defaults_false(self):
         assert config_module.USE_REDIS is False
         assert config_module.USE_LANGGRAPH is False
-        assert config_module.GRAPH_ENABLED is False
+        assert config_module.GRAPH_ENABLED is True
 
 
 class TestEnvVarOverrides:

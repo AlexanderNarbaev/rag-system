@@ -313,7 +313,8 @@ def create_embedder() -> Any:
             api_key=EMBEDDER_API_KEY,
             model=EMBEDDER_MODEL,
         )
-        if client._check_health():
+        health_ok = client._check_health()
+        if health_ok:
             logger.info(
                 "Using remote embedder at %s (model=%s)",
                 EMBEDDER_ENDPOINT,
@@ -322,14 +323,17 @@ def create_embedder() -> Any:
             _embedder_instance = client
             return _embedder_instance
 
+        # Health check failed — log exact error and fall back if allowed
         if EMBEDDER_FALLBACK_LOCAL:
             logger.warning(
-                "Remote embedder at %s is unreachable. Falling back to local.",
+                "Remote embedder at %s (model=%s) health check FAILED. Falling back to local model.",
                 EMBEDDER_ENDPOINT,
+                EMBEDDER_MODEL or "default",
             )
         else:
             raise ConnectionError(
-                f"Remote embedder at {EMBEDDER_ENDPOINT} is unreachable and EMBEDDER_FALLBACK_LOCAL is false.",
+                f"Remote embedder at {EMBEDDER_ENDPOINT} (model={EMBEDDER_MODEL or 'default'}) "
+                f"is unreachable and EMBEDDER_FALLBACK_LOCAL is false.",
             )
 
     # Local fallback
@@ -339,7 +343,7 @@ def create_embedder() -> Any:
         raise ImportError(
             "sentence-transformers is required for local embedding. "
             "Set EMBEDDER_ENDPOINT to use a remote service, or install "
-            "sentence-transformers.",
+            "sentence-transformers: pip install sentence-transformers",
         ) from err
 
     if not EMBEDDER_MODEL:
@@ -349,7 +353,16 @@ def create_embedder() -> Any:
         )
 
     logger.info("Loading local embedder: %s on %s", EMBEDDER_MODEL, EMBEDDER_DEVICE)
-    _embedder_instance = SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)
+    try:
+        _embedder_instance = SentenceTransformer(EMBEDDER_MODEL, device=EMBEDDER_DEVICE)
+    except Exception as exc:
+        logger.error(
+            "Failed to load local embedder model '%s' on device '%s': %s",
+            EMBEDDER_MODEL,
+            EMBEDDER_DEVICE,
+            exc,
+        )
+        raise
     return _embedder_instance
 
 

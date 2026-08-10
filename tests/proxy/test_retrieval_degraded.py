@@ -3,6 +3,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 class TestRetrievalDegradation:
     """Test that retrieval degrades gracefully when Qdrant is down."""
@@ -36,16 +38,17 @@ class TestRetrievalDegradation:
     @patch("proxy.app.core.retrieval.qdrant_client", None)
     @patch("proxy.app.core.retrieval.embedder", None)
     def test_hybrid_search_returns_empty_when_no_client(self):
-        """hybrid_search returns empty list when Qdrant is unavailable."""
+        """hybrid_search raises RetrievalDegradedError when Qdrant is unavailable."""
         from proxy.app.core.retrieval import hybrid_search
+        from proxy.app.shared.exceptions import RetrievalDegradedError
 
-        # Should not raise, should return empty
+        # Should raise RetrievalDegradedError (not silently return empty)
         with (
             patch("proxy.app.core.retrieval.initialize_retrieval"),
             patch("proxy.app.core.retrieval.qdrant_client", None),
+            pytest.raises(RetrievalDegradedError),
         ):
-            result = hybrid_search(query="test query")
-            assert result == []
+            hybrid_search(query="test query")
 
 
 class TestOrchestratorDegradation:

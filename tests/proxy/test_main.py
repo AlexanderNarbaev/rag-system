@@ -75,6 +75,8 @@ def mock_rag_pipeline():
         patch("proxy.app.main.extract_version_from_query", return_value=None),
         patch("proxy.app.main.cache_manager", None),
         patch("proxy.app.main.log_interaction") as mock_log,
+        patch("proxy.app.core.retrieval.qdrant_client", MagicMock()),
+        patch("proxy.app.core.retrieval.embedder", MagicMock()),
     ):
         mock_hybrid.return_value = []
         mock_rerank.return_value = []
@@ -308,7 +310,7 @@ class TestChatCompletionsNonStreaming:
         response = client.post(
             "/v1/chat/completions",
             json={
-                "model": "test-model",
+                "model": "test-model+RAG",
                 "messages": [{"role": "user", "content": "test query"}],
                 "rag_skip_generation": True,
                 "rag_return_chunks": True,
@@ -513,6 +515,8 @@ class TestProcessRagQuery:
             patch("proxy.app.main.rerank_chunks", return_value=[0]),
             patch("proxy.app.main.deduplicate_chunks") as mock_dedup,
             patch("proxy.app.main.build_context", return_value="Built context"),
+            patch("proxy.app.core.retrieval.qdrant_client", MagicMock()),
+            patch("proxy.app.core.retrieval.embedder", MagicMock()),
         ):
             mock_dedup.return_value = [(mock_chunk, 0.95), (mock_chunk, 0.90)]
             context, messages, _, sources, _ = await process_rag_query(

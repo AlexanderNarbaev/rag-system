@@ -17,6 +17,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -50,6 +51,7 @@ from proxy.app.shared.config import (
     REDIS_URL,
     USE_REDIS,
 )
+from proxy.app.shared.exceptions import RetrievalDegradedError
 from proxy.app.shared.tracing import add_event, tracer
 
 logger = logging.getLogger(__name__)
@@ -62,8 +64,12 @@ _scoring_service = RetrievalScoringService()
 _acl_service = AccessControlService()
 
 # Two-level score filtering thresholds (from DRAG research)
-STRONG_SCORE_THRESHOLD = 0.32
-BORDERLINE_SCORE_THRESHOLD = 0.25
+# Configurable via environment variables. NOTE: when Qdrant uses
+# Distance.COSINE, scores are INVERTED (0 = perfect match, 2 = worst),
+# so these thresholds will filter out all good results. Recreate the
+# collection with Distance.DOT or lower these thresholds significantly.
+STRONG_SCORE_THRESHOLD = float(os.getenv("STRONG_SCORE_THRESHOLD", "0.32"))
+BORDERLINE_SCORE_THRESHOLD = float(os.getenv("BORDERLINE_SCORE_THRESHOLD", "0.25"))
 MIN_STRONG_SOURCES = 2
 
 # Knee-point pruning settings (from DRAG with KNEE research)
@@ -132,6 +138,11 @@ def _get_dense_vector_name(client: Any) -> str | None:
 qdrant_client = None
 embedder = None
 cache_manager = None
+
+# Module-level flag: set to True when Qdrant connection fails at startup.
+# Used by hybrid_search to raise RetrievalDegradedError instead of
+# silently returning empty results.
+_QDRANT_DEGRADED: bool = False
 
 # Для графа (опционально)
 neo4j_driver = None
@@ -227,7 +238,7 @@ def initialize_retrieval() -> None:
     instead of crashing the proxy. Retries with exponential backoff on
     transient connection failures.
     """
-    global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED
+    global qdrant_client, embedder, cache_manager, neo4j_driver, _GRAPH_ENABLED, _QDRANT_DEGRADED
     if not QDRANT_AVAILABLE:
         raise ImportError("qdrant-client is required. Install with: pip install qdrant-client")
 
@@ -257,16 +268,55 @@ def initialize_retrieval() -> None:
             ),
         )
         logger.info("Qdrant connection established at %s:%s", QDRANT_HOST, QDRANT_PORT)
+        _QDRANT_DEGRADED = False
     except Exception as exc:
-        logger.warning("Qdrant unavailable at %s:%s — degraded mode (%s)", QDRANT_HOST, QDRANT_PORT, exc)
+        logger.error(
+            "Qdrant unavailable at %s:%s — DEGRADED MODE: knowledge base queries will fail (%s)",
+            QDRANT_HOST,
+            QDRANT_PORT,
+            exc,
+        )
         qdrant_client = None
+        _QDRANT_DEGRADED = True
+
+    # Fix 2: Validate collection distance metric
+    if qdrant_client is not None:
+        try:
+            collection_info = qdrant_client.get_collection(COLLECTION_NAME)
+            if collection_info.config and collection_info.config.params:
+                vectors_config = collection_info.config.params.vectors
+                if hasattr(vectors_config, "distance") and vectors_config.distance == "Cosine":
+                    logger.warning(
+                        "Collection '%s' uses COSINE distance — scores may be inverted "
+                        "(0=perfect match). Consider recreating with DOT distance.",
+                        COLLECTION_NAME,
+                    )
+                elif isinstance(vectors_config, dict):
+                    for vname, vparams in vectors_config.items():
+                        if hasattr(vparams, "distance") and vparams.distance == "Cosine":
+                            logger.warning(
+                                "Collection '%s' vector '%s' uses COSINE distance — "
+                                "scores may be inverted. Consider recreating with DOT distance.",
+                                COLLECTION_NAME,
+                                vname,
+                            )
+        except Exception:
+            pass  # Collection may not exist yet
 
     # Use factory to select remote or local embedder
     from proxy.app.llm.remote_services import create_embedder
 
-    embedder = create_embedder()
-    embedder_name = getattr(embedder, "__class__", type(embedder)).__name__
-    logger.info("Embedder initialized: %s", embedder_name)
+    try:
+        embedder = create_embedder()
+        embedder_name = getattr(embedder, "__class__", type(embedder)).__name__
+        logger.info("Embedder initialized: %s", embedder_name)
+    except Exception as exc:
+        logger.error(
+            "No embedder available — retrieval pipeline will not work. "
+            "Set EMBEDDER_ENDPOINT or EMBEDDER_MODEL. Error: %s",
+            exc,
+        )
+        embedder = None
 
     # Кэш (если используется Redis)
     if USE_REDIS and REDIS_URL:  # noqa: SIM108
@@ -618,6 +668,18 @@ def filter_results_by_score(results: list[Any]) -> tuple[list[Any], str]:
 
     strong = [r for r in results if r.score >= STRONG_SCORE_THRESHOLD]
     borderline = [r for r in results if BORDERLINE_SCORE_THRESHOLD <= r.score < STRONG_SCORE_THRESHOLD]
+    below_all = [r for r in results if r.score < BORDERLINE_SCORE_THRESHOLD]
+
+    # Log filtered-out results for diagnostics
+    if below_all:
+        max_filtered = max((r.score for r in below_all), default=0.0)
+        logger.info(
+            "Filtered %d results below borderline threshold (%.2f). Max filtered score: %.4f. "
+            "If scores look unexpectedly low, check if collection uses COSINE distance.",
+            len(below_all),
+            BORDERLINE_SCORE_THRESHOLD,
+            max_filtered,
+        )
 
     if len(strong) >= MIN_STRONG_SOURCES:
         # Good quality — use strong + some borderline
@@ -677,13 +739,27 @@ def hybrid_search(
         if not qdrant_client or not embedder:
             initialize_retrieval()
 
-        # If Qdrant is still unavailable after initialization, return empty results
+        # If Qdrant is still unavailable after initialization, raise degraded error
         if qdrant_client is None:
-            logger.warning("Qdrant unavailable — returning empty search results")
+            logger.error("Qdrant unavailable — cannot perform search (retrieval degraded)")
             add_event("rag.retrieval.qdrant_unavailable")
             if span.is_recording():
                 span.set_attribute("rag.error", "qdrant_unavailable")
-            return []
+            raise RetrievalDegradedError(
+                "Knowledge base unavailable — Qdrant connection failed",
+                reason="qdrant_unavailable",
+            )
+
+        # If embedder is unavailable, raise degraded error
+        if embedder is None:
+            logger.error("No embedder available — cannot compute query embeddings")
+            add_event("rag.retrieval.no_embedder")
+            if span.is_recording():
+                span.set_attribute("rag.error", "no_embedder")
+            raise RetrievalDegradedError(
+                "Knowledge base unavailable — embedder not configured",
+                reason="no_embedder",
+            )
 
         if lang:
             logger.debug(f"Cross-lingual search: query language = {lang}")
