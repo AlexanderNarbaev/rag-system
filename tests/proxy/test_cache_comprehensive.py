@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -144,7 +145,7 @@ class TestCacheManagerFallback:
 
     def test_init_with_redis_url_but_redis_unavailable(self) -> None:
         """When redis_url is set but redis is unreachable, fall back to memory."""
-        with patch("redis.asyncio.from_url", side_effect=Exception("connection refused")):
+        with _patch_redis(from_url_side_effect=Exception("connection refused")):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             # Should not raise at __init__; the failure happens on first use
             assert cm.use_redis is True
@@ -153,12 +154,31 @@ class TestCacheManagerFallback:
         """When redis is unreachable, initialize() raises after retries (intentional)."""
         from proxy.app.shared.retry import RetryExhaustedError
 
-        with patch("redis.asyncio.from_url", side_effect=Exception("connection refused")):
+        with _patch_redis(from_url_side_effect=Exception("connection refused")):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             # initialize() retries 3 times then raises — this is the
             # documented fast-fail behaviour, not a bug.
             with pytest.raises(RetryExhaustedError):
                 asyncio.run(cm.initialize())
+
+
+def _patch_redis(client: Any = None, from_url_side_effect: Exception | None = None) -> Any:
+    """Inject a fake ``redis``/``redis.asyncio`` pair into ``sys.modules``.
+
+    ``cache.py`` resolves ``import redis.asyncio`` lazily inside the call, so
+    patching the ``from_url`` attribute is unreliable when another test module
+    has replaced ``sys.modules["redis.asyncio"]`` with a plain ``MagicMock``
+    (attribute patching then lands on a different auto-created child mock).
+    Replacing the ``sys.modules`` entries directly works regardless.
+    """
+    fake_asyncio = MagicMock()
+    if from_url_side_effect is not None:
+        fake_asyncio.from_url = MagicMock(side_effect=from_url_side_effect)
+    else:
+        fake_asyncio.from_url = MagicMock(return_value=client)
+    fake_redis = MagicMock()
+    fake_redis.asyncio = fake_asyncio
+    return patch.dict(sys.modules, {"redis": fake_redis, "redis.asyncio": fake_asyncio})
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +199,7 @@ class TestCacheManagerRedis:
         return client
 
     def test_redis_get_returns_value(self, mock_redis: Any) -> None:
-        with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with _patch_redis(mock_redis):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             mock_redis.get.return_value = json.dumps("cached_value")
             result = asyncio.run(cm.get("k"))
@@ -187,32 +207,32 @@ class TestCacheManagerRedis:
 
     def test_redis_get_non_json_falls_back_to_raw(self, mock_redis: Any) -> None:
         """A non-JSON-decodable value should be returned as raw string."""
-        with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with _patch_redis(mock_redis):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             mock_redis.get.return_value = "not json"
             result = asyncio.run(cm.get("k"))
             assert result == "not json"
 
     def test_redis_set_serializes_to_json(self, mock_redis: Any) -> None:
-        with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with _patch_redis(mock_redis):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             asyncio.run(cm.set("k", {"dict": "value"}))
             mock_redis.setex.assert_called_once()
 
     def test_redis_set_with_ttl(self, mock_redis: Any) -> None:
-        with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with _patch_redis(mock_redis):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             asyncio.run(cm.set("k", "v", ttl=60))
             mock_redis.setex.assert_called_once()
 
     def test_redis_delete(self, mock_redis: Any) -> None:
-        with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with _patch_redis(mock_redis):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             asyncio.run(cm.delete("k"))
             mock_redis.delete.assert_called_once()
 
     def test_redis_initialize_succeeds(self, mock_redis: Any) -> None:
-        with patch("redis.asyncio.from_url", return_value=mock_redis):
+        with _patch_redis(mock_redis):
             cm = CacheManager(use_redis=True, redis_url="redis://localhost:6379/0")
             asyncio.run(cm.initialize())
 

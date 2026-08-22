@@ -305,8 +305,8 @@ Helm-чарт `deploy/k8s/helm/rag-system/` включает:
 
 | Документ                                              | Назначение                                              |
 |:------------------------------------------------------|:--------------------------------------------------------|
-| [Архитектурные ADR](../adr/)                          | 14 ADR, покрывающих все ключевые дизайн-решения        |
-| [C4-диаграммы](../diagrams/)                          | L1 (Context), L2 (Containers), L3 (Components)         |
+| [Архитектурные ADR](../adr/index.md)                          | 14 ADR, покрывающих все ключевые дизайн-решения        |
+| [C4-диаграммы](../diagrams/index.md)                          | L1 (Context), L2 (Containers), L3 (Components)         |
 | [Knowledge Graph Strategy](knowledge-graph-strategy.md) | Neo4j entity extraction и graph enrichment             |
 | [Deployment Guide](deployment-guide.md)               | Docker + K8s продакшен-деплой                          |
 | [Operations Guide](operations-guide.md)               | Мониторинг, бэкап, масштабирование                     |

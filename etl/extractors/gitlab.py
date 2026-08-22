@@ -1,13 +1,13 @@
 # etl/extractors/gitlab.py
-"""Выгрузка данных из GitLab (Self-Hosted) с поддержкой:
-- Проекты (все или по списку)
-- Коммиты (полные метаданные + diff файлов)
-- Ветки
-- Содержимое файлов (код, конфиги)
-- Merge Requests (обсуждения, комментарии, изменения)
-- Дискуссии (нити комментариев в MR)
-- Инкрементальный режим (хеши коммитов, timestamp последнего MR)
-- WAL для возобновления
+"""Data extraction from GitLab (Self-Hosted) with support for:
+- Projects (all or from a list)
+- Commits (full metadata + file diffs)
+- Branches
+- File contents (code, configs)
+- Merge Requests (discussions, comments, changes)
+- Discussions (comment threads in MRs)
+- Incremental mode (commit hashes, last MR timestamp)
+- WAL for resuming
 """
 
 import json
@@ -25,7 +25,7 @@ import urllib3
 from etl.extractors.acl_extractor import extract_gitlab_acl
 from etl.extractors.base_extractor import SyncExtractor
 
-# Подавление SSL warnings для самоподписанных сертификатов
+# Suppress SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -38,8 +38,8 @@ class GitLabExtractor(SyncExtractor):
             "url": "https://gitlab.internal.company.com",
             "token": "personal_access_token",      # or use "api_key" as alternative
             "api_key": "",                          # alternative to "token"
-            "verify_ssl": true,                     # false для самоподписанных сертификатов
-            "ca_bundle": "",                        # путь к корпоративному CA bundle
+            "verify_ssl": true,                     # false for self-signed certificates
+            "ca_bundle": "",                        # path to the corporate CA bundle
             "project_ids": null,                    # null = fetch ALL accessible projects
             "max_projects": 0,                      # limit total projects (0 = no limit)
             "output_dir": "./raw_data/gitlab",
@@ -115,7 +115,7 @@ class GitLabExtractor(SyncExtractor):
         return default
 
     def _request(self, endpoint: str, params: dict[str, Any] | None = None, method: str = "GET") -> dict[str, Any]:
-        """Выполняет запрос к GitLab API с retry логикой и экспоненциальной задержкой."""
+        """Performs a request to the GitLab API with retry logic and exponential backoff."""
         url = urljoin(self.url, endpoint)
         max_retries = self.config.get("max_retries", 3)
         base_delay = self.config.get("retry_delay", 1)
@@ -154,7 +154,7 @@ class GitLabExtractor(SyncExtractor):
         params: dict[str, Any] | None = None,
         per_page: int = 100,
     ) -> Iterator[dict[str, Any]]:
-        """Пагинированный сбор всех элементов (постранично)."""
+        """Paginated collection of all items (page by page)."""
         page = 1
         while True:
             paginated_params = {"page": page, "per_page": per_page}
@@ -167,7 +167,7 @@ class GitLabExtractor(SyncExtractor):
             page += 1
 
     def get_projects(self) -> list[dict[str, Any]]:
-        """Список проектов (репозиториев)."""
+        """List of projects (repositories)."""
         if self.project_ids:
             projects = []
             for pid in self.project_ids:
@@ -180,7 +180,7 @@ class GitLabExtractor(SyncExtractor):
         return projects
 
     def get_commits(self, project_id: int, since: str | None = None) -> list[dict[str, Any]]:
-        """Коммиты с пагинацией. Опционально фильтр since (ISO8601)."""
+        """Commits with pagination. Optional since filter (ISO8601)."""
         params: dict[str, Any] = {"with_stats": True}
         if since:
             params["since"] = since
@@ -189,24 +189,24 @@ class GitLabExtractor(SyncExtractor):
             commits.append(commit)
             if self.max_commits_per_project > 0 and len(commits) >= self.max_commits_per_project:
                 break
-        # Добавить diff для каждого коммита (ограничимся топ-50 файлов)
+        # Add a diff for each commit (limited to the top 50 files)
         for commit in commits:
             sha = commit["id"]
             diff_endpoint = f"/api/v4/projects/{project_id}/repository/commits/{sha}/diff"
             try:
                 diff_data = self._request(diff_endpoint)
-                commit["diff"] = diff_data  # список файлов с изменениями
+                commit["diff"] = diff_data  # list of files with changes
             except Exception as e:
                 logger.warning(f"Failed to fetch diff for commit {sha}: {e}")
                 commit["diff"] = []
         return commits
 
     def get_branches(self, project_id: int) -> list[dict[str, Any]]:
-        """Список веток репозитория."""
+        """List of repository branches."""
         return list(self._paginated_get(f"/api/v4/projects/{project_id}/repository/branches"))
 
     def get_file_content(self, project_id: int, file_path: str, ref: str = "main") -> str | None:
-        """Получает содержимое файла (текст). Возвращает None если не удалось."""
+        """Fetches file contents (text). Returns None on failure."""
         encoded_path = file_path.replace("/", "%2F")
         endpoint = f"/api/v4/projects/{project_id}/repository/files/{encoded_path}/raw"
         try:
@@ -218,26 +218,26 @@ class GitLabExtractor(SyncExtractor):
             return None
 
     def get_merge_requests(self, project_id: int, state: str = "all") -> list[dict[str, Any]]:
-        """MR с пагинацией. Добавляет обсуждения и комментарии."""
+        """MRs with pagination. Adds discussions and comments."""
         params = {"state": state}
         if self.since_date:
             params["updated_after"] = self.since_date
         mrs = []
         for mr in self._paginated_get(f"/api/v4/projects/{project_id}/merge_requests", params):
-            # Добавляем обсуждения (discussions) и отдельные комментарии (notes)
+            # Add discussions and individual comments (notes)
             mr_iid = mr["iid"]
             discussions = self.get_mr_discussions(project_id, mr_iid)
             mr["discussions"] = discussions
-            # Также получаем изменения (changes) – файлы, затронутые MR
+            # Also fetch changes – files touched by the MR
             changes = self._request(f"/api/v4/projects/{project_id}/merge_requests/{mr_iid}/changes")
             mr["changes"] = changes.get("changes", [])
             mrs.append(mr)
         return mrs
 
     def get_mr_discussions(self, project_id: int, mr_iid: int) -> list[dict[str, Any]]:
-        """Возвращает все дискуссии (нити комментариев) в MR."""
+        """Returns all discussions (comment threads) in an MR."""
         discussions = list(self._paginated_get(f"/api/v4/projects/{project_id}/merge_requests/{mr_iid}/discussions"))
-        # Преобразуем в удобный формат: каждая дискуссия содержит массив заметок (notes)
+        # Convert to a convenient format: each discussion contains an array of notes
         result = []
         for disc in discussions:
             notes = []
@@ -255,7 +255,7 @@ class GitLabExtractor(SyncExtractor):
         return result
 
     def _should_process_commit(self, project_id: int, commit_sha: str, commit_updated: str) -> bool:
-        """Инкрементальная проверка: обрабатывать коммит, если он новый или изменился."""
+        """Incremental check: process a commit if it is new or has changed."""
         if not self.incremental:
             return True
         projects = self.wal_data.get("projects", {})
@@ -263,11 +263,11 @@ class GitLabExtractor(SyncExtractor):
         last_commit = project_wal.get("last_commit_sha")
         if not last_commit:
             return True
-        # Если SHA изменился (новый коммит) – всё равно нужно обработать
-        # Простой подход: проверяем, есть ли SHA в WAL
+        # If the SHA changed (new commit) – it still needs processing
+        # Simple approach: check whether the SHA is in the WAL
         if commit_sha == last_commit:  # noqa: SIM103
             return False
-        # Иначе если коммит новее – обрабатываем
+        # Otherwise, if the commit is newer – process it
         return True
 
     def _update_wal_commit(self, project_id: int, last_commit_sha: str, last_commit_date: str) -> None:
@@ -288,7 +288,7 @@ class GitLabExtractor(SyncExtractor):
         merge_requests: list[dict],
         files_data: list[dict],
     ):
-        """Сохраняет все данные проекта в JSON структуру."""
+        """Saves all project data to a JSON structure."""
         project_id = str(project["id"])
         proj_dir = self.output_dir / project_id
         proj_dir.mkdir(parents=True, exist_ok=True)
@@ -302,16 +302,16 @@ class GitLabExtractor(SyncExtractor):
             "source_permissions": acl.source_permissions,
         }
 
-        # Метаданные проекта
+        # Project metadata
         with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
             json.dump(project, f, ensure_ascii=False, indent=2)
 
-        # Коммиты
+        # Commits
         if commits:
             with open(proj_dir / "commits.json", "w", encoding="utf-8") as f:
                 json.dump(commits, f, ensure_ascii=False, indent=2)
 
-        # Ветки
+        # Branches
         if branches:
             with open(proj_dir / "branches.json", "w", encoding="utf-8") as f:
                 json.dump(branches, f, ensure_ascii=False, indent=2)
@@ -321,7 +321,7 @@ class GitLabExtractor(SyncExtractor):
             with open(proj_dir / "merge_requests.json", "w", encoding="utf-8") as f:
                 json.dump(merge_requests, f, ensure_ascii=False, indent=2)
 
-        # Файлы (код)
+        # Files (code)
         if files_data:
             files_dir = proj_dir / "files"
             files_dir.mkdir(exist_ok=True)
@@ -330,12 +330,12 @@ class GitLabExtractor(SyncExtractor):
                 safe_name = file_path.replace("/", "_").replace("\\", "_")
                 with open(files_dir / f"{safe_name}.txt", "w", encoding="utf-8") as f:
                     f.write(file_info["content"])
-            # также сохраняем список файлов как JSON
+            # also save the file list as JSON
             with open(proj_dir / "files_manifest.json", "w", encoding="utf-8") as f:
                 json.dump(files_data, f, ensure_ascii=False, indent=2)
 
     def run(self) -> None:
-        """Основной процесс выгрузки по всем проектам."""
+        """Main extraction loop over all projects."""
         projects = self.get_projects()
 
         # Apply max_projects limit if configured
@@ -361,11 +361,11 @@ class GitLabExtractor(SyncExtractor):
                     commits = self.get_commits(project_id, since=self.since_date)
                     logger.info(f"  Retrieved {len(commits)} commits")
                     if commits:
-                        last_commit = commits[0]  # самый новый (первый в списке)
+                        last_commit = commits[0]  # the newest one (first in the list)
                         self._update_wal_commit(project_id, last_commit["id"], last_commit["created_at"])
 
                 branches = []
-                if self.fetch_commits:  # ветки не требуют отдельного флага, но идём вместе
+                if self.fetch_commits:  # branches need no separate flag but are fetched together
                     branches = self.get_branches(project_id)
                     logger.info(f"  Retrieved {len(branches)} branches")
 
@@ -377,7 +377,7 @@ class GitLabExtractor(SyncExtractor):
                 files_data = []
                 if self.fetch_files:
                     try:
-                        # Получаем дерево корня репозитория
+                        # Fetch the repository root tree
                         tree = self._request(
                             f"/api/v4/projects/{project_id}/repository/tree",
                             params={"recursive": "true"},
@@ -403,7 +403,7 @@ class GitLabExtractor(SyncExtractor):
         logger.info("GitLab extraction finished.")
 
     def _matches_filter(self, path: str) -> bool:
-        """Проверяет, подходит ли путь файла под фильтр и не исключён ли он."""
+        """Checks whether a file path matches the filter and is not excluded."""
         # Check exclusions first
         if self.file_paths_exclude:
             for pattern in self.file_paths_exclude:
@@ -425,7 +425,7 @@ class GitLabExtractor(SyncExtractor):
 
 
 if __name__ == "__main__":
-    # Пример конфигурации (загружать из etl_config.yaml или переменных окружения)
+    # Configuration example (load from etl_config.yaml or environment variables)
     config_example = {
         "url": os.getenv("GITLAB_URL", "https://gitlab.example.com"),
         "token": os.getenv("GITLAB_TOKEN", "your_token"),

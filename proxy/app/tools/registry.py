@@ -102,25 +102,75 @@ class SDKProvider(ToolProvider):
 
 
 class DeclarativeProvider(ToolProvider):
-    """Provider for declarative tools (YAML/JSON files). Stub."""
+    """Provider for declarative tools (YAML/JSON files).
+
+    Loads tool definitions via ``declarative.DeclarativeToolLoader`` from a
+    configured directory. Resolution order for the directory:
+    explicit constructor arg → ``TOOLS_DECLARATIVE_DIR`` from app config →
+    ``TOOLS_DECLARATIVE_DIR`` env var default.
+    """
+
+    def __init__(self, tools_dir: str | None = None) -> None:
+        self._tools_dir = tools_dir
 
     @property
     def provider_name(self) -> str:
         return "declarative"
 
+    def _resolve_dir(self) -> str:
+        """Resolve the declarative tools directory."""
+        if self._tools_dir:
+            return self._tools_dir
+        try:
+            from proxy.app.shared.config import TOOLS_DECLARATIVE_DIR
+
+            return str(TOOLS_DECLARATIVE_DIR)
+        except ImportError:
+            return os.getenv("TOOLS_DECLARATIVE_DIR", "./tools/declarative")
+
     async def discover(self) -> list[ToolDefinition]:
-        return []
+        """Load all declarative tools from the configured directory."""
+        directory = self._resolve_dir()
+        if not os.path.isdir(directory):
+            logger.info("Declarative tools directory not found: %s — no tools discovered", directory)
+            return []
+
+        try:
+            from .declarative import DeclarativeToolLoader
+        except ImportError as exc:
+            logger.warning("Declarative loader unavailable: %s", exc)
+            return []
+
+        tools = DeclarativeToolLoader().load_from_dir(directory)
+        logger.info("DeclarativeProvider discovered %d tools from %s", len(tools), directory)
+        return tools
 
 
 class OpenAPIProvider(ToolProvider):
-    """Provider for OpenAPI spec-derived tools. Stub."""
+    """Provider for OpenAPI spec-derived tools.
+
+    Delegates to ``openapi.discovery.OpenAPIProvider``, which fetches/parses
+    each spec from ``TOOLS_OPENAPI_SPECS`` config and generates tool
+    definitions via the OpenAPI converter.
+    """
+
+    def __init__(self, spec_configs: list[dict[str, Any]] | None = None) -> None:
+        self._spec_configs = spec_configs
 
     @property
     def provider_name(self) -> str:
         return "openapi"
 
     async def discover(self) -> list[ToolDefinition]:
-        return []
+        """Discover tools from all configured OpenAPI specs."""
+        try:
+            from proxy.app.tools.openapi.discovery import OpenAPIProvider as DiscoveryProvider
+        except ImportError as exc:
+            logger.warning("OpenAPI discovery unavailable: %s", exc)
+            return []
+
+        provider = DiscoveryProvider(spec_configs=self._spec_configs)
+        return await provider.discover()
 
 
 # ---------------------------------------------------------------------------

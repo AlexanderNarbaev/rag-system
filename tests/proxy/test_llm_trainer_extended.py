@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,23 +22,25 @@ class TestLLMTrainerAdditional:
     def test_init_without_config(self, trainer):
         assert trainer.config.trainer_type == TrainerType.LLM
 
-    def test_train_fails_with_exception(self, trainer):
+    def test_train_fails_with_exception(self, trainer, tmp_path):
         trainer.config.env_profile = EnvProfile.DEV
-        trainer.prepare_data = MagicMock(return_value=[{"messages": [{"role": "user", "content": "hi"}]}])
+        trainer.config.output_dir = str(tmp_path)
+        (tmp_path / "llm_train.json").write_text(json.dumps([{"messages": [{"role": "user", "content": "hi"}]}]))
         with (
             patch("proxy.app.model_evolution.llm_trainer.LLMTrainer._train_mock", side_effect=RuntimeError("boom")),
             pytest.raises(TrainingError, match="LLM training failed"),
         ):
-            trainer.train([{"messages": []}])
+            trainer.train(trainer.config)
 
-    def test_train_mock_produces_metrics(self, trainer):
+    def test_train_mock_produces_metrics(self, trainer, tmp_path):
         trainer.config.env_profile = EnvProfile.DEV
-        trainer.config.output_dir = "/tmp/test-llm"
+        trainer.config.output_dir = str(tmp_path)
         data = [
             {"messages": [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]},
             {"messages": [{"role": "user", "content": "q2"}, {"role": "assistant", "content": "a2"}]},
         ]
-        job = trainer.train(data)
+        (tmp_path / "llm_train.json").write_text(json.dumps(data))
+        job = trainer.train(trainer.config)
         assert job.status == "completed"
         assert job.metrics is not None
         assert "train_loss" in job.metrics
@@ -45,24 +48,27 @@ class TestLLMTrainerAdditional:
         assert "bleu_1" in job.metrics
         assert "bleu_4" in job.metrics
         assert "rouge_l_f1" in job.metrics
+        assert job.metrics["mock"] == 1.0
 
-    def test_train_mock_single_sample(self, trainer):
+    def test_train_mock_single_sample(self, trainer, tmp_path):
         trainer.config.env_profile = EnvProfile.DEV
-        trainer.config.output_dir = "/tmp/test-llm"
+        trainer.config.output_dir = str(tmp_path)
         data = [{"messages": [{"role": "user", "content": "hello"}]}]
-        job = trainer.train(data)
+        (tmp_path / "llm_train.json").write_text(json.dumps(data))
+        job = trainer.train(trainer.config)
         assert job.status == "completed"
         assert job.artifact_uri is not None
 
-    def test_train_gpu_falls_back_to_mock_when_qlora_unavailable(self, trainer):
+    def test_train_gpu_falls_back_to_mock_when_qlora_unavailable(self, trainer, tmp_path):
         trainer.config.env_profile = EnvProfile.PROD
-        trainer.config.output_dir = "/tmp/test-llm"
+        trainer.config.output_dir = str(tmp_path)
         data = [{"messages": [{"role": "user", "content": "hello"}]}]
+        (tmp_path / "llm_train.json").write_text(json.dumps(data))
         with (
             patch("proxy.app.model_evolution.llm_trainer._QLORA_AVAILABLE", False),
             patch.object(trainer, "_cuda_available", return_value=True),
         ):
-            job = trainer.train(data)
+            job = trainer.train(trainer.config)
             assert job.status == "completed"
             assert "train_loss" in job.metrics
 
@@ -150,18 +156,45 @@ class TestLLMTrainerEvaluate:
         assert "train_loss" in result
         assert "val_loss" in result
         assert "bleu_1" in result
+        assert result["mock"] == 1.0
 
-    def test_evaluate_gpu_mode_returns_different_metrics(self, trainer):
+    def test_evaluate_gpu_mode_computes_metrics_from_pairs(self, trainer):
         trainer.config.env_profile = EnvProfile.PROD
-        result = trainer.evaluate([{"messages": []}])
-        assert "eval_loss" in result
-        assert "bleu_1" in result
+        eval_data = [
+            {
+                "messages": [
+                    {"role": "user", "content": "q"},
+                    {"role": "assistant", "content": "the reference"},
+                ],
+                "prediction": "the hypothesis",
+            },
+        ]
+        fake_bleu = MagicMock()
+        fake_bleu.corpus_bleu.return_value = SimpleNamespace(score=50.0)
+        fake_rouge = MagicMock()
+        fake_rouge.rouge_scorer.RougeScorer.return_value.score.return_value = {
+            "rougeL": SimpleNamespace(precision=0.4, recall=0.5, fmeasure=0.45),
+        }
+        fake_bert = MagicMock()
+        fake_bert.score.return_value = (
+            SimpleNamespace(mean=lambda: 0.6),
+            SimpleNamespace(mean=lambda: 0.7),
+            SimpleNamespace(mean=lambda: 0.65),
+        )
+        modules = {"sacrebleu": fake_bleu, "rouge_score": fake_rouge, "bert_score": fake_bert}
+        with patch.dict("sys.modules", modules):
+            result = trainer.evaluate(eval_data)
+        assert result["bleu_1"] == pytest.approx(0.50)
+        assert result["rouge_l_f1"] == pytest.approx(0.45)
+        assert result["bertscore_f1"] == pytest.approx(0.65)
+        assert "mock" not in result
 
     def test_evaluate_ci_mode_is_cpu(self, trainer):
         trainer.config.env_profile = EnvProfile.CI
         assert trainer._is_cpu_profile() is True
         result = trainer.evaluate([{"messages": []}])
         assert "train_loss" in result
+        assert result["mock"] == 1.0
 
 
 class TestLLMTrainerTokenizeDataset:

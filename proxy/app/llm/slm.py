@@ -9,16 +9,6 @@ SLM is used for fast, low-cost operations:
 
 Supports any OpenAI-compatible API (vLLM, llama.cpp, Ollama, LiteLLM, etc.)
 and local llama.cpp subprocess for air-gapped deployments.
-
-Маршрутизация и вспомогательные задачи с использованием SLM (Small Language Model).
-SLM используется для быстрых, дешёвых операций:
-- Классификация интента
-- Декомпозиция сложных запросов
-- Переписывание запроса (лёгкая версия)
-- Извлечение ключевых сущностей
-
-Поддерживает любой OpenAI-совместимый API (vLLM, llama.cpp, Ollama, LiteLLM и др.).
-А также локальный запуск llama.cpp через subprocess для air-gapped окружений.
 """
 
 import atexit
@@ -49,15 +39,15 @@ logger = logging.getLogger(__name__)
 
 
 class IntentType(Enum):
-    """Типы интентов пользователя."""
+    """User intent types."""
 
-    GREETING = "greeting"  # Приветствие/общие фразы
-    SIMPLE_FACT = "simple_fact"  # Простой факт (да/нет, определение)
-    FACTUAL = "factual"  # Простой факт (требует контекст)
-    PROCEDURAL = "procedural"  # "как сделать" (требует инструкций)
-    COMPARISON = "comparison"  # Сравнение нескольких сущностей
-    SUMMARIZATION = "summarize"  # Суммаризация документа
-    COMPLEX = "complex"  # Многочастный запрос, требующий декомпозиции
+    GREETING = "greeting"  # Greeting/common phrases
+    SIMPLE_FACT = "simple_fact"  # Simple fact (yes/no, definition)
+    FACTUAL = "factual"  # Simple fact (requires context)
+    PROCEDURAL = "procedural"  # "how to" (requires instructions)
+    COMPARISON = "comparison"  # Comparison of multiple entities
+    SUMMARIZATION = "summarize"  # Document summarization
+    COMPLEX = "complex"  # Multi-part query requiring decomposition
     UNKNOWN = "unknown"
 
 
@@ -379,7 +369,7 @@ def _call_slm_sync(prompt: str, max_tokens: int = 256, temperature: float = 0.1)
 
 
 def classify_intent(query: str) -> tuple[IntentType, float]:
-    """Классифицирует интент пользователя. Возвращает (тип, уверенность)."""
+    """Classifies the user intent. Returns (type, confidence)."""
     prompt = f"""Классифицируй следующий вопрос пользователя по типу:
 - greeting: приветствие, благодарность, общая фраза без запроса информации
 - simple_fact: простой вопрос да/нет или об одном известном понятии
@@ -394,7 +384,7 @@ def classify_intent(query: str) -> tuple[IntentType, float]:
 Ответь только одним словом из списка: greeting, simple_fact, factual, procedural, comparison, summarize, complex.
 """
     result = _call_slm_sync(prompt, max_tokens=10, temperature=0).lower()
-    confidence = 0.8  # простая эвристика
+    confidence = 0.8  # simple heuristic
     for intent in IntentType:
         if intent.value == result:
             return intent, confidence
@@ -415,8 +405,8 @@ def get_query_complexity(query: str) -> int:
 
 
 def decompose_query(query: str, max_subqueries: int = 3) -> list[str]:
-    """Разбивает сложный запрос на несколько подзапросов.
-    Возвращает список подзапросов (строки).
+    """Splits a complex query into several sub-queries.
+    Returns a list of sub-queries (strings).
     """
     prompt = f"""Разбей следующий сложный вопрос на {max_subqueries} простых подвопроса, которые можно искать отдельно.
 Вопрос: {query}
@@ -430,26 +420,26 @@ def decompose_query(query: str, max_subqueries: int = 3) -> list[str]:
         if isinstance(subqueries, list) and all(isinstance(q, str) for q in subqueries):
             return subqueries[:max_subqueries]
     except json.JSONDecodeError:
-        # Пытаемся извлечь строки вручную
+        # Try to extract the strings manually
         import re
 
         lines = re.findall(r'"([^"]+)"', result)
         if lines:
             return lines[:max_subqueries]
-    # Fallback: возвращаем исходный запрос
+    # Fallback: return the original query
     return [query]
 
 
 def needs_retrieval(intent: IntentType) -> bool:
-    """Определяет, нужен ли поиск в базе знаний для данного интента."""
+    """Determines whether a knowledge base search is needed for this intent."""
     if intent in (IntentType.GREETING, IntentType.SIMPLE_FACT, IntentType.UNKNOWN):  # noqa: SIM103
         return False
     return True
 
 
 def rewrite_query_slm(query: str) -> str:
-    """Переписывает запрос для улучшения ретривала.
-    Более лёгкая версия, чем в orchestator, использует SLM.
+    """Rewrites the query to improve retrieval.
+    A lighter version than the one in the orchestrator; uses the SLM.
     """
     prompt = f"""Перепиши следующий вопрос в эффективный поисковый запрос для технической документации.
 Сохрани ключевые термины, номера задач, технологии.
@@ -465,7 +455,7 @@ def rewrite_query_slm(query: str) -> str:
 
 
 def extract_entities_slm(query: str) -> list[str]:
-    """Извлекает ключевые сущности (технологии, проекты, имена) из запроса."""
+    """Extracts key entities (technologies, projects, names) from the query."""
     prompt = f"""Извлеки из следующего вопроса ключевые сущности: технологии, проекты, номера задач, имена людей.
 Верни ответ в виде JSON списка строк.
 
@@ -481,7 +471,7 @@ def extract_entities_slm(query: str) -> list[str]:
     except json.JSONDecodeError:
         import re
 
-        # Ищем слова с заглавной буквы или цифрами
+        # Look for words starting with a capital letter or containing digits
         words = re.findall(r"\b[A-ZА-Я][A-Za-zА-Яа-я0-9_-]+\b", query)
         return words
     return []
@@ -570,8 +560,8 @@ def dynamic_top_k_from_complexity(complexity: int, max_default: int = 50) -> int
 
 
 def should_use_graph(intent: IntentType, query: str) -> bool:
-    """Определяет, стоит ли использовать граф знаний для расширения."""
-    # Если запрос содержит явные связи между сущностями
+    """Determines whether to use the knowledge graph for expansion."""
+    # If the query contains explicit relations between entities
     relation_words = ["связан", "зависит", "использует", "относится", "принадлежит", "содержит"]
     has_relation = any(word in query.lower() for word in relation_words)
     return intent == IntentType.COMPARISON or has_relation
@@ -644,9 +634,9 @@ def classify_intent_multilingual(query: str) -> tuple[IntentType, float]:
     return IntentType.FACTUAL, 0.50
 
 
-# Пример использования
+# Usage example
 if __name__ == "__main__":
-    # Требуется настроенный SLM_ENDPOINT
+    # Requires a configured SLM_ENDPOINT
     test_query = "Как настроить CI/CD пайплайн в GitLab и чем он отличается от GitHub Actions?"
     intent, confidence = classify_intent(test_query)
     print(f"Intent: {intent.value}, confidence: {confidence}")

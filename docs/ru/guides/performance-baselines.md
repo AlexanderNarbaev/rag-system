@@ -46,7 +46,7 @@ make benchmark-compare
 !!! note
     Это **компонентные** задержки с замоканными внешними сервисами.
     Реальная end-to-end задержка включает сетевые round-trip к Qdrant, LLM и Redis.
-    См. [End-to-End Latency](#end-to-end-latency) для полной картины пайплайна.
+    См. [End-to-End Latency](#end-to-end-задержка) для полной картины пайплайна.
 
 ---
 

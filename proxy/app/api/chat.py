@@ -267,10 +267,7 @@ async def chat_completions(
         pass_messages = [{"role": "system", "content": "You are a helpful assistant."}]
         if other_messages:
             for msg in other_messages:  # type: ignore[assignment]
-                if isinstance(msg, dict):
-                    role = msg.get("role")
-                else:
-                    role = getattr(msg, "role", None)
+                role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
                 if role != "system":
                     if isinstance(msg, dict):
                         pass_messages.append(msg)

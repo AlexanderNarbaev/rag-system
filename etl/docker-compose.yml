@@ -32,7 +32,7 @@ services:
       - rag-network
 
   qdrant:
-    image: qdrant/qdrant:v1.16.0
+    image: qdrant/qdrant:v1.18.2
     container_name: rag-etl-qdrant
     ports:
       - "6333:6333"

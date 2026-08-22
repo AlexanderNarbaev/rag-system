@@ -42,7 +42,7 @@ COLBERT_ENABLED = True
 
 
 class QdrantHybridIndexer:
-    """Индексатор для Qdrant с гибридным поиском (dense + sparse)."""
+    """Indexer for Qdrant with hybrid search (dense + sparse)."""
 
     def __init__(
         self,
@@ -56,30 +56,30 @@ class QdrantHybridIndexer:
         embedder_model_name: str = "BAAI/bge-m3",
         embedder_device: str = "cpu",
         dense_vector_size: int = 1024,
-        # bge-m3 размер
+        # bge-m3 size
         sparse_index_on_disk: bool = True,
         batch_size: int = 100,
         embedder: Any | None = None,
     ):
         """:param host: Qdrant host
         :param port: Qdrant port (HTTP)
-        :param grpc_port: gRPC port (если нужен)
-        :param prefer_grpc: использовать gRPC
-        :param https: использовать HTTPS
-        :param api_key: API ключ (для облачного Qdrant)
-        :param collection_name: имя коллекции
-        :param embedder_model_name: модель эмбеддера (bge-m3)
-        :param embedder_device: 'cpu' или 'cuda'
-        :param dense_vector_size: размерность dense вектора
-        :param sparse_index_on_disk: хранить sparse индекс на диске
-        :param batch_size: размер пакета для upsert
+        :param grpc_port: gRPC port (if needed)
+        :param prefer_grpc: use gRPC
+        :param https: use HTTPS
+        :param api_key: API key (for cloud Qdrant)
+        :param collection_name: collection name
+        :param embedder_model_name: embedder model (bge-m3)
+        :param embedder_device: 'cpu' or 'cuda'
+        :param dense_vector_size: dense vector dimensionality
+        :param sparse_index_on_disk: store the sparse index on disk
+        :param batch_size: batch size for upsert
         :param embedder: pre-initialized embedder instance (remote or local).
                          If None, loads SentenceTransformer locally.
         """
         if not QDRANT_AVAILABLE:
             raise ImportError("qdrant-client is required. Install: pip install qdrant-client")
 
-        # Подключение к Qdrant
+        # Qdrant connection
         client_kwargs: dict[str, Any] = {
             "host": host,
             "port": port,
@@ -97,7 +97,7 @@ class QdrantHybridIndexer:
         self.sparse_index_on_disk = sparse_index_on_disk
         self.batch_size = batch_size
 
-        # Используем инжектированный эмбеддер или загружаем локальный
+        # Use the injected embedder or load a local one
         if embedder is not None:
             self.embedder = embedder
             logger.info("Using injected embedder: %s", type(embedder).__name__)
@@ -111,15 +111,15 @@ class QdrantHybridIndexer:
             self.embedder = SentenceTransformer(embedder_model_name, device=embedder_device)
             logger.info(f"Loaded local embedder {embedder_model_name} on {embedder_device}")
 
-        # Проверяем, поддерживает ли модель sparse векторы
+        # Check whether the model supports sparse vectors
         self.supports_sparse = hasattr(self.embedder, "encode_sparse") or hasattr(self.embedder, "tokenizer")
         if not self.supports_sparse:
             logger.warning("Embedder does not support native sparse vectors. Sparse indexing will use TF-IDF fallback.")
 
     def create_collection(self, recreate: bool = False) -> bool:
-        """Создаёт коллекцию с поддержкой dense и sparse векторов.
-        :param recreate: если True, удаляет существующую коллекцию
-        :return: True если создана, False если уже существовала
+        """Creates a collection with dense and sparse vector support.
+        :param recreate: if True, deletes the existing collection
+        :return: True if created, False if it already existed
         """
         collections = self.client.get_collections().collections
         exists = any(c.name == self.collection_name for c in collections)
@@ -130,9 +130,9 @@ class QdrantHybridIndexer:
             exists = False
 
         if not exists:
-            # Конфигурация dense вектора
+            # Dense vector configuration
             dense_config = models.VectorParams(size=self.dense_vector_size, distance=Distance.DOT)
-            # Конфигурация sparse вектора (с использованием SparseVectorParams)
+            # Sparse vector configuration (using SparseVectorParams)
             sparse_config = models.SparseVectorParams(index=models.SparseIndexParams(on_disk=self.sparse_index_on_disk))
             self.client.create_collection(
                 collection_name=self.collection_name,
@@ -145,28 +145,28 @@ class QdrantHybridIndexer:
         return False
 
     def get_collection_info(self) -> CollectionInfo:
-        """Возвращает информацию о коллекции."""
+        """Returns collection info."""
         return self.client.get_collection(self.collection_name)
 
     def _compute_dense_vector(self, text: str) -> list[float]:
-        """Вычисляет dense вектор через bge-m3 (нормализованный)."""
+        """Computes a dense vector via bge-m3 (normalized)."""
         vec = self.embedder.encode(text, normalize_embeddings=True)
         return vec.tolist()
 
     def _compute_sparse_vector(self, text: str) -> models.SparseVector | None:
-        """Вычисляет sparse вектор.
-        Для bge-m3: model.encode(text, return_sparse=True) возвращает словарь с индексами и значениями.
-        Для моделей без поддержки возвращает None.
+        """Computes a sparse vector.
+        For bge-m3: model.encode(text, return_sparse=True) returns a dict with indices and values.
+        For models without support, returns None.
         """
         if hasattr(self.embedder, "encode_sparse"):
-            # Специальный метод для моделей, поддерживающих sparse (например, bge-m3)
+            # Special method for models with sparse support (e.g., bge-m3)
             sparse = self.embedder.encode_sparse(text)
-            # Ожидается структура с индексами и значениями
+            # A structure with indices and values is expected
             if isinstance(sparse, dict) and "indices" in sparse and "values" in sparse:
                 return models.SparseVector(indices=sparse["indices"], values=sparse["values"])
             if hasattr(sparse, "indices") and hasattr(sparse, "values"):
                 return models.SparseVector(indices=sparse.indices.tolist(), values=sparse.values.tolist())
-        # Альтернативный способ: используем encode с параметром return_sparse
+        # Alternative approach: use encode with the return_sparse parameter
         try:
             result = self.embedder.encode(text, return_sparse=True)
             if isinstance(result, tuple) and len(result) == 2:
@@ -175,12 +175,13 @@ class QdrantHybridIndexer:
         except Exception:
             pass
 
-        # Если модель не поддерживает sparse, возвращаем None (только dense)
+        # If the model does not support sparse, return None (dense only)
         return None
 
     def _chunk_to_point(self, chunk: dict[str, Any]) -> PointStruct | None:
-        """Преобразует чанк (словарь) в PointStruct для Qdrant.
-        Ожидаемые поля: hash (id), text, title, source_type, source_id, version, doc_title, keywords, entities, summary.
+        """Converts a chunk (dict) into a PointStruct for Qdrant.
+        Expected fields: hash (id), text, title, source_type, source_id, version, doc_title,
+        keywords, entities, summary.
         """
         point_id_raw = chunk.get("hash")
         if not point_id_raw:
@@ -197,11 +198,11 @@ class QdrantHybridIndexer:
             logger.warning(f"Chunk {point_id} has empty text, skipping")
             return None
 
-        # Векторы
+        # Vectors
         dense_vec = self._compute_dense_vector(text)
         sparse_vec = self._compute_sparse_vector(text)
 
-        # Поля для payload (метаданные)
+        # Payload fields (metadata)
         payload = {
             "text": text,
             "title": chunk.get("title", ""),
@@ -221,7 +222,7 @@ class QdrantHybridIndexer:
             "allowed_groups": chunk.get("allowed_groups", []),
             "allowed_users": chunk.get("allowed_users", []),
         }
-        # Очищаем None значения
+        # Strip None values
         payload = {k: v for k, v in payload.items() if v is not None}
 
         vectors: dict[str, Any] = {"dense": dense_vec}
@@ -231,8 +232,8 @@ class QdrantHybridIndexer:
         return PointStruct(id=point_id, vector=vectors, payload=payload)
 
     def index_chunks(self, chunks: list[dict[str, Any]]) -> int:
-        """Индексирует список чанков в Qdrant (пакетно).
-        Возвращает количество успешно индексированных чанков.
+        """Indexes a list of chunks into Qdrant (in batches).
+        Returns the number of successfully indexed chunks.
         """
         total = 0
         for i in range(0, len(chunks), self.batch_size):
@@ -249,7 +250,7 @@ class QdrantHybridIndexer:
                     logger.debug(f"Indexed batch of {len(points)} chunks")
                 except Exception as e:
                     logger.error(f"Failed to upsert batch: {e}")
-                    # Пробуем по одному
+                    # Try one by one
                     for point in points:
                         try:
                             self.client.upsert(collection_name=self.collection_name, points=[point])
@@ -260,7 +261,7 @@ class QdrantHybridIndexer:
         return total
 
     def delete_chunks(self, chunk_ids: list[str]) -> int:
-        """Удаляет чанки по списку ID (SHA-256 хешей).
+        """Deletes chunks by a list of IDs (SHA-256 hashes).
 
         Chunk hashes are converted to UUID v5 for lookup (same as _chunk_to_point).
         """
@@ -279,7 +280,7 @@ class QdrantHybridIndexer:
             return 0
 
     def collection_exists(self) -> bool:
-        """Проверяет существование коллекции."""
+        """Checks whether the collection exists."""
         try:
             self.client.get_collection(self.collection_name)
             return True
@@ -287,12 +288,12 @@ class QdrantHybridIndexer:
             return False
 
     def get_chunk_count(self) -> int:
-        """Возвращает количество точек в коллекции."""
+        """Returns the number of points in the collection."""
         info = self.client.get_collection(self.collection_name)
         return info.points_count
 
     def delete_collection(self):
-        """Удаляет коллекцию целиком."""
+        """Deletes the entire collection."""
         self.client.delete_collection(self.collection_name)
         logger.info(f"Deleted collection {self.collection_name}")
 
@@ -426,8 +427,8 @@ class QdrantHybridIndexer:
 
 
 def batch_index_from_json_files(indexer: QdrantHybridIndexer, chunks_dir: Path, pattern: str = "*.json"):
-    """Утилита для индексации чанков из JSON-файлов в директории.
-    Каждый JSON должен содержать список чанков (как в формате save_chunks_to_json).
+    """Utility for indexing chunks from JSON files in a directory.
+    Each JSON must contain a list of chunks (as in the save_chunks_to_json format).
     """
     json_files = list(chunks_dir.glob(pattern))
     logger.info(f"Found {len(json_files)} JSON files in {chunks_dir}")
@@ -440,7 +441,7 @@ def batch_index_from_json_files(indexer: QdrantHybridIndexer, chunks_dir: Path, 
 
 
 if __name__ == "__main__":
-    # Пример использования
+    # Usage example
     import os
 
     indexer = QdrantHybridIndexer(
@@ -450,10 +451,10 @@ if __name__ == "__main__":
         embedder_device="cpu",
     )
 
-    # Создаём коллекцию
+    # Create the collection
     indexer.create_collection(recreate=True)
 
-    # Пример чанка
+    # Example chunk
     sample_chunks = [
         {
             "hash": "test_hash_1",

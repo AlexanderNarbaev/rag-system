@@ -26,6 +26,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -41,15 +42,16 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Ruff lint
-        run: ruff check proxy/ etl/ tests/
+        run: ruff check .
 
       - name: Ruff format check
-        run: ruff format --check proxy/ etl/
+        run: ruff format --check .
 
   test:
     name: Test (Python ${{ matrix.python-version }})
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         python-version: [ "3.11", "3.12", "3.13" ]
@@ -78,6 +80,7 @@ jobs:
       - name: Run unit and integration tests with coverage
         run: |
           python -m pytest tests/proxy/ tests/etl/ tests/integration/ \
+            tests/mcp_server/ tests/model_evolution/ tests/security/ tests/deploy/ \
             -v --tb=short \
             --junitxml=test-results.xml \
             --cov=proxy --cov=etl \
@@ -110,6 +113,7 @@ jobs:
     name: Type Check
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -127,13 +131,13 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run mypy
-        run: mypy proxy/app/ --ignore-missing-imports --no-error-summary
-        continue-on-error: true
+        run: mypy proxy/ etl/
 
   openapi:
     name: OpenAPI Spec Validation
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -164,6 +168,7 @@ jobs:
     name: Security Scan (bandit)
     needs: lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -178,48 +183,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements-proxy.txt
-          pip install bandit
+          pip install "bandit==1.9.*"
 
       - name: Run bandit
         run: bandit -q -r proxy/ etl/
 
-  pip-audit:
-    name: Dependency Audit (pip-audit)
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install pip-audit
-        run: pip install pip-audit
-
-      - name: Audit proxy dependencies
-        run: |
-          pip-audit \
-            --requirement requirements-proxy.txt \
-            --desc \
-            --format columns \
-            --vulnerability-service osv
-
-      - name: Audit ETL dependencies
-        run: |
-          pip-audit \
-            --requirement requirements-etl.txt \
-            --desc \
-            --format columns \
-            --vulnerability-service osv
-
-      - name: Audit dev dependencies
-        run: |
-          pip-audit \
-            --requirement requirements-dev.txt \
-            --desc \
-            --format columns \
-            --vulnerability-service osv

@@ -29,7 +29,7 @@ try:
 
     NLP_AVAILABLE = True
 except ImportError:
-    _spacy = None  # type: ignore[assignment]
+    _spacy = None
     NLP_AVAILABLE = False
 
 ENRICHMENT_PROMPT_TEMPLATE = """Analyze this technical text and return a JSON object with these fields:

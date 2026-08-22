@@ -1,13 +1,13 @@
 # etl/extractors/confluence.py
-"""Выгрузка данных из Confluence (Self-Hosted) с поддержкой:
-- Страницы (тело: storage, view, export)
-- Версии (полная история изменений)
-- Вложения (метаданные + бинарные файлы)
-- Комментарии (поток)
-- Макросы (рендеренные и исходные параметры)
-- Ссылки (внутренние на другие страницы, внешние URL)
-- Инкрементальный режим (только изменённые страницы)
-- WAL (чекпоинты для возобновления)
+"""Data extraction from Confluence (Self-Hosted) with support for:
+- Pages (body: storage, view, export)
+- Versions (full change history)
+- Attachments (metadata + binary files)
+- Comments (stream)
+- Macros (rendered and raw parameters)
+- Links (internal to other pages, external URLs)
+- Incremental mode (only changed pages)
+- WAL (checkpoints for resuming)
 """
 
 import hashlib
@@ -28,10 +28,10 @@ from requests.auth import HTTPBasicAuth
 from etl.extractors.acl_extractor import extract_confluence_acl
 from etl.extractors.base_extractor import SyncExtractor
 
-# Подавление SSL warnings для самоподписанных сертификатов
+# Suppress SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Настройка логирования
+# Logging setup
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -40,18 +40,18 @@ class ConfluenceExtractor(SyncExtractor):
     def __init__(self, config: dict[str, Any]):
         """config: {
             "url": "https://confluence.internal/",
-            "username": "bot",                  # опционально для Basic Auth
-            "token": "personal_access_token",   # Bearer токен или пароль
-            "verify_ssl": true,                 # false для самоподписанных сертификатов
-            "ca_bundle": "",                    # путь к корпоративному CA bundle
-            "space_keys": ["DEV", "OPS"],       # None для всех пространств
+            "username": "bot",                  # optional for Basic Auth
+            "token": "personal_access_token",   # Bearer token or password
+            "verify_ssl": true,                 # false for self-signed certificates
+            "ca_bundle": "",                    # path to the corporate CA bundle
+            "space_keys": ["DEV", "OPS"],       # None for all spaces
             "output_dir": "./raw_data/confluence",
             "wal_file": "./wal/confluence_wal.json",
             "incremental": True,
             "download_attachments": True,
-            "max_versions": 0,                  # 0 = все версии
-            "api_version": "2",                 # '2' для нового REST API, '1' для старого
-            "since_date": null                  # ISO 8601 — выгружать только страницы, изменённые после этой даты
+            "max_versions": 0,                  # 0 = all versions
+            "api_version": "2",                 # '2' for the new REST API, '1' for the old one
+            "since_date": null                  # ISO 8601 — extract only pages changed after this date
         }
         """
         self._init_sync_extractor(config)
@@ -90,7 +90,7 @@ class ConfluenceExtractor(SyncExtractor):
         else:
             self.session.verify = verify_ssl
 
-        # Auth: Bearer token (если нет username) или Basic Auth
+        # Auth: Bearer token (if no username) or Basic Auth
         token = config.get("token", "")
         username = config.get("username", "")
         if username:
@@ -103,7 +103,7 @@ class ConfluenceExtractor(SyncExtractor):
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def test_connection(self) -> bool:
-        """Тестирует подключение к Confluence API."""
+        """Tests the connection to the Confluence API."""
         logger.info(f"Testing connection to {self.url}...")
         logger.info(f"SSL verify: {self.session.verify}")
         logger.info(f"Auth: {'Bearer token' if 'Authorization' in self.session.headers else 'Basic auth'}")
@@ -115,16 +115,16 @@ class ConfluenceExtractor(SyncExtractor):
             )
             logger.info(f"Connection test: {resp.status_code}")
             if resp.status_code == 200:
-                logger.info("✅ Подключение успешно")
+                logger.info("✅ Connection successful")
                 return True
-            logger.error(f"❌ Ошибка: {resp.status_code} - {resp.text[:200]}")
+            logger.error(f"❌ Error: {resp.status_code} - {resp.text[:200]}")
             return False
         except Exception as e:
-            logger.error(f"❌ Ошибка подключения: {e}")
+            logger.error(f"❌ Connection error: {e}")
             return False
 
     def _load_wal(self, config: dict[str, Any]) -> dict[str, Any]:
-        """Загружает WAL (последние успешные метки времени и хеши страниц)."""
+        """Loads the WAL (last successful timestamps and page hashes)."""
         default = {"last_run": None, "pages_hash": {}}
         if self.wal_path.exists():
             try:
@@ -136,7 +136,7 @@ class ConfluenceExtractor(SyncExtractor):
         return default
 
     def _request(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Выполняет GET запрос к Confluence API с retry логикой и экспоненциальной задержкой."""
+        """Performs a GET request to the Confluence API with retry logic and exponential backoff."""
         url = urljoin(self.url, endpoint)
         max_retries = self.config.get("max_retries", 5)
         base_delay = self.config.get("retry_delay", 2)
@@ -151,7 +151,7 @@ class ConfluenceExtractor(SyncExtractor):
                 return resp.json()
             except requests.exceptions.SSLError as e:
                 logger.error(f"SSL Error: {e}")
-                logger.error("Попробуйте установить verify_ssl: false в конфиге")
+                logger.error("Try setting verify_ssl: false in the config")
                 raise
             except requests.exceptions.ConnectionError as e:
                 logger.error(f"Connection Error: {e}")
@@ -175,11 +175,11 @@ class ConfluenceExtractor(SyncExtractor):
     def _get_all_pages(
         self, space_key: str | None = None, since: str | None = None, start: int = 0, limit: int = 50
     ) -> list[dict[str, Any]]:
-        """Получает все страницы с пагинацией (только метаданные, без body).
-        Body загружается отдельно при обработке каждой страницы.
+        """Fetches all pages with pagination (metadata only, no body).
+        The body is loaded separately when processing each page.
 
-        Если указан since (ISO 8601 timestamp), используется CQL-поиск через
-        /rest/api/search для фильтрации только изменённых страниц.
+        If since (ISO 8601 timestamp) is set, a CQL search via
+        /rest/api/search is used to filter only changed pages.
         """
         if since:
             return self._get_pages_since(since, space_key, start, limit)
@@ -189,7 +189,7 @@ class ConfluenceExtractor(SyncExtractor):
             params = {
                 "limit": limit,
                 "start": start,
-                "expand": "version,space",  # Без body — быстрее и не зависает
+                "expand": "version,space",  # Without body — faster and does not hang
             }
             if space_key:
                 params["spaceKey"] = space_key
@@ -198,7 +198,7 @@ class ConfluenceExtractor(SyncExtractor):
             pages.extend(results)
             logger.info(f"  Fetched {len(results)} pages (total: {len(pages)})")
 
-            # Проверяем есть ли следующая страница
+            # Check whether there is a next page
             if len(results) < limit:
                 break
             start += limit
@@ -208,7 +208,7 @@ class ConfluenceExtractor(SyncExtractor):
     def _get_pages_since(
         self, since: str, space_key: str | None = None, start: int = 0, limit: int = 50
     ) -> list[dict[str, Any]]:
-        """Получает страницы, изменённые с указанной даты, используя CQL поиск."""
+        """Fetches pages changed since the given date using a CQL search."""
         cql_parts = [f'lastModified > "{since}"', 'type = "page"']
         if space_key:
             cql_parts.append(f'space = "{space_key}"')
@@ -238,7 +238,7 @@ class ConfluenceExtractor(SyncExtractor):
         return pages
 
     def _get_page_versions(self, page_id: str) -> list[dict[str, Any]]:
-        """Возвращает историю версий страницы."""
+        """Returns the page version history."""
         endpoint = f"/rest/experimental/content/{page_id}/version"
         data = self._request(endpoint)
         versions = data.get("results", [])
@@ -247,13 +247,13 @@ class ConfluenceExtractor(SyncExtractor):
         return versions
 
     def _get_comments(self, page_id: str) -> list[dict[str, Any]]:
-        """Возвращает комментарии к странице."""
+        """Returns the page comments."""
         endpoint = f"/rest/api/content/{page_id}/child/comment"
         data = self._request(endpoint, params={"expand": "body.storage,version"})
         return data.get("results", [])
 
     def _get_attachments_metadata(self, page_id: str) -> list[dict[str, Any]]:
-        """Возвращает метаданные вложений (без содержимого)."""
+        """Returns attachment metadata (without content)."""
         endpoint = f"/rest/api/content/{page_id}/child/attachment"
         data = self._request(endpoint, params={"expand": "version"})
         return data.get("results", [])
@@ -266,7 +266,7 @@ class ConfluenceExtractor(SyncExtractor):
         output_dir: Path,
         att_download_link: str,
     ) -> str | None:
-        """Скачивает файл вложения и возвращает путь к сохранённому файлу."""
+        """Downloads an attachment file and returns the path to the saved file."""
         url = urljoin(self.url, att_download_link)
         max_retries = 3
         for attempt in range(max_retries + 1):
@@ -303,7 +303,7 @@ class ConfluenceExtractor(SyncExtractor):
                 return None
 
     def _extract_links_from_html(self, html: str) -> dict[str, list[str]]:
-        """Извлекает внутренние (Confluence) и внешние ссылки из HTML."""
+        """Extracts internal (Confluence) and external links from HTML."""
         soup = BeautifulSoup(html, "html.parser")
         internal = []
         external = []
@@ -316,8 +316,8 @@ class ConfluenceExtractor(SyncExtractor):
         return {"internal_links": list(set(internal)), "external_links": list(set(external))}
 
     def _calculate_page_hash(self, page: dict) -> str:
-        """Вычисляет хеш содержимого страницы для проверки изменений."""
-        # Берём body.storage.value + версию + дату изменения
+        """Computes a hash of the page content for change detection."""
+        # Take body.storage.value + version + modification date
         body = page.get("body", {}).get("storage", {}).get("value", "")
         version = page.get("version", {}).get("number", 0)
         modified = page.get("version", {}).get("when", "")
@@ -325,49 +325,49 @@ class ConfluenceExtractor(SyncExtractor):
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     def _should_process_page(self, page_id: str, new_hash: str) -> bool:
-        # """Определяет, нужно ли обрабатывать страницу заново (инкрементальный режим)."""
-        # 1. Если инкрементальный режим выключен, всегда обрабатываем
+        # """Determines whether the page needs to be reprocessed (incremental mode)."""
+        # 1. If incremental mode is disabled, always process
         if not self.incremental:
             return True
 
-        # 2. Безопасно берем pages_hash. Если wal_data нет или в нем нет этого ключа,
-        # .get() вернет None, и мы вернем True (надо обрабатывать)
+        # 2. Safely read pages_hash. If wal_data is missing or has no such key,
+        # .get() returns None and we return True (needs processing)
         pages_hash = self.wal_data.get("pages_hash") if hasattr(self, "wal_data") else None
         if pages_hash is None:
             return True
 
-        # 3. Получаем старый хеш. Если его нет, old_hash будет None
+        # 3. Get the old hash. If missing, old_hash is None
         old_hash = pages_hash.get(page_id)
 
-        # 4. Если хеши не совпадают (или старого хеша нет), возвращаем True
+        # 4. If hashes differ (or there is no old hash), return True
         return old_hash != new_hash
 
     def _save_page_data(self, page_data: dict, page_id: str):
-        """Сохраняет структурированные данные страницы в JSON."""
+        """Saves the structured page data to JSON."""
         page_dir = self.output_dir / page_id
         page_dir.mkdir(parents=True, exist_ok=True)
-        # Основной файл с метаданными и контентом
+        # Main file with metadata and content
         with open(page_dir / "page.json", "w", encoding="utf-8") as f:
             json.dump(page_data, f, ensure_ascii=False, indent=2)
-        # Отдельно сохраняем raw body.storage (если нужно для семантического чанкинга)
+        # Save raw body.storage separately (if needed for semantic chunking)
         if "body_storage_raw" in page_data:
             with open(page_dir / "content_storage.html", "w", encoding="utf-8") as f:
                 f.write(page_data["body_storage_raw"])
         logger.info(f"Saved page {page_id} to {page_dir}")
 
     def extract_page(self, page: dict) -> dict[str, Any]:
-        """Извлекает полные данные одной страницы:
-        - Метаданные (id, title, space, версии, даты)
-        - Тело в форматах storage, view, export (если доступно)
-        - Комментарии
-        - Вложения (метаданные и файлы)
-        - Ссылки
+        """Extracts full data for a single page:
+        - Metadata (id, title, space, versions, dates)
+        - Body in storage, view, export formats (if available)
+        - Comments
+        - Attachments (metadata and files)
+        - Links
         """
         page_id = str(page["id"])
         title = page["title"]
         space = page.get("space", {}).get("key", "UNKNOWN")
 
-        # 1. Запрашиваем полные данные страницы
+        # 1. Request full page data
         page_detail = self._request(
             f"/rest/api/content/{page_id}",
             params={"expand": "body.storage,body.view,metadata.labels,metadata.properties,version"},
@@ -376,18 +376,18 @@ class ConfluenceExtractor(SyncExtractor):
         body_view = page_detail.get("body", {}).get("view", {}).get("value", "")
         page.update(page_detail)
 
-        # 2. Очистка от шума и конвертация в Markdown
+        # 2. Noise cleanup and conversion to Markdown
         body_markdown = ""
         headings = []
         if body_view:
             soup = BeautifulSoup(body_view, "html.parser")
-            # Вырезаем только основной контент, игнорируя сайдбары
+            # Keep only the main content, ignoring sidebars
             main_content = soup.find("div", class_="wiki-content") or soup.find("div", id="main-content") or soup
 
-            # Извлекаем заголовки для будущего title_boost в поиске
+            # Extract headings for a future title_boost in search
             headings = [h.get_text(strip=True) for h in main_content.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])]
 
-            # Конвертируем в Markdown с сохранением структуры
+            # Convert to Markdown preserving the structure
             try:
                 from markdownify import markdownify as md
 
@@ -396,20 +396,20 @@ class ConfluenceExtractor(SyncExtractor):
                 logger.warning("markdownify not installed, falling back to plain text")
                 body_markdown = main_content.get_text(separator="\n", strip=True)
 
-        # 3. Обработка макросов в storage (замена XML на текстовые маркеры)
+        # 3. Macro processing in storage (replace XML with text markers)
         import re
 
         body_storage_clean = re.sub(
             r'<ac:structured-macro ac:name="([^"]+)".*?>(.*?)</ac:structured-macro>',
-            r"[Макрос \1]",
+            r"[Macro \1]",
             body_storage,
             flags=re.DOTALL,
         )
 
-        # Извлечение ссылок, версий, комментариев и вложений из HTML тела
+        # Extract links, versions, comments, and attachments from the HTML body
         links = self._extract_links_from_html(body_view or body_storage)
 
-        # Версии (история)
+        # Versions (history)
         versions = self._get_page_versions(page_id)
         version_list = []
         for v in versions:
@@ -422,7 +422,7 @@ class ConfluenceExtractor(SyncExtractor):
                 },
             )
 
-        # Комментарии
+        # Comments
         comments = self._get_comments(page_id)
         comment_data = []
         for com in comments:
@@ -436,7 +436,7 @@ class ConfluenceExtractor(SyncExtractor):
                 },
             )
 
-        # Вложения
+        # Attachments
         attachments_meta = self._get_attachments_metadata(page_id)
         attachment_data = []
         att_dir = self.output_dir / page_id / "attachments"
@@ -459,8 +459,8 @@ class ConfluenceExtractor(SyncExtractor):
                 att_info["local_path"] = local_path
             attachment_data.append(att_info)
 
-        # Макросы: можно извлечь из storage формата (XML-like)
-        # Пример: <ac:structured-macro ac:name="code">...</ac:structured-macro>
+        # Macros: can be extracted from the storage format (XML-like)
+        # Example: <ac:structured-macro ac:name="code">...</ac:structured-macro>
         macros = []
         if body_storage:
             soup_macros = BeautifulSoup(body_storage, "html.parser")
@@ -474,7 +474,7 @@ class ConfluenceExtractor(SyncExtractor):
                         macro_params[key] = value
                 macros.append({"name": macro_name, "parameters": macro_params, "raw_html": str(macro)})
 
-        # Итоговый объект
+        # Final object
         # RBAC metadata: author from current version, contributors from all versions
         author = page.get("version", {}).get("by", {}).get("displayName", "")
         contributors = list(
@@ -489,7 +489,7 @@ class ConfluenceExtractor(SyncExtractor):
         # ACL extraction from page restrictions and space metadata
         acl = extract_confluence_acl(page)
 
-        # Хеш контента для инкрементальных обновлений на этапе эмбеддингов
+        # Content hash for incremental updates at the embedding stage
         content_hash = hashlib.sha256(body_markdown.encode("utf-8")).hexdigest()
 
         page_data = {
@@ -525,8 +525,8 @@ class ConfluenceExtractor(SyncExtractor):
         return page_data
 
     def run(self) -> None:
-        """Основной цикл выгрузки всех страниц (по указанным пространствам или всем)."""
-        spaces_to_process = self.space_keys or [None]  # None = все пространства
+        """Main extraction loop over all pages (for the given spaces or all)."""
+        spaces_to_process = self.space_keys or [None]  # None = all spaces
         for space in spaces_to_process:
             self._check_shutdown()
             logger.info(f"Processing space: {space or 'ALL'}")
@@ -542,7 +542,7 @@ class ConfluenceExtractor(SyncExtractor):
                 try:
                     full_data = self.extract_page(page)
                     self._save_page_data(full_data, page_id)
-                    # Обновляем WAL
+                    # Update the WAL
                     self.wal_data.setdefault("pages_hash", {})[page_id] = new_hash
                     self.wal_data["last_run"] = datetime.now(UTC).isoformat()
                     self._save_wal()
@@ -553,17 +553,17 @@ class ConfluenceExtractor(SyncExtractor):
                     logger.error(
                         f"Failed to process page {page_id}: {e}",
                         exc_info=True,
-                    )  # Продолжаем, не прерываем весь процесс
+                    )  # Continue without aborting the whole process
         logger.info("Extraction finished.")
 
 
 if __name__ == "__main__":
-    # Пример конфигурации (загружать из etl_config.yaml или переменных окружения)
+    # Configuration example (load from etl_config.yaml or environment variables)
     config_example = {
         "url": os.getenv("CONFLUENCE_URL", "https://confluence.example.com"),
         "username": os.getenv("CONFLUENCE_USER", "bot"),
         "token": os.getenv("CONFLUENCE_TOKEN", "your_token"),
-        "space_keys": ["DEV", "OPS"],  # или None для всех
+        "space_keys": ["DEV", "OPS"],  # or None for all
         "output_dir": "./raw_data/confluence",
         "wal_file": "./wal/confluence_wal.json",
         "incremental": True,

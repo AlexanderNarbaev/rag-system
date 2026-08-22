@@ -4,9 +4,6 @@
 Provides streaming and non-streaming completion functions with automatic
 retry on failure. This is the legacy router — prefer provider.py's
 MultiProviderRouter for new code.
-
-Маршрутизация запросов к LLM через OpenAI-совместимый API.
-Поддерживает потоковую и обычную генерацию, повторные попытки при сбоях.
 """
 
 import asyncio
@@ -115,7 +112,7 @@ async def non_stream_completion(
     temperature: float = 0.2,
     max_tokens: int = 4096,
 ) -> str:
-    """Не-потоковая генерация, возвращает полный текст ответа."""
+    """Non-streaming generation; returns the full response text."""
     data = await _send_completion_request(messages, temperature, max_tokens, stream=False, retry=MAX_RETRIES)
     try:
         content: str = data["choices"][0]["message"]["content"]
@@ -125,13 +122,13 @@ async def non_stream_completion(
         raise LLMError(f"Failed to extract content from LLM response: {e}") from e
 
 
-# Синхронные обёртки для использования в не-async контекстах (например, в LangGraph узлах)
+# Synchronous wrappers for use in non-async contexts (e.g. LangGraph nodes)
 def non_stream_completion_sync(
     messages: list[dict[str, str]],
     temperature: float = 0.2,
     max_tokens: int = 4096,
 ) -> str:
-    """Синхронная обёртка для вызова в обычных функциях."""
+    """Synchronous wrapper for calling from regular functions."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -140,15 +137,15 @@ def non_stream_completion_sync(
         loop.close()
 
 
-# Пример использования (для самопроверки, требует запущенного LLM сервера)
+# Usage example (for self-check, requires a running LLM server)
 if __name__ == "__main__":
 
     async def test() -> None:
         messages = [{"role": "user", "content": "Привет, как дела?"}]
-        # Не-потоковый тест
+        # Non-streaming test
         resp = await non_stream_completion(messages)
         print("Non-stream response:", resp)
-        # Потоковый тест
+        # Streaming test
         async for chunk in stream_completion(messages):
             print("Chunk:", chunk)
 

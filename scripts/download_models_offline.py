@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 # scripts/download_models_offline.py
-"""Скрипт для загрузки всех моделей, необходимых для RAG-системы, в офлайн-режиме.
-Запускается на машине с доступом в интернет. Скачанные модели копируются в защищённый контур.
-
-Download script for all models needed by the RAG system in air-gapped environments.
+"""Download script for all models needed by the RAG system in air-gapped environments.
 Run on a machine with internet access. Copy downloaded models to the target environment.
 
-Поддерживает / Supports:
+Supports:
 - SentenceTransformer (embedding models)
 - Cross-encoder (reranker models)
 - SLM / Small Language Model (HuggingFace)

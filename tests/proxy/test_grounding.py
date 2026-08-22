@@ -30,7 +30,10 @@ class TestComputeGrounding:
         from proxy.app.core import grounding
 
         grounding._embedder = None
-        with patch.object(grounding, "_get_embedder", return_value=None):
+        with (
+            patch.object(grounding, "_get_embedder", return_value=None),
+            patch.object(grounding, "_entailment_grounding", return_value=None),
+        ):
             score = grounding.compute_grounding("answer", "context")
             assert score == 0.0
 
@@ -89,7 +92,10 @@ class TestComputeGrounding:
             def encode(self, text, normalize_embeddings=True):
                 raise RuntimeError("GPU OOM")
 
-        with patch.object(grounding, "_get_embedder", return_value=FailingEmbedder()):
+        with (
+            patch.object(grounding, "_get_embedder", return_value=FailingEmbedder()),
+            patch.object(grounding, "_entailment_grounding", return_value=None),
+        ):
             score = grounding.compute_grounding("answer", "context")
             assert score == 0.0
 
@@ -115,3 +121,102 @@ class TestGetEmbedder:
             e2 = grounding._get_embedder()
             assert e1 is e2
             assert e1 is mock_embedder
+
+
+class TestCombinedGrounding:
+    """Tests for the combined cosine + NLI entailment scoring."""
+
+    def test_combines_cosine_and_entailment(self):
+        from proxy.app.core import grounding
+
+        with (
+            patch.object(grounding, "_cosine_grounding", return_value=0.8),
+            patch.object(grounding, "_entailment_grounding", return_value=1.0),
+        ):
+            score = grounding.compute_grounding("answer", "context")
+        assert score == pytest.approx(0.9)
+
+    def test_falls_back_to_cosine_when_nli_unavailable(self):
+        from proxy.app.core import grounding
+
+        with (
+            patch.object(grounding, "_cosine_grounding", return_value=0.7),
+            patch.object(grounding, "_entailment_grounding", return_value=None),
+        ):
+            score = grounding.compute_grounding("answer", "context")
+        assert score == pytest.approx(0.7)
+
+    def test_falls_back_to_entailment_when_embedder_unavailable(self):
+        from proxy.app.core import grounding
+
+        with (
+            patch.object(grounding, "_cosine_grounding", return_value=None),
+            patch.object(grounding, "_entailment_grounding", return_value=0.6),
+        ):
+            score = grounding.compute_grounding("answer", "context")
+        assert score == pytest.approx(0.6)
+
+    def test_zero_when_both_signals_unavailable(self):
+        from proxy.app.core import grounding
+
+        with (
+            patch.object(grounding, "_cosine_grounding", return_value=None),
+            patch.object(grounding, "_entailment_grounding", return_value=None),
+        ):
+            score = grounding.compute_grounding("answer", "context")
+        assert score == 0.0
+
+    def test_score_clamped_to_unit_range(self):
+        from proxy.app.core import grounding
+
+        with (
+            patch.object(grounding, "_cosine_grounding", return_value=1.5),
+            patch.object(grounding, "_entailment_grounding", return_value=1.0),
+        ):
+            score = grounding.compute_grounding("answer", "context")
+        assert 0.0 <= score <= 1.0
+
+
+class TestEntailmentGrounding:
+    """Tests for the NLI entailment signal (graceful degradation)."""
+
+    def test_returns_none_when_disabled_in_config(self):
+        from proxy.app.core import grounding
+
+        with patch("proxy.app.shared.config.NLI_GROUNDING_ENABLED", False):
+            assert grounding._entailment_grounding("answer", "context") is None
+
+    def test_returns_none_when_nli_model_unavailable(self):
+        from proxy.app.core import grounding
+
+        with patch("proxy.app.model_evolution.nli_evaluator.is_nli_model_available", return_value=False):
+            assert grounding._entailment_grounding("answer", "context") is None
+
+    def test_returns_overall_score_when_model_available(self):
+        from proxy.app.core import grounding
+        from proxy.app.model_evolution.nli_evaluator import NLIEvaluationResult
+
+        fake_result = NLIEvaluationResult(
+            entailment_rate=1.0,
+            contradiction_rate=0.0,
+            neutral_rate=0.0,
+            overall_score=1.0,
+            total_claims=1,
+            entailed_claims=1,
+            contradicted_claims=0,
+            neutral_claims=0,
+        )
+        with (
+            patch("proxy.app.model_evolution.nli_evaluator.is_nli_model_available", return_value=True),
+            patch("proxy.app.model_evolution.nli_evaluator.evaluate_nli", return_value=fake_result),
+        ):
+            assert grounding._entailment_grounding("answer", "context") == 1.0
+
+    def test_returns_none_on_nli_exception(self):
+        from proxy.app.core import grounding
+
+        with patch(
+            "proxy.app.model_evolution.nli_evaluator.is_nli_model_available",
+            side_effect=RuntimeError("boom"),
+        ):
+            assert grounding._entailment_grounding("answer", "context") is None

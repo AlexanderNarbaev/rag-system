@@ -1,13 +1,13 @@
 # etl/extractors/jira.py
-"""Выгрузка данных из Jira (Self-Hosted) с поддержкой:
-- Задачи (issues) с полным набором полей
-- Комментарии
-- Changelog (история изменений полей)
-- Вложения (скачивание бинарных файлов)
-- Спринты (из agile-API)
-- Связи: issuelinks, subtasks
-- Инкрементальный режим (updated > last_run)
-- WAL для возобновления
+"""Data extraction from Jira (Self-Hosted) with support for:
+- Issues with the full field set
+- Comments
+- Changelog (field change history)
+- Attachments (binary file download)
+- Sprints (from the agile API)
+- Links: issuelinks, subtasks
+- Incremental mode (updated > last_run)
+- WAL for resuming
 """
 
 import json
@@ -27,7 +27,7 @@ from requests.auth import HTTPBasicAuth
 from etl.extractors.acl_extractor import extract_jira_acl
 from etl.extractors.base_extractor import SyncExtractor
 
-# Подавление SSL warnings для самоподписанных сертификатов
+# Suppress SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -38,10 +38,10 @@ class JiraExtractor(SyncExtractor):
     def __init__(self, config: dict[str, Any]):
         """config: {
             "url": "https://jira.internal.company.com",
-            "username": "bot",                   # опционально для Basic Auth
-            "token": "api_token_or_password",    # Bearer токен или пароль
-            "verify_ssl": true,                  # false для самоподписанных сертификатов
-            "ca_bundle": "",                     # путь к корпоративному CA bundle
+            "username": "bot",                   # optional for Basic Auth
+            "token": "api_token_or_password",    # Bearer token or password
+            "verify_ssl": true,                  # false for self-signed certificates
+            "ca_bundle": "",                     # path to the corporate CA bundle
             "jql": "project in (ABC, DEF) ORDER BY updated DESC",
             "output_dir": "./raw_data/jira",
             "wal_file": "./wal/jira_wal.json",
@@ -90,7 +90,7 @@ class JiraExtractor(SyncExtractor):
         else:
             self.session.verify = verify_ssl
 
-        # Auth: Bearer token (если нет username) или Basic Auth
+        # Auth: Bearer token (if no username) or Basic Auth
         token = config.get("token", "")
         username = config.get("username", "")
         if username:
@@ -113,7 +113,7 @@ class JiraExtractor(SyncExtractor):
         return default
 
     def _request(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Выполняет GET запрос к Jira API с retry логикой и экспоненциальной задержкой."""
+        """Performs a GET request to the Jira API with retry logic and exponential backoff."""
         url = urljoin(self.url, endpoint)
         max_retries = self.config.get("max_retries", 5)
         base_delay = self.config.get("retry_delay", 2)
@@ -147,7 +147,7 @@ class JiraExtractor(SyncExtractor):
                     raise
 
     def _paginated_issues(self, jql: str, start_at: int = 0, max_results: int = 100) -> Iterator[dict[str, Any]]:
-        """Генератор для пагинированного получения задач."""
+        """Generator for paginated issue retrieval."""
         while True:
             params = {
                 "jql": jql,
@@ -164,14 +164,14 @@ class JiraExtractor(SyncExtractor):
             start_at += max_results
 
     def _get_issue_transitions(self, issue_key: str) -> list[dict[str, Any]]:
-        """Возвращает доступные переходы (не все хранятся в changelog, но полезно)."""
+        """Returns available transitions (not all are stored in the changelog, but useful)."""
         endpoint = f"/rest/api/2/issue/{issue_key}/transitions"
         data = self._request(endpoint)
         return data.get("transitions", [])
 
     def _get_sprints_for_issue(self, issue_key: str) -> list[dict[str, Any]]:
-        """Получает спринты, связанные с задачей (через agile API).
-        Требует установленного дополнения Jira Agile (Greenhopper).
+        """Fetches sprints associated with an issue (via the agile API).
+        Requires the Jira Agile (Greenhopper) add-on to be installed.
         """
         endpoint = f"/rest/agile/1.0/issue/{issue_key}"
         try:
@@ -182,7 +182,7 @@ class JiraExtractor(SyncExtractor):
             return []
 
     def _download_attachment(self, attachment: dict, issue_key: str) -> str | None:
-        """Скачивает вложение и возвращает локальный путь."""
+        """Downloads an attachment and returns the local path."""
         attachment_id = attachment["id"]
         filename = attachment["filename"]
         download_url = attachment["content"]
@@ -229,7 +229,7 @@ class JiraExtractor(SyncExtractor):
                 return None
 
     def _extract_links_from_text(self, text: str) -> dict[str, list[str]]:
-        """Извлекает ссылки из текста (описание, комментарий): URL и Jira issue ключи."""
+        """Extracts links from text (description, comment): URLs and Jira issue keys."""
         import re
 
         url_pattern = r'https?://[^\s<>"\']+'
@@ -239,11 +239,11 @@ class JiraExtractor(SyncExtractor):
         return {"external_urls": list(set(urls)), "mentioned_issues": list(set(issue_keys))}
 
     def _process_issue(self, issue: dict) -> dict[str, Any]:
-        """Преобразует сырой JSON задачи в структурированный формат с нужными данными."""
+        """Converts raw issue JSON into a structured format with the required data."""
         key = issue["key"]
         fields = issue.get("fields", {})
 
-        # Базовые поля
+        # Basic fields
         summary = fields.get("summary", "")
         description = fields.get("description", "")
         status = fields.get("status", {}).get("name", "")
@@ -256,10 +256,10 @@ class JiraExtractor(SyncExtractor):
         reporter = fields.get("reporter", {}).get("displayName", "") if fields.get("reporter") else None
         labels = fields.get("labels", [])
 
-        # Спринты (если есть)
+        # Sprints (if any)
         sprints = self._get_sprints_for_issue(key)
 
-        # Комментарии (уже входят в expand=renderedBody)
+        # Comments (already included via expand=renderedBody)
         comments_data = fields.get("comment", {}).get("comments", [])
         comments = []
         for com in comments_data:
@@ -275,7 +275,7 @@ class JiraExtractor(SyncExtractor):
                 },
             )
 
-        # Changelog (история изменений)
+        # Changelog (change history)
         changelog = issue.get("changelog", {})
         histories = changelog.get("histories", [])
         changelog_entries = []
@@ -291,7 +291,7 @@ class JiraExtractor(SyncExtractor):
                     },
                 )
 
-        # Вложения
+        # Attachments
         attachments = []
         if self.download_attachments:
             for att in fields.get("attachment", []):
@@ -319,7 +319,7 @@ class JiraExtractor(SyncExtractor):
                 for att in fields.get("attachment", [])
             ]
 
-        # Связи (issuelinks, subtasks)
+        # Links (issuelinks, subtasks)
         links = []
         for link in fields.get("issuelinks", []):
             link_info = {}
@@ -334,7 +334,7 @@ class JiraExtractor(SyncExtractor):
             if link_info:
                 links.append(link_info)
 
-        # Подзадачи (subtasks)
+        # Subtasks
         subtasks = [{"key": st["key"], "summary": st["fields"].get("summary", "")} for st in fields.get("subtasks", [])]
 
         # RBAC metadata
@@ -343,10 +343,10 @@ class JiraExtractor(SyncExtractor):
         # ACL extraction from issue security and project metadata
         acl = extract_jira_acl(issue)
 
-        # Извлечение ссылок из описания
+        # Extract links from the description
         description_links = self._extract_links_from_text(description)
 
-        # Итоговый объект задачи
+        # Final issue object
         result = {
             "key": key,
             "summary": summary,
@@ -381,7 +381,7 @@ class JiraExtractor(SyncExtractor):
         return result
 
     def _build_jql(self) -> str:
-        """Формирует JQL с учётом инкрементального режима."""
+        """Builds a JQL query with incremental mode support."""
         jql = self.base_jql or "ORDER BY updated DESC"
         last_run = self.wal_data.get("last_run")
         if self.incremental and (last_run or self.since_date):
@@ -398,8 +398,8 @@ class JiraExtractor(SyncExtractor):
         return jql
 
     def run(self) -> None:
-        """Основной процесс выгрузки задач."""
-        # Инициализируем список обработанных задач, если его нет
+        """Main issue extraction loop."""
+        # Initialize the list of processed issues if missing
         if "processed_issues" not in self.wal_data:
             self.wal_data["processed_issues"] = []
         jql = self._build_jql()
@@ -414,13 +414,13 @@ class JiraExtractor(SyncExtractor):
 
             try:
                 processed = self._process_issue(issue)
-                # Сохраняем в JSON
+                # Save to JSON
                 issue_dir = self.output_dir / key
                 issue_dir.mkdir(parents=True, exist_ok=True)
                 with open(issue_dir / "issue.json", "w", encoding="utf-8") as f:
                     json.dump(processed, f, ensure_ascii=False, indent=2)
 
-                # Обновляем WAL
+                # Update the WAL
                 if key not in self.wal_data.get("processed_issues", []):
                     self.wal_data["processed_issues"].append(key)
                 self.wal_data["last_run"] = datetime.now(UTC).isoformat()
@@ -436,13 +436,13 @@ class JiraExtractor(SyncExtractor):
                 logger.warning("Jira extraction interrupted by shutdown")
                 return
             except Exception as e:
-                logger.error(f"Failed to process issue {key}: {e}", exc_info=True)  # продолжаем со следующей задачей
+                logger.error(f"Failed to process issue {key}: {e}", exc_info=True)  # continue with the next issue
 
         logger.info(f"Jira extraction finished. Processed {total_processed} issues.")
 
 
 if __name__ == "__main__":
-    # Пример конфигурации (загружать из etl_config.yaml или переменных окружения)
+    # Configuration example (load from etl_config.yaml or environment variables)
     config_example = {
         "url": os.getenv("JIRA_URL", "https://jira.example.com"),
         "username": os.getenv("JIRA_USER", "bot"),

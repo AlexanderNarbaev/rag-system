@@ -98,8 +98,8 @@ def _dynamic_top_k(query: str, *, max_default: int = 50) -> int:
 
 
 def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
-    """Переписывает запрос с помощью LLM для улучшения ретривала.
-    Используется при первом входе или когда контекст признан недостаточным.
+    """Rewrites the query with an LLM to improve retrieval.
+    Used on first entry or when the context is deemed insufficient.
     """
     query = state["query"]
     rewrite_count = state.get("rewrite_count", 0)
@@ -134,9 +134,9 @@ def rewrite_query(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def retrieve(state: dict[str, Any]) -> dict[str, Any]:
-    """Выполняет гибридный поиск в Qdrant.
-    Использует переписанный запрос, если есть, иначе оригинальный.
-    Применяет time-decay бустинг для версионированных документов.
+    """Performs hybrid search in Qdrant.
+    Uses the rewritten query when available, otherwise the original one.
+    Applies time-decay boosting for versioned documents.
     Gracefully returns empty results when Qdrant is unavailable.
     """
     query_to_use = state.get("rewritten_query") or state["query"]
@@ -149,12 +149,12 @@ def retrieve(state: dict[str, Any]) -> dict[str, Any]:
         logger.warning("Hybrid search failed (degraded mode): %s", exc)
         return {"retrieved_chunks": []}
 
-    # Преобразуем результаты в список словарей для единообразия
+    # Convert results to a list of dicts for uniformity
     chunks = []
     for hit in results:
         chunks.append({"id": hit.id, "text": hit.payload.get("text", ""), "score": hit.score, "payload": hit.payload})
 
-    # Применяем time-decay бустинг для версионированных документов
+    # Apply time-decay boosting for versioned documents
     chunks = _get_apply_time_decay()(chunks)
 
     logger.info(f"Retrieved {len(chunks)} chunks (with time-decay)")
@@ -162,8 +162,8 @@ def retrieve(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def graph_expand(state: dict[str, Any]) -> dict[str, Any]:
-    """Расширяет запрос с помощью графа знаний (Neo4j).
-    Возвращает дополнительные сущности или связанные документы.
+    """Expands the query using the knowledge graph (Neo4j).
+    Returns additional entities or related documents.
     """
     if not USE_GRAPH_EXPANSION:
         return {"graph_context": ""}
@@ -180,15 +180,15 @@ def graph_expand(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def check_sufficiency(state: dict[str, Any]) -> Literal["rewrite", "rerank"]:
-    """Оценивает, достаточно ли релевантны извлечённые чанки.
-    Если средний балл или покрытие низкое -> инициирует повторное переписывание.
+    """Assesses whether the retrieved chunks are relevant enough.
+    If the average score or coverage is low -> triggers another rewrite.
     """
     chunks = state.get("retrieved_chunks", [])
     if not chunks:
         logger.info("No chunks retrieved, need rewrite")
         return "rewrite"
 
-    # Простая эвристика: средний скор выше порога?
+    # Simple heuristic: is the average score above the threshold?
     avg_score = sum(c.get("score", 0) for c in chunks) / len(chunks)
     if avg_score < 0.6 and state.get("rewrite_count", 0) < MAX_RETRIEVAL_LOOPS:
         logger.info(f"Low average score {avg_score:.2f}, rewriting query")
@@ -199,7 +199,7 @@ def check_sufficiency(state: dict[str, Any]) -> Literal["rewrite", "rerank"]:
 
 
 def rerank(state: dict[str, Any]) -> dict[str, Any]:
-    """Выполняет кросс-энкодер реранкинг извлечённых чанков."""
+    """Runs cross-encoder reranking over the retrieved chunks."""
     chunks = state.get("retrieved_chunks", [])
     if not chunks:
         return {"reranked_chunks": []}
@@ -211,15 +211,15 @@ def rerank(state: dict[str, Any]) -> dict[str, Any]:
     indices = _get_rerank_chunks()(query, texts, top_k=MAX_CHUNKS_AFTER_RERANK)
     reranked = [(chunks[i], scores[i]) for i in indices]
 
-    # Дедупликация
+    # Deduplication
     unique = _get_deduplicate_chunks()(reranked)
     logger.info(f"Reranked to {len(unique)} chunks")
     return {"reranked_chunks": unique}
 
 
 def build_context_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Собирает финальный контекст из отреранжированных чанков и графового расширения.
-    Применяет extractive-компрессию если контекст превышает токен-бюджет.
+    """Builds the final context from reranked chunks and graph expansion.
+    Applies extractive compression when the context exceeds the token budget.
     """
     chunks_with_scores = state.get("reranked_chunks", [])
     graph_ctx = state.get("graph_context", "")
@@ -228,7 +228,7 @@ def build_context_node(state: dict[str, Any]) -> dict[str, Any]:
 
     context = _get_build_context()(chunks_with_scores, max_tokens=max_tokens)
 
-    # Оценка токенов и extractive-компрессия при превышении бюджета
+    # Token estimate and extractive compression when the budget is exceeded
     optimizer = TokenOptimizer()
     approx_tokens = optimizer.estimate_token_cost(context)
     if approx_tokens > max_tokens * 0.9 and chunks_with_scores:
@@ -246,8 +246,8 @@ def build_context_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def generate(state: dict[str, Any]) -> dict[str, Any]:
-    """Генерация ответа с использованием контекста.
-    Поддерживает как потоковый, так и обычный режим.
+    """Answer generation using the context.
+    Supports both streaming and non-streaming modes.
     """
     user_query = state["query"]
     context = state.get("context", "")

@@ -387,5 +387,5 @@ class TestOpenAPIProvider:
         from proxy.app.tools.openapi.discovery import OpenAPIProvider
 
         with patch("proxy.app.tools.openapi.discovery.TOOLS_OPENAPI_SPECS", [], create=True):
-            result = OpenAPIProvider._get_spec_configs()
+            result = OpenAPIProvider._load_spec_configs_from_config()
             assert result == []

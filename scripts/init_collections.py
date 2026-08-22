@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # scripts/init_collections.py
-"""Скрипт для инициализации коллекций в Qdrant и Neo4j.
-Создаёт коллекцию с поддержкой dense и sparse векторов,
-а также индексы и ограничения в графовой базе (опционально).
+"""Script for initializing collections in Qdrant and Neo4j.
+Creates a collection with dense and sparse vector support,
+as well as indexes and constraints in the graph database (optional).
 """
 
 import argparse
@@ -10,7 +10,7 @@ import logging
 import sys
 from pathlib import Path
 
-# Добавляем путь к корню проекта для импорта модулей
+# Add the project root to the path for module imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from proxy.app.config import (
@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 
 def init_qdrant(recreate: bool = False):
-    """Инициализирует коллекцию Qdrant."""
+    """Initializes the Qdrant collection."""
     logger.info(f"Initializing Qdrant collection '{COLLECTION_NAME}' (recreate={recreate})")
     indexer = QdrantHybridIndexer(host=QDRANT_HOST, port=QDRANT_PORT, collection_name=COLLECTION_NAME)
-    # Проверяем, существует ли коллекция
+    # Check whether the collection exists
     exists = indexer.collection_exists()
     if exists and recreate:
         logger.info(f"Deleting existing collection {COLLECTION_NAME}")
@@ -45,13 +45,13 @@ def init_qdrant(recreate: bool = False):
         logger.info(f"Collection {COLLECTION_NAME} created")
     else:
         logger.info(f"Collection {COLLECTION_NAME} already exists")
-    # Выводим информацию о коллекции
+    # Print collection info
     info = indexer.get_collection_info()
     logger.info(f"Collection info: points_count={info.points_count}, status={info.status}")
 
 
 def init_neo4j():
-    """Инициализирует ограничения и индексы в Neo4j (если граф включён)."""
+    """Initializes constraints and indexes in Neo4j (if the graph is enabled)."""
     if not GRAPH_ENABLED:
         logger.info("Graph disabled, skipping Neo4j initialization")
         return
@@ -64,9 +64,9 @@ def init_neo4j():
     try:
         loader.create_constraints_and_indexes()
         logger.info("Neo4j constraints and indexes created")
-        # Дополнительно можно создать ограничения уникальности для конкретных меток
+        # Additionally, uniqueness constraints can be created for specific labels
         with loader.driver.session(database=loader.database) as session:
-            # Проверяем существование ограничений
+            # Check whether the constraints exist
             result = session.run("SHOW CONSTRAINTS")
             constraints = list(result)
             logger.info(f"Existing constraints: {len(constraints)}")

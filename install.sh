@@ -93,18 +93,18 @@ clone_repo() {
 setup_config() {
     log "Setting up configuration..."
 
-    # Create proxy/.env from .env.example
+    # Create proxy/.env from proxy/.env.example
     if [ ! -f proxy/.env ]; then
-        if [ -f .env.example ]; then
-            cp .env.example proxy/.env
-            log "Created proxy/.env from .env.example"
+        if [ -f proxy/.env.example ]; then
+            cp proxy/.env.example proxy/.env
+            log "Created proxy/.env from proxy/.env.example"
             warn "Please edit proxy/.env with your settings before starting:"
             warn "  - EMBEDDER_MODEL (embedding model name)"
             warn "  - RERANKER_MODEL (reranker model name)"
             warn "  - LLM_MODEL_NAME (LLM model name)"
             warn "  - LLM_ENDPOINT (LLM API endpoint)"
         else
-            warn ".env.example not found, skipping proxy/.env creation"
+            warn "proxy/.env.example not found, skipping proxy/.env creation"
         fi
     else
         log "proxy/.env already exists"

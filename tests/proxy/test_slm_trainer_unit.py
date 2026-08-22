@@ -191,3 +191,45 @@ class TestSLMTrainerUnit:
         config_data = json.loads(config_file.read_text())
         assert config_data["model_type"] == "slm_intent_classifier"
         assert config_data["num_labels"] == 7
+
+
+class TestSLMTrainerDatasetLoading:
+    """Missing dataset files must fail loudly — no silent dummy datasets."""
+
+    @pytest.fixture
+    def trainer(self):
+        return SLMTrainer()
+
+    def test_load_dataset_missing_file_raises(self, trainer, tmp_path):
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
+        config = TrainingConfig(trainer_type=TrainerType.SLM, output_dir=str(tmp_path))
+        with pytest.raises(FileNotFoundError, match="SLM training dataset not found"):
+            trainer._load_dataset("train", MagicMock(), config)
+
+    def test_load_dataset_existing_file(self, trainer, tmp_path):
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
+        data = [{"query": "hello", "intent_label": "greeting"}]
+        (tmp_path / "intent_train.json").write_text(json.dumps(data))
+        config = TrainingConfig(trainer_type=TrainerType.SLM, output_dir=str(tmp_path))
+        dataset = trainer._load_dataset("train", MagicMock(), config)
+        assert len(dataset) == 1
+
+    def test_train_fails_when_dataset_missing(self, trainer, tmp_path):
+        """train() must mark the job as failed with a clear error, not train on a dummy."""
+        from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
+        config = TrainingConfig(trainer_type=TrainerType.SLM, output_dir=str(tmp_path), use_lora=False)
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.pad_token = "[PAD]"
+        with (
+            patch("proxy.app.model_evolution.slm_trainer.AutoTokenizer") as auto_tok,
+            patch("proxy.app.model_evolution.slm_trainer.AutoModelForSequenceClassification"),
+            patch("proxy.app.model_evolution.slm_trainer.Trainer"),
+        ):
+            auto_tok.from_pretrained.return_value = mock_tokenizer
+            job = trainer.train(config)
+        assert job.status == "failed"
+        assert job.error_message is not None
+        assert "dataset not found" in job.error_message

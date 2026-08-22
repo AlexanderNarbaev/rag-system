@@ -12,6 +12,8 @@ edit_uri: edit/main/docs/
 theme:
   name: material
   language: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -84,6 +86,9 @@ nav:
       - Project Checklist: guides/project-checklist.md
       - Runbook: guides/runbook.md
       - Troubleshooting: guides/troubleshooting.md
+      - Compliance Requirements: guides/compliance-requirements.md
+      - Secrets Rotation: guides/secrets-rotation.md
+      - Changelog: guides/changelog.md
   - API Reference: api_reference.md
   - API Examples: guides/api-examples.md
   - Architecture Decision Records:
@@ -120,7 +125,9 @@ markdown_extensions:
   - toc:
       permalink: true
       toc_depth: 4
-      slugify: !!python/name:pymdownx.slugs.uslugify
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -157,24 +164,68 @@ plugins:
         - locale: ru
           name: Русский
           build: true
+          nav_translations:
+            Home: Главная
+            Quick Start: Быстрый старт
+            Architecture: Архитектура
+            Design Guides: Руководства
+            RAG Maturity Assessment: Оценка зрелости RAG
+            Production Readiness Checklist: Чек-лист готовности к production
+            Disaster Recovery Runbook: План аварийного восстановления
+            SLI/SLO Definitions: Определения SLI/SLO
+            Performance & Quality: Производительность и качество
+            "Extensibility: Adding Data Sources": "Расширяемость: добавление источников данных"
+            Access Control & RBAC: Контроль доступа и RBAC
+            Knowledge Graph Strategy: Стратегия графа знаний
+            Federated RAG: Федеративный RAG
+            Model Evolution: Эволюция моделей
+            Agentic Tools - SDK: Агентные инструменты — SDK
+            Agentic Tools - Declarative: Агентные инструменты — декларативные
+            Agentic Tools - OpenAPI: Агентные инструменты — OpenAPI
+            Integration with OpenCode: Интеграция с OpenCode
+            Development Roadmap: Дорожная карта
+            Configuration Reference: Справочник конфигурации
+            Deployment Guide: Руководство по развёртыванию
+            Operations Guide: Руководство по эксплуатации
+            Monitoring Guide: Руководство по мониторингу
+            ETL Guide: Руководство по ETL
+            Security Guide: Руководство по безопасности
+            MCP Server Guide: Руководство по MCP-серверу
+            User Guide: Руководство пользователя
+            Development Guide: Руководство разработчика
+            Integration Guide: Руководство по интеграции
+            Knowledge Graph Guide: Руководство по графу знаний
+            Project Checklist: Чек-лист проекта
+            Runbook: Ранбук
+            Troubleshooting: Устранение неполадок
+            Compliance Requirements: Требования соответствия
+            Secrets Rotation: Ротация секретов
+            Changelog: Журнал изменений
+            API Reference: Справочник API
+            API Examples: Примеры API
+            Architecture Decision Records: Архитектурные решения (ADR)
+            C4 Architecture Diagrams: Диаграммы архитектуры C4
+            Deployment: Развёртывание
+            Proxy Deployment: Развёртывание прокси
+            ETL Deployment: Развёртывание ETL
+            MCP Server: MCP-сервер
   - search:
-      lang: en
+      lang:
+        - en
+        - ru
       separator: '[\s\-,:!=\[\]()"/]+'
   - minify:
       minify_html: true
+
+exclude_docs: |
+  INDEX.md
+  superpowers/**
 
 extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/AlexanderNarbaev/rag-system
       name: RAG System on GitHub
-  alternate:
-    - name: English
-      link: /en/
-      lang: en
-    - name: Русский
-      link: /ru/
-      lang: ru
 
 extra_css:
   - stylesheets/extra.css

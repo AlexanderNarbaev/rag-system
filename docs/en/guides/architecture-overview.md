@@ -315,8 +315,8 @@ The system is designed for fully offline environments:
 
 | Document                                                | Purpose                                        |
 |:--------------------------------------------------------|:-----------------------------------------------|
-| [Architecture Decision Records](../adr/)                | 14 ADRs covering all major design decisions    |
-| [C4 Diagrams](../diagrams/)                             | L1 (Context), L2 (Containers), L3 (Components) |
+| [Architecture Decision Records](../adr/index.md)                | 14 ADRs covering all major design decisions    |
+| [C4 Diagrams](../diagrams/index.md)                             | L1 (Context), L2 (Containers), L3 (Components) |
 | [Knowledge Graph Strategy](knowledge-graph-strategy.md) | Neo4j entity extraction and graph enrichment   |
 | [Deployment Guide](deployment-guide.md)                 | Docker + K8s production deployment             |
 | [Operations Guide](operations-guide.md)                 | Monitoring, backup, scaling                    |

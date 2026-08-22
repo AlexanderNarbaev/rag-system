@@ -115,10 +115,74 @@ class TestDeclarativeProvider:
     def test_provider_name(self):
         assert DeclarativeProvider().provider_name == "declarative"
 
+    def test_discover_loads_tools_from_dir(self, tmp_path):
+        tool_file = tmp_path / "tools.yaml"
+        tool_file.write_text(
+            "tools:\n"
+            "  - name: echo_tool\n"
+            "    type: shell\n"
+            "    description: Echo a message\n"
+            "    shell:\n"
+            "      command: 'echo {{message}}'\n"
+            "      allowed_commands: [echo]\n"
+            "    parameters:\n"
+            "      message:\n"
+            "        type: string\n"
+            "        required: true\n",
+            encoding="utf-8",
+        )
+        provider = DeclarativeProvider(tools_dir=str(tmp_path))
+        tools = asyncio.run(provider.discover())
+        names = {t.name for t in tools}
+        assert "echo_tool" in names
+        tool = next(t for t in tools if t.name == "echo_tool")
+        assert tool.provider == "declarative"
+        assert tool.handler is not None
+
+    def test_discover_missing_dir_returns_empty(self, tmp_path):
+        provider = DeclarativeProvider(tools_dir=str(tmp_path / "nonexistent"))
+        assert asyncio.run(provider.discover()) == []
+
+    def test_discover_invalid_tool_file_returns_empty(self, tmp_path):
+        bad_file = tmp_path / "bad.yaml"
+        bad_file.write_text("tools:\n  - name: Bad Name!\n    type: unknown\n", encoding="utf-8")
+        provider = DeclarativeProvider(tools_dir=str(tmp_path))
+        assert asyncio.run(provider.discover()) == []
+
 
 class TestOpenAPIProvider:
     def test_provider_name(self):
         assert OpenAPIProvider().provider_name == "openapi"
+
+    def test_discover_from_explicit_spec_file(self, tmp_path):
+        import json
+
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "T", "version": "1.0"},
+            "servers": [{"url": "https://api.example.com"}],
+            "paths": {
+                "/items": {
+                    "get": {"operationId": "listItems", "summary": "List items"},
+                },
+            },
+        }
+        spec_file = tmp_path / "spec.json"
+        spec_file.write_text(json.dumps(spec), encoding="utf-8")
+
+        provider = OpenAPIProvider(spec_configs=[{"name": "test", "file": str(spec_file)}])
+        tools = asyncio.run(provider.discover())
+        names = {t.name for t in tools}
+        assert "listItems" in names
+
+    def test_discover_with_empty_explicit_configs(self):
+        provider = OpenAPIProvider(spec_configs=[])
+        assert asyncio.run(provider.discover()) == []
+
+    def test_discover_invalid_spec_config_skipped(self):
+        provider = OpenAPIProvider(spec_configs=[{"name": "broken"}])
+        # Config has neither url nor file — skipped with a warning, no exception.
+        assert asyncio.run(provider.discover()) == []
 
 
 class TestToolProviderABC:

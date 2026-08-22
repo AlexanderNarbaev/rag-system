@@ -4,14 +4,6 @@
 Uses a Cross-Encoder model for precise chunk ranking. Supports batch processing,
 result caching (Redis/in-memory), automatic text truncation to model max_length,
 and fine-tuning from HITL feedback data.
-
-Модуль реранкинга для RAG-прокси.
-Использует кросс-энкодер (Cross-Encoder) для точного ранжирования чанков.
-Поддерживает:
-- Пакетный реранкинг (batch processing)
-- Кэширование результатов (Redis/in-memory)
-- Автоматическую обрезку текста до max_length модели
-- Fine-tuning from HITL feedback data
 """
 
 import hashlib
@@ -45,13 +37,13 @@ RERANKER_FT_ENABLED = os.getenv("RERANKER_FT_ENABLED", "false").lower() == "true
 FEEDBACK_LOG_DIR = os.getenv("FEEDBACK_LOG_DIR", "./logs/feedback")
 FT_MODEL_DIR = os.getenv("FT_MODEL_DIR", "./models/reranker_ft")
 
-# Глобальные объекты
+# Global objects
 reranker: Any = None
 cache_manager: "CacheManager | None" = None
 
 
 def initialize_reranker() -> None:
-    """Инициализирует реранкер и кэш (вызывается при старте прокси).
+    """Initializes the reranker and cache (called at proxy startup).
 
     Uses remote_services.create_reranker() to select between remote HTTP service
     and local CrossEncoder with graceful fallback.
@@ -64,7 +56,7 @@ def initialize_reranker() -> None:
     reranker_name = getattr(reranker, "__class__", type(reranker)).__name__
     logger.info("Reranker initialized: %s", reranker_name)
 
-    # Инициализация кэша (если используется Redis)
+    # Cache initialization (if Redis is used)
     if USE_REDIS and REDIS_URL:  # noqa: SIM108
         cache_manager = CacheManager(redis_url=REDIS_URL, key_prefix=REDIS_KEY_PREFIX)
     else:
@@ -72,10 +64,10 @@ def initialize_reranker() -> None:
 
 
 def _truncate_text(text: str, max_tokens: int | None = None) -> str:
-    """Обрезает текст до указанного количества токенов (приближённо)."""
+    """Truncates text to the given number of tokens (approximately)."""
     if max_tokens is None:
         max_tokens = RERANKER_MAX_LENGTH
-    # Грубая оценка: 1 токен ~ 4 символа
+    # Rough estimate: 1 token ~ 4 characters
     max_chars = max_tokens * 4
     if len(text) > max_chars:
         return text[:max_chars]
@@ -116,19 +108,19 @@ def _call_reranker_safe(pairs: list[tuple[str, str]]) -> list[float]:
 
 
 def _get_cache_key(query: str, chunk_text: str) -> str:
-    """Генерирует ключ кэша для пары (запрос, чанк)."""
+    """Generates a cache key for a (query, chunk) pair."""
     content = f"{query}|{chunk_text}"
     return f"rerank:{hashlib.md5(content.encode()).hexdigest()}"
 
 
 def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: bool = True) -> list[int]:
-    """Выполняет реранкинг списка чанков по релевантности запросу.
+    """Reranks a list of chunks by relevance to the query.
 
-    :param query: поисковый запрос
-    :param chunks: список текстов чанков
-    :param top_k: количество лучших чанков после реранкинга
-    :param use_cache: использовать ли кэш
-    :return: индексы чанков в порядке убывания релевантности (первые top_k)
+    :param query: search query
+    :param chunks: list of chunk texts
+    :param top_k: number of top chunks after reranking
+    :param use_cache: whether to use the cache
+    :return: chunk indices in descending relevance order (first top_k)
     """
     if not reranker:
         initialize_reranker()
@@ -142,13 +134,13 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
             span.set_attribute("rag.num_chunks", len(chunks))
             span.set_attribute("rag.top_k", top_k)
 
-        # Обрезаем тексты до максимальной длины модели
+        # Truncate texts to the model's maximum length
         truncated_chunks = [_truncate_text(chunk) for chunk in chunks]
 
-        # Подготовка пар (запрос, чанк)
+        # Prepare (query, chunk) pairs
         pairs = [(query, chunk) for chunk in truncated_chunks]
 
-        # Получение скоров с кэшированием — incremental cache
+        # Get scores with caching — incremental cache
         scores: list[float] = [0.0] * len(pairs)
         if use_cache and cache_manager:
             cached_count = 0
@@ -176,7 +168,7 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
             scores = _call_reranker_safe(pairs)
             add_event("rag.rerank.computed", {"num_pairs": len(pairs)})
 
-        # Сортировка индексов по убыванию скора
+        # Sort indices by descending score
         indexed_scores = list(enumerate(scores))
         indexed_scores.sort(key=lambda x: x[1], reverse=True)
 
@@ -196,9 +188,9 @@ def rerank_chunks_with_scores(
     top_k: int = 20,
     use_cache: bool = True,
 ) -> list[tuple[int, float]]:
-    """Возвращает пары (индекс, score) для top_k чанков."""
+    """Returns (index, score) pairs for the top_k chunks."""
     indices = rerank_chunks(query, chunks, top_k, use_cache)
-    # Получаем скоры для этих индексов
+    # Get scores for these indices
     if not reranker:
         initialize_reranker()
     truncated = [_truncate_text(ch) for ch in chunks]
@@ -456,7 +448,7 @@ class TwoStageReranker:
         return results[: self.final_top_k]
 
 
-# Если кэш-менеджер не был инициализирован, создаём заглушку
+# If the cache manager was not initialized, create a stub
 if cache_manager is None:
     cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
@@ -621,9 +613,9 @@ def _fine_tune_full(pairs: list[tuple[str, str, float]], epochs: int = 3) -> Any
 RERANKER_LORA_R = 16
 RERANKER_LORA_ALPHA = 32
 
-# Пример использования (для тестирования)
+# Usage example (for testing)
 if __name__ == "__main__":
-    # Тестовый запуск (требуется настроенная конфигурация)
+    # Test run (requires a configured environment)
     import sys
 
     sys.path.insert(0, ".")

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class RAGState(TypedDict):
-    """Состояние графа RAG."""
+    """RAG graph state."""
 
     query: str
     version: str | None
@@ -82,7 +82,7 @@ def _route_after_generate(state: RAGState) -> str:
 
 
 def build_rag_graph() -> Any:
-    """Создаёт и компилирует граф RAG с tool-calling поддержкой."""
+    """Builds and compiles the RAG graph with tool-calling support."""
     if not LANGGRAPH_AVAILABLE or StateGraph is None:
         raise RuntimeError(
             "LangGraph is not installed. Install with: pip install langgraph. "
@@ -90,7 +90,7 @@ def build_rag_graph() -> Any:
         )
     builder = StateGraph(RAGState)
 
-    # Добавляем узлы
+    # Add nodes
     builder.add_node("rewrite", rewrite_query)  # type: ignore[type-var]
     builder.add_node("retrieve", retrieve)  # type: ignore[type-var]
     builder.add_node("graph_expand", graph_expand)  # type: ignore[type-var]
@@ -99,14 +99,14 @@ def build_rag_graph() -> Any:
     builder.add_node("generate", generate)  # type: ignore[type-var]
     builder.add_node("check_sufficiency", check_sufficiency)  # type: ignore[type-var]
 
-    # Начало
+    # Entry point
     builder.set_entry_point("rewrite")
 
-    # Переходы
+    # Transitions
     builder.add_edge("rewrite", "retrieve")
     builder.add_edge("retrieve", "check_sufficiency")
 
-    # Условное ребро после проверки
+    # Conditional edge after the sufficiency check
     builder.add_conditional_edges("check_sufficiency", check_sufficiency, {"rewrite": "rewrite", "rerank": "rerank"})
 
     builder.add_edge("build_context", "generate")
@@ -162,7 +162,7 @@ def build_rag_graph() -> Any:
         },
     )
 
-    # Добавляем графовое расширение как опциональный узел между rerank и build_context
+    # Add graph expansion as an optional node between rerank and build_context
     builder.add_edge("rerank", "graph_expand")
     builder.add_edge("graph_expand", "build_context")
 
@@ -170,7 +170,7 @@ def build_rag_graph() -> Any:
 
 
 class RAGOrchestrator:
-    """Обёртка над скомпилированным графом."""
+    """Wrapper around the compiled graph."""
 
     def __init__(self, checkpointer: Any = None) -> None:
         self.builder = build_rag_graph()
@@ -179,17 +179,17 @@ class RAGOrchestrator:
         self.graph = self.builder.compile(checkpointer=checkpointer)
 
     async def ainvoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Асинхронный вызов графа."""
+        """Async graph invocation."""
         result: dict[str, Any] = await self.graph.ainvoke(inputs)
         return result
 
     def invoke(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Синхронный вызов графа."""
+        """Sync graph invocation."""
         result: dict[str, Any] = self.graph.invoke(inputs)
         return result
 
 
-# Функция для получения экземпляра оркестратора (синглтон)
+# Singleton accessor for the orchestrator instance
 _orchestrator = None
 
 

@@ -5,6 +5,11 @@ baseline regression, and produces pass/fail/warn decisions.
 Includes NLI-based answer grounding evaluation via nli_evaluator module.
 
 Integrates with ExperimentTracker for MLflow run context.
+
+NOTE: keep this module logically in sync with
+``proxy/app/model_evolution/eval_gate.py`` — the two implementations must
+expose the same public API and gate semantics (they differ only in
+service-local import paths).
 """
 
 from __future__ import annotations
@@ -300,6 +305,72 @@ class EvalGate:
         from model_evolution_service.evaluation.nli_evaluator import evaluate_nli_batch
 
         if answer_context_pairs:
+            nli_metrics = evaluate_nli_batch(answer_context_pairs, use_real_nli=use_real_nli)
+            metrics = {**metrics, **nli_metrics}
+
+        return EvalGate.evaluate(
+            metrics,
+            config,
+            baseline_metrics=baseline_metrics,
+            version=version,
+        )
+
+    @staticmethod
+    def evaluate_with_ragas(
+        metrics: dict[str, float],
+        config: EvalGateConfig,
+        question: str,
+        answer: str,
+        contexts: list[str],
+        answer_context_pairs: list[tuple[str, str]] | None = None,
+        baseline_metrics: dict[str, float] | None = None,
+        version: str | None = None,
+        use_real_nli: bool = True,
+    ) -> GateResult:
+        """Evaluate metrics + NLI grounding + RAGAS scores against thresholds and baseline.
+
+        Mirrors ``proxy.app.model_evolution.eval_gate.EvalGate.evaluate_with_ragas``.
+        RAGAS/Prometheus integrations are imported lazily; if they are
+        unavailable (e.g. the proxy package is not importable from the
+        standalone service), they are skipped and only NLI + base metrics
+        are evaluated.
+
+        Args:
+            metrics: Current model evaluation metrics.
+            config: EvalGateConfig with thresholds.
+            question: The original question.
+            answer: The generated answer.
+            contexts: Retrieved context texts.
+            answer_context_pairs: Optional list of (answer, context) pairs for NLI scoring.
+            baseline_metrics: Optional baseline metrics for regression detection.
+            version: Model version string.
+            use_real_nli: Whether to attempt real NLI model.
+
+        Returns:
+            GateResult with pass/fail/warn status including NLI and RAGAS metrics.
+
+        """
+        try:
+            from proxy.app.core.ragas_metrics import compute_all_ragas_metrics
+
+            ragas_scores = compute_all_ragas_metrics(
+                question=question,
+                answer=answer,
+                contexts=contexts,
+            )
+            metrics = {**metrics, **ragas_scores}
+
+            from proxy.app.shared.metrics import rag_ragas_faithfulness, rag_ragas_precision, rag_ragas_relevancy
+
+            rag_ragas_faithfulness.set(ragas_scores.get("ragas_faithfulness", 0.0))
+            rag_ragas_relevancy.set(ragas_scores.get("ragas_relevancy", 0.0))
+            rag_ragas_precision.set(ragas_scores.get("ragas_precision", 0.0))
+        except Exception:
+            logger.debug("RAGAS metrics computation failed in eval gate", exc_info=True)
+
+        if answer_context_pairs:
+            from model_evolution_service.evaluation.nli_evaluator import evaluate_nli_batch
+
             nli_metrics = evaluate_nli_batch(answer_context_pairs, use_real_nli=use_real_nli)
             metrics = {**metrics, **nli_metrics}
 

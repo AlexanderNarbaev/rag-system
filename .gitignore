@@ -89,3 +89,7 @@ proxy/.env.production
 etl/.env
 *.pem
 *.key
+
+# ETL model cache staging (keep README, ignore downloaded models)
+etl/model_cache/*
+!etl/model_cache/README.md

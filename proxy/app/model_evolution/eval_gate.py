@@ -5,6 +5,11 @@ baseline regression, and produces pass/fail/warn decisions.
 Includes NLI-based answer grounding evaluation via nli_evaluator module.
 
 Integrates with ExperimentTracker for MLflow run context.
+
+NOTE: keep this module logically in sync with
+``model_evolution_service/evaluation/eval_gate.py`` — the two implementations
+must expose the same public API and gate semantics (they differ only in
+service-local import paths).
 """
 
 from __future__ import annotations

@@ -304,12 +304,21 @@ class SLMTrainer(TrainerBase):
         )
 
     def _load_dataset(self, split: str, tokenizer: Any, config: TrainingConfig) -> Any:
+        """Load an intent dataset split from ``intent_{split}.json`` in output_dir.
+
+        Raises:
+            FileNotFoundError: If the dataset file does not exist — training
+                must never fall back to a silent dummy dataset.
+
+        """
         dataset_file = Path(config.output_dir) / f"intent_{split}.json"
-        if dataset_file.exists():
-            data = json.loads(dataset_file.read_text())
-            return IntentDataset(data, tokenizer, config.max_seq_length)
-        dummy = [{"query": "hello", "intent_label": "greeting"}]
-        return IntentDataset(dummy, tokenizer, config.max_seq_length)
+        if not dataset_file.exists():
+            raise FileNotFoundError(
+                f"SLM training dataset not found: {dataset_file}. "
+                f"Export intent_{split}.json to config.output_dir before training.",
+            )
+        data = json.loads(dataset_file.read_text())
+        return IntentDataset(data, tokenizer, config.max_seq_length)
 
     def _extract_metrics(self, raw_metrics: dict[str, Any]) -> dict[str, float]:
         return {

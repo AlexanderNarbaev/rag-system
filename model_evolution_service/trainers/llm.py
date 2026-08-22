@@ -88,20 +88,38 @@ class LLMTrainer(TrainerBase):
 
     # ── Training ───────────────────────────────────────────────────────────
 
-    def train(self, training_data: list[dict[str, Any]]) -> TrainingJob:  # type: ignore[override]
-        prepared = self.prepare_data(training_data)
-        if not prepared:
-            raise TrainingError("No training data provided after preparation")
+    def train(self, config: TrainingConfig) -> TrainingJob:
+        """Execute training from a TrainingConfig (unified trainer interface).
+
+        Loads instruction-tuning pairs from ``llm_train.json`` inside
+        ``config.output_dir``, prepares them via :meth:`prepare_data`, then runs
+        mock (CPU profile) or QLoRA (GPU profile) training.
+
+        Args:
+            config: Training configuration with hyperparameters and output_dir.
+
+        Returns:
+            TrainingJob with status, metrics, and artifact URI.
+
+        Raises:
+            TrainingError: If the dataset is missing/empty or training fails.
+
+        """
+        config.trainer_type = TrainerType.LLM
+        self.config = config
 
         job = TrainingJob(
             job_id=self._make_job_id(),
             trainer_type=TrainerType.LLM,
-            config=self.config,
+            config=config,
             status="running",
             started_at=datetime.now(UTC).isoformat(),
         )
 
         try:
+            prepared = self.prepare_data(self._load_training_data(config))
+            if not prepared:
+                raise TrainingError("No training data provided after preparation")
             if self._is_cpu_profile() or not self._cuda_available():
                 return self._train_mock(job, prepared)
             return self._train_gpu(job, prepared)
@@ -109,10 +127,34 @@ class LLMTrainer(TrainerBase):
             job.status = "failed"
             job.error_message = str(exc)
             logger.exception("LLM training failed: %s", exc)
+            if isinstance(exc, TrainingError):
+                raise
             raise TrainingError(f"LLM training failed: {exc}") from exc
 
+    @staticmethod
+    def _load_training_data(config: TrainingConfig) -> list[dict[str, Any]]:
+        """Load instruction-tuning pairs from ``llm_train.json`` in output_dir.
+
+        Raises:
+            FileNotFoundError: If the dataset file does not exist — training
+                must never fall back to a silent dummy dataset.
+
+        """
+        dataset_file = Path(config.output_dir) / "llm_train.json"
+        if not dataset_file.exists():
+            raise FileNotFoundError(
+                f"LLM training dataset not found: {dataset_file}. "
+                "Export instruction-tuning pairs to llm_train.json in config.output_dir before training.",
+            )
+        data: list[dict[str, Any]] = json.loads(dataset_file.read_text())
+        return data
+
     def _train_mock(self, job: TrainingJob, prepared: list[dict[str, Any]]) -> TrainingJob:
-        """Simulate training on CPU — produce mock metrics and adapter."""
+        """Simulate training on CPU — produce mock metrics and adapter.
+
+        Metrics are explicitly flagged with ``mock=1.0`` so placeholders cannot
+        be mistaken for real measurements downstream (e.g. by the eval gate).
+        """
         logger.info("Running LLM mock training (CPU profile) with %d samples", len(prepared))
 
         job.metrics = {
@@ -121,6 +163,7 @@ class LLMTrainer(TrainerBase):
             "bleu_1": 0.42,
             "bleu_4": 0.15,
             "rouge_l_f1": 0.38,
+            "mock": 1.0,
         }
 
         output_dir = Path(self.config.output_dir) / f"run_{job.job_id}"
@@ -278,25 +321,132 @@ class LLMTrainer(TrainerBase):
         self,
         eval_data: list[dict[str, Any]],
         model: Any = None,
+        tokenizer: Any = None,
     ) -> dict[str, float]:
-        """Compute evaluation metrics on held-out data."""
+        """Compute evaluation metrics on held-out data.
+
+        CPU/mock profile: returns placeholder metrics explicitly flagged with
+        ``mock=1.0`` so they cannot be mistaken for real measurements.
+        GPU profile: computes BLEU (sacrebleu), ROUGE-L (rouge-score), and
+        BertScore (bert-score) over reference/hypothesis pairs. Each metric
+        library is imported lazily — if a package is unavailable, a warning is
+        logged and only the available metrics are returned.
+        """
         if not eval_data:
             return {}
 
         if self._is_cpu_profile():
+            logger.warning("CPU/mock profile: returning placeholder LLM eval metrics (mock=1.0)")
             return {
                 "train_loss": 0.45,
                 "val_loss": 0.52,
                 "bleu_1": 0.40,
                 "bleu_4": 0.12,
                 "rouge_l_f1": 0.35,
+                "mock": 1.0,
             }
+
+        references, hypotheses = self._extract_eval_pairs(eval_data, model, tokenizer)
+        if not references:
+            logger.warning("No reference/hypothesis pairs could be derived from eval data")
+            return {}
+
+        metrics: dict[str, float] = {}
+        metrics.update(self._compute_bleu(references, hypotheses))
+        metrics.update(self._compute_rouge_l(references, hypotheses))
+        metrics.update(self._compute_bertscore(references, hypotheses))
+        return metrics
+
+    def _extract_eval_pairs(
+        self,
+        eval_data: list[dict[str, Any]],
+        model: Any = None,
+        tokenizer: Any = None,
+    ) -> tuple[list[str], list[str]]:
+        """Build (reference, hypothesis) pairs from eval data.
+
+        Reference: content of the last assistant message. Hypothesis: an
+        explicit ``prediction``/``hypothesis`` field on the item, or text
+        generated by the provided model/tokenizer from the prompt messages.
+        """
+        references: list[str] = []
+        hypotheses: list[str] = []
+        for item in eval_data:
+            reference = self._reference_from_messages(item.get("messages") or [])
+            if not reference:
+                continue
+            hypothesis = item.get("prediction") or item.get("hypothesis")
+            if hypothesis is None and model is not None and tokenizer is not None:
+                hypothesis = self._generate_hypothesis(model, tokenizer, item.get("messages") or [])
+            if not hypothesis:
+                continue
+            references.append(reference)
+            hypotheses.append(str(hypothesis))
+        return references, hypotheses
+
+    @staticmethod
+    def _reference_from_messages(messages: list[dict[str, Any]]) -> str:
+        """Return the content of the last assistant message, or an empty string."""
+        for message in reversed(messages):
+            if message.get("role") == "assistant" and message.get("content"):
+                return str(message["content"])
+        return ""
+
+    def _generate_hypothesis(self, model: Any, tokenizer: Any, messages: list[dict[str, Any]]) -> str:
+        """Generate an answer from prompt messages using the fine-tuned model."""
+        import torch
+
+        prompt_messages = [m for m in messages if m.get("role") != "assistant"]
+        try:
+            prompt = tokenizer.apply_chat_template(prompt_messages, tokenize=False, add_generation_prompt=True)
+        except Exception:
+            prompt = "".join(f"{m['role']}: {m['content']}\n" for m in prompt_messages)
+
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=self.config.max_seq_length)
+        with torch.no_grad():
+            output_ids = model.generate(**inputs, max_new_tokens=256)
+        generated = output_ids[0][inputs["input_ids"].shape[-1] :]
+        return str(tokenizer.decode(generated, skip_special_tokens=True))
+
+    @staticmethod
+    def _compute_bleu(references: list[str], hypotheses: list[str]) -> dict[str, float]:
+        """Compute corpus BLEU-1/BLEU-4 via sacrebleu (normalized to 0-1)."""
+        try:
+            import sacrebleu
+        except ImportError:
+            logger.warning("sacrebleu is not installed; skipping BLEU metrics")
+            return {}
+        bleu_1 = sacrebleu.corpus_bleu(hypotheses, [references], weights=[1.0, 0.0, 0.0, 0.0])
+        bleu_4 = sacrebleu.corpus_bleu(hypotheses, [references])
+        return {"bleu_1": bleu_1.score / 100.0, "bleu_4": bleu_4.score / 100.0}
+
+    @staticmethod
+    def _compute_rouge_l(references: list[str], hypotheses: list[str]) -> dict[str, float]:
+        """Compute mean ROUGE-L precision/recall/F1 via rouge-score."""
+        try:
+            from rouge_score import rouge_scorer
+        except ImportError:
+            logger.warning("rouge-score is not installed; skipping ROUGE-L metrics")
+            return {}
+        scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
+        scores = [scorer.score(ref, hyp)["rougeL"] for ref, hyp in zip(references, hypotheses, strict=False)]
+        count = max(1, len(scores))
         return {
-            "eval_loss": 0.48,
-            "bleu_1": 0.44,
-            "bleu_4": 0.18,
-            "rouge_l_f1": 0.40,
+            "rouge_l_precision": sum(s.precision for s in scores) / count,
+            "rouge_l_recall": sum(s.recall for s in scores) / count,
+            "rouge_l_f1": sum(s.fmeasure for s in scores) / count,
         }
+
+    @staticmethod
+    def _compute_bertscore(references: list[str], hypotheses: list[str]) -> dict[str, float]:
+        """Compute mean BertScore F1 via bert-score."""
+        try:
+            from bert_score import score as bert_score
+        except ImportError:
+            logger.warning("bert-score is not installed; skipping BertScore metrics")
+            return {}
+        _precision, _recall, f1 = bert_score(hypotheses, references, lang="en", verbose=False)
+        return {"bertscore_f1": float(f1.mean())}
 
     # ── Adapter persistence ────────────────────────────────────────────────
 

@@ -1,11 +1,11 @@
 # proxy/app/utils.py
-"""Вспомогательные утилиты для RAG-прокси.
-- Хеширование строк и объектов
-- Оценка количества токенов (tiktoken или приближение)
-- Безопасная обрезка текста
-- Форматирование метаданных
-- Генерация ID запросов
-- Работа с датами
+"""Auxiliary utilities for the RAG proxy.
+- Hashing strings and objects
+- Token count estimation (tiktoken or approximation)
+- Safe text truncation
+- Metadata formatting
+- Request ID generation
+- Date handling
 """
 
 import hashlib
@@ -18,7 +18,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-# Попытка импорта tiktoken для точной токенизации
+# Try importing tiktoken for precise tokenization
 try:
     import tiktoken
 
@@ -28,7 +28,7 @@ except ImportError:
 
 
 def compute_hash(data: Any) -> str:
-    """Вычисляет SHA-256 хеш от любого объекта (сериализуемого в JSON)."""
+    """Computes the SHA-256 hash of any object (JSON-serializable)."""
     if isinstance(data, str):  # noqa: SIM108
         content = data
     else:
@@ -37,8 +37,8 @@ def compute_hash(data: Any) -> str:
 
 
 def estimate_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
-    """Оценивает количество токенов в тексте.
-    Использует tiktoken, если доступен, иначе приближённое правило (4 символа ~ 1 токен).
+    """Estimates the number of tokens in the text.
+    Uses tiktoken if available, otherwise an approximate rule (4 characters ~ 1 token).
     """
     if not text:
         return 0
@@ -49,15 +49,15 @@ def estimate_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
         except Exception:
             # fallback
             pass
-    # Fallback: длина / 4 (грубо)
+    # Fallback: length / 4 (rough)
     return len(text) // 4
 
 
 def truncate_by_tokens(text: str, max_tokens: int, model: str = "gpt-3.5-turbo") -> str:
-    """Обрезает текст до указанного количества токенов."""
+    """Truncates text to the given number of tokens."""
     if estimate_tokens(text, model) <= max_tokens:
         return text
-    # Грубое приближение: обрезаем символы
+    # Rough approximation: truncate characters
     max_chars = max_tokens * 4
     if len(text) <= max_chars:
         return text
@@ -65,8 +65,8 @@ def truncate_by_tokens(text: str, max_tokens: int, model: str = "gpt-3.5-turbo")
 
 
 def generate_request_id() -> str:
-    """Генерирует уникальный ID для запроса.
-    Формат: rag_<timestamp>_<uuid_short>
+    """Generates a unique ID for a request.
+    Format: rag_<timestamp>_<uuid_short>
     """
     timestamp = int(time.time() * 1000)
     short_uuid = uuid.uuid4().hex[:8]
@@ -74,7 +74,7 @@ def generate_request_id() -> str:
 
 
 def format_metadata(metadata: dict[str, Any]) -> str:
-    """Форматирует метаданные для включения в контекст."""
+    """Formats metadata for inclusion in the context."""
     if not metadata:
         return ""
     parts = []
@@ -85,12 +85,12 @@ def format_metadata(metadata: dict[str, Any]) -> str:
 
 
 def now_iso() -> str:
-    """Возвращает текущее время в ISO формате."""
+    """Returns the current time in ISO format."""
     return datetime.now(UTC).isoformat()
 
 
 def safe_json_loads(s: str, default: Any = None) -> Any:
-    """Безопасно парсит JSON, возвращает default при ошибке."""
+    """Safely parses JSON, returning default on error."""
     try:
         return json.loads(s)
     except json.JSONDecodeError:
@@ -98,24 +98,24 @@ def safe_json_loads(s: str, default: Any = None) -> Any:
 
 
 def extract_issue_keys(text: str) -> list[str]:
-    """Извлекает Jira-like issue ключи из текста (например, PROJ-123)."""
+    """Extracts Jira-like issue keys from text (e.g. PROJ-123)."""
     pattern = r"\b[A-Z][A-Z0-9]+-\d+\b"
     return re.findall(pattern, text)
 
 
 def extract_urls(text: str) -> list[str]:
-    """Извлекает URL из текста."""
+    """Extracts URLs from text."""
     pattern = r'https?://[^\s<>"\']+'
     return re.findall(pattern, text)
 
 
 def mask_sensitive_data(text: str, secrets: list[str] | None = None) -> str:
-    """Маскирует чувствительные данные (токены, пароли) в логах.
-    По умолчанию маскирует строки, похожие на токены (40+ символов).
+    """Masks sensitive data (tokens, passwords) in logs.
+    By default masks strings that look like tokens (40+ characters).
     """
     if not text:
         return text
-    # Маскировка последовательностей из 40+ алфавитно-цифровых символов (предположительно токены)
+    # Mask sequences of 40+ alphanumeric characters (presumably tokens)
     masked = re.sub(r"\b[A-Za-z0-9]{40,}\b", "[REDACTED_TOKEN]", text)
     if secrets:
         for secret in secrets:
@@ -125,12 +125,12 @@ def mask_sensitive_data(text: str, secrets: list[str] | None = None) -> str:
 
 
 def chunk_list(lst: list[Any], chunk_size: int) -> list[list[Any]]:
-    """Разбивает список на чанки указанного размера."""
+    """Splits a list into chunks of the given size."""
     return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def safe_divide(a: float, b: float, default: float = 0.0) -> float:
-    """Безопасное деление (защита от деления на ноль)."""
+    """Safe division (protects against division by zero)."""
     return a / b if b != 0 else default
 
 
@@ -174,7 +174,7 @@ def safe_urlopen(
 
 
 if __name__ == "__main__":
-    # Примеры использования
+    # Usage examples
     print(f"Hash: {compute_hash({'key': 'value'})}")
     print(f"Tokens estimate: {estimate_tokens('Пример текста для оценки токенов.')}")
     print(f"Truncated: {truncate_by_tokens('Длинный текст ' * 100, 50)}")

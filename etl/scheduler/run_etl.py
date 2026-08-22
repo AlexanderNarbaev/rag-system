@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # etl/scheduler/run_etl.py
-"""Главный оркестратор ETL-пайплайна для RAG-системы.
-Запускает все этапы:
-1. Extract: Confluence, Jira, GitLab (параллельно, с graceful degradation)
-2. Chunking: семантическая нарезка документов
-3. Graph: извлечение сущностей и отношений (опционально)
-4. Index: индексация в Qdrant (гибридная, с версионированием)
-5. Neo4j: загрузка графа (опционально)
+"""Main ETL pipeline orchestrator for the RAG system.
+Runs all stages:
+1. Extract: Confluence, Jira, GitLab (in parallel, with graceful degradation)
+2. Chunking: semantic document splitting
+3. Graph: entity and relation extraction (optional)
+4. Index: indexing into Qdrant (hybrid, with versioning)
+5. Neo4j: graph loading (optional)
 
-Использует единый WAL для инкрементальных запусков.
+Uses a single WAL for incremental runs.
 """
 
 import argparse
@@ -26,17 +26,17 @@ from typing import Any
 
 import yaml
 
-# Глобальное событие для graceful shutdown (потокобезопасное)
+# Global event for graceful shutdown (thread-safe)
 _shutdown_event = threading.Event()
-# Флаг для обработки двойного Ctrl+C (принудительный выход)
+# Flag for handling double Ctrl+C (forced exit)
 _force_exit = False
 
 
 def _signal_handler(signum: int, frame: Any) -> None:
-    """Обработчик SIGINT/SIGTERM для graceful shutdown."""
+    """SIGINT/SIGTERM handler for graceful shutdown."""
     global _force_exit
     if _shutdown_event.is_set():
-        # Второй нажатие Ctrl+C — принудительный выход
+        # Second Ctrl+C — forced exit
         _force_exit = True
         logger.warning("Forced shutdown requested — exiting immediately")
         sys.exit(1)
@@ -44,14 +44,14 @@ def _signal_handler(signum: int, frame: Any) -> None:
     logger.warning(f"Received signal {signum}, shutting down gracefully...")
 
 
-# Регистрируем обработчики сигналов
+# Register signal handlers
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
-# Добавляем корень проекта в PYTHONPATH
+# Add the project root to PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# Импорт модулей ETL — E402 suppressed: sys.path must be set before imports
+# ETL module imports — E402 suppressed: sys.path must be set before imports
 from etl.chunker.hash_versioning import ChunkVersionStore  # noqa: E402
 from etl.chunker.semantic_chunker import MDKeyChunker, MetadataEnricher, SemanticChunker  # noqa: E402
 from etl.extractors.confluence import ConfluenceExtractor  # noqa: E402
@@ -77,9 +77,9 @@ logger = logging.getLogger("ETL Orchestrator")
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
-    """Загружает YAML-конфигурацию с подстановкой переменных окружения.
+    """Loads the YAML configuration with environment variable substitution.
 
-    Поддерживает синтаксис ${VAR:-default} в строковых значениях.
+    Supports the ${VAR:-default} syntax in string values.
     """
     with open(config_path, encoding="utf-8") as f:
         raw = f.read()
@@ -123,7 +123,7 @@ def _resolve_chunk_max_tokens(chunker_config: dict, full_config: dict) -> int:
 
 
 def run_extract_confluence(config: dict, wal: WALManager) -> Path:
-    """Запускает выгрузку Confluence, возвращает директорию с сырыми данными."""
+    """Runs the Confluence extraction, returns the raw data directory."""
     logger.info("=== Starting Confluence extraction ===")
     confluence_config = config.get("confluence", {})
     last_run = wal.get_last_run(PIPELINE_CONFLUENCE)
@@ -142,7 +142,7 @@ def run_extract_confluence(config: dict, wal: WALManager) -> Path:
 
 
 def run_extract_jira(config: dict, wal: WALManager) -> Path:
-    """Запускает выгрузку Jira."""
+    """Runs the Jira extraction."""
     logger.info("=== Starting Jira extraction ===")
     jira_config = config.get("jira", {})
     last_run = wal.get_last_run(PIPELINE_JIRA)
@@ -160,7 +160,7 @@ def run_extract_jira(config: dict, wal: WALManager) -> Path:
 
 
 def run_extract_gitlab(config: dict, wal: WALManager) -> Path:
-    """Запускает выгрузку GitLab."""
+    """Runs the GitLab extraction."""
     logger.info("=== Starting GitLab extraction ===")
     gitlab_config = config.get("gitlab", {})
     last_run = wal.get_last_run(PIPELINE_GITLAB)
@@ -178,7 +178,7 @@ def run_extract_gitlab(config: dict, wal: WALManager) -> Path:
 
 
 def _run_extractor_safe(name: str, extract_fn, config: dict, wal: WALManager) -> tuple[str, Path | None, str | None]:
-    """Запускает экстрактор с обработкой ошибок. Возвращает (name, output_dir, error)."""
+    """Runs an extractor with error handling. Returns (name, output_dir, error)."""
     try:
         output_dir = extract_fn(config, wal)
         return (name, output_dir, None)
@@ -188,8 +188,8 @@ def _run_extractor_safe(name: str, extract_fn, config: dict, wal: WALManager) ->
 
 
 def collect_all_documents(extract_dirs: list[Path]) -> list[dict[str, Any]]:
-    """Собирает все извлечённые документы из директорий extractors.
-    Обрабатывает отсутствующие директории gracefully (Extractor мог не запуститься).
+    """Collects all extracted documents from the extractor directories.
+    Handles missing directories gracefully (an extractor may not have run).
     """
     documents = []
     source_names = ["confluence", "jira", "gitlab"]
@@ -364,8 +364,8 @@ def run_chunking(
     output_dir: Path,
     quality_filter: Any = None,
 ):
-    """Выполняет семантический чанкинг всех документов и сохраняет чанки в JSON.
-    Также создаёт heading-level и document-level чанки для Confluence-страниц.
+    """Performs semantic chunking of all documents and saves chunks to JSON.
+    Also creates heading-level and document-level chunks for Confluence pages.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     all_chunks = []
@@ -438,7 +438,7 @@ def run_chunking(
         except Exception as e:
             logger.error(f"Failed to chunk {doc['id']}: {e}")
 
-    # Сохраняем все чанки
+    # Save all chunks
     all_chunks_file = output_dir / "all_chunks.json"
     with open(all_chunks_file, "w", encoding="utf-8") as f:
         json.dump(all_chunks, f, ensure_ascii=False, indent=2)
@@ -464,7 +464,7 @@ def run_chunking(
 
 
 def run_enrichment(all_chunks: list[dict], config: dict) -> list[dict]:
-    """Обогащает чанки через SLM: keywords, entities, hyde_questions, summary.
+    """Enriches chunks via SLM: keywords, entities, hyde_questions, summary.
 
     Enrichment is non-blocking — if SLM is unavailable, falls back to heuristics.
     Each chunk dict gets enriched fields merged in-place.
@@ -512,9 +512,9 @@ def run_graph_extraction(
     entity_extractor: EntityRelationExtractor,
     neo4j_loader: Neo4jLoader | None,
 ):
-    """Извлекает сущности и отношения из чанков, загружает в Neo4j."""
+    """Extracts entities and relations from chunks, loads them into Neo4j."""
     logger.info("=== Starting graph extraction ===")
-    # Преобразуем чанки в формат для batch extractor
+    # Convert chunks to the batch extractor format
     chunk_inputs = []
     for ch in chunks:
         chunk_inputs.append(
@@ -523,9 +523,9 @@ def run_graph_extraction(
     entities, relations = entity_extractor.extract_batch(chunk_inputs)
     logger.info(f"Extracted {len(entities)} entities and {len(relations)} relations")
     if neo4j_loader and (entities or relations):
-        # Создаём индексы и ограничения (один раз)
+        # Create indexes and constraints (once)
         neo4j_loader.create_constraints_and_indexes()
-        # Конвертируем в формат для загрузчика (НЕ удаляем source_id — он нужен для MERGE)
+        # Convert to the loader format (do NOT remove source_id — it is needed for MERGE)
         entity_dicts = [e.__dict__ for e in entities]
         relation_dicts = [r.__dict__ for r in relations]
         neo4j_loader.load_entities(entity_dicts)
@@ -535,9 +535,9 @@ def run_graph_extraction(
 
 
 def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager):
-    """Инкрементально индексирует чанки в Qdrant через LiveVectorLake."""
+    """Incrementally indexes chunks into Qdrant via LiveVectorLake."""
     logger.info("=== Starting indexing ===")
-    # Группируем чанки по source_id (документ)
+    # Group chunks by source_id (document)
     doc_chunks = {}
     for ch in chunks:
         doc_id = ch.get("source_id", "unknown")
@@ -553,7 +553,7 @@ def run_indexing(chunks: list[dict], live_lake: LiveVectorLake, wal: WALManager)
         added, deleted = live_lake.sync_document(doc_id, doc_chunks_list)
         total_added += added
         total_deleted += deleted
-    # Обновляем WAL индексации
+    # Update the indexing WAL
     wal.update_last_run(PIPELINE_INDEXING)
     wal.set_checkpoint(PIPELINE_INDEXING, {"added": total_added, "deleted": total_deleted})
     logger.info(f"Indexing completed: added {total_added}, deleted {total_deleted}")
@@ -713,7 +713,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # Загрузка конфигурации
+    # Configuration loading
     config = load_config(args.config)
 
     # Override timeout from command line
@@ -787,7 +787,7 @@ def main():
             logger.error("Some connections failed. Check logs above.")
         return
 
-    # Инициализация WAL
+    # WAL initialization
     wal_path = Path(config.get("wal", {}).get("wal_file", "./wal/etl_wal.json"))
     wal = WALManager(wal_path, use_lock=True)
     if args.reset_wal:
@@ -806,7 +806,7 @@ def main():
 
     # --- Batch mode: traditional extract -> collect -> chunk -> index ---
     def _save_wal_on_exit() -> None:
-        """Сохраняет WAL checkpoint при завершении процесса."""
+        """Saves the WAL checkpoint on process exit."""
         try:
             wal.set_checkpoint(
                 "pipeline",
@@ -823,10 +823,10 @@ def main():
 
     atexit.register(_save_wal_on_exit)
 
-    # 1. Извлечение (параллельно с graceful degradation)
+    # 1. Extraction (in parallel with graceful degradation)
     extract_dirs = []
     if not args.skip_extract:
-        # Определяем какие экстракторы запускать
+        # Determine which extractors to run
         extractors_to_run = []
         if config.get("confluence", {}).get("url"):
             extractors_to_run.append(("confluence", run_extract_confluence))
@@ -875,18 +875,18 @@ def main():
             succeeded = len(extractors_to_run) - len(failed_extractors)
             logger.info(f"Extraction completed: {succeeded}/{len(extractors_to_run)} succeeded")
     else:
-        # Используем уже существующие директории из конфига
+        # Use the existing directories from the config
         extract_dirs = [
             Path(config.get("confluence", {}).get("output_dir", "./raw_data/confluence")),
             Path(config.get("jira", {}).get("output_dir", "./raw_data/jira")),
             Path(config.get("gitlab", {}).get("output_dir", "./raw_data/gitlab")),
         ]
 
-    # 2. Сбор документов
+    # 2. Document collection
     documents = collect_all_documents(extract_dirs)
     logger.info(f"Collected {len(documents)} documents from extractors")
 
-    # 3. Чанкинг (если нужен)
+    # 3. Chunking (if needed)
     if not args.skip_chunk:
         chunker_config = config.get("chunking", {})
         max_tokens = _resolve_chunk_max_tokens(chunker_config, config)
@@ -904,7 +904,7 @@ def main():
         quality_filter = build_chunk_quality_filter_from_config(config)
         all_chunks = run_chunking(documents, md_chunker, chunks_output_dir, quality_filter=quality_filter)
     else:
-        # Загружаем уже существующие чанки
+        # Load existing chunks
         chunks_output_dir = Path(config.get("chunking", {}).get("output_dir", "./chunks"))
         all_chunks_file = chunks_output_dir / "all_chunks.json"
         if all_chunks_file.exists():
@@ -914,12 +914,12 @@ def main():
             logger.error("No chunks found and --skip-chunk is set. Exiting.")
             sys.exit(1)
 
-    # 3.5. SLM-обогащение чанков (keywords, entities, hyde_questions, summary)
+    # 3.5. SLM chunk enrichment (keywords, entities, hyde_questions, summary)
     enrichment_cfg = config.get("enrichment", {})
     if enrichment_cfg.get("enabled", False):
         all_chunks = run_enrichment(all_chunks, config)
 
-    # 4. Граф знаний (опционально)
+    # 4. Knowledge graph (optional)
     if not args.skip_graph and config.get("graph", {}).get("enabled", False):
         graph_config = config.get("graph", {})
         entity_extractor = EntityRelationExtractor(
@@ -944,7 +944,7 @@ def main():
         if neo4j_loader:
             neo4j_loader.close()
 
-    # 5. Индексация в Qdrant
+    # 5. Indexing into Qdrant
     if not args.skip_index:
         index_config = config.get("indexing", {})
 

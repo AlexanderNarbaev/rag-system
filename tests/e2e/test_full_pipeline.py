@@ -508,11 +508,7 @@ class TestStreamingChatCompletion:
         else:
             # SSE stream — accept either the planned "no relevant
             # documents" path or the current error SSE payload.
-            assert (
-                "No relevant documents" in body
-                or "Knowledge system" in body
-                or "temporarily unavailable" in body
-            )
+            assert "No relevant documents" in body or "Knowledge system" in body or "temporarily unavailable" in body
 
     def test_streaming_content_type_is_event_stream(self, client, mock_rag_pipeline):
         """Streaming response has text/event-stream content type."""

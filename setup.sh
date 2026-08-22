@@ -41,7 +41,7 @@ ENV_FILE="$PROJECT_ROOT/proxy/.env"
 ETL_CONFIG="$PROJECT_ROOT/etl/config/etl_config.yaml"
 COMPOSE_FILE="$PROJECT_ROOT/proxy/docker-compose.yml"
 OPENWEBUI_COMPOSE="$PROJECT_ROOT/deploy/docker/docker-compose.openwebui.yml"
-ENV_EXAMPLE="$PROJECT_ROOT/.env.example"
+ENV_EXAMPLE="$PROJECT_ROOT/proxy/.env.example"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 get_env() {

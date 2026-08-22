@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - "proxy/app/model_evolution/**"
-      - "proxy/.env"
       - ".github/workflows/model-evolution.yml"
   workflow_dispatch:
     inputs:
@@ -72,7 +71,9 @@ jobs:
         run: |
           pip install -r requirements-proxy.txt
 
-      - name: Export training dataset from HITL feedback
+      # NOTE: this step generates a small hardcoded sample dataset for CI only.
+      # TODO: replace with a real export from HITL feedback (separate task).
+      - name: Prepare sample training dataset (CI fixture)
         id: export
         run: |
           DATASET_DIR="./datasets/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -177,7 +178,7 @@ jobs:
           cache: pip
 
       - name: Download dataset artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: training-dataset
           path: ./datasets/
@@ -190,8 +191,15 @@ jobs:
       - name: Create MinIO bucket
         run: |
           pip install awscli
+          # Wait for MinIO with a bounded retry loop (60 attempts x 2s = 120s max)
+          attempts=0
           until curl -s http://localhost:9000/minio/health/live; do
-            echo "Waiting for MinIO..."
+            attempts=$((attempts + 1))
+            if [ "$attempts" -ge 60 ]; then
+              echo "::error::MinIO did not become healthy within 120s"
+              exit 1
+            fi
+            echo "Waiting for MinIO... (attempt $attempts/60)"
             sleep 2
           done
           aws --endpoint-url http://localhost:9000 s3 mb s3://rag-artifacts || true
@@ -205,6 +213,9 @@ jobs:
           DATASET_DIR="./datasets"
           OUTPUT_DIR="./models/training"
           mkdir -p "$OUTPUT_DIR" ./data
+          # Trainers resolve dataset files relative to config.output_dir —
+          # stage the downloaded artifact there.
+          cp "$DATASET_DIR"/*.json "$OUTPUT_DIR"/ 2>/dev/null || true
 
           declare -A RESULTS
           declare -A RUN_IDS
@@ -349,13 +360,13 @@ jobs:
           cache: pip
 
       - name: Download model artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: model-artifacts
           path: ./models/training/
 
       - name: Download training results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: training-results
           path: /tmp/
@@ -487,13 +498,13 @@ jobs:
           cache: pip
 
       - name: Download training results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: training-results
           path: /tmp/
 
       - name: Download model artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: model-artifacts
           path: ./models/training/
@@ -591,7 +602,7 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- **training-dataset** — exported HITL feedback data" >> $GITHUB_STEP_SUMMARY
+          echo "- **training-dataset** — sample CI fixture dataset" >> $GITHUB_STEP_SUMMARY
           echo "- **model-artifacts** — trained model adapters/checkpoints" >> $GITHUB_STEP_SUMMARY
           echo "- **evaluation-report** — eval gate report with thresholds" >> $GITHUB_STEP_SUMMARY
           echo "- **model-registry** — JSON registry state after promotion" >> $GITHUB_STEP_SUMMARY

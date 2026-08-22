@@ -6,7 +6,11 @@ Unifies the webhook server, stream producer, and stream consumer into a single
 coordinator that can be started/stopped as a long-running service. Replaces the
 batch scheduler for real-time processing of Confluence, Jira, and GitLab events.
 
-Stub implementation — full integration with chunker/indexer pending.
+Consumer events are processed for real through chunk (MDKeyChunker) → enrich
+(ChunkEnricher, optional) → index (QdrantHybridIndexer) via
+``etl.scheduler.event_processor.EventProcessor``. When Redis is unavailable the
+pipeline degrades to idle mode; when Qdrant/embedder are unavailable, events
+stay un-ACKed and are retried by the consumer group.
 
 Usage:
     pipeline = EventPipeline(config)
@@ -24,6 +28,7 @@ See Also:
     - etl/scheduler/webhook_server.py — FastAPI webhook endpoints
     - etl/scheduler/stream_producer.py — Redis Streams XADD
     - etl/scheduler/stream_consumer.py — Redis Streams XREADGROUP
+    - etl/scheduler/event_processor.py — real event handlers (chunk → enrich → index)
     - docs/en/guides/roadmap.md — Phase 6: Real-Time Indexing & Streaming
 
 """
@@ -71,11 +76,9 @@ class EventPipeline:
     """Orchestrates event-driven ETL: webhooks produce to Redis Streams,
     a consumer group processes events through extract → chunk → index.
 
-    This is a **stub** — the consumer handlers currently return False
-    (no real processing). Full implementation requires wiring in:
-    - MDKeyChunker for document chunking
-    - LiveVectorLake for Qdrant upserts
-    - EntityRelationExtractor for graph updates
+    Events are handled by ``ProcessingStreamConsumer`` (a StreamConsumer that
+    delegates to ``EventProcessor``): payload → document → MDKeyChunker →
+    optional ChunkEnricher → QdrantHybridIndexer.
 
     Attributes:
         config: Full YAML configuration dict.
@@ -155,14 +158,15 @@ class EventPipeline:
             return None
 
     def _create_consumer(self) -> Any:
-        """Create a StreamConsumer instance."""
-        from etl.scheduler.stream_consumer import StreamConsumer
+        """Create a ProcessingStreamConsumer wired to a real EventProcessor."""
+        from etl.scheduler.event_processor import EventProcessor, ProcessingStreamConsumer
 
-        return StreamConsumer(
+        return ProcessingStreamConsumer(
             redis_client=self._redis_client,
             stream_key=self._stream_key,
             consumer_group=self._consumer_group,
             batch_size=self._batch_size,
+            processor=EventProcessor(self.config),
         )
 
     def _create_producer(self) -> Any:
@@ -183,7 +187,7 @@ class EventPipeline:
         )
 
     async def _run_webhook_server(self) -> None:
-        """Start the webhook server as a background task (stub)."""
+        """Start the webhook server as a background task."""
         try:
             import uvicorn
 
@@ -205,7 +209,7 @@ class EventPipeline:
             logger.error("Webhook server error: %s", e)
 
     async def _run_consumer_loop(self) -> None:
-        """Run the stream consumer in a loop (stub — delegates to StreamConsumer)."""
+        """Run the stream consumer in a loop (delegates to ProcessingStreamConsumer)."""
         if not self._consumer:
             logger.warning("Consumer not initialized — consumer loop skipped")
             return
@@ -237,14 +241,15 @@ class EventPipeline:
     def process_event(self, event: dict[str, Any]) -> bool:
         """Process a single event through the pipeline.
 
-        This is a **stub** — currently delegates to StreamConsumer.process_event()
-        which returns False for all events (real chunk+index not yet wired in).
+        Delegates to the consumer's real handler (EventProcessor):
+        event → document → chunk → enrich → index. Returns False on
+        retryable failures so the caller can keep the message pending.
 
         Args:
             event: Event dict with keys: source, event_type, doc_id, payload.
 
         Returns:
-            True if processed successfully, False otherwise.
+            True if processed (or intentionally skipped), False otherwise.
 
         """
         if not self._consumer:

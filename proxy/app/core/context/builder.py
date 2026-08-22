@@ -24,8 +24,8 @@ class KnowledgeStrip:
 
 
 def compute_chunk_hash(chunk: dict[str, Any]) -> str:
-    """Вычисляет хеш чанка на основе текста и ключевых метаданных (игнорирует score, position и т.д.).
-    Используется для дедупликации.
+    """Computes a chunk hash from the text and key metadata (ignores score, position, etc.).
+    Used for deduplication.
     """
     text = chunk.get("text", "")
     source_type = chunk.get("source_type", "")
@@ -40,10 +40,10 @@ def deduplicate_chunks(
     chunks_with_scores: list[tuple[dict[str, Any], float]],
     method: str = "hash",
 ) -> list[tuple[dict[str, Any], float]]:
-    """Дедупликация списка чанков.
-    :param chunks_with_scores: список пар (chunk_dict, score)
-    :param method: "hash" (по SHA-256), "similarity" (по порогу косинусного сходства, пока не реализован)
-    :return: отфильтрованный список (сохраняется первый встреченный чанк с данным хешом)
+    """Deduplicates a list of chunks.
+    :param chunks_with_scores: list of (chunk_dict, score) pairs
+    :param method: "hash" (by SHA-256), "similarity" (by cosine similarity threshold, not implemented yet)
+    :return: filtered list (the first chunk encountered with a given hash is kept)
     """
     seen = set()
     unique = []
@@ -57,8 +57,8 @@ def deduplicate_chunks(
 
 
 def group_by_semantic_key(chunks_with_scores: list[tuple[dict[str, Any], float]]) -> list[tuple[dict[str, Any], float]]:
-    """Группирует чанки с одинаковым semantic_key (поле в чанке) и объединяет их текст.
-    Это позволяет вернуть связанные фрагменты как один блок.
+    """Groups chunks with the same semantic_key (a chunk field) and merges their text.
+    This allows returning related fragments as a single block.
     """
     groups = defaultdict(list)
     for chunk, score in chunks_with_scores:
@@ -70,19 +70,19 @@ def group_by_semantic_key(chunks_with_scores: list[tuple[dict[str, Any], float]]
         if len(group) == 1:
             merged.append(group[0])
         else:
-            # Объединяем тексты
+            # Merge the texts
             combined_text = "\n\n".join([ch["text"] for ch, _ in group])
             combined_chunk = group[0][0].copy()
             combined_chunk["text"] = combined_text
-            # Средний скор (или максимальный – на выбор)
+            # Average score (or maximum — your choice)
             avg_score = sum(sc for _, sc in group) / len(group)
             merged.append((combined_chunk, avg_score))
     return merged
 
 
 def estimate_tokens(text: str) -> int:
-    """Грубая оценка количества токенов (4 символа ~ 1 токен для рус/англ).
-    Для точности использовать tiktoken.
+    """Rough token count estimate (4 characters ~ 1 token for Russian/English).
+    Use tiktoken for accuracy.
     """
     return len(text) // 4
 
@@ -160,13 +160,13 @@ def build_context(
     sort_by_score: bool = True,
     lang: str | None = None,
 ) -> str:
-    """Собирает контекст из отреранжированных и продедуплицированных чанков.
-    :param chunks_with_scores: список пар (chunk, score)
-    :param max_tokens: максимальное количество токенов в финальном контексте
-    :param include_metadata: добавлять ли заголовки с метаданными перед каждым чанком
-    :param sort_by_score: сортировать ли чанки по убыванию релевантности (score)
+    """Builds the context from reranked and deduplicated chunks.
+    :param chunks_with_scores: list of (chunk, score) pairs
+    :param max_tokens: maximum number of tokens in the final context
+    :param include_metadata: whether to add metadata headers before each chunk
+    :param sort_by_score: whether to sort chunks by descending relevance (score)
     :param lang: detected query language for multi-lingual prioritization (optional)
-    :return: текст контекста
+    :return: context text
     """
     if not chunks_with_scores:
         return ""
@@ -179,7 +179,7 @@ def build_context(
     if REORDER_ENABLED:
         chunks_with_scores = reorder_chunks(chunks_with_scores)
 
-    # Сортировка по скору (убывание)
+    # Sort by score (descending)
     if sort_by_score:
         chunks_with_scores.sort(key=lambda x: x[1], reverse=True)
 
@@ -191,13 +191,13 @@ def build_context(
         if not text:
             continue
 
-        # Добавляем метаданные, если нужно
+        # Add metadata if needed
         if include_metadata:
             source_type = chunk.get("source_type", "unknown")
             title = chunk.get("title", "")
             doc_title = chunk.get("doc_title", "")
             version = chunk.get("version", "latest")
-            # Формируем компактный заголовок
+            # Build a compact header
             header = f"[{source_type}] {doc_title} / {title} (v{version}) [rel={score:.3f}]\n"
         else:
             header = ""
@@ -206,10 +206,10 @@ def build_context(
         part_tokens = estimate_tokens(part)
 
         if total_tokens + part_tokens > max_tokens:
-            # Если превышаем лимит, пытаемся сократить последний чанк или остановиться
+            # If the limit is exceeded, try to shrink the last chunk or stop
             remaining = max_tokens - total_tokens
             if remaining > 50:
-                # Обрезаем текст последнего чанка
+                # Truncate the text of the last chunk
                 truncated_text = text[: remaining * 4]
                 part = header + truncated_text + "...\n\n"
                 context_parts.append(part)

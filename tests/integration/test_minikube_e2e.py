@@ -22,6 +22,13 @@ import pytest
 PROXY_URL = os.getenv("RAG_PROXY_URL", "http://localhost:9080")
 MOCK_LLM_URL = os.getenv("MOCK_LLM_URL", "http://localhost:8010")
 
+# These tests need a live deployment (minikube or compose); skip in CI/local
+# unit runs where RAG_PROXY_URL is not explicitly provided.
+pytestmark = pytest.mark.skipif(
+    not os.getenv("RAG_PROXY_URL"),
+    reason="requires a running RAG proxy deployment (set RAG_PROXY_URL)",
+)
+
 
 @pytest.fixture(scope="module")
 def client():

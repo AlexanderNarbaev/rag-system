@@ -375,7 +375,7 @@ qdrant:
     # -- Qdrant image repository
     repository: qdrant/qdrant
     # -- Image tag
-    tag: "v1.12.1"
+    tag: "v1.18.2"
     # -- Image pull policy
     pullPolicy: IfNotPresent
 

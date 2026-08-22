@@ -27,6 +27,7 @@ jobs:
   pip-audit-proxy:
     name: Audit Proxy Dependencies
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -48,6 +49,7 @@ jobs:
   pip-audit-etl:
     name: Audit ETL Dependencies
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -69,6 +71,7 @@ jobs:
   pip-audit-dev:
     name: Audit Dev Dependencies
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -90,6 +93,7 @@ jobs:
   pip-audit-auxiliary:
     name: Audit Auxiliary Dependencies
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -127,34 +131,10 @@ jobs:
             --vulnerability-service osv \
             --no-deps || true
 
-  safety-check:
-    name: Safety Check (all-in-one)
+  vulnerability-report:
+    name: Generate Vulnerability Report
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install safety
-        run: pip install safety
-
-      - name: Check all requirements
-        run: |
-          safety check \
-            --file requirements-proxy.txt \
-            --output json \
-            --continue-on-error || true
-
-          safety check \
-            --file requirements-etl.txt \
-            --output json \
-            --continue-on-error || true
-
-  sbom-generation:
-    name: Generate SBOM
-    runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v7
@@ -166,7 +146,7 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
 
-      - name: Generate requirements-proxy SBOM
+      - name: Generate requirements-proxy vulnerability report
         run: |
           pip-audit \
             --requirement requirements-proxy.txt \
@@ -174,7 +154,7 @@ jobs:
             --output sbom-proxy.json \
             --vulnerability-service osv || true
 
-      - name: Generate requirements-etl SBOM
+      - name: Generate requirements-etl vulnerability report
         run: |
           pip-audit \
             --requirement requirements-etl.txt \
@@ -182,7 +162,7 @@ jobs:
             --output sbom-etl.json \
             --vulnerability-service osv || true
 
-      - name: Upload SBOMs
+      - name: Upload vulnerability reports
         uses: actions/upload-artifact@v7
         with:
           name: sbom-reports

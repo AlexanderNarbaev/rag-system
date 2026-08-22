@@ -103,4 +103,4 @@
 - [docs/en/guides/rag-maturity-assessment.md](../../en/guides/rag-maturity-assessment.md) — RAG maturity model
 - [docs/en/guides/best-practices-checklist.md](../../en/guides/best-practices-checklist.md) — Production readiness
 - [docs/en/guides/roadmap.md](../../en/guides/roadmap.md) — Roadmap
-- [docs/en/adr/](../adr/) — Architecture Decision Records
+- [docs/en/adr/](../adr/index.md) — Architecture Decision Records

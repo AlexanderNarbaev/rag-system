@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,6 +11,31 @@ from proxy.app.model_evolution.env_profile import EnvProfile
 from proxy.app.model_evolution.exceptions import TrainingError
 from proxy.app.model_evolution.llm_trainer import LLMTrainer
 from proxy.app.model_evolution.trainer import TrainerType, TrainingConfig
+
+
+def _write_llm_dataset(output_dir: Path, data: list[dict]) -> None:
+    """Write an llm_train.json dataset fixture into output_dir."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "llm_train.json").write_text(json.dumps(data))
+
+
+def _make_fake_metric_modules() -> dict[str, object]:
+    """Build fake sacrebleu/rouge_score/bert_score modules for sys.modules patching."""
+    sacrebleu = SimpleNamespace(corpus_bleu=lambda hyps, refs, **kwargs: SimpleNamespace(score=42.0))
+
+    rouge_result = SimpleNamespace(precision=0.5, recall=0.6, fmeasure=0.55)
+    scorer = SimpleNamespace(score=lambda ref, hyp: {"rougeL": rouge_result})
+    rouge_scorer = SimpleNamespace(RougeScorer=lambda names, use_stemmer=True: scorer)
+    rouge_score = SimpleNamespace(rouge_scorer=rouge_scorer)
+
+    bert_score = SimpleNamespace(
+        score=lambda hyps, refs, **kwargs: (
+            SimpleNamespace(mean=lambda: 0.7),
+            SimpleNamespace(mean=lambda: 0.8),
+            SimpleNamespace(mean=lambda: 0.75),
+        ),
+    )
+    return {"sacrebleu": sacrebleu, "rouge_score": rouge_score, "bert_score": bert_score}
 
 
 class TestLLMTrainerInit:
@@ -83,20 +109,55 @@ class TestLLMTrainerCPU:
             env_profile=EnvProfile.DEV,
             output_dir=str(tmp_path),
         )
+        _write_llm_dataset(
+            tmp_path,
+            [{"messages": [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]}],
+        )
         trainer = LLMTrainer(config)
-        data = [
-            {"messages": [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]},
-        ]
-        job = trainer.train(data)
+        job = trainer.train(config)
         assert job.status == "completed"
         assert job.metrics is not None
         assert "train_loss" in job.metrics
         assert job.artifact_uri is not None
 
-    def test_train_empty_data_raises(self):
+    def test_train_accepts_training_config(self, tmp_path):
+        """LLMTrainer.train takes a TrainingConfig, matching SLM/Reranker trainers."""
+        config = TrainingConfig(
+            trainer_type=TrainerType.LLM,
+            env_profile=EnvProfile.DEV,
+            output_dir=str(tmp_path),
+        )
+        _write_llm_dataset(
+            tmp_path,
+            [{"messages": [{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}]}],
+        )
         trainer = LLMTrainer()
-        with pytest.raises(TrainingError):
-            trainer.train([])
+        job = trainer.train(config)
+        assert job.status == "completed"
+        assert job.config is config
+        assert trainer.config is config
+
+    def test_train_missing_dataset_raises(self, tmp_path):
+        """A missing llm_train.json must fail loudly instead of using dummy data."""
+        config = TrainingConfig(
+            trainer_type=TrainerType.LLM,
+            env_profile=EnvProfile.DEV,
+            output_dir=str(tmp_path),
+        )
+        trainer = LLMTrainer(config)
+        with pytest.raises(TrainingError, match="dataset not found"):
+            trainer.train(config)
+
+    def test_train_empty_data_raises(self, tmp_path):
+        config = TrainingConfig(
+            trainer_type=TrainerType.LLM,
+            env_profile=EnvProfile.DEV,
+            output_dir=str(tmp_path),
+        )
+        _write_llm_dataset(tmp_path, [{"no_messages": True}])
+        trainer = LLMTrainer(config)
+        with pytest.raises(TrainingError, match="No training data"):
+            trainer.train(config)
 
     def test_evaluate_empty(self):
         trainer = LLMTrainer()
@@ -107,12 +168,53 @@ class TestLLMTrainerCPU:
         trainer.config.env_profile = EnvProfile.DEV
         result = trainer.evaluate([{"messages": []}])
         assert "train_loss" in result
+        assert result["mock"] == 1.0
 
-    def test_evaluate_gpu_mode(self):
+    def test_evaluate_gpu_mode_computes_real_metrics(self):
         trainer = LLMTrainer()
         trainer.config.env_profile = EnvProfile.PROD
-        result = trainer.evaluate([{"messages": []}])
-        assert "eval_loss" in result
+        eval_data = [
+            {
+                "messages": [
+                    {"role": "user", "content": "q"},
+                    {"role": "assistant", "content": "reference answer"},
+                ],
+                "prediction": "hypothesis answer",
+            },
+        ]
+        with patch.dict("sys.modules", _make_fake_metric_modules()):
+            result = trainer.evaluate(eval_data)
+        assert result["bleu_1"] == pytest.approx(0.42)
+        assert result["bleu_4"] == pytest.approx(0.42)
+        assert result["rouge_l_f1"] == pytest.approx(0.55)
+        assert result["rouge_l_precision"] == pytest.approx(0.5)
+        assert result["rouge_l_recall"] == pytest.approx(0.6)
+        assert result["bertscore_f1"] == pytest.approx(0.75)
+        assert "mock" not in result
+
+    def test_evaluate_gpu_mode_missing_libs_returns_available_only(self):
+        """Unavailable metric packages are skipped with a warning, not an error."""
+        trainer = LLMTrainer()
+        trainer.config.env_profile = EnvProfile.PROD
+        eval_data = [
+            {
+                "messages": [{"role": "assistant", "content": "ref"}],
+                "prediction": "hyp",
+            },
+        ]
+        fake = _make_fake_metric_modules()
+        modules = {"sacrebleu": fake["sacrebleu"], "rouge_score": None, "bert_score": None}
+        with patch.dict("sys.modules", modules):
+            result = trainer.evaluate(eval_data)
+        assert "bleu_1" in result
+        assert "rouge_l_f1" not in result
+        assert "bertscore_f1" not in result
+
+    def test_evaluate_gpu_mode_no_pairs_returns_empty(self):
+        trainer = LLMTrainer()
+        trainer.config.env_profile = EnvProfile.PROD
+        result = trainer.evaluate([{"messages": [{"role": "user", "content": "q only"}]}])
+        assert result == {}
 
     def test_save_adapter_creates_files(self, tmp_path):
         config = TrainingConfig(

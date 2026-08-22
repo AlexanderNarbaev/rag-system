@@ -33,7 +33,7 @@ wizard: ## Run configuration wizard
 	@python $(ROOT)/scripts/setup_wizard.py
 
 setup: ## Create .env from .env.example if missing
-	@test -f $(ROOT)/proxy/.env || (cp $(ROOT)/.env.example $(ROOT)/proxy/.env && echo "Created proxy/.env from .env.example")
+	@test -f $(ROOT)/proxy/.env || (cp $(ROOT)/proxy/.env.example $(ROOT)/proxy/.env && echo "Created proxy/.env from proxy/.env.example")
 	@test -f $(ROOT)/etl/.env || (cp $(ROOT)/etl/.env.example $(ROOT)/etl/.env 2>/dev/null && echo "Created etl/.env" || true)
 
 # ── Run ───────────────────────────────────────────────────────────────────────

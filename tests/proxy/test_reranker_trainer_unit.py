@@ -281,15 +281,14 @@ class TestRerankerLoadDataset:
         assert result[0][1] == "c1"
         assert result[0][2] == 1.0
 
-    def test_load_json_dataset_not_found_uses_dummy(self, trainer, tmp_path):
+    def test_load_json_dataset_not_found_raises(self, trainer, tmp_path):
         config = TrainingConfig(trainer_type=TrainerType.RERANKER, output_dir=str(tmp_path))
-        result = trainer._load_json_dataset("reranker_train.json", config)
-        assert len(result) == 1
-        assert result[0][2] == 1.0
+        with pytest.raises(FileNotFoundError, match="Reranker training dataset not found"):
+            trainer._load_json_dataset("reranker_train.json", config)
 
-    def test_load_json_dataset_config_none(self, trainer):
-        result = trainer._load_json_dataset("nonexistent.json")
-        assert len(result) == 1
+    def test_load_json_dataset_config_none_raises(self, trainer):
+        with pytest.raises(FileNotFoundError, match="Reranker training dataset not found"):
+            trainer._load_json_dataset("nonexistent.json")
 
 
 class TestRerankerTrainFull:

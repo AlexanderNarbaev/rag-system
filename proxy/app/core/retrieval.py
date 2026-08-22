@@ -4,13 +4,6 @@
 Implements hybrid search (dense + sparse) with RRF fusion, embedding cache
 via Redis/In-Memory, optional graph expansion via Neo4j, and Qdrant integration
 for nearest-neighbor search with version filtering.
-
-Модуль поиска для RAG-прокси.
-Реализует:
-- Гибридный поиск (dense + sparse) с RRF-слиянием
-- Кэширование эмбеддингов через Redis/In-Memory
-- Опциональное графовое расширение (Neo4j)
-- Интеграцию с Qdrant (ближний сосед + фильтрация по версии)
 """
 
 import asyncio
@@ -34,7 +27,7 @@ try:
 except ImportError:
     QDRANT_AVAILABLE = False
 
-# Импорт конфигурации (будет создан отдельно)
+# Configuration import (created separately)
 from proxy.app.domain.services import AccessControlService, RetrievalScoringService
 from proxy.app.shared.cache import CacheManager
 from proxy.app.shared.config import (
@@ -134,7 +127,7 @@ def _get_dense_vector_name(client: Any) -> str | None:
         return _DENSE_VECTOR_NAME
 
 
-# Глобальные объекты (инициализируются при старте)
+# Global objects (initialized at startup)
 qdrant_client = None
 embedder = None
 cache_manager = None
@@ -144,7 +137,7 @@ cache_manager = None
 # silently returning empty results.
 _QDRANT_DEGRADED: bool = False
 
-# Для графа (опционально)
+# For the graph (optional)
 neo4j_driver = None
 _GRAPH_ENABLED = GRAPH_ENABLED
 if _GRAPH_ENABLED:
@@ -231,7 +224,7 @@ _embedding_cache = EmbeddingCache()
 
 
 def initialize_retrieval() -> None:
-    """Инициализирует клиенты и кэш (вызывается при старте прокси).
+    """Initializes clients and cache (called at proxy startup).
 
     Gracefully handles Qdrant unavailability — sets ``qdrant_client`` to
     ``None`` so subsequent hybrid-search calls degrade to empty results
@@ -318,7 +311,7 @@ def initialize_retrieval() -> None:
         )
         embedder = None
 
-    # Кэш (если используется Redis)
+    # Cache (if Redis is used)
     if USE_REDIS and REDIS_URL:  # noqa: SIM108
         cache_manager = CacheManager(
             redis_url=REDIS_URL,
@@ -327,7 +320,7 @@ def initialize_retrieval() -> None:
     else:
         cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
-    # Граф Neo4j
+    # Neo4j graph
     if _GRAPH_ENABLED:
         try:
             from proxy.app.shared.retry import RetryConfig, sync_retry
@@ -353,7 +346,7 @@ def initialize_retrieval() -> None:
 
 
 def _compute_dense_embedding(text: str) -> list[float]:
-    """Вычисляет dense вектор с кэшированием."""
+    """Computes the dense vector with caching."""
     cache_key = f"embed:{hashlib.md5(text.encode()).hexdigest()}"
     # Check embedding cache first
     cached_embedding = _embedding_cache.get(text)
@@ -383,8 +376,8 @@ def _compute_dense_embedding(text: str) -> list[float]:
 
 
 def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
-    """Вычисляет sparse вектор через bge-m3 (если поддерживается).
-    Возвращает SparseVector или None.
+    """Computes the sparse vector via bge-m3 (if supported).
+    Returns a SparseVector or None.
     """
     if embedder is not None and hasattr(embedder, "encode_sparse"):
         sparse = embedder.encode_sparse(text)
@@ -394,8 +387,8 @@ def _compute_sparse_embedding(text: str) -> models.SparseVector | None:
 
 
 def reciprocal_rank_fusion(results_dense: list[Any], results_sparse: list[Any], k: int = 60) -> list[Any]:
-    """RRF слияние двух списков результатов (каждый элемент должен иметь .id и .score).
-    Возвращает объединённый список, отсортированный по RRF-скорy.
+    """RRF fusion of two result lists (each element must have .id and .score).
+    Returns the merged list sorted by RRF score.
 
     The RRF formula ``score = 1/(k+dense_rank) + 1/(k+sparse_rank)`` is
     delegated to ``RetrievalScoringService.compute_rrf_score`` so the
@@ -419,9 +412,9 @@ def reciprocal_rank_fusion(results_dense: list[Any], results_sparse: list[Any], 
             sparse_rank=rank,
             k=k,
         )
-    # Сортировка по убыванию RRF score
+    # Sort by descending RRF score
     sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-    # Восстанавливаем объекты из первого списка (или второго) – лучше по id достать из dense первым
+    # Restore the objects from the first list (or the second) — fetch from dense first by id
     all_results = {hit.id: hit for hit in results_dense}
     all_results.update({hit.id: hit for hit in results_sparse})
     return [all_results[hid] for hid in sorted_ids if hid in all_results]
@@ -711,10 +704,10 @@ def hybrid_search(
     lang: str | None = None,
     access_filter: list[dict[str, Any]] | None = None,
 ) -> list[Any]:
-    """Гибридный поиск в Qdrant: dense + sparse.
-    Фильтрация по версии и namespace (для мультитенантности).
-    Поддержка кросс-языкового поиска через bge-m3.
-    Возвращает список объектов Qdrant ScoredPoint.
+    """Hybrid search in Qdrant: dense + sparse.
+    Filtering by version and namespace (for multi-tenancy).
+    Cross-lingual search support via bge-m3.
+    Returns a list of Qdrant ScoredPoint objects.
 
     Args:
         query: Search query text.
@@ -827,7 +820,7 @@ def hybrid_search(
         dense_response = _qc.query_points(**_dense_kwargs)
         dense_results = dense_response.points
 
-    # Sparse поиск (если поддерживается)
+    # Sparse search (if supported)
     sparse_results: list[Any] = []
     if sparse_vec is not None:
         if _get_cb is not None:
@@ -856,7 +849,7 @@ def hybrid_search(
             )
             sparse_results = sparse_response.points
 
-    # Слияние
+    # Fusion
     if sparse_results:
         combined_results = reciprocal_rank_fusion(dense_results, sparse_results)[:top_k]
     else:
@@ -912,19 +905,19 @@ def hybrid_search(
 
 
 def graph_expand_query(query: str, max_entities: int = 5) -> str:
-    """Расширяет запрос с помощью графа знаний (Neo4j).
-    Извлекает связанные сущности из графа и возвращает их в виде текста.
+    """Expands the query using the knowledge graph (Neo4j).
+    Extracts related entities from the graph and returns them as text.
     """
     if not _GRAPH_ENABLED or not neo4j_driver:
         return ""
 
-    # Извлекаем ключевые слова из запроса (простейшая эвристика)
-    # В реальном применении лучше использовать NER или запрос к графу по full-text поиску
+    # Extract keywords from the query (simple heuristic)
+    # In production, NER or a graph full-text search query would be better
     keywords = [w for w in query.split() if len(w) > 3][:3]
     if not keywords:
         return ""
 
-    # Cypher запрос: ищем сущности, связанные с этими ключевыми словами
+    # Cypher query: find entities related to these keywords
     cypher = """
     MATCH (e:Entity)
     WHERE e.name CONTAINS $keyword OR ANY(k in $keywords WHERE e.name CONTAINS k)
@@ -1256,8 +1249,8 @@ class GlobalSearch:
 # Global search instance
 _global_search = GlobalSearch()
 
-# Если нужен синхронный доступ к кэшу, добавим методы в CacheManager
-# Для совместимости с уже написанным кодом, добавим синхронные обёртки
+# If synchronous cache access is needed, add the methods to CacheManager
+# For compatibility with existing code, add synchronous wrappers
 if cache_manager is None:
     cache_manager = CacheManager(use_redis=False, key_prefix=REDIS_KEY_PREFIX)
 
@@ -1309,7 +1302,7 @@ def apply_time_decay(chunks: list[dict[str, Any]], decay_days: int = 180) -> lis
     return result
 
 
-# Утилита для проверки доступности Qdrant
+# Utility for checking Qdrant availability
 def check_qdrant_health() -> bool:
     try:
         if qdrant_client is not None:

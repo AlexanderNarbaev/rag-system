@@ -1,47 +1,55 @@
 # AGENTS.md — RAG System
 
-## Identity
+## Project Overview
 
-Corporate RAG Knowledge Assistant — OpenAI-compatible proxy with ETL pipeline for Confluence, Jira, GitLab data
-ingestion into Qdrant + Neo4j, served via configurable LLM backend.
+Corporate RAG Knowledge Assistant — an OpenAI-compatible proxy with an ETL pipeline that ingests Confluence, Jira,
+GitLab, documents, and chat history into Qdrant (vector DB) + Neo4j (knowledge graph), and serves answers via a
+configurable LLM backend (vLLM, llama.cpp, or any OpenAI-compatible endpoint). Designed for air-gapped enterprise
+environments: it runs fully offline with no external API calls at runtime.
+
+- **Version**: 2.0.0 (`pyproject.toml`)
+- **Python**: >= 3.11 (mypy targets 3.12)
+- **License**: MIT
+- **Docs site**: MkDocs Material (`mkdocs.yml`), published to GitHub Pages
 
 ## Language
 
-English for code and comments. The system supports full i18n — documentation is available in RU and EN with a language
-switcher. See `docs/en/` and `docs/ru/`.
+English for code and comments. The system supports full i18n — documentation is maintained in both English
+(`docs/en/`) and Russian (`docs/ru/`) with a language switcher, and the two trees must stay synchronized.
 
 ## Architecture
 
 Six-layer system plus supporting services, with multi-provider LLM backend support:
 
 1. **ETL Layer** — data extraction, chunking, embedding, indexing (runs on a separate machine)
-2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing (
-   vLLM, llama.cpp, or any OpenAI-compatible endpoint)
+2. **Proxy Layer** — FastAPI app with OpenAI-compatible API, hybrid retrieval, reranking, multi-provider LLM routing
+   (vLLM, llama.cpp, or any OpenAI-compatible endpoint)
 3. **HITL Layer** — Streamlit expert dashboard for feedback and quality control
 4. **MCP Server** — Model Context Protocol server exposing RAG tools to MCP-compatible clients (OpenCode, Claude
    Desktop)
 5. **Model Evolution** — LoRA/QLoRA fine-tuning pipeline for SLM, LLM, and Reranker; MLflow experiment tracking; MinIO
    artifact storage; EvalGate CI/CD quality gating; AdapterManager hot-reload; CanaryController gradual rollout
-6. **Agentic Tools Expansion** — Custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI
+6. **Agentic Tools Expansion** — custom tool SDK for user-defined tools; declarative tool definitions; OpenAPI
    auto-discovery; parallel tool execution with dependency resolution
 
 ## Key Architectural Principles
 
 1. **Air-gapped first** — all models pre-downloaded, no external API calls at runtime. The system must function fully
    offline.
-2. **Graceful degradation** — every component can fail independently: Neo4j unavailable → skip graph expansion. Reranker
-   OOM → use raw hybrid scores. Redis down → fall back to in-memory cache. The proxy never crashes on component failure.
+2. **Graceful degradation** — every component can fail independently: Neo4j unavailable → skip graph expansion.
+   Reranker OOM → use raw hybrid scores. Redis down → fall back to in-memory cache. The proxy never crashes on
+   component failure.
 3. **Incremental by default** — WAL-based ETL checkpointing. SHA-256 content-addressable chunks. Only changed documents
    are reindexed.
 4. **OpenAI compatibility** — the proxy is a drop-in replacement for any OpenAI client. Extensions (`rag_version`,
-   `rag_force_refresh`) are silently ignored by standard clients.
+   `rag_force_refresh`, etc.) are silently ignored by standard clients.
 5. **Dual-model routing** — lightweight SLM for fast preprocessing (intent classification, query decomposition, entity
    extraction); full-scale LLM for heavy generation. Keeps latency low for routing tasks.
-6. **Multi-provider support** — pluggable backend adapters via `provider_adapter.py` allow swapping between vLLM,
+6. **Multi-provider support** — pluggable backend adapters via the provider layer allow swapping between vLLM,
    llama.cpp, and any OpenAI-compatible API without changing orchestration logic.
 7. **Optional complexity** — LangGraph orchestrator, Neo4j graph expansion, and Redis caching are all optional. The
    system runs in simple RAG mode by default.
-8. **Token economy** — every token counts. Token optimizer provides BPE-aware counting, 4 compression strategies, and
+8. **Token economy** — every token counts. Token optimizer provides BPE-aware counting, compression strategies, and
    smart budget allocation.
 
 ## Project Structure
@@ -50,21 +58,23 @@ Six-layer system plus supporting services, with multi-provider LLM backend suppo
 rag-system/
 ├── etl/                              # ETL pipeline (standalone)
 │   ├── extractors/                   # confluence.py, jira.py, gitlab.py, books.py, docs.py, chats.py
-│   ├── chunker/                      # semantic_chunker.py, hash_versioning.py
-│   ├── graph_builder/                # entity_extractor.py, neo4j_loader.py, schema.yaml
-│   ├── indexer/                      # qdrant_hybrid.py, live_vector_lake.py, wal_manager.py
-│   ├── scheduler/                    # run_etl.py (orchestrates full pipeline)
+│   ├── chunker/                      # semantic chunking, hash-based versioning
+│   ├── graph_builder/                # entity extraction, Neo4j loader, schema.yaml, community detection
+│   ├── indexer/                      # Qdrant hybrid indexing, live vector lake, WAL manager
+│   ├── scheduler/                    # run_etl.py (orchestrates full pipeline, batch/streaming modes)
 │   ├── config/                       # etl_config.yaml
 │   ├── Dockerfile.etl
+│   ├── docker-compose.yml
 │   └── requirements_etl.txt
 ├── proxy/                            # RAG proxy (Dockerized)
 │   ├── app/
-│   │   ├── main.py                   # FastAPI entry point (30+ endpoints: chat, models, health, auth, widget, feedback, admin, tools, files, model evolution)
+│   │   ├── main.py                   # FastAPI entry point (30+ endpoints: chat, models, health, auth, widget,
+│   │   │                             #   feedback, admin, tools, files, model evolution)
 │   │   ├── api/                      # API endpoint handlers
 │   │   │   ├── chat.py               # /v1/chat/completions — streaming + non-streaming
 │   │   │   ├── auth_endpoints.py     # /v1/auth/* — login, register, refresh, logout, me
 │   │   │   ├── health.py             # /v1/health, /v1/health/live, /v1/health/ready
-│   │   │   ├── admin.py              # /v1/admin/* — model training, promotion, canary
+│   │   │   ├── admin.py              # /v1/admin/* — model training, promotion, canary, knowledge bases
 │   │   │   ├── feedback.py           # /v1/feedback — expert feedback submission
 │   │   │   ├── files.py              # /v1/files/* — file upload/download via MinIO
 │   │   │   ├── tools.py              # /v1/tools — list/get tools with filters
@@ -78,7 +88,7 @@ rag-system/
 │   │   │   └── api_keys.py           # API key management and validation
 │   │   ├── core/                     # RAG pipeline logic
 │   │   │   ├── retrieval.py          # Qdrant hybrid search (dense+sparse RRF) + graph expansion
-│   │   │   ├── rerank.py             # Cross-encoder reranker (MiniLM-L-6-v2)
+│   │   │   ├── rerank.py             # Cross-encoder reranker (BAAI/bge-reranker-v2-m3, 8192-token context)
 │   │   │   ├── confidence.py         # Confidence scoring: heuristics + optional SLM verification
 │   │   │   ├── grounding.py          # NLI-based answer grounding (cosine + entailment)
 │   │   │   ├── hallucination.py      # Hallucination detection and scoring
@@ -90,21 +100,14 @@ rag-system/
 │   │   │   ├── enricher.py           # Self-enrichment: feedback Q&A → chunk → Qdrant
 │   │   │   ├── hitl.py               # Human-in-the-loop: async interaction logging, feedback collection
 │   │   │   ├── live_sources.py       # Live Confluence/Jira/GitLab API queries
-│   │   │   ├── context/              # Context assembly
-│   │   │   │   ├── builder.py        # Context assembly: dedup, versioning, token-budgeted assembly
-│   │   │   │   ├── compression.py    # Context compression strategies
-│   │   │   │   └── versioning.py     # Document version tracking in context
-│   │   │   └── orchestrator/         # LangGraph agentic pipeline
-│   │   │       ├── graph.py          # LangGraph state graph definition (10-node agentic pipeline)
-│   │   │       └── nodes.py          # Individual graph node implementations
+│   │   │   ├── context/              # Context assembly (builder, compression, versioning)
+│   │   │   └── orchestrator/         # LangGraph agentic pipeline (11-node state graph + node impls)
 │   │   ├── llm/                      # LLM routing & provider abstraction
 │   │   │   ├── router.py             # Async LLM adapter (streaming + non-streaming)
 │   │   │   ├── slm.py                # SLM: intent classification, query decomposition, entity extraction
 │   │   │   ├── remote_services.py    # Remote embedder/reranker clients with local fallback
-│   │   │   └── provider/             # Provider adapters
-│   │   │       ├── base.py           # Multi-provider router with adapter pattern
-│   │   │       ├── openai.py         # OpenAI/Anthropic/Ollama/Generic adapters
-│   │   │       └── utils.py          # Backward-compatible wrappers
+│   │   │   └── provider/             # Provider adapters (base router; OpenAI/Anthropic/Ollama/Generic
+│   │   │                             #   adapters all live in openai.py)
 │   │   ├── tools/                    # Agentic Tools Expansion
 │   │   │   ├── sdk.py                # Custom tool SDK: @tool decorator, ToolBuilder, ToolContext
 │   │   │   ├── definition.py         # ToolDefinition model and schemas
@@ -116,9 +119,9 @@ rag-system/
 │   │   │   ├── audit.py              # Tool usage auditing and logging
 │   │   │   ├── metrics.py            # Tool execution metrics and monitoring
 │   │   │   ├── errors.py             # Tool-specific error hierarchy
-│   │   │   └── openapi/              # OpenAPI auto-discovery
-│   │   │       ├── discovery.py      # Auto-discovery of OpenAPI endpoints
-│   │   │       └── converter.py      # OpenAPI spec to tool definition converter
+│   │   │   └── openapi/              # OpenAPI auto-discovery (discovery.py, converter.py)
+│   │   ├── db/                       # Database migrations (SQLite users, API keys, Neo4j schema)
+│   │   ├── domain/                   # Domain models
 │   │   ├── shared/                   # Shared utilities & middleware
 │   │   │   ├── config.py             # Environment-based configuration (all settings)
 │   │   │   ├── cache.py              # Redis + in-memory multi-tier cache
@@ -138,158 +141,181 @@ rag-system/
 │   │   │   ├── memory_manager.py     # Memory management for long-running processes
 │   │   │   ├── minio_client.py       # MinIO/S3 object storage client
 │   │   │   └── utils.py              # Shared utilities: token counting, hashing, masking
-│   │   ├── model_evolution/          # Fine-tuning pipeline (17 modules)
-│   │   │   ├── trainer.py            # Base trainer classes + TrainingJob + registry
-│   │   │   ├── trainer_base.py       # ABC for all trainers
-│   │   │   ├── slm_trainer.py        # SLM LoRA fine-tuning
-│   │   │   ├── llm_trainer.py        # LLM QLoRA fine-tuning
-│   │   │   ├── reranker_trainer.py   # Reranker Full/LoRA fine-tuning
-│   │   │   ├── adapter_manager.py    # Hot-reload trained adapters
-│   │   │   ├── canary_controller.py  # Gradual rollout with traffic splitting
-│   │   │   ├── model_registry.py     # Model artifact registry (MLflow + MinIO)
-│   │   │   ├── artifact_store.py     # Artifact storage abstraction
-│   │   │   ├── eval_gate.py          # EvalGate CI/CD quality gating
-│   │   │   ├── experiment_tracker.py # MLflow experiment tracking
-│   │   │   ├── data_processor.py     # Training data preprocessing
-│   │   │   ├── metrics_gen.py        # Training metrics generation
-│   │   │   ├── nli_evaluator.py      # NLI-based model evaluation
-│   │   │   ├── env_profile.py        # Dev/Prod/CI training profiles
-│   │   │   └── exceptions.py         # Model evolution error hierarchy
-│   │   └── tools.py                  # Legacy tool utilities
-│   ├── .env                          # Configuration (edit before first run)
+│   │   └── model_evolution/          # Fine-tuning pipeline (trainer registry, SLM/LLM/Reranker trainers,
+│   │                                 #   adapter manager, canary controller, model registry, EvalGate,
+│   │                                 #   MLflow tracking, data processing, NLI evaluation, env profiles)
+│   ├── .env                          # Configuration (create from .env.example before first run)
 │   ├── Dockerfile
-│   ├── requirements_proxy.txt
-│   └── docker-compose.yml            # Qdrant + Redis + Neo4j + MinIO + Proxy
-├── mcp_server/                       # MCP server for OpenCode/Claude Desktop integration
-│   ├── server.py                     # STDIO + Streamable HTTP transports, tools/resources/prompts
-│   └── __init__.py
-├── dashboard/                        # Streamlit expert review dashboard (Implemented)
+│   ├── docker-compose.yml            # Qdrant + Redis + Neo4j + MinIO + Proxy
+│   ├── docker-compose.ha.yml         # HA variant (nginx, redis-sentinel)
+│   └── requirements_proxy.txt        # plus requirements_proxy_gpu.txt for GPU deployments
+├── mcp_server/                       # MCP server (FastMCP: STDIO + Streamable HTTP)
+├── dashboard/                        # Streamlit expert review dashboard
 ├── tui/                              # Terminal UI for RAG interaction
-│   ├── app.py
-│   └── requirements.txt
+├── model_evolution_service/          # Standalone model evolution service (API, trainers, deployment).
+│   │                                 #   KNOWN TECH DEBT: largely duplicates proxy/app/model_evolution/
+│   │                                 #   (byte-identical canary_controller/artifact_store/model_registry,
+│   │                                 #   near-identical trainers). proxy/app/model_evolution/ is the
+│   │                                 #   source of truth — port changes to the service tree manually.
 ├── scripts/                          # Utility scripts
 │   ├── init_collections.py           # Initialize Qdrant collections
 │   ├── download_models_offline.py    # Pre-download models for air-gapped env
 │   ├── deploy.sh                     # Deploy script (dev/prod)
 │   ├── setup_wizard.py               # Interactive configuration wizard
-│   └── ops/                          # Operations scripts
-│       ├── backup_cron.sh            # Cron backup orchestrator
-│       ├── backup_qdrant.sh          # Qdrant snapshot backup
-│       ├── backup_neo4j.sh           # Neo4j database backup
-│       ├── backup_redis.sh           # Redis RDB backup
-│       ├── restore_all.sh            # Restore all services from backup
-│       └── verify_restore.sh         # Verify backup integrity
+│   ├── benchmark.py / run_benchmarks.py  # Latency benchmarks and baseline comparison
+│   ├── export_openapi.py             # Export OpenAPI spec + generate API docs
+│   ├── mock_llm_server.py            # Mock LLM for integration/e2e tests
+│   └── ops/                          # Operations scripts (backup/restore, health check, status)
 ├── deploy/                           # Deployment manifests
-│   ├── docker/                       # Docker Compose variants
-│   │   ├── docker-compose.prod.yml   # Production deployment
-│   │   └── docker-compose.openwebui.yml # OpenWebUI integration
-│   └── k8s/helm/rag-system/          # Kubernetes Helm chart (Implemented)
-├── config/                           # Monitoring configuration
-│   └── monitoring/                   # Prometheus + Grafana configs
-├── tests/                            # Test suite
-│   ├── proxy/                        # Proxy unit tests (117 files)
-│   ├── etl/                          # ETL unit tests (26 files)
-│   ├── mcp_server/                   # MCP server tests (1 file)
-│   ├── integration/                  # Integration tests (10 files)
-│   ├── e2e/                          # End-to-end tests (4 files)
-│   ├── performance/                  # Performance tests (4 files)
-│   ├── resilience/                   # Chaos/resilience tests (2 files)
-│   └── conftest.py                   # Shared fixtures
-├── docs/                             # Documentation (EN + RU)
-│   ├── en/adr/                       # Architecture Decision Records (14 ADRs)
-│   ├── en/diagrams/                  # C4 diagrams (SVG + Excalidraw)
-│   ├── en/guides/                    # Design & implementation guides (44 guides)
-│   ├── ru/adr/                       # Russian translations of ADRs
-│   └── ru/guides/                    # Russian translations of guides
-├── Makefile                          # Primary dev entry point (36 targets)
-├── pyproject.toml                    # Python project config (ruff, mypy, pytest)
-├── setup.sh                          # Installation script
-├── opencode.json                     # OpenCode IDE configuration
-└── README.md
+│   ├── docker/                       # Docker Compose variants (prod, distributed, OpenWebUI)
+│   ├── k8s/helm/rag-system/          # Kubernetes Helm chart
+│   ├── nginx/                        # Reverse proxy config + cert generation
+│   └── haproxy/                      # HAProxy config
+├── config/monitoring/                # Prometheus + Grafana configs
+├── tests/                            # Test suite (see Testing section)
+├── docs/                             # Documentation (EN + RU), MkDocs source
+├── requirements-proxy.txt            # Root-level dependency pins (audited by `make audit`)
+├── requirements-etl.txt
+├── requirements-dev.txt
+├── Makefile                          # Primary dev entry point
+├── pyproject.toml                    # Ruff, mypy, pytest, coverage configuration
+└── setup.sh / install.sh             # Installation scripts
 ```
 
 ## Tech Stack
 
-| Component      | Technology                                                                         | Purpose                                           |
-|----------------|------------------------------------------------------------------------------------|---------------------------------------------------|
-| **LLM**        | Any OpenAI-compatible model (e.g., Llama, Mistral, Gemma, Qwen) via vLLM/llama.cpp | Response generation (configurable context length) |
-| **SLM**        | Lightweight model (e.g., Llama-3B, Gemma-2B, Qwen-2.5-3B)                          | Query routing, entity extraction (fast path)      |
-| **Embeddings** | BAAI/bge-m3                                                                        | Dense (1024-dim) + sparse (lexical) + ColBERT     |
-| **Vector DB**  | Qdrant                                                                             | Hybrid search (dense + sparse), RRF fusion        |
-| **Graph DB**   | Neo4j                                                                              | Entity relationships, multi-hop traversal         |
-| **Cache**      | Redis                                                                              | Embedding cache, rerank results, response cache   |
-| **Proxy**      | FastAPI + LangGraph                                                                | OpenAI-compatible API, agentic orchestration      |
-| **ETL**        | Python, requests, BeautifulSoup, spaCy, sentence-transformers                      | Data extraction, chunking, indexing               |
-| **Dashboard**  | Streamlit                                                                          | HITL expert review                                |
-| **MCP**        | FastMCP                                                                            | Model Context Protocol server for IDE integration |
-| **Auth**       | Keycloak OIDC                                                                      | Corporate SSO, RBAC                               |
-| **Infra**      | Kubernetes + Helm                                                                  | Production-grade deployment with HPA, probes      |
-| **Backup**     | S3/MinIO                                                                           | Automated snapshots, dumps, RDB backups           |
+| Component       | Technology                                                                         | Purpose                                           |
+|-----------------|------------------------------------------------------------------------------------|---------------------------------------------------|
+| **LLM**         | Any OpenAI-compatible model (e.g., Llama, Mistral, Gemma, Qwen) via vLLM/llama.cpp | Response generation (configurable context length) |
+| **SLM**         | Lightweight model (e.g., Llama-3B, Gemma-2B, Qwen-2.5-3B)                          | Query routing, entity extraction (fast path)      |
+| **Embeddings**  | BAAI/bge-m3                                                                        | Dense (1024-dim) + sparse (lexical) + ColBERT     |
+| **Reranker**    | BAAI/bge-reranker-v2-m3                                                            | Cross-encoder reranking, fine-tuning supported    |
+| **Vector DB**   | Qdrant                                                                             | Hybrid search (dense + sparse), RRF fusion        |
+| **Graph DB**    | Neo4j                                                                              | Entity relationships, multi-hop traversal         |
+| **Cache**       | Redis                                                                              | Embedding cache, rerank results, response cache   |
+| **Proxy**       | FastAPI + LangGraph, served by Granian (ASGI)                                      | OpenAI-compatible API, agentic orchestration      |
+| **ETL**         | Python, requests, BeautifulSoup, spaCy, sentence-transformers                      | Data extraction, chunking, indexing               |
+| **Dashboard**   | Streamlit                                                                          | HITL expert review                                |
+| **MCP**         | FastMCP                                                                            | Model Context Protocol server for IDE integration |
+| **Auth**        | JWT + bcrypt (SQLite), Keycloak OIDC, LDAP/AD                                      | Corporate SSO, RBAC (4 roles)                     |
+| **Infra**       | Kubernetes + Helm                                                                  | Production deployment with HPA, probes            |
+| **Backup**      | S3/MinIO                                                                           | Automated snapshots, dumps, RDB backups           |
+| **Fine-tuning** | LoRA/QLoRA, MLflow, MinIO                                                          | Model training, tracking, canary deployment       |
 
-## MCP Servers (configured in opencode.json)
+## Build, Run, and Test Commands
 
-| Server                    | Purpose                                           |
-|---------------------------|---------------------------------------------------|
-| **`filesystem`**          | File operations within the project                |
-| **`context7`**            | Live documentation for libraries and frameworks   |
-| **`context7-official`**   | Official Context7 library documentation (upstash) |
-| **`sequential-thinking`** | Step-by-step reasoning for complex problems       |
-| **`codegraph`**           | Code graph navigation and call tracing            |
-| **`agentic-tools`**       | Hierarchical task management and memory           |
-| **`memorylayer`**         | Semantic memory and session context               |
-| **`fetch`**               | HTTP requests and web content retrieval           |
-| **`sqlite`**              | SQLite database interactions                      |
-| **`github`**              | GitHub API (repositories, PRs, issues)            |
-| **`excalidraw`**          | Architecture diagrams (C4, system design)         |
-
-## Key Constraints
-
-- **Air-gapped environment** — all components must work without internet access
-- **LLM context limits**: configurable (depends on deployed model); 8K tokens (embedder/reranker)
-- **Technical documents**: versioned, overlapping, duplicate-prone
-- **Incremental updates**: WAL-based checkpointing for resume capability
-- **Single worker proxy**: `WORKERS=1` to protect shared embedder/cache state
-
-## Development
+The `Makefile` is the primary entry point (`make help` lists all targets):
 
 ```bash
-# ── Quick commands (preferred) ──
-make install        # Full setup (proxy + ETL)
-make install-dev    # Setup with dev dependencies
-make test           # Run all tests
-make test-proxy     # Proxy unit tests only
-make test-etl       # ETL unit tests only
-make test-integration  # Integration tests
-make lint           # Lint with ruff
-make format         # Format with ruff
-make format-check   # Check formatting without changes
-make typecheck      # Run mypy static type checker
-make clean          # Remove build artifacts and caches
-make docker-build   # Build Docker images
-make docker-up      # Start docker-compose services (detached)
-make docker-down    # Stop docker-compose services
-make docker-logs    # Tail docker-compose logs
-make all            # CI pipeline: install → lint → test
-make help           # Show all available targets
+# ── Setup ──
+make install            # Full setup (proxy + ETL) via setup.sh --full
+make install-dev        # Setup with dev dependencies (lint, test, typecheck)
+make setup              # Create proxy/.env and etl/.env from examples
+make wizard             # Interactive configuration wizard
 
-# ── Manual commands ──
+# ── Run ──
+make run                # Start proxy locally: granian --interface asgi --port 8080 proxy.app.main:app
+make run-dev            # Same, with hot reload
+make etl                # Run full ETL pipeline
+make etl-run-streaming  # ETL streaming mode with remote embedder
+make etl-run-batch      # ETL batch mode
+make dashboard          # Streamlit dashboard on :8501
+make tui                # Terminal UI
+make mcp-server         # MCP server
 
-# ETL (run on ETL machine)
-cd etl && pip install -r requirements_etl.txt
-python scheduler/run_etl.py --config config/etl_config.yaml
+# ── Tests ──
+make test               # All tests
+make test-proxy         # Proxy unit tests only
+make test-etl           # ETL unit tests only
+make test-integration   # Integration tests
+make test-performance   # Performance/benchmark tests (marker: benchmark)
+make test-e2e           # End-to-end tests (marker: e2e, requires running services)
+make test-resilience    # Chaos/resilience tests (marker: chaos)
 
-# Proxy (run on proxy machine)
-cd proxy && docker-compose up -d
+# ── Code quality ──
+make lint               # ruff check .
+make format             # ruff format .
+make format-check       # Check formatting without changes
+make typecheck          # mypy proxy/ etl/
+make audit              # pip-audit on requirements-{proxy,etl,dev}.txt
+make helm-lint          # Helm chart validation (skips if helm not installed)
+make all                # CI pipeline: install → lint → test
 
-# Single test with verbose output
-python -m pytest tests/proxy/test_retrieval.py::TestHybridSearch::test_rrf_fusion -v
+# ── Docker & deploy ──
+make docker-build       # Build Docker images (proxy/docker-compose.yml)
+make docker-up          # Start Qdrant + Redis + Neo4j + MinIO + Proxy
+make docker-down
+make docker-logs
+make deploy             # Deploy dev via scripts/deploy.sh
+make deploy-prod        # Deploy prod
 
-# Coverage report
-python -m pytest tests/ --cov=proxy --cov=etl --cov-report=html
-
-# Watch mode (requires pytest-watch)
-ptw tests/ -- -v
+# ── Ops ──
+make backup             # Back up Qdrant, Neo4j, Redis
+make restore            # Restore from latest backups
+make health-check       # Comprehensive service health check
+make status             # Real-time service status
 ```
+
+Manual equivalents:
+
+```bash
+# ETL (run on ETL machine)
+python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml
+
+# Proxy (Docker)
+cd proxy && docker compose up -d
+
+# Single test
+python -m pytest tests/proxy/test_retrieval.py -v
+
+# Coverage (also configured as pytest addopts in pyproject.toml)
+python -m pytest tests/ --cov=proxy --cov=etl --cov-report=html
+```
+
+## Code Style Guidelines
+
+- **Formatter & linter**: Ruff (replaces black/isort/flake8). Line length **120**, double quotes, target `py312`.
+- **Ruff rules** (`pyproject.toml`): `E`, `F`, `I`, `N`, `W`, `UP`, `B`, `C4`, `SIM`. NFR test classes may use
+  `NFR-XX` prefixes (`N801` ignored in `tests/**/test_nfr_*.py`).
+- **Type checker**: mypy `strict = true` for `proxy/`; `etl.*` has relaxed overrides while type coverage matures.
+  `ignore_missing_imports = true`.
+- **Docstrings**: Google style. All public functions must have type annotations.
+- **Naming**: modules/functions `snake_case`, classes `PascalCase`, constants `UPPER_SNAKE`, private members with a
+  leading underscore.
+- **Language**: English only in code and comments — no Russian (project rule).
+- **Commits**: Conventional Commits — `<type>(<scope>): <subject>` with types `feat`, `fix`, `docs`, `style`,
+  `refactor`, `test`, `chore`, `perf` (see `CONTRIBUTING.md`).
+
+## Testing Instructions
+
+Test layout under `tests/`:
+
+- `tests/proxy/` — proxy unit tests (~150 files)
+- `tests/etl/` — ETL unit tests (~40 files)
+- `tests/mcp_server/`, `tests/model_evolution/`, `tests/security/`, `tests/deploy/` — component suites
+- `tests/integration/` — requires running services (Qdrant, Neo4j, Redis); minikube variant via `make test-minikube`
+- `tests/e2e/` — end-to-end, requires running services
+- `tests/performance/` — latency benchmarks with saved baselines (`tests/performance/latency_benchmarks.json`)
+- `tests/resilience/` — chaos / graceful-degradation tests
+- `tests/features/` — BDD feature tests (require `RAG_PROXY_URL`)
+- `tests/conftest.py` — shared fixtures
+
+Pytest markers (registered in `pyproject.toml`): `e2e`, `benchmark`, `chaos`, `asyncio`, `slow`, `integration`,
+`regression`, `bdd`.
+
+Rules:
+
+- Coverage floor: **80%** (`fail_under = 80` in `pyproject.toml`, enforced in CI); critical paths (auth, retrieval,
+  generation) target 90%+.
+- Mock external services (Qdrant, Redis, Neo4j, LLM) in unit tests; test success and failure paths.
+- Test naming: `test_<what>_<condition>_<expected>`.
+- New features must include tests.
+- Some suites are explicitly excluded from coverage because they need live services (`etl/scheduler/
+  streaming_pipeline.py`, `proxy/app/core/flare.py`, `proxy/app/core/ragas_eval.py`) — see `[tool.coverage.run] omit`
+  in `pyproject.toml`.
+
+CI workflows live in `.github/workflows/`: `ci.yml` (lint/format/typecheck/tests, Python 3.12), `security.yml`,
+`model-evolution.yml`, `docs.yml` (MkDocs publish).
 
 ## API Endpoints
 
@@ -297,7 +323,7 @@ ptw tests/ -- -v
 |------------------------------------|--------|----------------------------------------------------------------|
 | `/v1/chat/completions`             | POST   | Chat completion (streaming + non-streaming)                    |
 | `/v1/models`                       | GET    | List available models                                          |
-| `/v1/health`                       | GET    | Health check (Qdrant + LLM status)                             |
+| `/v1/health`                       | GET    | Health check (Qdrant + LLM + KB manager status)                |
 | `/v1/health/live`                  | GET    | Liveness probe (K8s-compatible)                                |
 | `/v1/health/ready`                 | GET    | Readiness probe (Qdrant + LLM connectivity)                    |
 | `/v1/feedback`                     | POST   | Submit expert feedback (positive/negative + corrections)       |
@@ -310,6 +336,7 @@ ptw tests/ -- -v
 | `/v1/widget.js`                    | GET    | Standalone widget JavaScript                                   |
 | `/v1/tools`                        | GET    | List available tools with optional category/tag filters        |
 | `/v1/tools/{name}`                 | GET    | Get a single tool's details (parameters, visibility, provider) |
+| `/v1/admin/kb/*`                   | *      | Knowledge base CRUD and ETL task tracking                      |
 | `/v1/admin/models/train`           | POST   | Trigger a model training job (SLM/LLM/Reranker)                |
 | `/v1/admin/models/status/{job_id}` | GET    | Poll training job status and metrics                           |
 | `/v1/admin/models`                 | GET    | List registered models with versions and metrics               |
@@ -331,26 +358,55 @@ RAG-specific parameters on `/v1/chat/completions`:
 
 ## Configuration
 
-All configuration via environment variables or `.env` file in `proxy/.env`. Key settings:
+All configuration via environment variables or `proxy/.env` (created from `proxy/.env.example`; `make setup`
+creates both `proxy/.env` and `etl/.env` from their respective `.env.example` templates). The ETL Compose stack
+(`etl/docker-compose.yml`) expects an external Docker network — create it once with
+`docker network create rag-network`. Key settings:
 
 ```bash
 # Required
-QDRANT_HOST=localhost          # Qdrant server
-LLM_ENDPOINT=http://localhost:8000/v1  # LLM backend endpoint (vLLM/llama.cpp/OpenAI-compatible)
+QDRANT_HOST=localhost                     # Qdrant server
+LLM_ENDPOINT=http://localhost:8000/v1     # LLM backend endpoint (vLLM/llama.cpp/OpenAI-compatible)
 LLM_MODEL_NAME=your-model-name
-LLM_PROVIDER=vllm              # Backend provider: vllm, llama_cpp, openai_compatible
+LLM_PROVIDER=vllm                         # Backend provider: vllm, llama_cpp, openai_compatible
 
 # Optional features (disabled by default)
-USE_LANGGRAPH=true             # Enable agentic orchestration
-USE_REDIS=true                 # Enable Redis caching
-GRAPH_ENABLED=true             # Enable Neo4j graph expansion
-USE_GRAPH_EXPANSION=true       # Enable graph context enrichment
-RATE_LIMIT_ENABLED=true        # Enable rate limiting
-METRICS_ENABLED=true           # Enable Prometheus metrics
-LOG_FORMAT=json                # Structured JSON logging
+USE_LANGGRAPH=true                        # Enable agentic orchestration
+USE_REDIS=true                            # Enable Redis caching
+GRAPH_ENABLED=true                        # Enable Neo4j graph expansion
+AUTH_ENABLED=true                         # Enable JWT authentication
+RATE_LIMIT_ENABLED=true                   # Enable rate limiting
+METRICS_ENABLED=true                      # Enable Prometheus metrics
+MODEL_EVOLUTION_ENABLED=true              # Enable fine-tuning pipelines
+LOG_FORMAT=json                           # Structured JSON logging
 ```
 
-See `proxy/app/config.py` for all available settings and defaults.
+See `proxy/app/shared/config.py` for all settings and `docs/en/guides/configuration-reference.md` for the full
+reference.
+
+## Security Considerations
+
+- **Never commit secrets.** `proxy/.env`, `etl/.env`, and credential files are gitignored; use the `.example`
+  templates. `JWT_SECRET` must be set in production — an ephemeral secret is generated with a warning otherwise.
+- **Auth stack**: JWT access+refresh pairs, bcrypt-hashed passwords in SQLite, refresh-token revocation, token
+  blacklist on logout. Optional Keycloak OIDC and LDAP/AD integration. RBAC roles: admin, expert, user, read-only.
+- **Input validation** via `proxy/app/shared/security.py` (`InputValidator`); tool execution goes through
+  `proxy/app/tools/security.py` validation and sandboxing.
+- **Audit logging**: structured audit events (`proxy/app/shared/audit.py`, `logs/audit.jsonl`); compliance
+  requirements tracked in `docs/en/guides/compliance-requirements.md`.
+- **Rate limiting**: per-IP token bucket middleware (`RATE_LIMIT_ENABLED`).
+- **Dependency scanning**: `make audit` runs pip-audit (OSV) over all requirements files;
+  `.github/workflows/security.yml` runs in CI. Secret rotation procedures: `docs/en/guides/secrets-rotation.md`.
+- **Air-gapped**: no external API calls at runtime; pre-download models with
+  `python scripts/download_models_offline.py --all`.
+
+## Key Constraints
+
+- **Air-gapped environment** — all components must work without internet access
+- **LLM context limits**: configurable (depends on deployed model); 8K tokens (embedder/reranker)
+- **Technical documents**: versioned, overlapping, duplicate-prone
+- **Incremental updates**: WAL-based checkpointing for resume capability
+- **Single worker proxy**: `WORKERS=1` to protect shared embedder/cache state
 
 ## Git Remotes
 
@@ -359,9 +415,15 @@ See `proxy/app/config.py` for all available settings and defaults.
 
 ## Documentation Index
 
+Full bilingual docs under `docs/en/` and `docs/ru/` (MkDocs source; rendered site in `site/`).
+
 | Document                                       | Purpose                                               |
 |------------------------------------------------|-------------------------------------------------------|
 | `docs/en/adr/ADR-001` through `ADR-014`        | Architecture Decision Records (English)               |
+| `docs/en/diagrams/`                            | C4 diagrams (SVG + Excalidraw)                        |
+| `docs/en/guides/quickstart.md`                 | 5-minute setup tutorial                               |
+| `docs/en/api_reference.md`                     | Complete endpoint reference                           |
+| `docs/en/guides/configuration-reference.md`    | All environment variables                             |
 | `docs/en/guides/rag-maturity-assessment.md`    | RAG maturity model, capability scoring, token economy |
 | `docs/en/guides/best-practices-checklist.md`   | Production readiness checklist (8 dimensions)         |
 | `docs/en/guides/roadmap.md`                    | Development roadmap and phased approach               |
@@ -384,8 +446,7 @@ See `proxy/app/config.py` for all available settings and defaults.
 ## Multi-Agent Continuous Development Framework v3.0
 
 The project is developed by an enhanced multi-agent team operating in wave-based sprints with checkpoint/resume
-capabilities
-and integrated tool ecosystem.
+capabilities and an integrated tool ecosystem.
 
 ### Agent Team Composition (23 Roles)
 
@@ -409,13 +470,13 @@ and integrated tool ecosystem.
 
 #### Development & Engineering
 
-| Role               | Responsibilities                                                                |
-|--------------------|---------------------------------------------------------------------------------|
-| Backend Developer  | API, ETL, Qdrant/Neo4j/Redis/LLM integration                                    |
-| ML Engineer        | Embeddings, reranking, HyDE, CRAG, hallucination detection, model fine-tuning   |
-| Data Engineer      | ETL pipelines, data quality, incremental extraction, WAL management             |
-| Frontend Developer | OpenWebUI, admin panel, widget embedding                                        |
-| UX/UI Designer     | User research, interaction design, accessibility, component library maintenance |
+| Role               | Responsibilities                                                              |
+|--------------------|-------------------------------------------------------------------------------|
+| Backend Developer  | API, ETL, Qdrant/Neo4j/Redis/LLM integration                                  |
+| ML Engineer        | Embeddings, reranking, HyDE, CRAG, hallucination detection, model fine-tuning |
+| Data Engineer      | ETL pipelines, data quality, incremental extraction, WAL management           |
+| Frontend Developer | OpenWebUI, admin panel, widget embedding                                      |
+| UX/UI Designer     | User research, interaction design, accessibility, component library           |
 
 #### Quality & Security
 
@@ -448,8 +509,8 @@ and integrated tool ecosystem.
    assessment
 2. **Detailing** (BA + Data Analyst + Domain Expert + UX/UI Designer) → test cases, golden dataset, UX research
 3. **Design** (Architect + Tech Lead + Tool Orchestrator + ML + Data Eng) → specs, APIs, schemas, tool definitions
-4. **Implementation** (all developers + DevOps + Tool Orchestrator) → parallel with mocks, CI gates, [STRATEGIC_NEEDED]
-   blocking
+4. **Implementation** (all developers + DevOps + Tool Orchestrator) → parallel with mocks, CI gates,
+   [STRATEGIC_NEEDED] blocking
 5. **Testing** (QA + Integration + Security + Dual-Guardian Validators) → all test types, dual validation
 6. **Quality Assessment** (Data Analyst + Domain Expert + UX + Doc-Sync Reflector) → metrics, verification, doc sync
 7. **Acceptance** (PM + Tech Lead + DevOps + Infrastructure Sentinel) → final review, canary deploy, checkpoint commit
@@ -461,22 +522,11 @@ and integrated tool ecosystem.
 - **Session state persisted after every action** via `artifacts/state/session_checkpoint.json`
 - **Context compaction** logged in `artifacts/state/context_compaction_log.md` — carried-forward context, decisions,
   open items
-- **Wave tracking** in `artifacts/state/current_wave.md` — active task, protected zones, status
+- **Wave tracking** in `artifacts/state/current_wave.md` (mirror at repo-root `current_wave.md`) — active task,
+  protected zones, status
+- **Team state** in `.rag-team/state.json` — current project snapshot
 - **Protected zones** — critical files that require Strategic Steering Committee approval to modify
 - On session restart, load `artifacts/state/session_checkpoint.json` and `context_compaction_log.md` to resume state
-
-### Tool Ecosystem
-
-| Tool                     | Category             | Purpose                                                                                                             |
-|--------------------------|----------------------|---------------------------------------------------------------------------------------------------------------------|
-| **CodeGraph**            | Code Intelligence    | AST-indexed knowledge graph, call path tracing, blast radius analysis                                               |
-| **LSP**                  | Code Intelligence    | Real-time diagnostics, type checking, symbol resolution                                                             |
-| **MCP Servers**          | Protocol Integration | filesystem, context7, sequential-thinking, codegraph, agentic-tools, memorylayer, fetch, sqlite, github, excalidraw |
-| **Memory (MemoryLayer)** | Session Persistence  | Semantic memory, episodic memory, working memory, chat thread persistence                                           |
-| **ChromaDB**             | Vector Memory        | Embedding-based semantic recall, cross-session knowledge retrieval                                                  |
-| **Muninn**               | Knowledge Management | Project context persistence, decision recording, next-step tracking                                                 |
-| **Multi-Model Router**   | LLM Infrastructure   | Provider-agnostic routing (vLLM, llama.cpp, OpenAI-compatible), SLM/LLM tiered inference                            |
-| **Session Compaction**   | Context Management   | Automatic context summarization, unnecessary detail pruning, state continuity                                       |
 
 ### Strategic Blocking ([STRATEGIC_NEEDED])
 
@@ -496,11 +546,12 @@ and integrated tool ecosystem.
 1. **Always commit + push after each wave** — never leave uncommitted work
 2. **Run full verification**: lint, format, typecheck, tests before every commit
 3. **Test coverage >= 80%** — enforced at CI level
-4. **No Russian in code or comments** — English only (AGENTS.md policy)
+4. **No Russian in code or comments** — English only
 5. **Keep CHANGELOG.md and docs in sync** with every feature
 6. **Check .rag-team/state.json** for current project snapshot
 7. **Push to BOTH remotes**: origin (GitHub) + gitverse (GitVerse mirror)
-8. **Compliance**: Every change must be traceable to a requirement in compliance-requirements.md
+8. **Compliance**: every change must be traceable to a requirement in
+   `docs/en/guides/compliance-requirements.md`
 9. **Graceful degradation** — every component must fail independently
 10. **Air-gapped first** — no external API calls at runtime
 11. **Session persistence** — update `artifacts/state/session_checkpoint.json` after every action; log context
@@ -508,27 +559,17 @@ and integrated tool ecosystem.
 12. **Protected zones** — no modification of `proxy/app/shared/config.py` or `etl/scheduler/run_etl.py` without
     Strategic Steering Committee approval
 13. **Bilingual docs** — all documentation must exist in EN and RU; Doc-Sync Reflector validates parity
-14. **Checkpoint on resume** — load `artifacts/state/session_checkpoint.json` and `context_compaction_log.md` at session
-    start
+14. **Checkpoint on resume** — load `artifacts/state/session_checkpoint.json` and `context_compaction_log.md` at
+    session start
 15. **[STRATEGIC_NEEDED]** — tag blocking decisions; do not proceed past unacknowledged strategic gates
 
 ## Key Verification Commands
 
-- `ruff check proxy/ etl/ tests/` — lint
-- `ruff format --check proxy/ etl/ tests/` — format
-- `make typecheck` — mypy strict
-- `python -m pytest tests/proxy/ tests/etl/ -q` — full test suite
-- `make audit` — dependency vulnerability scan
-- `helm lint deploy/k8s/helm/rag-system/` — K8s validation
-
-## AI Development Tools (via opencode_initializer)
-
-| Tool        | IDE                 | License     | Purpose                                   |
-|-------------|---------------------|-------------|-------------------------------------------|
-| DevoxxGenie | JetBrains           | Apache 2.0  | Local LLMs, RAG, MCP, agent mode          |
-| Cline       | VS Code + JetBrains | Apache 2.0  | AI coding agent, Ollama, MCP              |
-| Tabby       | VS Code + JetBrains | Apache 2.0  | Self-hosted code completion               |
-| Aider       | CLI                 | Apache 2.0  | Git-aware multi-file AI edits             |
-| Veai        | JetBrains (RU)      | Proprietary | On-prem, Memory Bank, sanctions-resilient |
-
-All installed via: `bash ~/Projects/opencode_initializer/setup.sh --full`
+```bash
+ruff check .                                  # lint
+ruff format --check .                         # format
+make typecheck                                # mypy strict (proxy), relaxed (etl)
+python -m pytest tests/proxy/ tests/etl/ -q   # main unit suites
+make audit                                    # dependency vulnerability scan
+helm lint deploy/k8s/helm/rag-system/         # K8s validation (or: make helm-lint)
+```

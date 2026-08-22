@@ -1,13 +1,13 @@
 # etl/Dockerfile.etl
-# Docker-образ для запуска ETL-пайплайна RAG-системы
-# Предварительно необходимо скачать модели:
+# Docker image for running the RAG system ETL pipeline
+# Models must be downloaded beforehand:
 #   python -m spacy download ru_core_news_sm
 #   python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
-#   и скопировать кэш в /model_cache при сборке (см. ниже)
+#   and the cache copied to /model_cache at build time (see below)
 
-FROM python:3.14-slim
+FROM python:3.12-slim
 
-# Установка системных зависимостей (для компиляции некоторых пакетов)
+# Install system dependencies (for compiling some packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -15,34 +15,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Копирование файла зависимостей
+# Copy the requirements file
 COPY etl/requirements_etl.txt .
 
-# Установка Python-пакетов
+# Install Python packages
 RUN pip install --no-cache-dir -r requirements_etl.txt
 
-# Копирование исходного кода ETL
+# Copy the ETL source code
 COPY etl/ /app/etl/
 COPY scripts/ /app/scripts/
 
-# Создание директорий для данных
+# Create data directories
 RUN mkdir -p /data/raw /data/chunks /data/hot_chunks /data/cold_chunks /data/cold_lake /data/entity_cache /wal
 
-# Переменные окружения для Python (отключаем байткод и буферизацию логов)
+# Python environment variables (disable bytecode and log buffering)
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Копирование предварительно скачанных кэшей моделей (офлайн)
-# Для этого нужно заранее скачать модели на хост и скопировать в образ:
-#   - spaCy: /root/.local/share/spacy/...
-#   - sentence-transformers: /root/.cache/huggingface/hub/...
-# Используйте --build-arg MODEL_CACHE=/path/to/cache на хосте
-ARG MODEL_CACHE_HOST=/tmp/model_cache
-COPY ${MODEL_CACHE_HOST} /root/.cache/
-# Для spaCy модели могут быть в /usr/local/lib/python3.11/site-packages/en_core_web_sm, но лучше копировать в /root/.cache
+# Copy pre-downloaded model caches (offline)
+# COPY sources must live inside the build context (repo root), so host paths
+# cannot be used directly. Place the caches under etl/model_cache/ before the
+# build, or point the build arg at another in-context directory:
+#   docker build --build-arg MODEL_CACHE_DIR=etl/model_cache -f etl/Dockerfile.etl .
+# Expected contents:
+#   - spaCy: spacy/... (from ~/.local/share/spacy or site-packages)
+#   - sentence-transformers: huggingface/hub/... (from ~/.cache/huggingface)
+ARG MODEL_CACHE_DIR=etl/model_cache
+COPY ${MODEL_CACHE_DIR} /root/.cache/
 
-# Точка входа – основной оркестратор
+# Entry point — the main orchestrator
 ENTRYPOINT ["python", "-m", "etl.scheduler.run_etl"]
-# Параметры по умолчанию (можно переопределить через командную строку)
+# Default parameters (can be overridden via the command line)
 CMD ["--config", "/app/etl/config/etl_config.yaml"]

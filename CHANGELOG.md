@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Real evaluation metrics in `LLMTrainer` (sacrebleu BLEU-1/4, rouge-score ROUGE-L, bert-score F1) with lazy
+  imports and graceful fallback; mock mode is explicitly flagged with a `mock: 1.0` metric
+- `EventProcessor` for the ETL event pipeline: webhook events now flow through chunking → enrichment → Qdrant
+  indexing with retry/no-ack semantics (previously consumer handlers were stubs)
+- Working `DeclarativeProvider` / `OpenAPIProvider` discovery in the tool registry (were returning empty lists)
+- LLM-driven OpenAPI tool discovery via SLM with explicit degradation to an empty selection
+- NLI entailment signal in answer grounding (combined with cosine similarity, `NLI_GROUNDING_ENABLED` gated)
+- Sync test guarding parity of the two `eval_gate.py` trees (proxy vs standalone service)
+- `etl/.env.example` template, `dashboard/Dockerfile`, `etl/model_cache/` staging dir, `requirements-docs.txt`
+  with pinned documentation dependencies
+- Russian translations for api/, architecture/, operations/, audit/, security/ docs; English translations for
+  `requirements/` (full EN/RU documentation parity)
+- Docs site: logo/favicon, Russian nav translations, language alternates fixed
+
+### Fixed
+
+- 6 Redis cache tests failed in full-suite runs due to `sys.modules` pollution from admin test modules —
+  tests now inject a fake `redis`/`redis.asyncio` pair via `patch.dict`
+- `proxy/Dockerfile`: broken `COPY .env.example` (missing file) and wrong module path in `CMD`
+  (`app.main:app` → `proxy.app.main:app` + `PYTHONPATH`)
+- `etl/Dockerfile.etl`: `python:3.14-slim` → `3.12-slim`; model cache COPY now uses an in-context directory
+- HA compose was an invalid project (fixed `container_name` × `deploy.replicas` conflict via `!reset`,
+  unpublished host port, `hitl-dashboard` build context `../hitl_dashboard` → `../dashboard`)
+- Base compose was invalid with the override file (missing `hitl-dashboard` service definition)
+- `make setup`, `setup.sh`, `install.sh` referenced a non-existent root `.env.example`
+- CI: `tests/integration/test_minikube_e2e.py` now skips without `RAG_PROXY_URL` (was a guaranteed red job)
+- CI: mypy gate no longer `continue-on-error`, covers `proxy/ etl/` like `make typecheck`
+- CI: `download-artifact@v4` → `@v8`, bounded MinIO health wait, dead `proxy/.env` trigger removed,
+  duplicated pip-audit jobs removed from ci.yml, dead `safety check` removed, "SBOM" steps renamed to
+  vulnerability reports, `timeout-minutes` on all jobs
+- `LLMTrainer.train()` unified with the SLM/Reranker `train(config)` contract (the model-evolution workflow
+  called it with a config and crashed); silent dummy-dataset fallbacks replaced with explicit `FileNotFoundError`
+- Helm chart: `appVersion` 2.0.0, Qdrant image aligned to v1.18.2
+- mkdocs: fixed `extra.alternate` (404 on `/en/`), broken diagram SVGs on the RU site, broken relative links
+  (`../adr/`, `../diagrams/`, `#end-to-end-latency` anchor), deprecated `uslugify` slugify
+- Russian comments/docstrings translated to English across proxy/, etl/, scripts/ (project language rule)
+
 ## [1.0.0] - 2026-07-26
 
 ### Added

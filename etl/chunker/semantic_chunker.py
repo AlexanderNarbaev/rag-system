@@ -1,8 +1,8 @@
 # etl/chunker/semantic_chunker.py
-"""Семантический чанкинг для RAG-системы.
-Реализует MDKeyChunker (Semantic Chunker) с извлечением метаданных и каскадированием.
-Поддерживает HTML и Markdown, LLM-обогащение (опционально).
-Добавлены: HTML→Markdown конвертация, heading-level indexing, document-level embedding.
+"""Semantic chunking for the RAG system.
+Implements MDKeyChunker (Semantic Chunker) with metadata extraction and cascading.
+Supports HTML and Markdown, LLM enrichment (optional).
+Added: HTML→Markdown conversion, heading-level indexing, document-level embedding.
 """
 
 import hashlib
@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Для парсинга HTML и Markdown
+# For HTML and Markdown parsing
 try:
     from bs4 import BeautifulSoup
 except ImportError:
@@ -23,7 +23,7 @@ try:
 except ImportError:
     markdown = None
 
-# HTML→Markdown конвертер
+# HTML→Markdown converter
 try:
     import markdownify
 
@@ -31,7 +31,7 @@ try:
 except ImportError:
     MARKDOWNIFY_AVAILABLE = False
 
-# Для NLP (опционально)
+# For NLP (optional)
 try:
     import spacy
 
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Chunk:
-    """Структура чанка с метаданными."""
+    """Chunk structure with metadata."""
 
     text: str
     hash: str
@@ -54,24 +54,24 @@ class Chunk:
     keywords: list[str] = field(default_factory=list)
     entities: list[str] = field(default_factory=list)
     hypothetical_questions: list[str] = field(default_factory=list)
-    semantic_key: str = ""  # для группировки
+    semantic_key: str = ""  # for grouping
     source_type: str = ""  # confluence, jira, gitlab
     source_id: str = ""  # page_id, issue_key, commit_sha
-    version: str = ""  # версия документа
-    doc_title: str = ""  # оригинальный заголовок документа
-    parent_metadata: dict[str, Any] = field(default_factory=dict)  # унаследованные метаданные
-    position: int = 0  # порядковый номер в документе
-    tokens_approx: int = 0  # примерное количество токенов
-    original_text: str = ""  # текст без контекстного префикса (для отображения)
-    enriched: bool = False  # был ли чанк обогащён контекстом
+    version: str = ""  # document version
+    doc_title: str = ""  # original document title
+    parent_metadata: dict[str, Any] = field(default_factory=dict)  # inherited metadata
+    position: int = 0  # ordinal position in the document
+    tokens_approx: int = 0  # approximate token count
+    original_text: str = ""  # text without the context prefix (for display)
+    enriched: bool = False  # whether the chunk was enriched with context
     access_level: str = "public"  # public, internal, confidential, restricted
     allowed_groups: list[str] = field(default_factory=list)
     allowed_users: list[str] = field(default_factory=list)
 
 
 class SemanticChunker:
-    """Базовый семантический чанкер. Разбивает документ на структурные блоки:
-    заголовки (h1-h3), абзацы, списки, таблицы. Поддерживает HTML и Markdown.
+    """Base semantic chunker. Splits a document into structural blocks:
+    headings (h1-h3), paragraphs, lists, tables. Supports HTML and Markdown.
     """
 
     def __init__(
@@ -81,12 +81,12 @@ class SemanticChunker:
         min_chunk_tokens: int = 100,
         contextual_enrichment: bool = True,
     ):
-        """:param max_tokens: максимальное количество токенов в чанке (для эмбеддера)
+        """:param max_tokens: maximum number of tokens per chunk (for the embedder)
                            Research-backed optimal: 1500 tokens (~6000 chars) for retrieval quality.
                            See: https://habr.com/ru/articles/1029740/
-        :param overlap_tokens: перекрытие между чанками (токены)
+        :param overlap_tokens: overlap between chunks (tokens)
                                 200 tokens (~800 chars, ~13% overlap) for context continuity.
-        :param min_chunk_tokens: минимальный размер чанка, иначе объединяется со следующим
+        :param min_chunk_tokens: minimum chunk size, otherwise merged with the next one
         :param contextual_enrichment: enable ContextualEnricher for each chunk
         """
         self.max_tokens = max_tokens
@@ -170,8 +170,8 @@ class SemanticChunker:
         return sections
 
     def _split_by_headings(self, html: str) -> list[dict[str, Any]]:
-        """Разбивает HTML на секции по заголовкам — преобразует HTML в Markdown и разбивает.
-        Возвращает список {heading: str, content: str}
+        """Splits HTML into sections by headings — converts HTML to Markdown and splits it.
+        Returns a list of {heading: str, content: str}
         """
         if MARKDOWNIFY_AVAILABLE:
             md_text = self._html_to_markdown(html)
@@ -197,12 +197,12 @@ class SemanticChunker:
         return sections
 
     def _split_by_paragraphs(self, text: str) -> list[str]:
-        """Разбивает текст на абзацы (две новые строки)."""
+        """Splits text into paragraphs (two newlines)."""
         paragraphs = re.split(r"\n\s*\n", text)
         return [p.strip() for p in paragraphs if p.strip()]
 
     def _merge_short_chunks(self, chunks: list[Chunk]) -> list[Chunk]:
-        """Объединяет короткие чанки с соседними."""
+        """Merges short chunks with neighboring ones."""
         if not chunks:
             return chunks
         merged = []
@@ -212,11 +212,11 @@ class SemanticChunker:
             if combined_tokens <= self.max_tokens and (
                 buffer.tokens_approx < self.min_chunk_tokens or chunk.tokens_approx < self.min_chunk_tokens
             ):
-                # Объединяем
+                # Merge
                 buffer.text += "\n\n" + chunk.text
                 buffer.tokens_approx = self._estimate_tokens(buffer.text)
                 buffer.hash = hashlib.sha256(buffer.text.encode()).hexdigest()
-                # Объединяем метаданные
+                # Merge metadata
                 buffer.keywords.extend(chunk.keywords)
                 buffer.entities.extend(chunk.entities)
                 buffer.hypothetical_questions.extend(chunk.hypothetical_questions)
@@ -250,12 +250,12 @@ class SemanticChunker:
         return chunk_text
 
     def chunk_html(self, html: str, source_metadata: dict[str, Any]) -> list[Chunk]:
-        """Нарезка HTML-документа на семантические чанки.
-        Конвертирует HTML в Markdown, затем разбивает по заголовкам.
-        Таблицы, списки, ссылки сохраняются в Markdown-формате.
-        :param html: HTML-строка документа
-        :param source_metadata: базовые метаданные (source_type, doc_title, version и т.д.)
-        :return: список Chunk
+        """Splits an HTML document into semantic chunks.
+        Converts HTML to Markdown, then splits by headings.
+        Tables, lists, and links are preserved in Markdown format.
+        :param html: HTML string of the document
+        :param source_metadata: base metadata (source_type, doc_title, version, etc.)
+        :return: list of Chunk
         """
         if MARKDOWNIFY_AVAILABLE:
             md_text = self._html_to_markdown(html)
@@ -566,7 +566,7 @@ class SemanticChunker:
         )
 
     def chunk_markdown(self, markdown_text: str, source_metadata: dict[str, Any]) -> list[Chunk]:
-        """Конвертирует Markdown в HTML и использует chunk_html."""
+        """Converts Markdown to HTML and uses chunk_html."""
         if markdown is None:
             raise ImportError("markdown library is required. Install: pip install markdown")
         html = markdown.markdown(markdown_text, extensions=["extra", "tables"])
@@ -590,18 +590,18 @@ class SemanticChunker:
         return chunk
 
     def _apply_overlap(self, chunks: list[Chunk]) -> list[Chunk]:
-        """Добавляет перекрытие между чанками (последние overlap_tokens из предыдущего в начало следующего)."""
+        """Adds overlap between chunks (the last overlap_tokens of the previous chunk prepended to the next one)."""
         if self.overlap_tokens <= 0 or len(chunks) <= 1:
             return chunks
         overlapped = []
         prev_text = ""
         for _i, chunk in enumerate(chunks):
             if prev_text:
-                # Берем последние self.overlap_tokens токенов из prev_text (приближённо)
+                # Take the last self.overlap_tokens tokens from prev_text (approximately)
                 overlap_chars = self.overlap_tokens * 4
                 overlap_snippet = prev_text[-overlap_chars:] if len(prev_text) > overlap_chars else prev_text
                 chunk.text = f"[previous context: ...{overlap_snippet}]\n\n" + chunk.text
-                # Пересчитываем хеш и токены
+                # Recompute hash and token count
                 chunk.hash = hashlib.sha256(chunk.text.encode()).hexdigest()
                 chunk.tokens_approx = self._estimate_tokens(chunk.text)
             overlapped.append(chunk)
@@ -610,7 +610,7 @@ class SemanticChunker:
 
 
 class MetadataEnricher:
-    """Обогащение чанков метаданными с использованием NLP (spaCy) и опционально SLM."""
+    """Chunk metadata enrichment using NLP (spaCy) and optionally an SLM."""
 
     def __init__(self, use_slm: bool = False, slm_endpoint: str | None = None):
         self.use_slm = use_slm
@@ -618,8 +618,8 @@ class MetadataEnricher:
         self.nlp = None
         if NLP_AVAILABLE:
             try:
-                # Загружаем маленькую модель для русского/английского
-                self.nlp = spacy.load("ru_core_news_sm")  # или "en_core_web_sm"
+                # Load a small model for Russian/English
+                self.nlp = spacy.load("ru_core_news_sm")  # or "en_core_web_sm"
             except Exception:
                 try:
                     self.nlp = spacy.load("en_core_web_sm")
@@ -628,8 +628,8 @@ class MetadataEnricher:
                     self.nlp = None
 
     def extract_keywords_tfidf(self, text: str, top_n: int = 5) -> list[str]:
-        """Извлекает ключевые слова (простейший TF-IDF на уровне предложений). Заглушка для простоты."""
-        # Упрощённо: берём наиболее частые слова длиннее 3 символов, исключая стоп-слова
+        """Extracts keywords (simplest sentence-level TF-IDF). Stub for simplicity."""
+        # Simplified: take the most frequent words longer than 3 characters, excluding stopwords
         stopwords = {"и", "в", "на", "с", "к", "у", "по", "для", "из", "о", "не", "быть", "что", "как", "это"}
         words = re.findall(r"\b\w{4,}\b", text.lower())
         freq = {}
@@ -640,25 +640,25 @@ class MetadataEnricher:
         return [w for w, _ in sorted_words[:top_n]]
 
     def extract_entities_spacy(self, text: str) -> list[str]:
-        """Извлекает именованные сущности (люди, организации, продукты)."""
+        """Extracts named entities (people, organizations, products)."""
         if not self.nlp:
             return []
-        doc = self.nlp(text[:500000])  # ограничиваем длину
+        doc = self.nlp(text[:500000])  # limit the length
         entities = list({ent.text for ent in doc.ents if ent.label_ in ("PERSON", "ORG", "PRODUCT", "GPE")})
         return entities[:10]
 
     def generate_summary(self, text: str) -> str:
-        """Генерирует суммаризацию через эвристики (первые 2 предложения). Для SLM оставляем заглушку."""
+        """Generates a summary via heuristics (first 2 sentences). SLM support left as a stub."""
         sentences = re.split(r"(?<=[.!?])\s+", text)
         if len(sentences) <= 2:
             return text
         return " ".join(sentences[:2]) + "..."
 
     def generate_hypothetical_questions(self, text: str) -> list[str]:
-        """Генерирует гипотетические вопросы, которые может задать пользователь (заглушка)."""
-        # Простейший шаблон: извлечение ключевых фраз с вопросительными словами
+        """Generates hypothetical questions a user might ask (stub)."""
+        # Simplest template: extract key phrases with question words
         questions = []
-        # Ищем фразы с "как", "почему", "что такое"
+        # Look for phrases with "how", "why", "what is"
         for match in re.finditer(r"(Как|Что такое|Почему|Зачем|Где)([^.!?]+)", text):
             q = match.group(0).strip() + "?"
             if len(q) < 100:
@@ -666,7 +666,7 @@ class MetadataEnricher:
         return questions[:3]
 
     def enrich_with_slm(self, chunk_text: str) -> dict[str, Any]:
-        """Вызывает локальный SLM (через REST API) для генерации суммаризации, ключевых слов, вопросов."""
+        """Calls a local SLM (via REST API) to generate a summary, keywords, and questions."""
         if not self.use_slm or not self.slm_endpoint:
             return {}
         try:
@@ -687,7 +687,7 @@ Output JSON:"""
             )
             if resp.status_code == 200:
                 result = resp.json()
-                # Предполагаем, что SLM возвращает текст, который можно распарсить
+                # Assume the SLM returns text that can be parsed
                 import json as json_parse
 
                 try:
@@ -705,17 +705,17 @@ Output JSON:"""
 
 
 class MDKeyChunker:
-    """Полноценный семантический чанкер с каскадированием метаданных и биновой упаковкой."""
+    """Full semantic chunker with metadata cascading and bin packing."""
 
     def __init__(self, base_chunker: SemanticChunker, enricher: MetadataEnricher):
         self.base = base_chunker
         self.enricher = enricher
 
     def process_document(self, content: str, content_type: str, source_metadata: dict[str, Any]) -> list[Chunk]:
-        """Основной метод: нарезка, обогащение, каскадирование метаданных.
-        :param content: HTML или Markdown строка
-        :param content_type: "html" или "markdown"
-        :param source_metadata: словарь с source_type, doc_title, version, source_id
+        """Main method: chunking, enrichment, metadata cascading.
+        :param content: HTML or Markdown string
+        :param content_type: "html" or "markdown"
+        :param source_metadata: dict with source_type, doc_title, version, source_id
         """
         chunks = self._do_chunking(content, content_type, source_metadata)
         self._enrich_chunks(chunks, source_metadata)
@@ -785,7 +785,7 @@ class MDKeyChunker:
             chunk.hash = hashlib.sha256(chunk.text.encode()).hexdigest()
 
     def _pack_by_semantic_key(self, chunks: list[Chunk]) -> list[Chunk]:
-        """Объединяет чанки с одинаковым semantic_key в один, сохраняя порядок."""
+        """Merges chunks with the same semantic_key into one, preserving order."""
         groups = {}
         for ch in chunks:
             key = ch.semantic_key or f"_unique_{ch.hash}"
@@ -797,7 +797,7 @@ class MDKeyChunker:
             if len(group) == 1:
                 packed.append(group[0])
             else:
-                # Объединяем тексты и метаданные
+                # Merge texts and metadata
                 combined_text = "\n\n---\n\n".join([ch.text for ch in group])
                 combined_hash = hashlib.sha256(combined_text.encode()).hexdigest()
                 combined_entities = list({e for ch in group for e in ch.entities})
@@ -1252,13 +1252,13 @@ class AdaptiveChunker:
         return chunks
 
 
-# Утилита для сохранения чанков в JSON (для последующей индексации)
+# Utility for saving chunks to JSON (for subsequent indexing)
 def save_chunks_to_json(chunks: list[Chunk], output_path: Path):
-    """Сохраняет список чанков в JSON-файл."""
+    """Saves a list of chunks to a JSON file."""
     data = []
     for ch in chunks:
         d = asdict(ch)
-        # Преобразуем списки в обычные списки
+        # Convert to plain lists
         d["keywords"] = list(d["keywords"])
         d["entities"] = list(d["entities"])
         d["hypothetical_questions"] = list(d["hypothetical_questions"])
@@ -1268,7 +1268,7 @@ def save_chunks_to_json(chunks: list[Chunk], output_path: Path):
 
 
 if __name__ == "__main__":
-    # Пример использования
+    # Usage example
     test_html = """
     <h1>Introduction to RAG</h1>
     <p>Retrieval-Augmented Generation is a technique for enhancing LLMs with external knowledge.</p>
@@ -1286,4 +1286,4 @@ if __name__ == "__main__":
         print(f"  Keywords: {ch.keywords}")
         print(f"  Entities: {ch.entities}")
         print(f"  Summary: {ch.summary}")
-        print("---")  # Сохранить в JSON  # save_chunks_to_json(chunks, Path("./chunks_output.json"))
+        print("---")  # Save to JSON  # save_chunks_to_json(chunks, Path("./chunks_output.json"))

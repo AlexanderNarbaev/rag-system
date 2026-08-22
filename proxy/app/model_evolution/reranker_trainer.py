@@ -327,19 +327,38 @@ class RerankerTrainer(TrainerBase):
         return "cpu"
 
     def _load_dataset(self, filename: str, tokenizer: Any, config: TrainingConfig) -> RerankerDataset:
+        """Load a reranker dataset file from output_dir into a RerankerDataset.
+
+        Raises:
+            FileNotFoundError: If the dataset file does not exist — training
+                must never fall back to a silent dummy dataset.
+
+        """
         dataset_file = Path(config.output_dir) / filename
-        if dataset_file.exists():
-            data = json.loads(dataset_file.read_text())
-            return RerankerDataset(data, tokenizer, config.max_seq_length)
-        dummy = [("how to install docker", "Docker installation guide", 1.0)]
-        return RerankerDataset(dummy, tokenizer, config.max_seq_length)
+        if not dataset_file.exists():
+            raise FileNotFoundError(
+                f"Reranker training dataset not found: {dataset_file}. "
+                f"Export {filename} to config.output_dir before training.",
+            )
+        data = json.loads(dataset_file.read_text())
+        return RerankerDataset(data, tokenizer, config.max_seq_length)
 
     def _load_json_dataset(self, filename: str, config: TrainingConfig | None = None) -> list[tuple[str, str, float]]:
+        """Load raw (query, chunk, score) triples from a dataset file in output_dir.
+
+        Raises:
+            FileNotFoundError: If the dataset file does not exist — training
+                must never fall back to a silent dummy dataset.
+
+        """
         output_dir = config.output_dir if config else TrainingConfig(trainer_type=TrainerType.RERANKER).output_dir
         dataset_file = Path(output_dir) / filename
-        if dataset_file.exists():
-            return json.loads(dataset_file.read_text())  # type: ignore[no-any-return]
-        return [("how to install docker", "Docker installation guide", 1.0)]
+        if not dataset_file.exists():
+            raise FileNotFoundError(
+                f"Reranker training dataset not found: {dataset_file}. "
+                f"Export {filename} to config.output_dir before training.",
+            )
+        return json.loads(dataset_file.read_text())  # type: ignore[no-any-return]
 
     def _extract_metrics(self, raw_metrics: dict[str, Any]) -> dict[str, float]:
         return {

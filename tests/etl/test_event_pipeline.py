@@ -360,11 +360,27 @@ class TestComponentCreation:
         pipeline = EventPipeline(minimal_config)
         pipeline._redis_client = MagicMock()
 
-        with patch("etl.scheduler.stream_consumer.StreamConsumer") as mock_consumer:
+        with (
+            patch("etl.scheduler.event_processor.ProcessingStreamConsumer") as mock_consumer,
+            patch("etl.scheduler.event_processor.EventProcessor") as mock_processor,
+        ):
             mock_consumer.return_value = MagicMock()
+            mock_processor.return_value = MagicMock()
             consumer = pipeline._create_consumer()
             mock_consumer.assert_called_once()
+            mock_processor.assert_called_once_with(minimal_config)
             assert consumer is not None
+
+    def test_create_consumer_wires_real_event_processor(self, minimal_config):
+        from etl.scheduler.event_pipeline import EventPipeline
+        from etl.scheduler.event_processor import EventProcessor, ProcessingStreamConsumer
+
+        pipeline = EventPipeline(minimal_config)
+        pipeline._redis_client = MagicMock()
+
+        consumer = pipeline._create_consumer()
+        assert isinstance(consumer, ProcessingStreamConsumer)
+        assert isinstance(consumer.processor, EventProcessor)
 
     def test_create_producer_imports_stream_producer(self, minimal_config):
         from etl.scheduler.event_pipeline import EventPipeline

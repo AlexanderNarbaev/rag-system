@@ -2,10 +2,8 @@
 # High-Availability Docker Compose configuration.
 # Proxy replicas (2+), Qdrant with 2 replicas, Redis Sentinel, Neo4j cluster.
 #
-# Usage:
+# Usage (requires Docker Compose v2.24+ for !reset tags):
 #   docker-compose -f docker-compose.yml -f docker-compose.ha.yml up -d
-
-version: '3.8'
 
 services:
   # ============================================================================
@@ -226,12 +224,16 @@ services:
   # RAG Proxy — 2 replicas (scale with docker-compose up --scale)
   # ============================================================================
   rag-proxy:
+    # Base compose pins container_name + host port for single-node use; both
+    # conflict with replicas, so reset them here (Compose v2.24+).
+    container_name: !reset null
+    ports: !reset []
+    expose:
+      - "8080"  # reached through the HA load balancer, not published directly
     build:
       context: ..
       dockerfile: proxy/Dockerfile
     image: rag-system/proxy:${PROXY_TAG:-latest}
-    ports:
-      - "8080:8080"
     volumes:
       - /path/to/model_cache:/app/cache:ro
       - ./logs:/app/logs
@@ -267,8 +269,8 @@ services:
   # ============================================================================
   hitl-dashboard:
     build:
-      context: ../hitl_dashboard
-      dockerfile: Dockerfile.dashboard
+      context: ../dashboard
+      dockerfile: Dockerfile
     image: rag-system/hitl:${HITL_TAG:-latest}
     container_name: rag-hitl
     ports:

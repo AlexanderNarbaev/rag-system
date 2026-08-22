@@ -117,10 +117,50 @@ class TestOpenAPIDiscovery:
         names = {t.name for t in tools}
         assert "deletePet" not in names
 
-    def test_discover_llm_driven_mode(self):
+    def test_discover_llm_driven_mode_slm_unavailable(self):
+        """SLM unavailable → empty list with a warning (graceful degradation)."""
         discovery = OpenAPIDiscovery()
-        tools = discovery.discover(SAMPLE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value=""):
+            tools = discovery.discover(SAMPLE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)
         assert tools == []
+
+    def test_discover_llm_driven_mode_slm_exception(self):
+        """SLM call raises → empty list (graceful degradation)."""
+        discovery = OpenAPIDiscovery()
+        with patch("proxy.app.llm.slm._call_slm_sync", side_effect=RuntimeError("slm down")):
+            tools = discovery.discover(SAMPLE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)
+        assert tools == []
+
+    def test_discover_llm_driven_selects_tools(self):
+        """SLM selects a subset of operationIds → only those tools are returned."""
+        discovery = OpenAPIDiscovery()
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value='["listPets", "getPet"]'):
+            tools = discovery.discover(SAMPLE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)
+        names = {t.name for t in tools}
+        assert names == {"listPets", "getPet"}
+
+    def test_discover_llm_driven_tolerates_prose_around_json(self):
+        """JSON array embedded in prose is still parsed."""
+        discovery = OpenAPIDiscovery()
+        response = 'Sure! Here are the operations: ["listPets"] — these are read-only.'
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value=response):
+            tools = discovery.discover(SAMPLE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)
+        assert {t.name for t in tools} == {"listPets"}
+
+    def test_discover_llm_driven_unparseable_response(self):
+        """Unparseable SLM response → empty list with a warning."""
+        discovery = OpenAPIDiscovery()
+        with patch("proxy.app.llm.slm._call_slm_sync", return_value="I cannot decide"):
+            tools = discovery.discover(SAMPLE_SPEC, mode=DiscoveryMode.LLM_DRIVEN)
+        assert tools == []
+
+    def test_discover_llm_driven_empty_spec(self):
+        """Empty spec → no AUTO tools → SLM is never called."""
+        discovery = OpenAPIDiscovery()
+        with patch("proxy.app.llm.slm._call_slm_sync") as mock_slm:
+            tools = discovery.discover({}, mode=DiscoveryMode.LLM_DRIVEN)
+        assert tools == []
+        mock_slm.assert_not_called()
 
     def test_discover_from_spec_alias(self):
         discovery = OpenAPIDiscovery()
@@ -245,5 +285,5 @@ class TestOpenAPIProvider:
 
     def test_get_spec_configs_import_error(self):
         with patch.dict("sys.modules", {"proxy.app.shared.config": None}):
-            configs = OpenAPIProvider._get_spec_configs()
+            configs = OpenAPIProvider._load_spec_configs_from_config()
             assert configs == []

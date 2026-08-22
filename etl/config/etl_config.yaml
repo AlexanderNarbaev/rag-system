@@ -120,12 +120,12 @@ remote_services:
     retry_max_delay: 30.0                   # Max retry delay cap (seconds)
     connection_pool_size: 16                # HTTP connection pool size
   reranker:
-    endpoint: "${RERANKER_ENDPOINT:-http://rag-proxy:8080/v1}"   # или http://host:8080/v1/rerank
+    endpoint: "${RERANKER_ENDPOINT:-http://rag-proxy:8080/v1}"   # or http://host:8080/v1/rerank
     model: "${RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}"
     api_key: "${RERANKER_API_KEY:-}"
     timeout: 30
   slm:
-    endpoint: "${SLM_ENDPOINT:-http://rag-proxy:8080/v1}"        # лёгкая модель для entity extraction
+    endpoint: "${SLM_ENDPOINT:-http://rag-proxy:8080/v1}"        # lightweight model for entity extraction
     model: "${SLM_MODEL:-qwen2.5-3b}"
     api_key: "${SLM_API_KEY:-}"
     timeout: 30

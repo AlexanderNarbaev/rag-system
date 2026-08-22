@@ -1,12 +1,12 @@
 # etl/indexer/wal_manager.py
-"""Универсальный менеджер Write-Ahead Log (WAL) для ETL-пайплайнов.
-Используется для:
-- Инкрементальных выгрузок (Confluence, Jira, GitLab)
-- Индексации чанков в Qdrant
-- Отслеживания последних успешных меток времени и идентификаторов
+"""Universal Write-Ahead Log (WAL) manager for ETL pipelines.
+Used for:
+- Incremental extractions (Confluence, Jira, GitLab)
+- Chunk indexing into Qdrant
+- Tracking the last successful timestamps and identifiers
 
-Формат WAL: JSON-файл с секциями для разных pipeline.
-Поддерживает конкурентный доступ через filelock (опционально).
+WAL format: a JSON file with sections for different pipelines.
+Supports concurrent access via filelock (optional).
 
 Remote backends:
 - WAL_BACKEND="file" (default): local JSON file
@@ -236,8 +236,8 @@ class ProxyWALBackend(BaseWALBackend):
 
 
 class WALManager:
-    """Менеджер WAL для ETL-процессов.
-    Каждый pipeline (например, 'confluence_extractor', 'jira_extractor', 'indexing') имеет свою секцию.
+    """WAL manager for ETL processes.
+    Each pipeline (e.g., 'confluence_extractor', 'jira_extractor', 'indexing') has its own section.
 
     Supports pluggable backends: FileWALBackend (default), RedisWALBackend, ProxyWALBackend.
     """
@@ -249,9 +249,9 @@ class WALManager:
         lock_timeout: int = 30,
         backend: BaseWALBackend | None = None,
     ):
-        """:param wal_path: путь к JSON-файлу WAL (used with file backend)
-        :param use_lock: использовать ли файловую блокировку (требуется pip install filelock)
-        :param lock_timeout: таймаут ожидания блокировки (секунды)
+        """:param wal_path: path to the WAL JSON file (used with file backend)
+        :param use_lock: whether to use file locking (requires pip install filelock)
+        :param lock_timeout: lock wait timeout (seconds)
         :param backend: WAL backend instance. If None, creates FileWALBackend from wal_path.
         """
         if backend is not None:
@@ -266,7 +266,7 @@ class WALManager:
         self.lock_timeout = lock_timeout
 
     def _read_wal(self) -> dict[str, Any]:
-        """Читает текущий WAL (без блокировки, только чтение)."""
+        """Reads the current WAL (without locking, read-only)."""
         try:
             return self._backend.read()
         except Exception:
@@ -274,12 +274,12 @@ class WALManager:
             return {}
 
     def _write_wal(self, data: dict[str, Any]) -> None:
-        """Записывает WAL (без блокировки). Raises OSError on disk full."""
+        """Writes the WAL (without locking). Raises OSError on disk full."""
         self._backend.write(data)
 
     def _update_wal(self, update_func: Any) -> None:
-        """Безопасное обновление WAL с блокировкой.
-        update_func принимает текущие данные и возвращает обновлённые.
+        """Safe WAL update with locking.
+        update_func takes the current data and returns the updated data.
         """
         if self.use_lock and isinstance(self._backend, FileWALBackend) and FILELOCK_AVAILABLE:
             lock = self._backend._get_lock()
@@ -294,9 +294,9 @@ class WALManager:
         self._write_wal(new_data)
 
     def get_checkpoint(self, pipeline: str, key: str | None = None) -> Any:
-        """Получает чекпоинт для указанного pipeline.
-        Если key указан, возвращает конкретное значение (или None).
-        Иначе возвращает весь словарь чекпоинта для этого pipeline.
+        """Gets the checkpoint for the given pipeline.
+        If key is given, returns the specific value (or None).
+        Otherwise returns the whole checkpoint dict for this pipeline.
         """
         data = self._read_wal()
         pipeline_data = data.get(pipeline, {})
@@ -305,8 +305,8 @@ class WALManager:
         return pipeline_data
 
     def set_checkpoint(self, pipeline: str, updates: dict[str, Any]):
-        """Обновляет чекпоинт для pipeline. Добавляет/перезаписывает переданные ключи.
-        Автоматически добавляет метку времени обновления '_updated_at'.
+        """Updates the checkpoint for a pipeline. Adds/overwrites the given keys.
+        Automatically adds an '_updated_at' update timestamp.
         """
         updates_with_time = updates.copy()
         updates_with_time["_updated_at"] = datetime.now(UTC).isoformat()
@@ -321,7 +321,7 @@ class WALManager:
         logger.debug(f"Updated checkpoint for pipeline '{pipeline}': {list(updates.keys())}")
 
     def update_last_run(self, pipeline: str, last_run: str | datetime | None = None) -> None:
-        """Удобный метод для обновления временной метки последнего успешного запуска."""
+        """Convenience method for updating the last successful run timestamp."""
         if last_run is None:
             last_run = datetime.now(UTC).isoformat()
         elif isinstance(last_run, datetime):
@@ -329,21 +329,21 @@ class WALManager:
         self.set_checkpoint(pipeline, {"last_run": last_run})
 
     def get_last_run(self, pipeline: str) -> str | None:
-        """Возвращает last_run для pipeline или None."""
+        """Returns last_run for a pipeline or None."""
         result: Any = self.get_checkpoint(pipeline, "last_run")
         return str(result) if result is not None else None
 
     def update_offset(self, pipeline: str, offset: int) -> None:
-        """Для пагинируемых выгрузок (например, startAt в Jira)."""
+        """For paginated extractions (e.g., startAt in Jira)."""
         self.set_checkpoint(pipeline, {"offset": offset})
 
     def get_offset(self, pipeline: str) -> int:
-        """Возвращает сохранённый offset (0 по умолчанию)."""
+        """Returns the saved offset (0 by default)."""
         result: Any = self.get_checkpoint(pipeline, "offset")
         return int(result) if result else 0
 
     def update_last_id(self, pipeline: str, last_id: str) -> None:
-        """Сохраняет последний обработанный ID (например, страницы Confluence или коммита)."""
+        """Saves the last processed ID (e.g., of a Confluence page or a commit)."""
         self.set_checkpoint(pipeline, {"last_id": last_id})
 
     def get_last_id(self, pipeline: str) -> str | None:
@@ -351,10 +351,10 @@ class WALManager:
         return str(result) if result is not None else None
 
     def update_hash_state(self, pipeline: str, doc_id: str, chunk_hash: str) -> None:
-        """Для версионирования чанков: сохраняет хеш документа.
-        Может использоваться вместе с ChunkVersionStore, но дублирует функциональность.
+        """For chunk versioning: saves the document hash.
+        Can be used together with ChunkVersionStore, but duplicates its functionality.
         """
-        # Получаем текущий словарь хешей
+        # Get the current hash map
         hash_map = self.get_checkpoint(pipeline, "hash_map") or {}
         hash_map[doc_id] = chunk_hash
         self.set_checkpoint(pipeline, {"hash_map": hash_map})
@@ -364,8 +364,8 @@ class WALManager:
         return str(hash_map.get(doc_id)) if hash_map.get(doc_id) is not None else None
 
     def reset_pipeline(self, pipeline: str, keep_last_run: bool = False) -> None:
-        """Сбрасывает чекпоинт для указанного pipeline.
-        Если keep_last_run=True, сохраняет только last_run.
+        """Resets the checkpoint for the given pipeline.
+        If keep_last_run=True, keeps only last_run.
         """
 
         def update(data: dict[str, Any]) -> dict[str, Any]:
@@ -380,18 +380,18 @@ class WALManager:
         logger.info(f"Reset checkpoint for pipeline '{pipeline}' (keep_last_run={keep_last_run})")
 
     def reset_all(self) -> None:
-        """Полный сброс WAL."""
+        """Full WAL reset."""
         self._update_wal(lambda data: {})
         logger.info("Reset all WAL checkpoints")
 
     def get_all_pipelines(self) -> list[str]:
-        """Возвращает список всех pipeline, присутствующих в WAL."""
+        """Returns the list of all pipelines present in the WAL."""
         data = self._read_wal()
         return list(data.keys())
 
     def vacuum(self, max_age_days: int = 30) -> None:
-        """Очищает устаревшие записи (например, старые hash_map, чтобы WAL не разрастался).
-        Удаляет hash_map для pipeline, если их возраст больше max_age_days.
+        """Prunes stale entries (e.g., old hash_maps, to keep the WAL from growing).
+        Deletes hash_maps for a pipeline if their age exceeds max_age_days.
         """
 
         def update(data: dict[str, Any]) -> dict[str, Any]:
@@ -402,7 +402,7 @@ class WALManager:
                     try:
                         updated = datetime.fromisoformat(updated_at)
                         if (now - updated).days > max_age_days:
-                            # Удаляем большие поля, оставляя метаданные
+                            # Remove large fields, keeping metadata
                             if "hash_map" in cp:
                                 del cp["hash_map"]
                                 logger.debug(f"Vacuumed hash_map from {pipeline}")
@@ -453,42 +453,42 @@ def create_wal_manager(config: dict[str, Any]) -> WALManager:
         return WALManager(wal_path=wal_path, use_lock=use_lock, lock_timeout=lock_timeout)
 
 
-# Предустановленные константы для имён pipeline
+# Predefined constants for pipeline names
 PIPELINE_CONFLUENCE = "confluence_extractor"
 PIPELINE_JIRA = "jira_extractor"
 PIPELINE_GITLAB = "gitlab_extractor"
 PIPELINE_INDEXING = "indexing"
 PIPELINE_GRAPH = "graph_builder"
 
-# Пример использования и тестирование
+# Usage example and testing
 if __name__ == "__main__":
-    # Создаём WAL менеджер
+    # Create the WAL manager
     wal = WALManager(Path("./test_wal/etl_wal.json"), use_lock=False)
 
-    # Обновляем чекпоинт для Confluence
+    # Update the Confluence checkpoint
     wal.set_checkpoint(
         PIPELINE_CONFLUENCE,
         {"last_run": "2025-06-01T00:00:00", "space_keys": ["DEV", "OPS"], "total_pages": 1250},
     )
 
-    # Обновляем last_run для Jira
+    # Update last_run for Jira
     wal.update_last_run(PIPELINE_JIRA, "2025-06-02T12:00:00")
 
-    # Сохраняем offset для GitLab (пагинация)
+    # Save the offset for GitLab (pagination)
     wal.update_offset(PIPELINE_GITLAB, 150)
 
-    # Получаем данные
+    # Read the data
     print(f"Confluence last_run: {wal.get_last_run(PIPELINE_CONFLUENCE)}")
     print(f"Jira last_run: {wal.get_last_run(PIPELINE_JIRA)}")
     print(f"GitLab offset: {wal.get_offset(PIPELINE_GITLAB)}")
 
-    # Сохраняем хеш документа для индексации
+    # Save the document hash for indexing
     wal.update_hash_state(PIPELINE_INDEXING, "confluence_123", "abc123hash")
     print(f"Indexing hash for doc: {wal.get_hash_state(PIPELINE_INDEXING, 'confluence_123')}")
 
-    # Сброс одного pipeline
+    # Reset a single pipeline
     wal.reset_pipeline(PIPELINE_CONFLUENCE, keep_last_run=True)
     print(f"After reset, Confluence last_run: {wal.get_last_run(PIPELINE_CONFLUENCE)}")
 
-    # Очистка старых данных
+    # Prune old data
     wal.vacuum(max_age_days=1)

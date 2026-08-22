@@ -28,7 +28,8 @@ class OpenAPIDiscovery:
 
     Supports two modes:
     - ``AUTO`` — registers all GET as search tools, all POST/PUT/DELETE as action tools.
-    - ``LLM_DRIVEN`` — stub; sends spec to LLM for tool selection (future).
+    - ``LLM_DRIVEN`` — generates the AUTO tool set, then asks the SLM to select
+      which operations to expose (empty list + warning when the SLM is unavailable).
     """
 
     def discover(
@@ -195,8 +196,68 @@ class OpenAPIDiscovery:
         return tools
 
     def _discover_llm_driven(self, spec: dict[str, Any]) -> list[ToolDefinition]:
-        """Stub: LLM-driven discovery — returns empty list for now."""
-        return []
+        """LLM-driven discovery: the SLM selects which operations to expose as tools.
+
+        Generates the full AUTO tool set, then asks the SLM to pick the
+        operationIds worth exposing. Graceful degradation: when the SLM is
+        unavailable or returns an unparseable answer, logs a warning and
+        returns an empty list (explicit degradation, not a silent stub).
+        """
+        auto_tools = self._discover_auto(
+            spec=spec,
+            include_tags=None,
+            exclude_tags=None,
+            default_visibility=ToolVisibility.PUBLIC,
+            base_url_override="",
+        )
+        if not auto_tools:
+            return []
+
+        try:
+            from proxy.app.llm import slm
+        except ImportError as exc:
+            logger.warning("LLM-driven discovery unavailable (SLM module not importable: %s)", exc)
+            return []
+
+        operations = "\n".join(f"- {tool.name}: {tool.description}" for tool in auto_tools[:50])
+        prompt = (
+            "You are selecting API operations to expose as agent tools.\n"
+            "From the list below, choose the operations that are safe and useful "
+            "for a read-oriented assistant (prefer search/lookup operations; "
+            "avoid destructive ones unless clearly intended).\n\n"
+            f"Operations:\n{operations}\n\n"
+            'Respond with a JSON array of selected operation names, e.g. ["opA", "opB"]. '
+            "Respond with the JSON array only."
+        )
+
+        try:
+            response = slm._call_slm_sync(prompt, max_tokens=512, temperature=0.0)
+        except Exception as exc:
+            logger.warning("LLM-driven discovery failed (SLM call error: %s)", exc)
+            return []
+
+        if not response:
+            logger.warning(
+                "LLM-driven discovery: SLM unavailable or returned empty response — no tools selected",
+            )
+            return []
+
+        selected = _parse_selection_response(response)
+        if selected is None:
+            logger.warning(
+                "LLM-driven discovery: could not parse SLM response as a JSON list: %.200s",
+                response,
+            )
+            return []
+
+        selected_names = {name for name in selected if isinstance(name, str)}
+        tools = [tool for tool in auto_tools if tool.name in selected_names]
+        logger.info(
+            "LLM-driven discovery: SLM selected %d/%d operations",
+            len(tools),
+            len(auto_tools),
+        )
+        return tools
 
     @staticmethod
     def _extract_base_url(spec: dict[str, Any], fallback: str = "") -> str:
@@ -254,6 +315,25 @@ def _parse_yaml(text: str) -> dict[str, Any]:
     return result
 
 
+def _parse_selection_response(response: str) -> list[Any] | None:
+    """Parse an SLM tool-selection response into a list of operation names.
+
+    Tolerates surrounding prose/markdown fences by extracting the first
+    JSON array found in the response. Returns None when no valid JSON
+    array is present.
+    """
+    text = response.strip()
+    start = text.find("[")
+    end = text.rfind("]")
+    if start == -1 or end == -1 or end < start:
+        return None
+    try:
+        parsed = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, list) else None
+
+
 # ---------------------------------------------------------------------------
 # OpenAPIProvider — ToolProvider integration
 # ---------------------------------------------------------------------------
@@ -269,6 +349,22 @@ class OpenAPIProvider:
     """
 
     provider_name: str = "openapi"
+
+    def __init__(self, spec_configs: list[dict[str, Any]] | None = None) -> None:
+        """Create a provider.
+
+        Args:
+            spec_configs: Optional explicit spec configs (dicts with
+                url/file/mode/include_tags/exclude_tags/visibility keys).
+                When None, configs are loaded from ``TOOLS_OPENAPI_SPECS``.
+        """
+        self._spec_configs = spec_configs
+
+    def _get_spec_configs(self) -> list[dict[str, Any]]:
+        """Return explicit spec configs or load them from app config."""
+        if self._spec_configs is not None:
+            return list(self._spec_configs)
+        return self._load_spec_configs_from_config()
 
     async def discover(self) -> list[ToolDefinition]:
         """Discover tools from all configured OpenAPI specs."""
@@ -342,7 +438,7 @@ class OpenAPIProvider:
         return issues
 
     @staticmethod
-    def _get_spec_configs() -> list[dict[str, Any]]:
+    def _load_spec_configs_from_config() -> list[dict[str, Any]]:
         """Load OpenAPI spec configs from app config."""
         try:
             from proxy.app.shared.config import TOOLS_OPENAPI_SPECS

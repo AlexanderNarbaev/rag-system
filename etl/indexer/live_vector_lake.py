@@ -1,12 +1,12 @@
 # etl/indexer/live_vector_lake.py
-"""LiveVectorLake: двухуровневое хранение чанков для RAG-системы.
-- Горячий слой: Qdrant (векторный индекс для быстрого поиска)
-- Холодный слой: Parquet/Delta Lake (история всех версий, дельта-обновления)
+"""LiveVectorLake: two-tier chunk storage for the RAG system.
+- Hot tier: Qdrant (vector index for fast search)
+- Cold tier: Parquet/Delta Lake (full version history, delta updates)
 
-Реализует инкрементальную индексацию:
-- При добавлении новых чанков (или изменении существующих) обновляется Qdrant
-- Устаревшие чанки удаляются из Qdrant
-- История сохраняется в холодном хранилище с возможностью отката
+Implements incremental indexing:
+- When new chunks are added (or existing ones change), Qdrant is updated
+- Stale chunks are removed from Qdrant
+- History is preserved in cold storage with rollback support
 """
 
 import json
@@ -22,7 +22,7 @@ try:
 except ImportError:
     PANDAS_AVAILABLE = False
 
-# Импорт наших модулей
+# Import our modules
 from etl.chunker.hash_versioning import ChunkVersionStore
 from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class LiveVectorLake:
-    """Реализует паттерн LiveVectorLake для версионирования и инкрементальной индексации."""
+    """Implements the LiveVectorLake pattern for versioning and incremental indexing."""
 
     def __init__(
         self,
@@ -40,10 +40,10 @@ class LiveVectorLake:
         cold_storage_dir: Path,
         use_delta: bool = False,
     ):
-        """:param qdrant_indexer: экземпляр QdrantHybridIndexer для горячего слоя
-        :param version_store: экземпляр ChunkVersionStore для WAL и хеширования
-        :param cold_storage_dir: директория для холодного хранилища (Parquet/Delta)
-        :param use_delta: использовать ли Delta Lake (требуется delta-rs), иначе Parquet
+        """:param qdrant_indexer: QdrantHybridIndexer instance for the hot tier
+        :param version_store: ChunkVersionStore instance for WAL and hashing
+        :param cold_storage_dir: directory for cold storage (Parquet/Delta)
+        :param use_delta: whether to use Delta Lake (requires delta-rs), otherwise Parquet
         """
         self.qdrant = qdrant_indexer
         self.version_store = version_store
@@ -64,8 +64,8 @@ class LiveVectorLake:
             self.delta_available = False
 
     def _append_to_cold_storage(self, doc_id: str, chunks: list[dict], operation: str = "upsert"):
-        """Добавляет версию чанков в холодное хранилище.
-        Сохраняется полный снапшот документа или инкрементальные изменения.
+        """Adds a chunk version to cold storage.
+        Stores a full document snapshot or incremental changes.
         """
         if not PANDAS_AVAILABLE:
             logger.warning("pandas is not available — cold storage disabled")
@@ -102,7 +102,7 @@ class LiveVectorLake:
             else:
                 write_deltalake(str(cold_file), df)
         else:
-            # Parquet с накоплением
+            # Parquet with accumulation
             parquet_file = cold_file.with_suffix(".parquet")
             if parquet_file.exists():
                 existing = pd.read_parquet(parquet_file)
@@ -112,30 +112,30 @@ class LiveVectorLake:
         logger.debug(f"Appended {len(chunks)} chunks to cold storage for doc {doc_id}")
 
     def sync_document(self, doc_id: str, new_chunks: list[dict], force: bool = False) -> tuple[int, int]:
-        """Синхронизирует документ: обновляет горячий слой (Qdrant) и холодное хранилище.
-        Возвращает (added_count, deleted_count).
+        """Synchronizes a document: updates the hot tier (Qdrant) and cold storage.
+        Returns (added_count, deleted_count).
         """
-        # Определяем, какие чанки добавить/удалить
+        # Determine which chunks to add/delete
         added_chunks, deleted_hashes = self.version_store.update_document_chunks(doc_id, new_chunks, force)
 
-        # Обновляем Qdrant
+        # Update Qdrant
         if added_chunks:  # noqa: SIM108
-            # Индексация новых/изменённых чанков
+            # Index new/changed chunks
             added_count = self.qdrant.index_chunks(added_chunks)
         else:
             added_count = 0
 
         if deleted_hashes:  # noqa: SIM108
-            # Удаляем устаревшие чанки из Qdrant
+            # Remove stale chunks from Qdrant
             deleted_count = self.qdrant.delete_chunks(deleted_hashes)  # type: ignore[arg-type]
         else:
             deleted_count = 0
 
-        # Сохраняем версию в холодное хранилище
+        # Save the version to cold storage
         if added_chunks:
             self._append_to_cold_storage(doc_id, added_chunks, operation="upsert")
         if deleted_hashes:
-            # Логируем удаление как отдельную операцию
+            # Log the deletion as a separate operation
             deletion_records = [{"hash": h} for h in deleted_hashes]
             self._append_to_cold_storage(doc_id, deletion_records, operation="delete")
 
@@ -143,7 +143,7 @@ class LiveVectorLake:
         return added_count, deleted_count
 
     def bulk_sync(self, documents: dict[str, list[dict]], force: bool = False) -> dict[str, tuple[int, int]]:
-        """Синхронизирует несколько документов.
+        """Synchronizes multiple documents.
         :param documents: {doc_id: [chunks]}
         :return: {doc_id: (added, deleted)}
         """
@@ -153,7 +153,7 @@ class LiveVectorLake:
         return results
 
     def get_document_history(self, doc_id: str, limit: int = 100):
-        """Возвращает историю изменений документа из холодного хранилища."""
+        """Returns the document change history from cold storage."""
         if not PANDAS_AVAILABLE:
             logger.warning("pandas not available — cannot read cold storage history")
             return []
@@ -174,8 +174,8 @@ class LiveVectorLake:
         return df.tail(limit)
 
     def rollback_document(self, doc_id: str, to_timestamp: str) -> int:
-        """Откатывает документ к указанной временной метке.
-        Восстанавливает состояние чанков из холодного хранилища и переиндексирует в Qdrant.
+        """Rolls back a document to the given timestamp.
+        Restores the chunk state from cold storage and reindexes into Qdrant.
         """
         history = self.get_document_history(doc_id)
         is_empty = history.empty if PANDAS_AVAILABLE and hasattr(history, "empty") else not history
@@ -183,14 +183,14 @@ class LiveVectorLake:
             logger.warning(f"No history for document {doc_id}")
             return 0
 
-        # Фильтруем записи до указанного времени
+        # Filter records up to the given time
         snapshot = history[history["timestamp"] <= to_timestamp]
         if snapshot.empty:
             logger.warning(f"No snapshot before {to_timestamp} for doc {doc_id}")
             return 0
 
-        # Берём последнюю версию каждого чанка на тот момент
-        # (упрощённо: собираем все чанки с операцией upsert, исключая delete)
+        # Take the latest version of each chunk at that point
+        # (simplified: collect all chunks with an upsert operation, excluding delete)
         chunks_snapshot = []
         seen_hashes = set()
         for _, row in snapshot.iterrows():
@@ -211,20 +211,20 @@ class LiveVectorLake:
                 )
                 seen_hashes.add(row["chunk_hash"])
 
-        # Принудительно заменяем текущее состояние
+        # Force-replace the current state
         self.version_store.reset(doc_id)
         added, _ = self.sync_document(doc_id, chunks_snapshot, force=True)
         logger.info(f"Rolled back document {doc_id} to {to_timestamp}, restored {added} chunks")
         return added
 
     def get_all_current_chunks(self) -> list[dict[str, Any]]:
-        """Возвращает все актуальные чанки из версионного хранилища (для полной выгрузки)."""
+        """Returns all current chunks from the version store (for a full export)."""
         return self.version_store.get_all_current_chunks()
 
     def cleanup_old_versions(self, doc_id: str, keep_versions: int = 10):
-        """Очищает старые версии в холодном хранилище."""
+        """Prunes old versions in cold storage."""
         self.version_store.cleanup_old_versions(doc_id, keep_versions)
-        # Также можно удалить старые Parquet/Delta файлы (но здесь оставляем историю)
+        # Old Parquet/Delta files could also be deleted (but we keep the history here)
         logger.info(f"Cleaned up old versions for {doc_id}")
 
 
@@ -234,19 +234,19 @@ def incremental_index_pipeline(
     new_chunks: list[dict],
     force_reindex: bool = False,
 ) -> bool:
-    """Готовая функция для инкрементальной индексации: сравнивает хеши, обновляет Qdrant и cold storage.
-    Возвращает True, если были изменения.
+    """Ready-to-use function for incremental indexing: compares hashes, updates Qdrant and cold storage.
+    Returns True if there were changes.
     """
     added, deleted = live_lake.sync_document(doc_id, new_chunks, force=force_reindex)
     return (added + deleted) > 0
 
 
 if __name__ == "__main__":
-    # Пример использования
+    # Usage example
     from etl.chunker.hash_versioning import ChunkVersionStore
     from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
 
-    # Инициализация компонентов
+    # Component initialization
     qdrant_idx = QdrantHybridIndexer(host="localhost", port=6333, collection_name="test_live_lake")
     qdrant_idx.create_collection(recreate=True)
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
         use_delta=False,
     )
 
-    # Тестовый документ
+    # Test document
     doc_id = "confluence_123"
     chunks_v1 = [
         {
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     ]
     live_lake.sync_document(doc_id, chunks_v1)
 
-    # Новая версия
+    # New version
     chunks_v2 = [
         {
             "hash": "bbb",
@@ -298,9 +298,9 @@ if __name__ == "__main__":
     ]
     live_lake.sync_document(doc_id, chunks_v2)
 
-    # История
+    # History
     history = live_lake.get_document_history(doc_id)
     print("History:")
     print(history[["timestamp", "operation", "chunk_hash"]])
 
-    # Откат  # live_lake.rollback_document(doc_id, "2025-01-01T00:00:00")
+    # Rollback  # live_lake.rollback_document(doc_id, "2025-01-01T00:00:00")

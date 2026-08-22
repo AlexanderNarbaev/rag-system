@@ -1,10 +1,10 @@
 # proxy/app/hitl.py
-"""Human-in-the-Loop модуль для сбора обратной связи.
-Функции:
-- Логирование всех запросов и ответов (с метаданными)
-- Сохранение исправлений от экспертов
-- Формирование датасета для fine-tuning
-- Интеграция с дашбордом (через API или запись в БД)
+"""Human-in-the-Loop module for feedback collection.
+Features:
+- Logging of all requests and responses (with metadata)
+- Storing corrections from experts
+- Building a dataset for fine-tuning
+- Dashboard integration (via API or DB writes)
 """
 
 import json
@@ -36,12 +36,12 @@ def generate_feedback_id() -> str:
 class FeedbackType(StrEnum):
     POSITIVE = "positive"
     NEGATIVE = "negative"
-    CORRECTION = "correction"  # пользователь исправил ответ
+    CORRECTION = "correction"  # the user corrected the answer
 
 
 class InteractionLogger:
-    """Логирует взаимодействия пользователя с системой.
-    Сохраняет: запрос, контекст, ответ, временные метки, метаданные.
+    """Logs user interactions with the system.
+    Stores: query, context, response, timestamps, metadata.
     """
 
     def __init__(self, log_dir: Path | None = None) -> None:
@@ -94,12 +94,12 @@ class InteractionLogger:
         user_feedback: FeedbackType | None = None,
         corrected_response: str | None = None,
     ) -> None:
-        """Записывает одно взаимодействие в JSON Lines файл."""
+        """Writes a single interaction to a JSON Lines file."""
         record = {
             "request_id": request_id,
             "timestamp": datetime.now(UTC).isoformat(),
             "user_query": user_query,
-            "context": context[:5000],  # ограничим длину
+            "context": context[:5000],  # limit the length
             "response": response,
             "metadata": metadata or {},
         }
@@ -124,7 +124,7 @@ class InteractionLogger:
         corrected_response: str | None = None,
         expert_id: str | None = None,
     ) -> None:
-        """Записывает обратную связь от пользователя или эксперта."""
+        """Writes feedback from a user or an expert."""
         record = {
             "request_id": request_id,
             "timestamp": datetime.now(UTC).isoformat(),
@@ -142,7 +142,7 @@ class InteractionLogger:
             logger.error(f"Failed to log feedback: {e}")
 
     def get_interactions(self, limit: int = 100) -> list[dict[str, Any]]:
-        """Читает последние взаимодействия (обратный порядок)."""
+        """Reads the most recent interactions (reverse order)."""
         interactions = []
         try:
             with open(self.interactions_file, encoding="utf-8") as f:
@@ -151,10 +151,10 @@ class InteractionLogger:
                 interactions.append(json.loads(line))
         except Exception as e:
             logger.error(f"Failed to read interactions: {e}")
-        return interactions[::-1]  # от новых к старым
+        return interactions[::-1]  # newest to oldest
 
 
-# Глобальный экземпляр логгера (инициализируется при импорте)
+# Global logger instance (initialized on import)
 _logger = None
 
 
@@ -165,7 +165,7 @@ def get_logger() -> InteractionLogger:
     return _logger
 
 
-# Упрощённые функции для вызова из main.py
+# Simplified functions for calling from main.py
 async def log_interaction(
     request_id: str,
     user_query: str,
@@ -173,11 +173,11 @@ async def log_interaction(
     response: str,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Асинхронная обёртка для логирования (неблокирующая)."""
+    """Async wrapper for logging (non-blocking)."""
     if not LOG_REQUESTS:
         return
     logger = get_logger()
-    # Можно выполнить в отдельном потоке, чтобы не блокировать ответ
+    # Can be run in a separate thread to avoid blocking the response
     import asyncio
 
     await asyncio.to_thread(
@@ -197,7 +197,7 @@ def log_feedback_sync(
     corrected_response: str | None = None,
     expert_id: str | None = None,
 ) -> None:
-    """Синхронная запись фидбека (например, из дашборда)."""
+    """Synchronous feedback write (e.g. from the dashboard)."""
     logger = get_logger()
     logger.log_feedback(
         request_id=request_id,
@@ -208,10 +208,10 @@ def log_feedback_sync(
     )
 
 
-# Функция для экспорта датасета для fine-tuning
+# Function for exporting the fine-tuning dataset
 def export_training_dataset(output_path: Path, min_length: int = 50, use_processor: bool = False) -> None:
-    """Экспортирует пары (вопрос, ответ) из взаимодействий, у которых есть положительная обратная связь
-    или исправленные ответы, в формат для fine-tuning.
+    """Exports (question, answer) pairs from interactions that have positive feedback
+    or corrected responses, in a fine-tuning format.
 
     When ``use_processor=True``, delegates to ``DataProcessor.export_training_dataset()``
     for richer query-answer-correction triples with feedback metadata.
@@ -242,13 +242,13 @@ def export_training_dataset(output_path: Path, min_length: int = 50, use_process
 
 
 def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingual: bool = False) -> None:
-    """Экспортирует пары (query, intent) из логов взаимодействий
-    в формат JSONL для обучения классификатора интентов.
+    """Exports (query, intent) pairs from interaction logs
+    in JSONL format for training the intent classifier.
 
-    :param output_path: Путь к выходному JSONL-файлу.
-    :param limit: Максимальное количество взаимодействий для обработки.
-    :param use_multilingual: Использовать classify_intent_multilingual
-        (поддержка DE/FR/ZH) вместо classify_intent.
+    :param output_path: Path to the output JSONL file.
+    :param limit: Maximum number of interactions to process.
+    :param use_multilingual: Use classify_intent_multilingual
+        (DE/FR/ZH support) instead of classify_intent.
     """
     from proxy.app.llm.slm import classify_intent, classify_intent_multilingual
 
@@ -277,7 +277,7 @@ def export_intent_dataset(output_path: Path, limit: int = 10000, use_multilingua
 
 
 if __name__ == "__main__":
-    # Пример использования
+    # Usage example
     interaction_logger = get_logger()
     interaction_logger.log_interaction(
         request_id="test123",

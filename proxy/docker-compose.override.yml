@@ -5,8 +5,6 @@
 # Mounts source code for hot reload, enables debug logging,
 # exposes additional ports for debugging.
 
-version: '3.8'
-
 services:
   qdrant:
     ports:

@@ -179,6 +179,16 @@ services:
     networks:
       - rag-network
 
+  # ── HITL expert review dashboard (Streamlit) ────────────────────────────────
+  hitl-dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    image: rag-system/hitl:latest
+    restart: unless-stopped
+    networks:
+      - rag-network
+
 volumes:
   qdrant_data:
   neo4j_data:

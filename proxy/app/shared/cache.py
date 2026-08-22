@@ -8,13 +8,6 @@ Used for:
 - Search queries (optional)
 
 Provides both async and sync interfaces for backward compatibility.
-
-Кэш-менеджер с поддержкой Redis и fallback на in-memory.
-Используется для:
-- Эмбеддингов (dense векторы)
-- Результатов реранкинга
-- Ответов LLM (опционально)
-- Поисковых запросов (опционально)
 """
 
 import asyncio
@@ -72,7 +65,7 @@ class InMemoryCache:
     async def clear(self) -> None:
         self._store.clear()
 
-    # Синхронные методы — InMemoryCache не требует asyncio (данные в памяти)
+    # Synchronous methods — InMemoryCache does not require asyncio (data is in memory)
     def get_sync(self, key: str) -> Any | None:
         return self._get_value(key)
 
@@ -160,7 +153,7 @@ class RedisCache:
         try:
             return json.loads(value)
         except json.JSONDecodeError:
-            return value  # строка
+            return value  # plain string
 
     async def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
         client = await self._get_client()
@@ -178,7 +171,7 @@ class RedisCache:
         client = await self._get_client()
         await client.flushdb()
 
-    # Синхронные обёртки — используют отдельный sync Redis клиент
+    # Synchronous wrappers — use a separate sync Redis client
     def get_sync(self, key: str) -> Any | None:
         try:
             client = self._get_sync_client()
@@ -223,7 +216,7 @@ class RedisCache:
 
 
 class CacheManager:
-    """Унифицированный менеджер кэша. Использует Redis (если задан URL) или in-memory."""
+    """Unified cache manager. Uses Redis (if a URL is provided) or in-memory."""
 
     def __init__(
         self,
@@ -248,7 +241,7 @@ class CacheManager:
         return f"{self._key_prefix}{key}" if self._key_prefix else key
 
     async def initialize(self) -> None:
-        """Для Redis: проверка подключения при старте."""
+        """For Redis: verify the connection at startup."""
         if self.use_redis and hasattr(self._cache, "_get_client"):
             await self._cache._get_client()
 
@@ -277,7 +270,7 @@ class CacheManager:
         if hasattr(self._cache, "close"):
             await self._cache.close()
 
-    # Синхронные методы для обратной совместимости (используются в retrieval и rerank)
+    # Synchronous methods for backward compatibility (used in retrieval and rerank)
     def get_sync(self, key: str) -> Any | None:
         result = self._cache.get_sync(self._full_key(key))
         if result is not None:
@@ -424,7 +417,7 @@ class SemanticCache:
         return True
 
 
-# Пример использования
+# Usage example
 if __name__ == "__main__":
 
     async def test() -> None:
@@ -434,7 +427,7 @@ if __name__ == "__main__":
         val = await cache.get("test_key")
         print(f"In-memory get: {val}")
 
-        # Redis (если доступен)
+        # Redis (if available)
         cache2 = CacheManager(redis_url="redis://localhost:6379", use_redis=True)
         await cache2.initialize()
         await cache2.set("test_redis", {"data": 123}, ttl=60)

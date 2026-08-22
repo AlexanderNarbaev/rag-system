@@ -3,9 +3,6 @@
 
 All parameters are loaded from environment variables or have default values.
 Supports .env file loading for local development.
-
-Конфигурация RAG-прокси.
-Все параметры загружаются из переменных окружения или имеют значения по умолчанию.
 """
 
 import os
@@ -13,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Загрузка .env файла (если существует)
+# Load the .env file (if it exists)
 env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
@@ -88,7 +85,7 @@ SLM_LOCAL_PORT = int(os.getenv("SLM_LOCAL_PORT", "8081"))
 # Maximum seconds to wait for the local server to become ready.
 SLM_LOCAL_STARTUP_TIMEOUT = int(os.getenv("SLM_LOCAL_STARTUP_TIMEOUT", "60"))
 
-# ============ Параметры RAG ============
+# ============ RAG parameters ============
 MAX_CHUNKS_RETRIEVAL = int(os.getenv("MAX_CHUNKS_RETRIEVAL", "50"))
 MAX_CHUNKS_AFTER_RERANK = int(os.getenv("MAX_CHUNKS_AFTER_RERANK", "20"))
 
@@ -96,7 +93,7 @@ MAX_CHUNKS_AFTER_RERANK = int(os.getenv("MAX_CHUNKS_AFTER_RERANK", "20"))
 PROGRESSIVE_RETRIEVAL_ENABLED = os.getenv("PROGRESSIVE_RETRIEVAL_ENABLED", "true").lower() == "true"
 PROGRESSIVE_RETRIEVAL_STAGES = os.getenv("PROGRESSIVE_RETRIEVAL_STAGES", "5,10,20")
 
-# ============ Кэш ============
+# ============ Cache ============
 USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 REDIS_KEY_PREFIX = os.getenv("REDIS_KEY_PREFIX", "proxy:")
@@ -106,14 +103,14 @@ SEMANTIC_CACHE_ENABLED = os.getenv("SEMANTIC_CACHE_ENABLED", "false").lower() ==
 SEMANTIC_CACHE_SIMILARITY = float(os.getenv("SEMANTIC_CACHE_SIMILARITY", "0.92"))
 SEMANTIC_CACHE_TTL = int(os.getenv("SEMANTIC_CACHE_TTL", "300"))
 
-# ============ Агентная оркестрация (LangGraph) ============
+# ============ Agentic orchestration (LangGraph) ============
 USE_LANGGRAPH = os.getenv("USE_LANGGRAPH", "false").lower() == "true"
 
 # ── Adaptive routing (opt-in) ──
 ADAPTIVE_ROUTING_ENABLED = os.getenv("ADAPTIVE_ROUTING_ENABLED", "false").lower() == "true"
 MAX_RETRIEVAL_LOOPS = int(os.getenv("MAX_RETRIEVAL_LOOPS", "3"))
 
-# ============ Граф знаний (Neo4j) ============
+# ============ Knowledge graph (Neo4j) ============
 GRAPH_ENABLED = os.getenv("GRAPH_ENABLED", "true").lower() == "true"
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
@@ -128,12 +125,12 @@ if GRAPH_ENABLED and not NEO4J_PASSWORD:
         stacklevel=2,
     )
 
-# ============ Логирование и HITL ============
+# ============ Logging and HITL ============
 LOG_REQUESTS = os.getenv("LOG_REQUESTS", "true").lower() == "true"
 LOG_DIR = os.getenv("LOG_DIR", "./logs")
 
-# ============ Безопасность ============
-# Список секретов для маскировки в логах (дополнительно)
+# ============ Security ============
+# List of additional secrets to mask in logs
 SENSITIVE_SECRETS = os.getenv("SENSITIVE_SECRETS", "").split(",") if os.getenv("SENSITIVE_SECRETS") else []
 
 # ============ Observability ============
@@ -241,7 +238,7 @@ NAMESPACE_ISOLATION_ENABLED = os.getenv("NAMESPACE_ISOLATION_ENABLED", "false").
 # ============ A/B Testing ============
 AB_TEST_ENABLED = os.getenv("AB_TEST_ENABLED", "false").lower() == "true"
 
-# ============ Настройки сервера ============
+# ============ Server settings ============
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8080"))
 RELOAD = os.getenv("RELOAD", "false").lower() == "true"
@@ -472,11 +469,11 @@ if not ETL_SECRET and os.getenv("REINDEX_ENABLED", "true").lower() != "false":
         )
 
 
-# ============ Вспомогательная функция для отладки ============
+# ============ Helper function for debugging ============
 def print_config() -> None:
-    """Выводит текущую конфигурацию (скрывая секреты)."""
+    """Prints the current configuration (hiding secrets)."""
     config_vars = {k: v for k, v in globals().items() if not k.startswith("_") and isinstance(v, (str, int, bool))}
-    # Маскируем чувствительные переменные
+    # Mask sensitive variables
     sensitive_keys = ["API_KEY", "PASSWORD", "SECRET"]
     for key in config_vars:
         for sens in sensitive_keys:

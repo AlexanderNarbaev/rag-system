@@ -1,8 +1,8 @@
 # etl/graph_builder/entity_extractor.py
-"""Извлечение сущностей и отношений из текста для построения графа знаний.
-Использует:
-- spaCy (если доступна) для быстрого NER
-- SLM (локальную модель) для извлечения отношений и кастомных сущностей
+"""Entity and relation extraction from text for knowledge graph construction.
+Uses:
+- spaCy (if available) for fast NER
+- An SLM (local model) for relation and custom entity extraction
 """
 
 import hashlib
@@ -32,27 +32,27 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Entity:
-    """Сущность для графа знаний."""
+    """Entity for the knowledge graph."""
 
     id: str
     name: str
     type: str  # PERSON, ORGANIZATION, TECHNOLOGY, PRODUCT, GPE, CONCEPT, etc.
-    source_id: str  # документ, из которого извлечена
+    source_id: str  # document it was extracted from
     properties: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class Relation:
-    """Отношение между двумя сущностями."""
+    """Relation between two entities."""
 
-    source: str  # id источника
-    target: str  # id цели
+    source: str  # source id
+    target: str  # target id
     type: str  # RELATES_TO, DEPENDS_ON, USES, CONTAINS, etc.
     properties: dict[str, Any] = field(default_factory=dict)
 
 
 class EntityRelationExtractor:
-    """Извлекает сущности и отношения из текста, используя комбинацию NLP и SLM."""
+    """Extracts entities and relations from text using a combination of NLP and an SLM."""
 
     def __init__(
         self,
@@ -63,12 +63,12 @@ class EntityRelationExtractor:
         cache_dir: Path | None = None,
         max_text_length: int = 4000,
     ):
-        """:param use_spacy: использовать ли spaCy для базового NER
-        :param spacy_model: модель spaCy (ru_core_news_sm, en_core_web_sm и т.д.)
-        :param use_slm: использовать ли SLM для извлечения отношений
-        :param slm_endpoint: URL локального сервера LLM (например, http://localhost:8080/v1/completions)
-        :param cache_dir: директория для кэширования результатов (избежать повторных вызовов SLM)
-        :param max_text_length: максимальная длина текста для обработки (токены/символы)
+        """:param use_spacy: whether to use spaCy for basic NER
+        :param spacy_model: spaCy model (ru_core_news_sm, en_core_web_sm, etc.)
+        :param use_slm: whether to use an SLM for relation extraction
+        :param slm_endpoint: URL of the local LLM server (e.g., http://localhost:8080/v1/completions)
+        :param cache_dir: directory for caching results (to avoid repeated SLM calls)
+        :param max_text_length: maximum text length to process (tokens/characters)
         """
         self.use_spacy = use_spacy and SPACY_AVAILABLE
         self.use_slm = use_slm and REQUESTS_AVAILABLE and slm_endpoint
@@ -91,7 +91,7 @@ class EntityRelationExtractor:
         self.cache = {}  # in-memory cache
 
     def _get_cache_key(self, text: str) -> str:
-        """Генерирует ключ кэша на основе текста."""
+        """Generates a cache key based on the text."""
         return hashlib.sha256(text.encode()).hexdigest()
 
     def _load_from_cache(self, key: str) -> tuple[list[Entity], list[Relation]] | None:
@@ -115,19 +115,19 @@ class EntityRelationExtractor:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def extract_entities_spacy(self, text: str) -> list[Entity]:
-        """Извлекает сущности с помощью spaCy."""
+        """Extracts entities using spaCy."""
         if not self.nlp:
             return []
         doc = self.nlp(text[: self.max_text_length])
         entities = []
         seen = set()
         for ent in doc.ents:
-            # Приводим к каноническому виду
+            # Normalize to canonical form
             name = ent.text.strip()
             if name and name not in seen:
                 seen.add(name)
                 ent_type = ent.label_
-                # Маппинг типов спайси на наши типы
+                # Map spaCy types to our types
                 type_map = {
                     "PERSON": "PERSON",
                     "ORG": "ORGANIZATION",
@@ -149,13 +149,13 @@ class EntityRelationExtractor:
         return entities
 
     def extract_relations_slm(self, text: str, entities: list[Entity]) -> list[Relation]:
-        """Использует SLM для извлечения отношений между известными сущностями.
-        Отправляет текст + список сущностей и запрашивает JSON с отношениями.
+        """Uses an SLM to extract relations between known entities.
+        Sends the text + entity list and requests JSON with relations.
         """
         if not self.use_slm:
             return []
 
-        # Подготовка промпта
+        # Prompt preparation
         entity_names = [e.name for e in entities]
         entities_str = ", ".join(entity_names)
         prompt = (
@@ -173,7 +173,7 @@ class EntityRelationExtractor:
         )
 
         try:
-            # Вызов SLM (ожидаем OpenAI-совместимый endpoint)
+            # SLM call (expects an OpenAI-compatible endpoint)
             payload: dict[str, Any] = {
                 "prompt": prompt,
                 "max_tokens": 1000,
@@ -183,7 +183,7 @@ class EntityRelationExtractor:
             if self.slm_endpoint and self.slm_endpoint.endswith("/completions"):
                 response = requests.post(self.slm_endpoint, json=payload, timeout=30)
             elif self.slm_endpoint:
-                # Предполагаем chat completions API
+                # Assume the chat completions API
                 payload["messages"] = [{"role": "user", "content": prompt}]
                 del payload["prompt"]
                 response = requests.post(self.slm_endpoint + "/chat/completions", json=payload, timeout=30)
@@ -198,9 +198,9 @@ class EntityRelationExtractor:
                     )
                 else:
                     output = result.get("text", "")
-                # Извлечение JSON из ответа
+                # Extract JSON from the response
                 output = output.strip()
-                # Убираем возможные маркеры кода
+                # Strip possible code markers
                 output = output.removeprefix("```json")
                 output = output.removesuffix("```")
                 relations_data = json.loads(output)
@@ -209,7 +209,7 @@ class EntityRelationExtractor:
                     source_name = rel.get("source")
                     target_name = rel.get("target")
                     rel_type = rel.get("relation_type", "RELATES_TO")
-                    # Находим id сущностей по имени
+                    # Look up entity ids by name
                     source_entity = next((e for e in entities if e.name == source_name), None)
                     target_entity = next((e for e in entities if e.name == target_name), None)
                     if source_entity and target_entity:
@@ -232,24 +232,24 @@ class EntityRelationExtractor:
         source_id: str,
         chunk_metadata: dict[str, Any] | None = None,
     ) -> tuple[list[Entity], list[Relation]]:
-        """Основной метод извлечения сущностей и отношений из одного чанка."""
+        """Main method for extracting entities and relations from a single chunk."""
         cache_key = self._get_cache_key(text + source_id)
         cached = self._load_from_cache(cache_key)
         if cached:
             return cached
 
         entities = []
-        # 1. Базовое извлечение через spaCy
+        # 1. Basic extraction via spaCy
         if self.use_spacy:
             entities = self.extract_entities_spacy(text)
 
-        # 2. Дополнительное извлечение кастомных сущностей через SLM (если включено)
+        # 2. Additional custom entity extraction via SLM (if enabled)
         if self.use_slm and entities:  # noqa: SIM108
             relations = self.extract_relations_slm(text, entities)
         else:
             relations = []
 
-        # Присваиваем source_id всем сущностям
+        # Assign source_id to all entities
         for e in entities:
             e.source_id = source_id
             if chunk_metadata:
@@ -259,8 +259,8 @@ class EntityRelationExtractor:
         return entities, relations
 
     def extract_batch(self, chunks: list[dict], source_id_prefix: str = None) -> tuple[list[Entity], list[Relation]]:
-        """Обрабатывает пакет чанков (список словарей с полем 'text' и опционально 'metadata').
-        Возвращает объединённые сущности и отношения с дедупликацией.
+        """Processes a batch of chunks (list of dicts with a 'text' field and optional 'metadata').
+        Returns merged entities and relations with deduplication.
         """
         all_entities = []
         all_relations = []
@@ -272,15 +272,15 @@ class EntityRelationExtractor:
             all_entities.extend(entities)
             all_relations.extend(relations)
 
-        # Дедупликация сущностей (объединяем по id)
+        # Entity deduplication (merge by id)
         unique_entities = {}
         for e in all_entities:
             if e.id not in unique_entities:
                 unique_entities[e.id] = e
             else:
-                # Объединяем свойства
+                # Merge properties
                 unique_entities[e.id].properties.update(e.properties)
-        # Дедупликация отношений (по source+target+type)
+        # Relation deduplication (by source+target+type)
         unique_relations = {}
         for r in all_relations:
             key = f"{r.source}|{r.target}|{r.type}"
@@ -289,15 +289,15 @@ class EntityRelationExtractor:
         return list(unique_entities.values()), list(unique_relations.values())
 
 
-# Функция для подготовки данных в Neo4j (cypher-запросы)
+# Function for preparing data for Neo4j (cypher queries)
 def entities_to_cypher(entities: list[Entity], relations: list[Relation]) -> list[str]:
-    """Генерирует Cypher-запросы для создания узлов и рёбер в Neo4j."""
+    """Generates Cypher queries for creating nodes and edges in Neo4j."""
     queries = []
-    # Создание узлов
+    # Node creation
     for ent in entities:
         props = json.dumps({**ent.properties, "name": ent.name, "type": ent.type}, ensure_ascii=False)
         queries.append(f"MERGE (e:{ent.type.replace(' ', '_')} {{id: '{ent.id}'}}) SET e += {props}")
-    # Создание рёбер
+    # Edge creation
     for rel in relations:
         queries.append(
             f"MATCH (a {{id: '{rel.source}'}}), (b {{id: '{rel.target}'}}) "
@@ -307,7 +307,7 @@ def entities_to_cypher(entities: list[Entity], relations: list[Relation]) -> lis
 
 
 if __name__ == "__main__":
-    # Пример использования
+    # Usage example
     sample_text = """
     Jira проект PROJ-123 использует Confluence страницу "Architecture" для документации.
     Разработчик Иван Иванов работает над интеграцией с GitLab CI.
@@ -315,7 +315,7 @@ if __name__ == "__main__":
     """
     extractor = EntityRelationExtractor(
         use_spacy=True,
-        use_slm=False,  # для теста без SLM
+        use_slm=False,  # for testing without SLM
         cache_dir=Path("./entity_cache"),
     )
     entities, relations = extractor.extract_from_chunk(sample_text, source_id="test_doc")
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     for r in relations:
         print(f"  {r.source} -> {r.target} : {r.type}")
 
-    # Генерация Cypher
+    # Cypher generation
     cypher = entities_to_cypher(entities, relations)
     print("\nCypher queries:")
     for q in cypher:

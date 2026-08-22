@@ -1,0 +1,740 @@
+# RAG-система — Руководство по распределённому развёртыванию
+
+**Продакшн-развёртывание с GPUStack на машине A, RAG-прокси + Qdrant + Redis + Open WebUI на машине B, ETL на ноутбуке пользователя.**
+
+---
+
+## Архитектура
+
+```
+┌──────────────────────────┐         ┌────────────────────────────────┐         ┌──────────────────────┐
+│  MACHINE A (GPU)         │         │  MACHINE B (Proxy)            │         │  USER LAPTOP         │
+│  GPUStack                │         │                                │         │                      │
+│                          │         │  ┌──────────────┐             │         │  ┌────────────────┐   │
+│  ┌────────────────────┐  │         │  │ Open WebUI    │             │         │  │ ETL Pipeline   │   │
+│  │ Qwen 3.6 (LLM)     │──┼────┐    │  │ :3000         │             │         │  │                │   │
+│  │ 8K context         │  │    │    │  └──────┬───────┘             │         │  │ • Confluence   │   │
+│  └────────────────────┘  │    │    │         │ HTTPS                │         │  │ • Jira         │   │
+│  ┌────────────────────┐  │    ├────┼─────────┘                       │         │  │ • GitLab       │   │
+│  │ Saiga (SLM)        │──┼────┘    │  ┌──────▼───────┐               │         │  │ • Docs/Books   │   │
+│  │ Routing, classify  │  │         │  │ RAG Proxy    │               │         │  └────────┬───────┘   │
+│  └────────────────────┘  │         │  │ :8080        │               │         │           │           │
+│  ┌────────────────────┐  │         │  └──────┬───────┘               │         │           │ HTTPS     │
+│  │ BGE-m3 (Embedder)  │──┼─────────┼──┐       │                       │         │           │ (VPN)     │
+│  │ 1024-dim dense     │  │         │  │       │                       │         │           │           │
+│  │ + sparse + ColBERT │  │         │  │  ┌────▼──────┐               │  HTTPS  │           ▼           │
+│  └────────────────────┘  │         │  │  │ Qdrant    │               ├─────────┘   ┌────────────────┐   │
+│  ┌────────────────────┐  │         │  │  │ :6333     │               │             │  GPUStack       │   │
+│  │ BGE-reranker-v2-m3│──┼─────────┼──┘  │ :6334 gRPC │               │             │  (Machine A)    │   │
+│  │ Cross-encoder      │  │         │     └───────────┘               │             └────────────────┘   │
+│  └────────────────────┘  │         │                                │                                │
+│                          │         │  ┌───────────┐                 │                                │
+│  API: http://<A>:8080/v1 │         │  │ Redis     │                 │                                │
+│  Token: sk-xxxxx         │         │  │ :6379     │                 │                                │
+└──────────────────────────┘         │  └───────────┘                 │                                │
+                                     │                                │                                │
+                                     │  ┌─────────────────┐ (optional)│                                │
+                                     │  │ Prometheus+Grafana│          │                                │
+                                     │  └─────────────────┘           │                                │
+                                     └────────────────────────────────┘                                │
+                                                                                                    │
+                          All connections are TLS/HTTPS over the corporate network.            │
+```
+
+---
+
+## Требования к сети
+
+| Соединение               | Порт  | Направление      | Протокол       | Обязательно |
+|--------------------------|-------|------------------|----------------|-------------|
+| Open WebUI → Proxy       | 8080  | B → B            | HTTP           | Да          |
+| Proxy → Qdrant           | 6333, 6334 | B → B         | HTTP / gRPC    | Да          |
+| Proxy → Redis            | 6379  | B → B            | TCP            | Да          |
+| Proxy → Neo4j            | 7687  | B → B            | Bolt           | Да          |
+| Браузер → Neo4j Browser  | 7474  | Пользователь → B | HTTP           | Опционально |
+| Proxy → GPUStack         | 8080  | B → A            | HTTPS          | Да          |
+| Браузер → Open WebUI     | 3000  | Пользователь → B | HTTP           | Да          |
+| ETL → Qdrant             | 6333  | Ноутбук → B      | HTTPS (VPN)    | Да          |
+| ETL → Neo4j              | 7687  | Ноутбук → B      | Bolt (VPN)     | Опционально |
+| ETL → GPUStack           | 8080  | Ноутбук → A      | HTTPS          | Да          |
+| Proxy → Prometheus       | 9090  | B → B            | HTTP           | Опционально |
+| Proxy → S3/MinIO         | 9000  | B → B            | HTTPS          | Опционально |
+
+---
+
+## Шаг 1: Проверка машины A (GPUStack)
+
+```bash
+# From Machine B (or any host with network access to A):
+curl -H "Authorization: Bearer $GPUSTACK_TOKEN" \
+  http://<MACHINE_A_IP>:8080/v1/models
+
+# Expected output: list of models including Qwen 3.6, Saiga, bge-m3, bge-reranker-v2-m3
+```
+
+**Примечание:** GPUStack предоставляет все модели через единый OpenAI-совместимый API. Используемая модель определяется именем модели в запросе. Например:
+- `qwen3-6b` → Qwen 3.6 LLM
+- `saiga` → Saiga SLM
+- `bge-m3` → эмбеддер BGE-m3
+- `bge-reranker-v2-m3` → реранкер BGE
+
+---
+
+## Шаг 2: Развёртывание на машине B (Proxy + Qdrant + Redis + Open WebUI)
+
+### 2.1. Клонирование репозитория
+
+```bash
+ssh user@<MACHINE_B_IP>
+cd /opt
+sudo git clone <repo> rag-system
+cd rag-system
+```
+
+### 2.2. Создание конфигурации прокси
+
+Создайте `proxy/.env.production`:
+
+```bash
+# === Server ===
+HOST=0.0.0.0
+PORT=8080
+WORKERS=1
+
+# === Logging ===
+LOG_FORMAT=json
+LOG_LEVEL=INFO
+LOG_REQUESTS=true
+LOG_DIR=/app/logs
+
+# === Vector Store (Qdrant on Machine B) ===
+QDRANT_HOST=qdrant
+QDRANT_PORT=6333
+QDRANT_GRPC_ENABLED=true
+QDRANT_GRPC_PORT=6334
+QDRANT_QUANTIZATION_ENABLED=true
+QDRANT_HNSW_M=16
+QDRANT_HNSW_EF_CONSTRUCT=128
+COLLECTION_NAME=knowledge_base
+
+# === Cache (Redis on Machine B) ===
+USE_REDIS=true
+REDIS_URL=redis://redis:6379
+REDIS_KEY_PREFIX=proxy:
+
+# === LLM (Machine A — GPUStack) ===
+LLM_ENDPOINT=http://<MACHINE_A_IP>:8080/v1
+LLM_PROVIDER_TYPE=openai
+LLM_API_KEY=<GPUSTACK_TOKEN>
+LLM_MODEL_NAME=qwen3-6b
+AVAILABLE_MODELS=qwen3-6b,qwen3-6b-instruct
+REQUEST_TIMEOUT=120
+MAX_RETRIES=3
+RETRY_DELAY=1.0
+
+# === SLM (Machine A — GPUStack) ===
+SLM_ENDPOINT=http://<MACHINE_A_IP>:8080/v1
+SLM_API_KEY=<GPUSTACK_TOKEN>
+SLM_MODEL_NAME=saiga
+SLM_LOCAL_ENABLED=false
+SLM_MAX_TOKENS=256
+
+# === Embedder (Machine A — GPUStack) ===
+EMBEDDER_ENDPOINT=http://<MACHINE_A_IP>:8080/v1
+EMBEDDER_API_KEY=<GPUSTACK_TOKEN>
+EMBEDDER_MODEL=bge-m3
+EMBEDDER_FALLBACK_LOCAL=false
+EMBEDDER_DEVICE=cpu
+
+# === Reranker (Machine A — GPUStack) ===
+RERANKER_ENDPOINT=http://<MACHINE_A_IP>:8080/v1
+RERANKER_API_KEY=<GPUSTACK_TOKEN>
+RERANKER_MODEL=bge-reranker-v2-m3
+RERANKER_FALLBACK_LOCAL=false
+RERANKER_MAX_LENGTH=8192
+RERANKER_BATCH_SIZE=32
+
+# === Retrieval ===
+MAX_CHUNKS_RETRIEVAL=50
+MAX_CHUNKS_AFTER_RERANK=20
+PROGRESSIVE_RETRIEVAL_ENABLED=true
+PROGRESSIVE_RETRIEVAL_STAGES=5,10,20
+
+# === Graph (Neo4j) ===
+GRAPH_ENABLED=true
+USE_GRAPH_EXPANSION=true
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<password>
+
+# === Optional features (disabled by default) ===
+USE_LANGGRAPH=false
+TOOLS_ENABLED=false
+LIVE_SOURCES_ENABLED=false
+
+# === Compression & Optimization ===
+COMPRESSION_ENABLED=true
+COMPRESSION_LEVEL=6
+COMPRESSION_MIN_SIZE=1024
+TOKEN_OPTIMIZER_ENABLED=true
+EMBEDDING_CACHE_ENABLED=true
+RESPONSE_CACHE_ENABLED=true
+SEMANTIC_CACHE_ENABLED=true
+
+# === Auth (off for internal corporate) ===
+AUTH_ENABLED=false
+JWT_SECRET=<openssl-rand-hex-32>
+CORS_ORIGINS=http://<MACHINE_B_IP>:3000
+
+# === Observability ===
+METRICS_ENABLED=true
+OTEL_ENABLED=false
+SHUTDOWN_TIMEOUT=30
+WARMUP_ENABLED=true
+WARMUP_ON_STARTUP=true
+
+# === MinIO (optional) ===
+MINIO_ENDPOINT=minio:9000
+MINIO_ACCESS_KEY=<minio-user>
+MINIO_SECRET_KEY=<minio-pass>
+MINIO_BUCKET=rag-artifacts
+MINIO_DOCS_BUCKET=rag-documents
+MINIO_SECURE=false
+
+# === Rate limiting ===
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=60
+RATE_LIMIT_BURST=10
+
+# === Quality features ===
+HYDE_ENABLED=true
+CRAG_DECOMPOSITION_ENABLED=true
+SELF_CRITIQUE_ENABLED=true
+HALLUCINATION_CHECK_ENABLED=true
+NLI_GROUNDING_ENABLED=true
+REORDER_ENABLED=true
+
+# === I18N ===
+I18N_ENABLED=true
+DEFAULT_LANGUAGE=ru
+SUPPORTED_LANGUAGES=ru,en,de,fr,zh
+```
+
+### 2.3. Создание docker-compose.yml
+
+Создайте `docker-compose.yml` в корне проекта:
+
+```yaml
+version: '3.8'
+services:
+  proxy:
+    build:
+      context: .
+      dockerfile: proxy/Dockerfile
+    container_name: rag-proxy
+    ports:
+      - "8080:8080"
+    env_file: proxy/.env.production
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [rag-net]
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: rag-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [rag-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [rag-net]
+
+  neo4j:
+    image: neo4j:5
+    container_name: rag-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/<neo4j-password>
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [rag-net]
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: rag-openwebui
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://proxy:8080/v1
+      - OPENAI_API_KEY=dummy-not-used
+      - WEBUI_AUTH=false
+      - ENABLE_RAG_WEB_SEARCH=false
+      - DEFAULT_MODELS=qwen3-6b+RAG
+    volumes:
+      - openwebui_data:/app/backend/data
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [rag-net]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rag-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+    networks: [rag-net]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rag-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./config/monitoring/grafana-rag-dashboard.json:/var/lib/grafana/dashboards/rag.json
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks: [rag-net]
+
+volumes:
+  qdrant_data:
+  neo4j_data:
+  redis_data:
+  openwebui_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  rag-net:
+    driver: bridge
+```
+
+### 2.4. Запуск сервисов
+
+```bash
+# On Machine B
+cd /opt/rag-system
+docker compose up -d
+
+# Watch logs
+docker compose logs -f proxy
+
+# Expected: "Application startup complete"
+```
+
+### 2.5. Проверка развёртывания
+
+```bash
+# Proxy health
+curl http://localhost:8080/v1/health/live
+# {"status":"alive","timestamp":"..."}
+
+curl http://localhost:8080/v1/health/ready
+# {"status":"ready","components":{"qdrant":"ok","llm":"ok"}}
+
+# Model listing (should show Qwen 3.6 + Qwen 3.6+RAG)
+curl http://localhost:8080/v1/models | python3 -m json.tool
+
+# Qdrant
+curl http://localhost:6333/collections
+# {"result":{"collections":[]},"status":"ok","time":0.001}
+
+# Open WebUI
+curl -I http://localhost:3000
+# HTTP/1.1 200 OK
+```
+
+---
+
+## Шаг 3: Настройка Open WebUI
+
+1. Откройте в браузере: `http://<MACHINE_B_IP>:3000`
+2. Open WebUI запускается на экране настройки администратора (пропустите, если `WEBUI_AUTH=false`)
+3. Перейдите в **Settings → Connections → OpenAI API**
+4. Добавьте подключение:
+   - **URL**: `http://proxy:8080/v1`
+   - **API Key**: любое непустое значение (прокси его не проверяет)
+5. Нажмите **Verify Connection** — проверка должна пройти успешно
+6. Модели `qwen3-6b` и `qwen3-6b+RAG` появятся в выпадающем списке моделей
+7. Начните диалог с `qwen3-6b+RAG` для получения ответов с RAG
+
+---
+
+## Шаг 4: ETL с ноутбука пользователя
+
+### 4.1. Создание конфигурации ETL
+
+Создайте `etl/.env.laptop` на ноутбуке:
+
+```bash
+# === USER LAPTOP: ETL Configuration ===
+
+# === Source systems (corporate) ===
+# Confluence
+CONFLUENCE_URL=https://confluence.corp.example.com
+CONFLUENCE_USERNAME=your.username
+CONFLUENCE_TOKEN=<personal-access-token>
+CONFLUENCE_SPACES=ENG,HR,PRODUCT,DATA
+CONFLUENCE_BATCH_SIZE=50
+
+# Jira
+JIRA_URL=https://jira.corp.example.com
+JIRA_USERNAME=your.username
+JIRA_TOKEN=<personal-access-token>
+JIRA_PROJECTS=PROJ,INFRA,SUPPORT
+JIRA_BATCH_SIZE=50
+
+# GitLab
+GITLAB_URL=https://gitlab.corp.example.com
+GITLAB_TOKEN=<personal-access-token>
+GITLAB_GROUPS=engineering,data,product
+GITLAB_BATCH_SIZE=50
+
+# Local documents
+DOCS_PATH=./data/documents
+BOOKS_PATH=./data/books
+
+# === Target (Qdrant on Machine B, via VPN) ===
+QDRANT_HOST=<MACHINE_B_IP>
+QDRANT_PORT=6333
+QDRANT_HTTPS=true
+QDRANT_API_KEY=
+COLLECTION_NAME=knowledge_base
+
+# === Embedder (Machine A via VPN) ===
+EMBEDDER_ENDPOINT=http://<MACHINE_A_IP>:8080/v1
+EMBEDDER_API_KEY=<GPUSTACK_TOKEN>
+EMBEDDER_MODEL=bge-m3
+EMBEDDER_BATCH_SIZE=32
+
+# === Processing settings ===
+CHUNK_SIZE=512
+CHUNK_OVERLAP=50
+CHUNKER_TYPE=semantic
+MAX_WORKERS=5
+
+# === ACL settings (extracted from source systems) ===
+ACL_ENABLED=true
+DEFAULT_ACCESS_LEVEL=internal
+
+# === Reranker (used during indexing for quality scoring) ===
+RERANKER_ENDPOINT=http://<MACHINE_A_IP>:8080/v1
+RERANKER_API_KEY=<GPUSTACK_TOKEN>
+RERANKER_MODEL=bge-reranker-v2-m3
+
+# === Logging ===
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+
+# === State ===
+WAL_PATH=./etl_state/wal
+STATE_PATH=./etl_state
+```
+
+### 4.2. Запуск ETL
+
+```bash
+# On laptop
+cd /path/to/rag-system
+cp etl/.env.laptop.example etl/.env.laptop
+# Edit .env.laptop with your corporate credentials
+
+# First run — full indexing (may take hours)
+python -m etl.scheduler.run_etl \
+  --config etl/config/production.yaml \
+  --source all \
+  --full
+
+# Subsequent runs — incremental (recommended nightly)
+python -m etl.scheduler.run_etl \
+  --config etl/config/production.yaml \
+  --source all \
+  --incremental
+```
+
+### 4.3. Планирование инкрементального ETL
+
+Добавьте в crontab (на ноутбуке):
+
+```cron
+# ETL incremental every night at 2 AM
+0 2 * * * cd /path/to/rag-system && python -m etl.scheduler.run_etl --config etl/config/production.yaml --source all --incremental >> /var/log/rag-etl.log 2>&1
+```
+
+---
+
+## Шаг 5: Проверка
+
+### 5.1. Сквозной тест
+
+С машины B:
+
+```bash
+# Test full RAG pipeline
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3-6b+RAG",
+    "messages": [{"role": "user", "content": "Что такое RAG?"}],
+    "stream": false
+  }' | python3 -m json.tool
+```
+
+Ожидаемый ответ:
+
+```json
+{
+  "id": "rag-...",
+  "object": "chat.completion",
+  "model": "qwen3-6b+RAG",
+  "choices": [{
+    "message": {"role": "assistant", "content": "..."},
+    "finish_reason": "stop"
+  }],
+  "rag_feedback_id": "fb-...",
+  "rag_confidence": 0.85,
+  "rag_sources": [...],
+  "rag_knowledge_status": "found"
+}
+```
+
+### 5.2. Скрипт проверки распределённой системы
+
+Создайте `scripts/verify_distributed.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+# === Configuration ===
+MACHINE_A_IP="${MACHINE_A_IP:-10.0.1.10}"
+MACHINE_B_IP="${MACHINE_B_IP:-localhost}"
+GPUSTACK_TOKEN="${GPUSTACK_TOKEN:-dummy}"
+PROXY_PORT="${PROXY_PORT:-8080}"
+OPENWEBUI_PORT="${OPENWEBUI_PORT:-3000}"
+
+echo "=== Distributed RAG Verification ==="
+echo "Machine A (GPUStack): $MACHINE_A_IP"
+echo "Machine B (Proxy): $MACHINE_B_IP"
+echo ""
+
+# Test 1: GPUStack connectivity
+echo "[1/7] GPUStack (Machine A) — LLM/SLM/Embedder/Reranker..."
+curl -sf -H "Authorization: Bearer $GPUSTACK_TOKEN" \
+  http://$MACHINE_A_IP:8080/v1/models | python3 -m json.tool | head -20
+
+# Test 2: Qdrant
+echo ""
+echo "[2/7] Qdrant (Machine B)..."
+curl -sf http://$MACHINE_B_IP:6333/collections | python3 -m json.tool
+
+# Test 3: Redis
+echo ""
+echo "[3/7] Redis (Machine B)..."
+redis-cli -h $MACHINE_B_IP -p 6379 ping 2>/dev/null || echo "(no redis-cli, skipping)"
+
+# Test 4: Proxy liveness
+echo ""
+echo "[4/7] Proxy liveness (Machine B)..."
+curl -sf http://$MACHINE_B_IP:$PROXY_PORT/v1/health/live | python3 -m json.tool
+
+# Test 5: Proxy readiness (checks all deps)
+echo ""
+echo "[5/7] Proxy readiness (Machine B)..."
+curl -sf http://$MACHINE_B_IP:$PROXY_PORT/v1/health/ready | python3 -m json.tool
+
+# Test 6: Model listing
+echo ""
+echo "[6/7] Models (Machine B)..."
+curl -sf http://$MACHINE_B_IP:$PROXY_PORT/v1/models | python3 -m json.tool
+
+# Test 7: RAG chat
+echo ""
+echo "[7/7] RAG chat test..."
+curl -sf -X POST http://$MACHINE_B_IP:$PROXY_PORT/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3-6b+RAG",
+    "messages": [{"role": "user", "content": "test"}]
+  }' | python3 -m json.tool
+
+echo ""
+echo "=== Verification complete ==="
+```
+
+Сделайте исполняемым: `chmod +x scripts/verify_distributed.sh`
+
+### 5.3. Запуск проверки
+
+```bash
+# On Machine B
+MACHINE_A_IP=10.0.1.10 GPUSTACK_TOKEN=sk-xxx bash scripts/verify_distributed.sh
+```
+
+---
+
+## Шаг 6: Мониторинг
+
+### 6.1. Дашборды Grafana
+
+Откройте `http://<MACHINE_B_IP>:3001` (admin/admin).
+
+Преднастроенный дашборд: `RAG System Overview`
+- Частота запросов (RPS)
+- Персентили латентности (p50, p95, p99)
+- Уровень ошибок
+- Доля попаданий в кэш
+- Латентность retrieval
+- Латентность LLM
+- Использование токенов
+- Статистика обратной связи
+- Распределение уверенности (confidence)
+
+### 6.2. Алерты Prometheus
+
+Преднастроенные алерты в `config/monitoring/alerts.yml`:
+- `HighLatency` — p95 > 5 с
+- `HighErrorRate` — 5xx > 5%
+- `LLMUnavailable` — LLM недоступна > 2 мин
+- `QdrantUnavailable` — Qdrant недоступен > 1 мин
+- `LowCacheHitRatio` — попадания в кэш < 20%
+
+---
+
+## Устранение неполадок
+
+| Симптом | Причина | Решение |
+|---------|---------|---------|
+| Proxy 503 — Qdrant недоступен | Контейнер Qdrant не запущен | `docker compose restart qdrant` |
+| Proxy 503 — LLM недоступна | GPUStack недоступен | Проверьте сеть, токен |
+| Пустые ответы | База знаний пуста | Запустите ETL с ноутбука |
+| Медленные ответы | GPUStack перегружен | Уменьшите `MAX_CHUNKS_RETRIEVAL` |
+| 401 Unauthorized | `AUTH_ENABLED=true`, но ключ не задан | Установите `AUTH_ENABLED=false` |
+| Ошибки CORS | Неверный `CORS_ORIGINS` | Добавьте URL Open WebUI |
+| Open WebUI 502 | Прокси не готов | Подождите 30 с, повторите |
+| ETL: connection refused | VPN не подключён | Проверьте статус VPN |
+| RAG не возвращает чанки | Чанки не проиндексированы | Запустите `python -m etl.scheduler.run_etl` |
+
+### Эндпоинты проверки здоровья
+
+```bash
+# Proxy liveness
+curl http://proxy:8080/v1/health/live
+
+# Proxy readiness (all components)
+curl http://proxy:8080/v1/health/ready
+
+# Qdrant
+curl http://qdrant:6333/
+
+# Redis
+redis-cli ping
+
+# GPUStack models
+curl -H "Authorization: Bearer $TOKEN" http://gpu:8080/v1/models
+```
+
+---
+
+## Резервное копирование
+
+### Автоматические резервные копии
+
+Система включает скрипты резервного копирования для:
+- Снапшоты Qdrant → `scripts/ops/backup_qdrant.sh`
+- Состояние ETL WAL → `scripts/ops/backup_etl_wal.sh`
+- Конфигурация → `scripts/ops/backup_config.sh`
+
+Планирование через cron на машине B:
+
+```cron
+# Daily at 3 AM
+0 3 * * * /opt/rag-system/scripts/ops/backup_all.sh >> /var/log/rag-backup.log 2>&1
+```
+
+### Аварийное восстановление
+
+См. `docs/en/guides/disaster-recovery-runbook.md` (если существует) или:
+1. Восстановите Qdrant из снапшота
+2. Повторно запустите ETL для недостающих данных
+3. Проверьте эндпоинты здоровья
+4. Возобновите трафик
+
+---
+
+## Замечания по безопасности
+
+1. **Токен GPUStack**: храните в `.env.production` (chmod 600), не в системе контроля версий
+2. **JWT_SECRET**: генерируйте командой `openssl rand -hex 32` для подписи токенов
+3. **CORS**: разрешайте в `CORS_ORIGINS` только origin Open WebUI
+4. **TLS**: используйте HTTPS для эндпоинта GPUStack, если он доступен за пределами приватной сети
+5. **Сеть**: держите машину B в приватной сети, наружу открывайте только порт 3000 (Open WebUI)
+6. **Ротация секретов**: ротируйте токен GPUStack ежеквартально через `scripts/security_audit.sh`
+7. **Аудит-лог**: все действия администратора логируются в `audit.jsonl` на хосте прокси
+
+---
+
+## Краткая шпаргалка
+
+| Задача | Команда |
+|--------|---------|
+| Запуск сервисов | `docker compose up -d` |
+| Остановка сервисов | `docker compose down` |
+| Просмотр логов | `docker compose logs -f proxy` |
+| Перезапуск прокси | `docker compose restart proxy` |
+| Обновление кода | `git pull && docker compose build proxy && docker compose up -d` |
+| Запуск ETL | `python -m etl.scheduler.run_etl --config etl/config/production.yaml` |
+| Проверка | `bash scripts/verify_distributed.sh` |
+| Резервная копия | `bash scripts/ops/backup_all.sh` |
+| Восстановление | `bash scripts/ops/restore_all.sh --latest` |
