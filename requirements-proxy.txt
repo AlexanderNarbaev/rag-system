@@ -38,6 +38,7 @@ numpy>=1.26.0          # vector math for hybrid retrieval scoring & rerank
 # ── Auth & user management ────────────────────────────────────────────────────
 aiosqlite>=0.19.0
 ldap3>=2.9.0
+cryptography>=50.0.0   # force fixed version (PYSEC-2026-3552)
 
 # ── Object storage (MinIO) ───────────────────────────────────────────────────
 boto3>=1.43.40
@@ -54,7 +55,8 @@ opentelemetry-exporter-otlp-proto-http>=1.20.0
 
 # ── Model Evolution (fine-tuning) ─────────────────────────────────────────────
 peft>=0.19.1
-mlflow>=3.11.0
+mlflow-skinny>=3.11.0   # avoids full mlflow's cryptography<50 pin
+cryptography>=50.0.0    # force fixed version (PYSEC-2026-3552)
 rouge-score>=0.1.2
 sacrebleu>=2.4.0
 bert-score>=0.3.13

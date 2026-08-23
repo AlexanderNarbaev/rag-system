@@ -29,6 +29,7 @@ import pkgutil
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
@@ -190,9 +191,7 @@ class MigrationManager:
         # Initialize Neo4j driver if configured
         if self._neo4j_uri:
             try:
-                import importlib.util
-
-                neo4j_spec = importlib.util.find_spec("neo4j")
+                neo4j_spec = find_spec("neo4j")
                 if neo4j_spec is not None:
                     from neo4j import AsyncGraphDatabase
 

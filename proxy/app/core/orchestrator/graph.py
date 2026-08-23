@@ -1,6 +1,6 @@
 # proxy/app/core/orchestrator/graph.py
 """LangGraph state graph construction for RAG orchestration."""
-# mypy: disable-error-code="import-untyped,attr-defined,misc,assignment"
+# mypy: disable-error-code="import-untyped,attr-defined,misc,assignment,type-var"
 
 import logging
 from typing import Any, TypedDict
@@ -91,13 +91,13 @@ def build_rag_graph() -> Any:
     builder = StateGraph(RAGState)
 
     # Add nodes
-    builder.add_node("rewrite", rewrite_query)  # type: ignore[type-var]
-    builder.add_node("retrieve", retrieve)  # type: ignore[type-var]
-    builder.add_node("graph_expand", graph_expand)  # type: ignore[type-var]
-    builder.add_node("rerank", rerank)  # type: ignore[type-var]
-    builder.add_node("build_context", build_context_node)  # type: ignore[type-var]
-    builder.add_node("generate", generate)  # type: ignore[type-var]
-    builder.add_node("check_sufficiency", check_sufficiency)  # type: ignore[type-var]
+    builder.add_node("rewrite", rewrite_query)
+    builder.add_node("retrieve", retrieve)
+    builder.add_node("graph_expand", graph_expand)
+    builder.add_node("rerank", rerank)
+    builder.add_node("build_context", build_context_node)
+    builder.add_node("generate", generate)
+    builder.add_node("check_sufficiency", check_sufficiency)
 
     # Entry point
     builder.set_entry_point("rewrite")
@@ -110,10 +110,10 @@ def build_rag_graph() -> Any:
     builder.add_conditional_edges("check_sufficiency", check_sufficiency, {"rewrite": "rewrite", "rerank": "rerank"})
 
     builder.add_edge("build_context", "generate")
-    builder.add_node("self_reflection", self_reflection)  # type: ignore[type-var]
-    builder.add_node("check_confidence", check_confidence)  # type: ignore[type-var]
-    builder.add_node("self_critique", self_critique)  # type: ignore[type-var]
-    builder.add_node("call_tools", call_tools)  # type: ignore[type-var]
+    builder.add_node("self_reflection", self_reflection)
+    builder.add_node("check_confidence", check_confidence)
+    builder.add_node("self_critique", self_critique)
+    builder.add_node("call_tools", call_tools)
 
     # Route from generate:
     # - If tool_calls were requested → call_tools

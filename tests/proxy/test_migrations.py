@@ -763,7 +763,7 @@ class TestNeo4jInitialization:
         """Neo4j init should be skipped if neo4j package not installed."""
         db_path = str(tmp_path / "test.db")
         with (
-            patch("importlib.util.find_spec", return_value=None),
+            patch("proxy.app.db.migrations.find_spec", return_value=None),
             patch("proxy.app.db.migrations.discover_migrations"),
         ):
             mgr = MigrationManager(
@@ -785,9 +785,8 @@ class TestNeo4jInitialization:
                 db_path=db_path,
                 neo4j_uri="bolt://localhost:7687",
             )
-            # Patch find_spec to indicate neo4j exists, but the actual import fails
-            with patch("proxy.app.db.migrations.importlib") as mock_importlib:
-                mock_importlib.util.find_spec.return_value = None
+            # Patch find_spec to simulate neo4j not being installed
+            with patch("proxy.app.db.migrations.find_spec", return_value=None):
                 await mgr.initialize()
             assert mgr._neo4j_driver is None
             await mgr.close()

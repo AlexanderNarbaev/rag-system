@@ -418,8 +418,8 @@ class LLMTrainer(TrainerBase):
         except ImportError:
             logger.warning("sacrebleu is not installed; skipping BLEU metrics")
             return {}
-        bleu_1 = sacrebleu.corpus_bleu(hypotheses, [references], weights=[1.0, 0.0, 0.0, 0.0])
-        bleu_4 = sacrebleu.corpus_bleu(hypotheses, [references])
+        bleu_1 = sacrebleu.BLEU(max_ngram_order=1).corpus_score(hypotheses, [references])
+        bleu_4 = sacrebleu.BLEU(max_ngram_order=4).corpus_score(hypotheses, [references])
         return {"bleu_1": bleu_1.score / 100.0, "bleu_4": bleu_4.score / 100.0}
 
     @staticmethod

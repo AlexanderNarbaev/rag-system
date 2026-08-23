@@ -227,6 +227,7 @@ class TestSLMTrainerDatasetLoading:
             patch("proxy.app.model_evolution.slm_trainer.AutoTokenizer") as auto_tok,
             patch("proxy.app.model_evolution.slm_trainer.AutoModelForSequenceClassification"),
             patch("proxy.app.model_evolution.slm_trainer.Trainer"),
+            patch.object(trainer, "_build_training_args", return_value=MagicMock()),
         ):
             auto_tok.from_pretrained.return_value = mock_tokenizer
             job = trainer.train(config)

@@ -3,14 +3,17 @@
 
 Converts webhook events (Confluence, GitLab) into documents and runs them
 through the standard ETL chain: chunk (MDKeyChunker) → enrich (ChunkEnricher,
-optional) → index (QdrantHybridIndexer).
+optional) → index (QdrantHybridIndexer). Deletion events (page_removed,
+page_deleted) remove existing chunks from Qdrant and clear the local version
+store.
 
 Graceful degradation:
 - Missing embedder/Qdrant at init → processing deferred (event not ACKed,
   retried later by the consumer group).
 - Enrichment failure → chunk is indexed with basic metadata only.
-- Events without indexable content (deletions, unknown types) → skipped and
+- Events without indexable content (comments, unknown types) → skipped and
   acknowledged so they do not poison the pending queue.
+- Deletion failures are logged and return False so the event can be retried.
 
 See Also:
     - etl/scheduler/streaming_pipeline.py — batch-mode equivalent wiring
@@ -34,13 +37,14 @@ logger = logging.getLogger("EventProcessor")
 # Event types that carry no indexable content — acknowledged without processing.
 _SKIP_EVENT_TYPES = frozenset(
     {
-        "page_removed",
-        "page_deleted",
         "comment_created",
         "comment_updated",
         "comment_removed",
     }
 )
+
+# Event types that signal a document should be removed from the index.
+_DELETE_EVENT_TYPES = frozenset({"page_removed", "page_deleted"})
 
 
 class EventProcessor:
@@ -179,7 +183,8 @@ class EventProcessor:
         """Map a webhook event to a document dict for the chunking pipeline.
 
         Returns None when the event carries no indexable content (caller
-        should ACK it as a no-op).
+        should ACK it as a no-op). Deletion events are handled in
+        ``process_event`` before this method is called.
         """
         if event_type in _SKIP_EVENT_TYPES:
             logger.info("Skipping non-indexable event: source=%s type=%s doc_id=%s", source, event_type, doc_id)
@@ -192,6 +197,18 @@ class EventProcessor:
 
         logger.warning("Unsupported event source: %s (doc_id=%s)", source, doc_id)
         return None
+
+    @staticmethod
+    def _normalize_document_id(source: str, doc_id: str) -> str:
+        """Prefix a raw document id with its source type.
+
+        Mirrors the id construction in ``_confluence_document`` and
+        ``_gitlab_document``.
+        """
+        prefix = f"{source}_"
+        if str(doc_id).startswith(prefix):
+            return str(doc_id)
+        return f"{prefix}{doc_id}"
 
     @staticmethod
     def _confluence_document(event_type: str, doc_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -299,12 +316,56 @@ class EventProcessor:
             except Exception as e:
                 logger.debug("Chunk enrichment failed for %s: %s", ch.get("hash", "?"), e)
 
+    def _version_store(self) -> Any:
+        """Build a ChunkVersionStore from config paths or sane defaults."""
+        from etl.chunker.hash_versioning import ChunkVersionStore
+
+        indexing_cfg = self._config.get("indexing", {})
+        hot_dir = indexing_cfg.get("hot_dir", "./data/etl/versions/hot")
+        cold_dir = indexing_cfg.get("cold_dir", "./data/etl/versions/cold")
+        wal_path = indexing_cfg.get("version_wal", "./data/etl/versions/wal.json")
+        return ChunkVersionStore(
+            hot_dir=Path(hot_dir),
+            cold_dir=Path(cold_dir),
+            wal_path=Path(wal_path),
+        )
+
+    def _delete_document(self, source: str, doc_id: str) -> bool:
+        """Remove all indexed chunks for a document and clear its version store.
+
+        Returns True when the Qdrant deletion succeeded (including the case
+        where no points matched). Returns False when components are unavailable
+        or Qdrant reported an error, so the event can be retried.
+        """
+        document_id = self._normalize_document_id(source, doc_id)
+
+        if not self._ensure_components():
+            return False
+
+        try:
+            deleted = self._indexer.delete_by_source_id(document_id)
+        except Exception as e:
+            logger.error("Failed to delete document %s from index: %s", document_id, e)
+            return False
+
+        try:
+            version_store = self._version_store()
+            version_store.reset(document_id)
+        except Exception as e:
+            logger.warning("Failed to reset version store for %s: %s", document_id, e)
+
+        logger.info("Deleted document %s (%d points)", document_id, deleted)
+        return True
+
     def process_event(self, event: dict[Any, Any]) -> bool:
         """Process a single event: map to document, chunk, enrich, index.
 
-        Returns True when the event was indexed or intentionally skipped
-        (safe to ACK). Returns False on retryable failures (component
-        unavailable, indexing error) so the message stays pending.
+        Deletion events (``page_removed``, ``page_deleted``) are routed to
+        ``_delete_document`` instead of the chunking pipeline.
+
+        Returns True when the event was indexed, deleted, or intentionally
+        skipped (safe to ACK). Returns False on retryable failures (component
+        unavailable, indexing/deletion error) so the message stays pending.
         """
         event = self._normalize_event(event)
 
@@ -321,6 +382,13 @@ class EventProcessor:
             payload = json.loads(payload_raw) if isinstance(payload_raw, str) else payload_raw
         except (json.JSONDecodeError, TypeError):
             logger.warning("Invalid payload JSON for event doc_id=%s", doc_id)
+            return False
+
+        if event_type in _DELETE_EVENT_TYPES and source in ("confluence", "gitlab"):
+            if self._delete_document(source, doc_id):
+                self.stats["processed"] += 1
+                return True
+            self.stats["failed"] += 1
             return False
 
         document = self._event_to_document(source, event_type, doc_id, payload)

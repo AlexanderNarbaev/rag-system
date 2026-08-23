@@ -19,6 +19,9 @@
 SHELL := /bin/bash
 ROOT  := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
+# Use project virtualenv when available; fall back to system python.
+PYTHON := $(shell test -x $(ROOT)/.venv/bin/python && echo $(ROOT)/.venv/bin/python || echo python)
+
 # ── Setup ─────────────────────────────────────────────────────────────────────
 install: ## Run full setup (proxy + ETL)
 	@bash $(ROOT)/setup.sh --full
@@ -30,7 +33,7 @@ install-one-line: ## One-line install (clone + setup + start)
 	@bash $(ROOT)/install.sh
 
 wizard: ## Run configuration wizard
-	@python $(ROOT)/scripts/setup_wizard.py
+	@$(PYTHON) $(ROOT)/scripts/setup_wizard.py
 
 setup: ## Create .env from .env.example if missing
 	@test -f $(ROOT)/proxy/.env || (cp $(ROOT)/proxy/.env.example $(ROOT)/proxy/.env && echo "Created proxy/.env from proxy/.env.example")
@@ -38,48 +41,51 @@ setup: ## Create .env from .env.example if missing
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 run: ## Start proxy locally (requires .env and venv)
-	@cd $(ROOT) && granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 proxy.app.main:app
+	@cd $(ROOT) && $(PYTHON) -m granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 proxy.app.main:app
 
 run-dev: ## Start proxy with hot reload for development
-	@cd $(ROOT) && granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 --reload proxy.app.main:app
+	@cd $(ROOT) && $(PYTHON) -m granian --interface asgi --host 0.0.0.0 --port 8080 --workers 1 --reload proxy.app.main:app
 
 # ── ETL ───────────────────────────────────────────────────────────────────────
 etl: ## Run full ETL pipeline
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml
 
 etl-run-streaming: ## Run ETL in streaming mode with remote embedder
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --mode streaming
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --mode streaming
 
 etl-run-batch: ## Run ETL in batch mode
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --mode batch
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --mode batch
 
 etl-test-connection: ## Test connections to all sources
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --test-connection
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --test-connection
 
 etl-cleanup: ## Clean raw data after indexing
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --cleanup-after-index
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --cleanup-after-index
 
 etl-confluence: ## Run Confluence extractor only
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
 
 etl-jira: ## Run Jira extractor only
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
 
 etl-gitlab: ## Run GitLab extractor only
-	@cd $(ROOT) && python etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
+	@cd $(ROOT) && $(PYTHON) etl/scheduler/run_etl.py --config etl/config/etl_config.yaml --skip-graph --skip-index
 
 # ── Testing ───────────────────────────────────────────────────────────────────
-test: ## Run all tests
-	@cd $(ROOT) && python -m pytest tests/ -v
+test: ## Run all tests (unit/integration first, then e2e/performance/resilience isolated)
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/ --ignore=tests/e2e --ignore=tests/performance --ignore=tests/resilience -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/e2e -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/performance -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/resilience -v
 
 test-proxy: ## Run proxy unit tests
-	@cd $(ROOT) && python -m pytest tests/proxy/ -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/proxy/ -v
 
 test-etl: ## Run ETL unit tests
-	@cd $(ROOT) && python -m pytest tests/etl/ -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/etl/ -v
 
 test-integration: ## Run integration tests
-	@cd $(ROOT) && python -m pytest tests/integration/ -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/integration/ -v
 
 test-minikube: ## Run integration tests against minikube deployment
 	@echo "Ensure minikube is running and port-forward is active:"
@@ -87,55 +93,55 @@ test-minikube: ## Run integration tests against minikube deployment
 	@echo "  python3 scripts/mock_llm_server.py &"
 	@echo ""
 	RAG_PROXY_URL=http://localhost:9080 MOCK_LLM_URL=http://localhost:8010 \
-		python -m pytest tests/integration/test_minikube_e2e.py -v
+		$(PYTHON) -m pytest tests/integration/test_minikube_e2e.py -v
 
 test-performance: ## Run performance and benchmark tests
-	@cd $(ROOT) && python -m pytest tests/performance/ -v -m benchmark
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/performance/ -v -m benchmark
 
 test-e2e: ## Run end-to-end tests (requires running services)
-	@cd $(ROOT) && python -m pytest tests/e2e/ -v -m e2e
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/e2e/ -v -m e2e
 
 test-resilience: ## Run chaos and resilience tests
-	@cd $(ROOT) && python -m pytest tests/resilience/ -v -m chaos
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/resilience/ -v -m chaos
 
 benchmark: ## Run performance benchmarks against the local proxy
 	@echo "Running benchmarks against http://localhost:8080..."
-	@cd $(ROOT) && python3 scripts/benchmark.py --proxy-url http://localhost:8080
+	@cd $(ROOT) && $(PYTHON) scripts/benchmark.py --proxy-url http://localhost:8080
 
 chaos-test: ## Run Docker-backed graceful-degradation tests
-	@cd $(ROOT) && python3 -m pytest tests/resilience/test_chaos_full.py -v
+	@cd $(ROOT) && $(PYTHON) -m pytest tests/resilience/test_chaos_full.py -v
 
 benchmark-baselines: ## Run latency baseline benchmarks and generate reports
-	@cd $(ROOT) && python scripts/run_benchmarks.py
+	@cd $(ROOT) && $(PYTHON) scripts/run_benchmarks.py
 
 benchmark-compare: ## Run benchmarks and compare against saved baseline
-	@cd $(ROOT) && python scripts/run_benchmarks.py --compare tests/performance/latency_benchmarks.json
+	@cd $(ROOT) && $(PYTHON) scripts/run_benchmarks.py --compare tests/performance/latency_benchmarks.json
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 audit: ## Run pip-audit on all requirements files
 	@echo "Auditing proxy dependencies..."
-	@pip-audit --requirement requirements-proxy.txt --desc --format columns --vulnerability-service osv
+	@$(PYTHON) -m pip_audit --requirement requirements-proxy.txt --desc --format columns --vulnerability-service osv
 	@echo ""
 	@echo "Auditing ETL dependencies..."
-	@pip-audit --requirement requirements-etl.txt --desc --format columns --vulnerability-service osv
+	@$(PYTHON) -m pip_audit --requirement requirements-etl.txt --desc --format columns --vulnerability-service osv
 	@echo ""
 	@echo "Auditing dev dependencies..."
-	@pip-audit --requirement requirements-dev.txt --desc --format columns --vulnerability-service osv
+	@$(PYTHON) -m pip_audit --requirement requirements-dev.txt --desc --format columns --vulnerability-service osv
 
 lint: ## Lint with ruff
-	@cd $(ROOT) && ruff check .
+	@cd $(ROOT) && $(PYTHON) -m ruff check .
 
 helm-lint: ## Lint Helm chart (requires helm CLI)
 	@if ! command -v helm >/dev/null 2>&1; then echo "helm not found - skipping Helm lint"; exit 0; fi && cd $(ROOT) && helm lint deploy/k8s/helm/rag-system/
 
 format: ## Format with ruff
-	@cd $(ROOT) && ruff format .
+	@cd $(ROOT) && $(PYTHON) -m ruff format .
 
 format-check: ## Check formatting without changes
-	@cd $(ROOT) && ruff format --check .
+	@cd $(ROOT) && $(PYTHON) -m ruff format --check .
 
 typecheck: ## Run mypy static type checker
-	@cd $(ROOT) && mypy proxy/ etl/ --exclude '\.venv|__pycache__'
+	@cd $(ROOT) && $(PYTHON) -m mypy proxy/ etl/ --exclude '\.venv|__pycache__'
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 clean: ## Remove build artifacts and caches
@@ -208,31 +214,31 @@ docs: ## Show documentation locations
 	@echo "  README.md:    project overview"
 
 export-openapi: ## Export OpenAPI spec + generate API docs
-	@cd $(ROOT) && python scripts/export_openapi.py
+	@cd $(ROOT) && $(PYTHON) scripts/export_openapi.py
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 dashboard: ## Start Streamlit dashboard
-	streamlit run dashboard/app.py --server.port 8501
+	$(PYTHON) -m streamlit run dashboard/app.py --server.port 8501
 
 tui: ## Start terminal UI
-	python tui/app.py
+	$(PYTHON) tui/app.py
 
 # ── MCP Server ────────────────────────────────────────────────────────────────
 mcp-server: ## Start MCP server
-	python mcp_server/server.py
+	$(PYTHON) mcp_server/server.py
 
 # ── CI pipeline ───────────────────────────────────────────────────────────────
 all: install lint test ## Install deps, lint, then run all tests
 
 # ── Maturity Review ───────────────────────────────────────────────────────────
 maturity-review: ## Run automated RAG maturity assessment
-	@python $(ROOT)/scripts/maturity_review.py
+	@$(PYTHON) $(ROOT)/scripts/maturity_review.py
 
 maturity-review-json: ## Run maturity assessment (JSON output)
-	@python $(ROOT)/scripts/maturity_review.py --json
+	@$(PYTHON) $(ROOT)/scripts/maturity_review.py --json
 
 maturity-review-save: ## Run maturity assessment and save report
-	@python $(ROOT)/scripts/maturity_review.py --output $(ROOT)/docs/en/guides/maturity-report.md
+	@$(PYTHON) $(ROOT)/scripts/maturity_review.py --output $(ROOT)/docs/en/guides/maturity-report.md
 	@echo "Report saved to docs/en/guides/maturity-report.md"
 
 # ── Help ──────────────────────────────────────────────────────────────────────

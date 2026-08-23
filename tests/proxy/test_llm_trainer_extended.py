@@ -170,7 +170,7 @@ class TestLLMTrainerEvaluate:
             },
         ]
         fake_bleu = MagicMock()
-        fake_bleu.corpus_bleu.return_value = SimpleNamespace(score=50.0)
+        fake_bleu.BLEU.return_value.corpus_score.return_value = SimpleNamespace(score=50.0)
         fake_rouge = MagicMock()
         fake_rouge.rouge_scorer.RougeScorer.return_value.score.return_value = {
             "rougeL": SimpleNamespace(precision=0.4, recall=0.5, fmeasure=0.45),

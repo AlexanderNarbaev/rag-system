@@ -1,15 +1,18 @@
 # tests/etl/test_event_processor.py
 """Tests for EventProcessor — real chunk → enrich → index event handlers."""
 
+from __future__ import annotations
+
 import json
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 
 @pytest.fixture
-def config():
+def config() -> dict[str, Any]:
     """Minimal ETL config for EventProcessor."""
     return {
         "chunking": {"max_tokens": 1500, "overlap_tokens": 200, "min_chunk_tokens": 100},
@@ -24,7 +27,7 @@ def config():
 
 
 @pytest.fixture
-def confluence_event():
+def confluence_event() -> dict[str, Any]:
     """Confluence page_created event as read from a Redis Stream."""
     return {
         "source": "confluence",
@@ -44,7 +47,11 @@ def confluence_event():
     }
 
 
-def _make_processor(config, chunks=None, indexed=1):
+def _make_processor(
+    config: dict[str, Any],
+    chunks: list[SimpleNamespace] | None = None,
+    indexed: int = 1,
+) -> tuple[Any, MagicMock, MagicMock]:
     """Build an EventProcessor with mocked chunker/indexer wired in."""
     from etl.scheduler.event_processor import EventProcessor
 
@@ -62,7 +69,7 @@ def _make_processor(config, chunks=None, indexed=1):
 class TestEventToDocument:
     """Event → document mapping."""
 
-    def test_confluence_page_created(self, config):
+    def test_confluence_page_created(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -82,14 +89,14 @@ class TestEventToDocument:
         assert doc["content"] == "<p>content</p>"
         assert doc["metadata"]["version"] == "2"
 
-    def test_confluence_empty_content_returns_none(self, config):
+    def test_confluence_empty_content_returns_none(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
         doc = processor._event_to_document("confluence", "page_created", "123", {"page": {"title": "Empty"}})
         assert doc is None
 
-    def test_confluence_body_storage_raw_fallback(self, config):
+    def test_confluence_body_storage_raw_fallback(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -98,7 +105,7 @@ class TestEventToDocument:
         assert doc is not None
         assert doc["content"] == "<p>raw</p>"
 
-    def test_gitlab_push_event(self, config):
+    def test_gitlab_push_event(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -111,7 +118,7 @@ class TestEventToDocument:
         assert doc["source_type"] == "gitlab_commit"
         assert "fix: retrieval bug" in doc["content"]
 
-    def test_gitlab_merge_request_event(self, config):
+    def test_gitlab_merge_request_event(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -124,21 +131,21 @@ class TestEventToDocument:
         assert doc["source_type"] == "gitlab_merge_request"
         assert "Details here" in doc["content"]
 
-    def test_gitlab_unknown_type_returns_none(self, config):
+    def test_gitlab_unknown_type_returns_none(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
         doc = processor._event_to_document("gitlab", "pipeline", "1", {"project": {}})
         assert doc is None
 
-    def test_skip_event_types_return_none(self, config):
+    def test_skip_event_types_return_none(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
-        doc = processor._event_to_document("confluence", "page_removed", "1", {"page": {"title": "X"}})
+        doc = processor._event_to_document("confluence", "comment_created", "1", {"page": {"title": "X"}})
         assert doc is None
 
-    def test_unknown_source_returns_none(self, config):
+    def test_unknown_source_returns_none(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -149,7 +156,7 @@ class TestEventToDocument:
 class TestProcessEvent:
     """process_event success and failure paths."""
 
-    def test_success_indexes_chunks(self, config, confluence_event):
+    def test_success_indexes_chunks(self, config: dict[str, Any], confluence_event: dict[str, Any]) -> None:
         processor, chunker, indexer = _make_processor(config)
 
         result = processor.process_event(confluence_event)
@@ -160,21 +167,21 @@ class TestProcessEvent:
         assert processor.stats["processed"] == 1
         assert processor.stats["chunks_indexed"] == 1
 
-    def test_missing_source_returns_false(self, config):
+    def test_missing_source_returns_false(self, config: dict[str, Any]) -> None:
         processor, _, _ = _make_processor(config)
         assert processor.process_event({"event_type": "x", "payload": "{}"}) is False
         assert processor.stats["failed"] == 0  # rejected before processing
 
-    def test_invalid_payload_json_returns_false(self, config):
+    def test_invalid_payload_json_returns_false(self, config: dict[str, Any]) -> None:
         processor, _, _ = _make_processor(config)
         event = {"source": "confluence", "event_type": "page_created", "doc_id": "1", "payload": "not json"}
         assert processor.process_event(event) is False
 
-    def test_skippable_event_returns_true_without_indexing(self, config):
+    def test_skippable_event_returns_true_without_indexing(self, config: dict[str, Any]) -> None:
         processor, chunker, indexer = _make_processor(config)
         event = {
             "source": "confluence",
-            "event_type": "page_removed",
+            "event_type": "comment_created",
             "doc_id": "1",
             "payload": json.dumps({"page": {"title": "Gone"}}),
         }
@@ -183,13 +190,13 @@ class TestProcessEvent:
         indexer.index_chunks.assert_not_called()
         assert processor.stats["skipped"] == 1
 
-    def test_bytes_event_normalized(self, config, confluence_event):
+    def test_bytes_event_normalized(self, config: dict[str, Any], confluence_event: dict[str, Any]) -> None:
         processor, _, indexer = _make_processor(config)
         bytes_event = {k.encode(): (v.encode() if isinstance(v, str) else v) for k, v in confluence_event.items()}
         assert processor.process_event(bytes_event) is True
         indexer.index_chunks.assert_called_once()
 
-    def test_chunker_failure_returns_false(self, config, confluence_event):
+    def test_chunker_failure_returns_false(self, config: dict[str, Any], confluence_event: dict[str, Any]) -> None:
         processor, chunker, indexer = _make_processor(config)
         chunker.process_document.side_effect = RuntimeError("chunk boom")
 
@@ -197,28 +204,32 @@ class TestProcessEvent:
         indexer.index_chunks.assert_not_called()
         assert processor.stats["failed"] == 1
 
-    def test_indexer_failure_returns_false(self, config, confluence_event):
+    def test_indexer_failure_returns_false(self, config: dict[str, Any], confluence_event: dict[str, Any]) -> None:
         processor, _, indexer = _make_processor(config)
         indexer.index_chunks.side_effect = ConnectionError("qdrant down")
 
         assert processor.process_event(confluence_event) is False
         assert processor.stats["failed"] == 1
 
-    def test_zero_indexed_returns_false_for_retry(self, config, confluence_event):
+    def test_zero_indexed_returns_false_for_retry(
+        self, config: dict[str, Any], confluence_event: dict[str, Any]
+    ) -> None:
         processor, _, indexer = _make_processor(config)
         indexer.index_chunks.return_value = 0
 
         assert processor.process_event(confluence_event) is False
         assert processor.stats["failed"] == 1
 
-    def test_no_chunks_returns_true_noop(self, config, confluence_event):
+    def test_no_chunks_returns_true_noop(self, config: dict[str, Any], confluence_event: dict[str, Any]) -> None:
         processor, _, indexer = _make_processor(config, chunks=[])
 
         assert processor.process_event(confluence_event) is True
         indexer.index_chunks.assert_not_called()
         assert processor.stats["skipped"] == 1
 
-    def test_components_unavailable_returns_false(self, config, confluence_event):
+    def test_components_unavailable_returns_false(
+        self, config: dict[str, Any], confluence_event: dict[str, Any]
+    ) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -226,7 +237,11 @@ class TestProcessEvent:
             assert processor.process_event(confluence_event) is False
         assert processor.stats["failed"] == 1
 
-    def test_enrichment_failure_does_not_block_indexing(self, config, confluence_event):
+    def test_enrichment_failure_does_not_block_indexing(
+        self,
+        config: dict[str, Any],
+        confluence_event: dict[str, Any],
+    ) -> None:
         processor, _, indexer = _make_processor(config)
         enricher = MagicMock()
         enricher.enrich.side_effect = RuntimeError("slm down")
@@ -236,15 +251,163 @@ class TestProcessEvent:
         indexer.index_chunks.assert_called_once()
 
 
+class TestDeleteEvents:
+    """Deletion event handling (page_removed, page_deleted)."""
+
+    @pytest.fixture
+    def delete_event(self) -> dict[str, Any]:
+        return {
+            "source": "confluence",
+            "event_type": "page_removed",
+            "doc_id": "123456",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "payload": json.dumps({"page": {"id": "123456", "title": "Gone"}}),
+        }
+
+    @pytest.fixture
+    def gitlab_delete_event(self) -> dict[str, Any]:
+        return {
+            "source": "gitlab",
+            "event_type": "page_deleted",
+            "doc_id": "42",
+            "payload": json.dumps({"project": {"name": "rag"}}),
+        }
+
+    @pytest.fixture
+    def version_store(self) -> MagicMock:
+        return MagicMock()
+
+    def test_page_removed_calls_delete_by_source_id(
+        self,
+        config: dict[str, Any],
+        delete_event: dict[str, Any],
+        version_store: MagicMock,
+    ) -> None:
+        processor, chunker, indexer = _make_processor(config)
+        indexer.delete_by_source_id.return_value = 3
+        processor._version_store = MagicMock(return_value=version_store)
+
+        assert processor.process_event(delete_event) is True
+
+        chunker.process_document.assert_not_called()
+        indexer.index_chunks.assert_not_called()
+        indexer.delete_by_source_id.assert_called_once_with("confluence_123456")
+        version_store.reset.assert_called_once_with("confluence_123456")
+        assert processor.stats["processed"] == 1
+
+    def test_page_deleted_gitlab_calls_delete_by_source_id(
+        self,
+        config: dict[str, Any],
+        gitlab_delete_event: dict[str, Any],
+        version_store: MagicMock,
+    ) -> None:
+        processor, _, indexer = _make_processor(config)
+        indexer.delete_by_source_id.return_value = 0
+        processor._version_store = MagicMock(return_value=version_store)
+
+        assert processor.process_event(gitlab_delete_event) is True
+
+        indexer.delete_by_source_id.assert_called_once_with("gitlab_42")
+        version_store.reset.assert_called_once_with("gitlab_42")
+
+    def test_delete_event_returns_false_when_components_unavailable(
+        self,
+        config: dict[str, Any],
+        delete_event: dict[str, Any],
+    ) -> None:
+        from etl.scheduler.event_processor import EventProcessor
+
+        processor = EventProcessor(config)
+        with patch.object(EventProcessor, "_create_chunker", side_effect=ImportError("no deps")):
+            assert processor.process_event(delete_event) is False
+        assert processor.stats["failed"] == 1
+
+    def test_delete_event_returns_false_when_indexer_raises(
+        self,
+        config: dict[str, Any],
+        delete_event: dict[str, Any],
+        version_store: MagicMock,
+    ) -> None:
+        processor, _, indexer = _make_processor(config)
+        indexer.delete_by_source_id.side_effect = RuntimeError("qdrant error")
+        processor._version_store = MagicMock(return_value=version_store)
+
+        assert processor.process_event(delete_event) is False
+        assert processor.stats["failed"] == 1
+
+    def test_delete_continues_when_version_store_fails(
+        self,
+        config: dict[str, Any],
+        delete_event: dict[str, Any],
+    ) -> None:
+        processor, _, indexer = _make_processor(config)
+        indexer.delete_by_source_id.return_value = 2
+        processor._version_store = MagicMock(side_effect=RuntimeError("store busy"))
+
+        assert processor.process_event(delete_event) is True
+
+        indexer.delete_by_source_id.assert_called_once()
+        assert processor.stats["processed"] == 1
+
+    def test_unknown_event_still_skipped(self, config: dict[str, Any]) -> None:
+        processor, chunker, indexer = _make_processor(config)
+        event = {
+            "source": "confluence",
+            "event_type": "unknown_event",
+            "doc_id": "1",
+            "payload": json.dumps({"page": {"title": "X"}}),
+        }
+        assert processor.process_event(event) is True
+        chunker.process_document.assert_not_called()
+        indexer.index_chunks.assert_not_called()
+        indexer.delete_by_source_id.assert_not_called()
+        assert processor.stats["skipped"] == 1
+
+    def test_delete_document_returns_true_on_success(
+        self,
+        config: dict[str, Any],
+        version_store: MagicMock,
+    ) -> None:
+        processor, _, indexer = _make_processor(config)
+        indexer.delete_by_source_id.return_value = 5
+        processor._version_store = MagicMock(return_value=version_store)
+
+        assert processor._delete_document("confluence", "789") is True
+
+        indexer.delete_by_source_id.assert_called_once_with("confluence_789")
+        version_store.reset.assert_called_once_with("confluence_789")
+
+    def test_delete_document_returns_false_when_indexer_error(
+        self,
+        config: dict[str, Any],
+        version_store: MagicMock,
+    ) -> None:
+        processor, _, indexer = _make_processor(config)
+        indexer.delete_by_source_id.return_value = 0
+        processor._version_store = MagicMock(return_value=version_store)
+
+        with patch.object(indexer, "delete_by_source_id", side_effect=ConnectionError("down")):
+            assert processor._delete_document("confluence", "789") is False
+
+    def test_normalize_document_id(self, config: dict[str, Any]) -> None:
+        from etl.scheduler.event_processor import EventProcessor
+
+        processor = EventProcessor(config)
+        assert processor._normalize_document_id("confluence", "123") == "confluence_123"
+        assert processor._normalize_document_id("confluence", "confluence_123") == "confluence_123"
+        assert processor._normalize_document_id("gitlab", "42") == "gitlab_42"
+        assert processor._normalize_document_id("gitlab", "gitlab_42") == "gitlab_42"
+
+
 class TestEnsureComponents:
     """Lazy component initialization and graceful degradation."""
 
-    def test_enricher_none_when_disabled(self, config):
+    def test_enricher_none_when_disabled(self, config: dict[str, Any]) -> None:
         processor, _, _ = _make_processor(config)
         assert processor._ensure_components() is True
         assert processor._enricher is None
 
-    def test_indexer_init_failure_degrades(self, config):
+    def test_indexer_init_failure_degrades(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor
 
         processor = EventProcessor(config)
@@ -253,12 +416,11 @@ class TestEnsureComponents:
             assert processor._ensure_components() is False
         assert processor._indexer is None
 
-    def test_enricher_init_failure_is_non_fatal(self, config):
+    def test_enricher_init_failure_is_non_fatal(self, config: dict[str, Any]) -> None:
         processor, _, _ = _make_processor(config)
-        with patch(
-            "etl.indexer.chunk_enricher.build_chunk_enricher_from_config",
-            side_effect=RuntimeError("bad config"),
-        ):
+        mock_module = MagicMock()
+        mock_module.build_chunk_enricher_from_config.side_effect = RuntimeError("bad config")
+        with patch.dict("sys.modules", {"etl.indexer.chunk_enricher": mock_module}):
             assert processor._ensure_components() is True
         assert processor._enricher is None
 
@@ -266,23 +428,26 @@ class TestEnsureComponents:
 class TestProcessingStreamConsumer:
     """ProcessingStreamConsumer wiring."""
 
-    def test_delegates_to_processor(self, config, confluence_event):
+    def test_delegates_to_processor(
+        self,
+        config: dict[str, Any],
+        confluence_event: dict[str, Any],
+    ) -> None:
         from etl.scheduler.event_processor import EventProcessor, ProcessingStreamConsumer
 
         processor = EventProcessor(config)
-        processor.process_event = MagicMock(return_value=True)
+        with patch.object(processor, "process_event", return_value=True) as mock_process:
+            consumer = ProcessingStreamConsumer(redis_client=None, processor=processor)
+            assert consumer.process_event(confluence_event) is True
+            mock_process.assert_called_once_with(confluence_event)
 
-        consumer = ProcessingStreamConsumer(redis_client=None, processor=processor)
-        assert consumer.process_event(confluence_event) is True
-        processor.process_event.assert_called_once_with(confluence_event)
-
-    def test_creates_default_processor_from_config(self, config):
+    def test_creates_default_processor_from_config(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import EventProcessor, ProcessingStreamConsumer
 
         consumer = ProcessingStreamConsumer(redis_client=None, config=config)
         assert isinstance(consumer.processor, EventProcessor)
 
-    def test_is_stream_consumer_subclass(self, config):
+    def test_is_stream_consumer_subclass(self, config: dict[str, Any]) -> None:
         from etl.scheduler.event_processor import ProcessingStreamConsumer
         from etl.scheduler.stream_consumer import StreamConsumer
 

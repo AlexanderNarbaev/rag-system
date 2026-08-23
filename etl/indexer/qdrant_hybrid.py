@@ -398,6 +398,50 @@ class QdrantHybridIndexer:
             logger.error("Live delete failed for chunk %s: %s", chunk_id, e)
             return False
 
+    def delete_by_source_id(self, source_id: str) -> int:
+        """Delete all points whose payload ``source_id`` matches the given value.
+
+        Scrolls the collection, collects matching point IDs, and deletes them
+        in batches. Returns the number of deleted points. Qdrant errors are
+        caught and logged; the caller receives ``0`` so the event can be retried.
+
+        :param source_id: document/source identifier stored in chunk payloads
+        :return: number of points deleted (0 on error or no matches)
+        """
+        if not source_id:
+            logger.warning("Empty source_id for delete_by_source_id")
+            return 0
+
+        scroll_filter = models.Filter(
+            must=[models.FieldCondition(key="source_id", match=models.MatchValue(value=source_id))],
+        )
+        deleted = 0
+        try:
+            next_offset: str | None | Any = None
+            while True:
+                points, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=scroll_filter,
+                    limit=self.batch_size,
+                    offset=next_offset,
+                    with_payload=False,
+                    with_vectors=False,
+                )
+                batch_ids = [point.id for point in points]
+                if batch_ids:
+                    self.client.delete(
+                        collection_name=self.collection_name,
+                        points_selector=models.PointIdsList(points=batch_ids),
+                    )
+                    deleted += len(batch_ids)
+                if next_offset is None:
+                    break
+            logger.info("Deleted %d points for source_id=%s", deleted, source_id)
+            return deleted
+        except Exception as e:
+            logger.error("Failed to delete points by source_id=%s: %s", source_id, e)
+            return 0
+
     def search_colbert(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Search using ColBERT late interaction scoring.
 

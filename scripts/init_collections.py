@@ -13,7 +13,9 @@ from pathlib import Path
 # Add the project root to the path for module imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from proxy.app.config import (
+from etl.graph_builder.neo4j_loader import NEO4J_AVAILABLE, Neo4jLoader
+from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
+from proxy.app.shared.config import (
     COLLECTION_NAME,
     GRAPH_ENABLED,
     NEO4J_PASSWORD,
@@ -22,9 +24,6 @@ from proxy.app.config import (
     QDRANT_HOST,
     QDRANT_PORT,
 )
-
-from etl.graph_builder.neo4j_loader import NEO4J_AVAILABLE, Neo4jLoader
-from etl.indexer.qdrant_hybrid import QdrantHybridIndexer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

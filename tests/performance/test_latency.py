@@ -38,6 +38,21 @@ for mod in _modules_to_mock:
 
 from proxy.app.main import app
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _cleanup_qdrant_module_mocks():
+    """Remove qdrant_client mocks from ``sys.modules`` after this module.
+
+    This module mocks ``qdrant_client.*`` at import time to avoid heavy
+    dependencies. Without cleanup, those mock entries leak to later test
+    modules that import the real ``qdrant_client.http.models``.
+    """
+    yield
+    for mod in list(sys.modules):
+        if mod.startswith("qdrant_client"):
+            del sys.modules[mod]
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

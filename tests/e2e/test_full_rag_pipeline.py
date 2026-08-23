@@ -27,7 +27,6 @@ _modules_to_mock = [
     "redis",
     "redis.asyncio",
     "tiktoken",
-    "bcrypt",
 ]
 
 for mod in _modules_to_mock:

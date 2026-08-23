@@ -22,9 +22,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Russian translations for api/, architecture/, operations/, audit/, security/ docs; English translations for
   `requirements/` (full EN/RU documentation parity)
 - Docs site: logo/favicon, Russian nav translations, language alternates fixed
+- Project logo asset (`docs/assets/logo.svg`) and export script for training datasets
+  (`scripts/export_training_datasets.py` with unit tests under `tests/scripts/`)
 
 ### Fixed
 
+- Full test-suite isolation: `make test` now runs unit/integration, e2e, performance, and resilience tests in
+  separate pytest processes, preventing `sys.modules`/`MagicMock` pollution between test groups
+- 5 performance tests missing the `benchmark` fixture now pass after adding `pytest-benchmark>=4.0.0` to dev
+  dependencies
+- SacreBLEU fake objects in `tests/proxy/test_llm_trainer_unit.py` and `tests/proxy/test_llm_trainer_extended.py`
+  updated to match the production `sacrebleu.BLEU(max_ngram_order=...).corpus_score(...)` API
+- Security audit: switched `requirements-proxy.txt` from full `mlflow` to `mlflow-skinny` and pinned
+  `cryptography>=50.0.0`, resolving PYSEC-2026-3552 while keeping Python 3.14 compatibility
+- Migration manager now imports `find_spec` at module level so tests can reliably patch Neo4j
+  availability; corresponding migration tests updated
+- SLM trainer unit test no longer triggers CUDA OOM when asserting missing-dataset failure path
 - 6 Redis cache tests failed in full-suite runs due to `sys.modules` pollution from admin test modules —
   tests now inject a fake `redis`/`redis.asyncio` pair via `patch.dict`
 - `proxy/Dockerfile`: broken `COPY .env.example` (missing file) and wrong module path in `CMD`

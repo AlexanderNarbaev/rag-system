@@ -71,58 +71,13 @@ jobs:
         run: |
           pip install -r requirements-proxy.txt
 
-      # NOTE: this step generates a small hardcoded sample dataset for CI only.
-      # TODO: replace with a real export from HITL feedback (separate task).
-      - name: Prepare sample training dataset (CI fixture)
+      - name: Export training datasets from HITL logs
         id: export
         run: |
           DATASET_DIR="./datasets/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$DATASET_DIR"
 
-          python -c "
-          import json, sys
-          from pathlib import Path
-
-          # Export intent classification data for SLM
-          intent_data = [
-              {'query': 'hello team', 'intent_label': 'greeting'},
-              {'query': 'how do I deploy via docker?', 'intent_label': 'procedural'},
-              {'query': 'compare llama vs mistral for rag', 'intent_label': 'comparison'},
-              {'query': 'what is the chunk size for bge-m3?', 'intent_label': 'factual'},
-              {'query': 'summarize the deployment guide', 'intent_label': 'summarize'},
-              {'query': 'explain how Qdrant hybrid search works and its tradeoffs', 'intent_label': 'complex'},
-              {'query': 'hi there', 'intent_label': 'greeting'},
-              {'query': 'steps to set up Keycloak OIDC', 'intent_label': 'procedural'},
-              {'query': 'compare bge-m3 vs e5-mistral embeddings', 'intent_label': 'comparison'},
-              {'query': 'define CRAG evaluator', 'intent_label': 'factual'},
-              {'query': 'briefly summarize the roadmap', 'intent_label': 'summarize'},
-              {'query': 'analyze how the orchestrator handles tool calling and self-reflection loops', 'intent_label': 'complex'},
-          ]
-          Path('$DATASET_DIR/intent_train.json').write_text(json.dumps(intent_data, indent=2))
-          Path('$DATASET_DIR/intent_eval.json').write_text(json.dumps(intent_data[:4], indent=2))
-
-          # Export reranker triples
-          reranker_data = [
-              ['how to deploy rag system', 'docker-compose up -d in proxy/ starts all services including Qdrant, Neo4j, Redis, and vLLM', 1.0],
-              ['how to deploy rag system', 'the system uses Python 3.11 with FastAPI for the proxy layer', 0.5],
-              ['chunk size configuration', 'BGE-M3 uses 8192 token context with 1024-dim dense embeddings', 1.0],
-              ['chunk size configuration', 'the default chunk size is 512 tokens with 128 token overlap', 0.3],
-              ['auth setup', 'Keycloak OIDC integration with JWT token pairs and bcrypt passwords', 1.0],
-              ['auth setup', 'the proxy runs on port 8080 by default', 0.1],
-          ]
-          Path('$DATASET_DIR/reranker_train.json').write_text(json.dumps(reranker_data, indent=2))
-          Path('$DATASET_DIR/reranker_eval.json').write_text(json.dumps(reranker_data[:2], indent=2))
-
-          # Export LLM instruction-tuning pairs
-          llm_data = [
-              {'messages': [{'role': 'system', 'content': 'You are a RAG system assistant.'}, {'role': 'user', 'content': 'How do I deploy?'}, {'role': 'assistant', 'content': 'Use docker-compose up -d in the proxy/ directory.'}]},
-              {'messages': [{'role': 'system', 'content': 'You are a RAG system assistant.'}, {'role': 'user', 'content': 'What embedding model is used?'}, {'role': 'assistant', 'content': 'BAAI/bge-m3 with 1024-dim dense embeddings and sparse lexical vectors.'}]},
-          ]
-          Path('$DATASET_DIR/llm_train.json').write_text(json.dumps(llm_data, indent=2))
-          Path('$DATASET_DIR/llm_eval.json').write_text(json.dumps(llm_data[:1], indent=2))
-
-          print(f'Dataset exported to $DATASET_DIR')
-          "
+          python scripts/export_training_datasets.py --output-dir "$DATASET_DIR" --eval-split 0.2 --fallback
 
           echo "dataset_path=$DATASET_DIR" >> $GITHUB_OUTPUT
           echo "dataset_files=$(ls $DATASET_DIR | tr '\n' ' ')" >> $GITHUB_OUTPUT
@@ -602,7 +557,7 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- **training-dataset** — sample CI fixture dataset" >> $GITHUB_STEP_SUMMARY
+          echo "- **training-dataset** — training dataset exported from HITL logs" >> $GITHUB_STEP_SUMMARY
           echo "- **model-artifacts** — trained model adapters/checkpoints" >> $GITHUB_STEP_SUMMARY
           echo "- **evaluation-report** — eval gate report with thresholds" >> $GITHUB_STEP_SUMMARY
           echo "- **model-registry** — JSON registry state after promotion" >> $GITHUB_STEP_SUMMARY

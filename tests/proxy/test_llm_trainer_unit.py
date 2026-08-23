@@ -21,7 +21,15 @@ def _write_llm_dataset(output_dir: Path, data: list[dict]) -> None:
 
 def _make_fake_metric_modules() -> dict[str, object]:
     """Build fake sacrebleu/rouge_score/bert_score modules for sys.modules patching."""
-    sacrebleu = SimpleNamespace(corpus_bleu=lambda hyps, refs, **kwargs: SimpleNamespace(score=42.0))
+
+    class _FakeBLEU:
+        def __init__(self, max_ngram_order: int = 4) -> None:
+            self.max_ngram_order = max_ngram_order
+
+        def corpus_score(self, hypotheses: list[str], references: list[list[str]]) -> object:
+            return SimpleNamespace(score=42.0)
+
+    sacrebleu = SimpleNamespace(BLEU=_FakeBLEU)
 
     rouge_result = SimpleNamespace(precision=0.5, recall=0.6, fmeasure=0.55)
     scorer = SimpleNamespace(score=lambda ref, hyp: {"rougeL": rouge_result})
