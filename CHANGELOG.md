@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Knee-based adaptive top-k in the reranker behind `RAG_ADAPTIVE_TOP_K` (default off): cuts the flat
+  score tail to save tokens, falls back to static `rag_top_k` on flat/short curves (FR-178,
+  `tests/proxy/test_adaptive_top_k.py`)
+- Per-stage latency breakdown: `process_rag_query(stage_timings=...)` fills retrieval/rerank/generation
+  timings; non-streaming responses expose `rag_stage_timings_ms`; previously dead
+  `rag_retrieval/rerank/llm_duration_seconds` histograms are now observed (FR-179,
+  `tests/proxy/test_stage_timings.py`)
+- `value_score()` helper in both eval_gate trees weighting normalized quality 70% vs log-cost 30% for
+  model version comparisons (FR-180, `tests/proxy/test_value_score.py`)
+- Requirements register: configurability/resilience FR-176..FR-180 and NFR-A07 recorded bilingually in
+  the compliance requirements doc
 - Research sources & best-practices integration guide (EN/RU) cataloguing 36 audited external sources with
   implementation-status mapping (✅/🟡/📋) and a prioritized adoption backlog
   (`docs/en|ru/guides/research-sources-and-best-practices.md`)

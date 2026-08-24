@@ -37,6 +37,12 @@ RERANKER_FT_ENABLED = os.getenv("RERANKER_FT_ENABLED", "false").lower() == "true
 FEEDBACK_LOG_DIR = os.getenv("FEEDBACK_LOG_DIR", "./logs/feedback")
 FT_MODEL_DIR = os.getenv("FT_MODEL_DIR", "./models/reranker_ft")
 
+# Adaptive top-k via knee-point detection on rerank scores (DRAG/KNEE research).
+# Disabled by default — enable with RAG_ADAPTIVE_TOP_K=true. Degrades safely:
+# flat or short score lists always fall back to the statically requested top_k.
+ADAPTIVE_TOP_K_ENABLED = os.getenv("RAG_ADAPTIVE_TOP_K", "false").lower() == "true"
+ADAPTIVE_TOP_K_MIN = max(1, int(os.getenv("RAG_ADAPTIVE_TOP_K_MIN", "3")))
+
 # Global objects
 reranker: Any = None
 cache_manager: "CacheManager | None" = None
@@ -113,6 +119,49 @@ def _get_cache_key(query: str, chunk_text: str) -> str:
     return f"rerank:{hashlib.md5(content.encode()).hexdigest()}"
 
 
+def adaptive_top_k(sorted_scores: list[float], requested_k: int, sensitivity: float = 0.5) -> int:
+    """Return an effective top_k by detecting the knee point of a descending score curve.
+
+    Rerank score curves typically drop sharply after the truly relevant chunks and
+    then flatten. Cutting at the knee keeps high-relevance chunks and drops the flat
+    tail, reducing token spend without losing precision. The function degrades safely:
+
+    - fewer scores than ``ADAPTIVE_TOP_K_MIN`` -> return their count
+    - flat / uniform curve (no meaningful knee) -> ``requested_k``
+    - computed knee below the floor -> clamped to the floor
+
+    :param sorted_scores: rerank scores in descending order
+    :param requested_k: caller-requested maximum number of chunks (static rag_top_k)
+    :param sensitivity: 0.0 keeps everything up to requested_k, 1.0 prunes to the knee
+    :return: effective number of chunks to return, within [ADAPTIVE_TOP_K_MIN .. requested_k]
+    """
+    if requested_k <= 0:
+        return 0
+    n = min(len(sorted_scores), requested_k)
+    if n <= ADAPTIVE_TOP_K_MIN:
+        return n
+    scores = [float(s) for s in sorted_scores[:n]]
+    span = scores[0] - scores[-1]
+    if span <= 1e-9:
+        # Flat curve — no meaningful knee; degrade to the requested size.
+        return requested_k
+    # Knee point = last index whose score sits meaningfully ABOVE the chord joining
+    # first and last scores (the bend of an L-shaped curve). Smooth declines stay
+    # under the relative threshold and conservatively keep the requested size.
+    threshold = 0.05 * span
+    best_idx, best_above = -1, threshold
+    for i in range(n):
+        chord_y = scores[0] - span * (i / (n - 1))
+        above = scores[i] - chord_y
+        if above > best_above:
+            best_above, best_idx = above, i
+    if best_idx < 0:
+        return requested_k  # smooth curve — no meaningful knee; keep the request
+    knee = best_idx + 1  # keep chunks through the knee position
+    relaxed = knee + int(round((requested_k - knee) * (1.0 - min(max(sensitivity, 0.0), 1.0))))
+    return max(ADAPTIVE_TOP_K_MIN, min(requested_k, relaxed))
+
+
 def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: bool = True) -> list[int]:
     """Reranks a list of chunks by relevance to the query.
 
@@ -172,12 +221,14 @@ def rerank_chunks(query: str, chunks: list[str], top_k: int = 20, use_cache: boo
         indexed_scores = list(enumerate(scores))
         indexed_scores.sort(key=lambda x: x[1], reverse=True)
 
-        result = [idx for idx, _ in indexed_scores[:top_k]]
+        effective_k = adaptive_top_k([s for _, s in indexed_scores], top_k) if ADAPTIVE_TOP_K_ENABLED else top_k
+        result = [idx for idx, _ in indexed_scores[:effective_k]]
 
         if span.is_recording():
             if result:
                 span.set_attribute("rag.rerank.top_score", indexed_scores[0][1])
             span.set_attribute("rag.rerank.num_returned", len(result))
+            span.set_attribute("rag.rerank.effective_top_k", effective_k)
 
         return result
 

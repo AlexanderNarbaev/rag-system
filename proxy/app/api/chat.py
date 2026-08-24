@@ -81,6 +81,7 @@ class ChatCompletionResponse(BaseModel):
     rag_source_count: int | None = None
     rag_clarification_needed: bool | None = None
     rag_clarifying_questions: list[str] | None = None
+    rag_stage_timings_ms: dict[str, float] | None = None
 
 
 class ModelInfo(BaseModel):
@@ -618,6 +619,7 @@ async def chat_completions(
     enriched_query = enrich_query_with_context(conversation, user_query)
 
     try:
+        stage_timings: dict[str, float] = {}
         _rag_result = await _main.process_rag_query(
             user_query=enriched_query,
             version=version,
@@ -629,6 +631,7 @@ async def chat_completions(
             user_context=user,
             top_k_override=request.rag_top_k,
             lang=request.lang,
+            stage_timings=stage_timings,
         )
     except Exception as rag_err:
         logger.error("Non-streaming RAG query failed: %s", rag_err, exc_info=True)
@@ -718,6 +721,7 @@ async def chat_completions(
         rag_source_count=knowledge_status.source_count,
         rag_clarification_needed=clarification_result.clarification_needed if clarification_result else None,
         rag_clarifying_questions=clarifying_questions,
+        rag_stage_timings_ms=stage_timings or None,
     )
     duration_ms = (time.time() - start_time) * 1000
     _main.request_tracker.complete(request_id, status="success", tokens=len(response_text) // 4)

@@ -419,6 +419,7 @@ async def process_rag_query(
     user_context: UserContext | None = None,
     top_k_override: int | None = None,
     lang: str | None = None,
+    stage_timings: dict[str, float] | None = None,
 ) -> tuple[str, str | list[dict[str, str]], bool, list[dict[str, Any]], dict[str, float]]:
     """Core RAG pipeline: search → filter → rerank → dedup → context → LLM.
 
@@ -494,6 +495,7 @@ async def process_rag_query(
     retrieval_stage = "direct"
     retrieval_degraded = False
     retrieval_reason = ""
+    _retrieval_t0 = time.perf_counter()
     try:
         # Fix 3: Check if embedder is available before attempting retrieval
         from proxy.app.core.retrieval import _QDRANT_DEGRADED
@@ -537,6 +539,13 @@ async def process_rag_query(
         retrieval_degraded = True
         retrieval_reason = "search_exception"
         search_results = None
+
+    if stage_timings is not None:
+        from proxy.app.shared.metrics import rag_retrieval_duration_seconds
+
+        _retrieval_s = time.perf_counter() - _retrieval_t0
+        stage_timings["retrieval_ms"] = round(_retrieval_s * 1000, 2)
+        rag_retrieval_duration_seconds.observe(_retrieval_s)
 
     # Fix 4: Explicit logging for empty results — different causes
     sources: list[dict[str, Any]] = []
@@ -583,7 +592,14 @@ async def process_rag_query(
             chunks_texts = filtered_texts
 
             # 3. Reranking
+            _rerank_t0 = time.perf_counter()
             reranked_indices = rerank_chunks(user_query, chunks_texts, top_k=MAX_CHUNKS_AFTER_RERANK)
+            if stage_timings is not None:
+                from proxy.app.shared.metrics import rag_rerank_duration_seconds
+
+                _rerank_s = time.perf_counter() - _rerank_t0
+                stage_timings["rerank_ms"] = round(_rerank_s * 1000, 2)
+                rag_rerank_duration_seconds.observe(_rerank_s)
             reranked_chunks = [(chunks_metadata[i], scores[i]) for i in reranked_indices]
 
             # 4. Deduplication and versioning
@@ -717,11 +733,18 @@ async def process_rag_query(
     if stream:
         return context, messages_for_llm, False, sources, {}
     try:
+        _llm_t0 = time.perf_counter()
         response_text = await non_stream_completion(
             messages_for_llm,
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        if stage_timings is not None:
+            from proxy.app.shared.metrics import rag_llm_duration_seconds
+
+            _llm_s = time.perf_counter() - _llm_t0
+            stage_timings["generation_ms"] = round(_llm_s * 1000, 2)
+            rag_llm_duration_seconds.observe(_llm_s)
     except Exception as llm_err:
         logger.error("LLM completion failed: %s", llm_err, exc_info=True)
         response_text = (

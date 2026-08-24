@@ -15,11 +15,52 @@ service-local import paths).
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Value Score weighting (research practice: Habr 1021388 — RU/EN leaderboard battle test).
+# Quality dominates; cost smoothly penalizes expensive models without zeroing them out.
+VALUE_SCORE_QUALITY_WEIGHT = 0.7
+VALUE_SCORE_COST_WEIGHT = 0.3
+
+
+def value_score(
+    quality: float,
+    cost_per_1k_tokens: float,
+    quality_min: float = 0.0,
+    quality_max: float = 1.0,
+) -> float:
+    """Compute a weighted quality-vs-cost score for model version comparisons.
+
+    Follows the Value Score practice: 70% weight on normalized quality plus a 30%
+    term that decays logarithmically as cost grows::
+
+        value = W_Q * norm_quality + W_C / (1 + ln(1 + max(cost, 0)))
+
+    The cost term lies in ``(0, 1]`` (cost 0 -> 1.0) and never goes negative, so an
+    unusually expensive model still keeps its quality contribution. Typical use:
+    compare candidate vs baseline versions by ``value_score`` instead of raw
+    quality alone when serving cost differs between them.
+
+    Args:
+        quality: Raw quality metric (e.g., accuracy on [quality_min, quality_max]).
+        cost_per_1k_tokens: Monetary or budgetary cost per 1k tokens.
+        quality_min: Lower bound of the quality scale.
+        quality_max: Upper bound of the quality scale.
+
+    Returns:
+        Score in [0, 1].
+
+    """
+    q_span = quality_max - quality_min
+    norm_q = 0.0 if q_span <= 0 else (float(quality) - quality_min) / q_span
+    norm_q = min(max(norm_q, 0.0), 1.0)
+    cost_term = 1.0 / (1.0 + math.log1p(max(float(cost_per_1k_tokens), 0.0)))
+    return VALUE_SCORE_QUALITY_WEIGHT * norm_q + VALUE_SCORE_COST_WEIGHT * cost_term
 
 
 class GateStatus(Enum):

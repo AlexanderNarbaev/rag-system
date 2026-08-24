@@ -175,7 +175,8 @@ document changes runtime behavior by itself.
 
 - LLM-judge bias is systematic (+15–30 pts inflation; self-preference even blind): use one strong judge,
   not committees; Value Score = 70%·quality + 30%·log-cost; automated artifact checks (CJK-in-Cyrillic etc.).
-- **Status:** 🟡 RAGAS regression testing exists; Value Score formula and artifact checks are backlog (§5, B1/B4).
+- **Status:** 🟡 RAGAS regression testing exists; ✅ Value Score helper shipped in `eval_gate.py`
+  (`value_score()`, FR-180); automated artifact checks remain backlog (§5, B4).
 
 ### 4.4 Controlled evolution of RAG configs («genomes», Habr 1019018)
 
@@ -194,8 +195,8 @@ document changes runtime behavior by itself.
 ### 4.6 Local AI assistant as a real backend (Habr 1048252)
 
 - Production LLM call = contract + request_id + structured logs + per-stage timings + sources + honest refusal.
-- **Status:** ✅ Request IDs, structured logging, `rag_sources`, refusal behavior all present; 🟡 per-stage
-  latency breakdown in response extensions (§5, A6).
+- **Status:** ✅ Request IDs, structured logging, `rag_sources`, refusal behavior all present; ✅ per-stage
+  latency breakdown shipped (`rag_stage_timings_ms` extension + stage histograms, FR-179).
 
 ### 4.7 Yandex Eda architecture review at scale (Habr 1003700)
 
@@ -213,7 +214,7 @@ document changes runtime behavior by itself.
 |--------|----------|--------|
 | CodeFox CLI local review (Habr 1006258) | Air-gapped diff-only review bot; baseline mode ignores old debt | ✅ philosophy shared; optional CI integration idea |
 | Claude×NotebookLM orchestration (Habr 1007062) | Delegate heavy analysis; citations ground answers | ✅ dual-model routing embodies it |
-| DRAG with KNEE adaptive top-k (Habr 1016438) | Hierarchical tree + knee-point pruning sets top_k per query | 📋 §5, A8 |
+| DRAG with KNEE adaptive top-k (Habr 1016438) | Hierarchical tree + knee-point pruning sets top_k per query | 🟡 rerank-level adaptive top-k shipped (`RAG_ADAPTIVE_TOP_K`, FR-178); hierarchical tree indexing remains §5, A8 |
 | Tokenomics / FinOps (jimmysong blog) | Tokens become managed quotas like CPU once was | 🟡 §5, B2 |
 | Obsidian PKS case (Habr 1028272) | Wrapper-note linking without duplication | ✅ payload linking analogous |
 | Developer→CTO path (OTUS 1027428) | Focus/horizon/leadership shifts | ✅ informs 23-role hierarchy |

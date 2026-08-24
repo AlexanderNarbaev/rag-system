@@ -93,3 +93,6 @@ etl/.env
 # ETL model cache staging (keep README, ignore downloaded models)
 etl/model_cache/*
 !etl/model_cache/README.md
+
+# Local MCP tooling state
+.agentic-tools-mcp/

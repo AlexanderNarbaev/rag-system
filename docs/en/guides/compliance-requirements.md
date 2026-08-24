@@ -326,6 +326,16 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 
 ---
 
+### Configurability, Resilience & Research-Driven Features
+
+| ID     | Description                                                                                                                                                          | Source                                              | Priority | Verification                                            |
+|--------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------|----------|---------------------------------------------------------|
+| FR-176 | Every optional subsystem (LangGraph orchestrator, Neo4j expansion, Redis caching, semantic cache, adaptive routing, knee pruning, adaptive top-k) SHALL be individually toggleable via environment configuration with safe defaults | AGENTS.md principles 2 & 7; oleg.guru redbook ch.3  | HIGH     | Flag matrix run: each flag off → pipeline still completes |
+| FR-177 | The proxy SHALL remain operational when any backing component fails, degrading per the documented fallback map (no embedder/Qdrant → ungrounded notice + clarifications; reranker unavailable → hybrid scores; Redis down → in-memory cache) | AGENTS.md principle 2; jimmysong agent-reliability framework | CRITICAL | `make test-resilience` chaos suite green                |
+| FR-178 | Rerank result count SHALL support knee-based adaptive top-k behind the `RAG_ADAPTIVE_TOP_K` flag, falling back to the static `rag_top_k` for flat or short score curves | research-sources-and-best-practices A8 (Habr 1016438) | MEDIUM   | `tests/proxy/test_adaptive_top_k.py`                    |
+| FR-179 | Non-streaming chat responses SHALL expose a per-stage latency breakdown (`rag_stage_timings_ms`) and observe the `rag_retrieval/rerank/llm_duration_seconds` Prometheus histograms | research-sources-and-best-practices A6 (Habr 1048252); jimmysong 8-layer observability | MEDIUM   | `tests/proxy/test_stage_timings.py`                     |
+| FR-180 | Model version comparison SHALL provide a `value_score` helper weighting normalized quality at 70% against a logarithmic cost term at 30%                             | research-sources-and-best-practices B1 (Habr 1021388) | LOW      | `tests/proxy/test_value_score.py`                       |
+
 ## NFR (Non-Functional Requirements)
 
 ### NFR-P: Performance
@@ -356,6 +366,7 @@ decision identified across all project artifacts: 14 ADRs, 12+ guides, source co
 | NFR-A04 | Backup RTO (Recovery Time Objective)                           | < 30 min                            | SLI/SLO, disaster-recovery-runbook   | DR drill timing                                |
 | NFR-A05 | Graceful degradation: proxy never crashes on component failure | Always return best available answer | AGENTS.md, ADR-011                   | Chaos tests pass for all component failures    |
 | NFR-A06 | ETL WAL survival across restarts                               | Resume from checkpoint              | requirements-and-sprint-plan NFR-3.4 | Integration test: restart ETL, verify resume   |
+| NFR-A07 | Operator-configurable degradation: every optional component is pre-disableable via configuration so the pipeline runs without it (stronger than surviving failure — the operator chooses the running topology) | AGENTS.md principle 7; FR-176        | Flag-matrix verification run                   |
 
 ### NFR-S: Security
 
