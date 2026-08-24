@@ -116,7 +116,11 @@ JWT_EXPIRATION_HOURS=24
   ],
   "tool_choice": "string | object (none | auto | {type: 'function', function: {name: '...'}})",
   "rag_version": "string (опционально)",
-  "rag_force_refresh": "boolean (по умолчанию: false)"
+  "rag_force_refresh": "boolean (по умолчанию: false)",
+  "rag_skip_generation": "boolean (по умолчанию: false)",
+  "rag_return_chunks": "boolean (по умолчанию: false)",
+  "rag_stage_timings_ms": "object | null — разбивка латентности по стадиям {retrieval_ms, rerank_ms, generation_ms} (только для не-стриминговых ответов)",
+  "rag_top_k": "integer (опционально)"
 }
 ```
 
@@ -145,6 +149,10 @@ JWT_EXPIRATION_HOURS=24
 |---------------------|---------|--------------|--------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `rag_version`       | string  | Нет          | `null`       | Запросить контекст конкретной версии документа. Принимает дату ISO (`"2026-01-15"`), префикс SHA-256 (`"a1b2c3d4"`) или тег версии (`"v2.1"`). Фильтрует найденные чанки по указанной версии. |
 | `rag_force_refresh` | boolean | Нет          | `false`      | Пропустить кэш ответов Redis. Принудительно выполняет новый поиск, реранкинг, сборку контекста и генерацию LLM. Полезно, когда документы обновлены, а кэшированные ответы устарели.           |
+| `rag_skip_generation` | boolean | Нет        | `false`      | Пропустить генерацию LLM полностью и вернуть только найденные чанки.                                                                                                                          |
+| `rag_return_chunks`  | boolean | Нет          | `false`      | Включить полные тексты чанков в ответ.                                                                                                                                                       |
+| `rag_top_k`          | integer | Нет          | —            | Переопределить `MAX_CHUNKS_RETRIEVAL` по умолчанию только для этого запроса.                                                                                                                 |
+| —                    | —       | —            | —            | **Расширение ответа:** `rag_stage_timings_ms` (object \| null) — разбивка латентности по стадиям `{retrieval_ms, rerank_ms, generation_ms}`, только для не-стриминговых ответов.            |
 
 #### Схема ответа (без потока, 200 OK)
 
@@ -201,6 +209,24 @@ JWT_EXPIRATION_HOURS=24
 | `rag_feedback_id` | string | Уникальный ID для отправки экспертной обратной связи через `/v1/feedback`. Генерируется для каждого ответа.                                                                                       |
 | `rag_confidence`  | float  | Оценка уверенности (0.0–1.0). На основе достаточности контекста, соотношения длины ответа к контексту и обнаружения фраз неуверенности. Значения ниже 0.5 активируют флаг `needs_review`.         |
 | `rag_sources`     | array  | Найденные чанки, использованные для генерации ответа. Каждая запись включает ID чанка, исходный документ, тип, версию, оценку релевантности и опциональный URL. Полезно для цитирования и аудита. |
+| `ragas_scores`    | object | Оценки RAGAS-метрик: `faithfulness`, `answer_relevance`, `context_relevance`, `overall` (каждая 0.0–1.0). Появляется, когда включена оценка качества поиска.                                       |
+| `rag_knowledge_status` | string | Статус обеспеченности знаниями (таксономия FR-144): `sufficient`, `partial`, `insufficient`, `absent`.                                                                                          |
+| `rag_source_count` | integer | Число найденных источников, использованных для ответа.                                                                                                                                         |
+| `rag_clarification_needed` | boolean | Требуется ли уточняющий вопрос пользователю (`true`, когда знание недостаточно или неоднозначно).                                                                                             |
+| `rag_clarifying_questions` | array | Список уточняющих вопросов, когда `rag_clarification_needed=true`.                                                                                                                             |
+| `rag_stage_timings_ms` | object | Разбивка латентности по стадиям `{retrieval_ms, rerank_ms, generation_ms}` (мс). Только для не-стриминговых ответов (FR-179).                                                                    |
+
+#### Схема записи `rag_sources`
+
+| Поле            | Тип    | Описание                                                                                                           |
+|-----------------|--------|--------------------------------------------------------------------------------------------------------------------|
+| `chunk_id`      | string | SHA-256 content-адресуемый хеш чанка                                                                               |
+| `source`        | string | Тип источника: `"confluence"`, `"jira"`, `"gitlab"`, `"document"`, `"book"`, `"chat"`, `"feedback_enrichment"`     |
+| `title`         | string | Заголовок документа или страницы                                                                                   |
+| `version`       | string | Форматированная дата версии или тег                                                                                |
+| `relevance`     | float  | Оценка релевантности после реранкинга (post-reranker)                                                              |
+| `text_preview`  | string | Первые 200 символов текста чанка                                                                                   |
+| `silo_id`       | string | Федерация: идентификатор silo развёртывания, из которого получен чанк                                              |
 
 #### Ответ с вызовом инструментов
 
@@ -321,6 +347,79 @@ data: [DONE]
     контекст/ответ (0.3), обнаружение фраз неуверенности (0.2), проверка длины ответа (0.1)
 11. **Кэширование ответа** — ответ кэшируется в Redis (1ч TTL), если не установлен `rag_force_refresh=true`
 
+#### Примеры cURL
+
+**Базовый RAG-запрос:**
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [
+      {"role": "system", "content": "You are a technical documentation assistant."},
+      {"role": "user", "content": "What is the project structure and how does the ETL pipeline work?"}
+    ],
+    "temperature": 0.2,
+    "max_tokens": 1024,
+    "rag_version": "2026-03",
+    "rag_force_refresh": false
+  }' | jq '.'
+```
+
+**Потоковая передача:**
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "Explain the deployment process."}],
+    "stream": true
+  }'
+```
+
+**Федерация (пропустить генерацию, вернуть только чанки):**
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "security policy"}],
+    "rag_skip_generation": true,
+    "rag_return_chunks": true,
+    "rag_top_k": 10
+  }' | jq '.rag_sources'
+```
+
+**Вызов инструментов:**
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "rag-proxy",
+    "messages": [{"role": "user", "content": "What Jira tickets are blocking the release?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_jira_issue",
+        "description": "Get Jira issue details by project key",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "project_key": {"type": "string"},
+            "status": {"type": "string"}
+          }
+        }
+      }
+    }],
+    "tool_choice": "auto"
+  }'
+```
+
 ---
 
 ### `GET /v1/models`
@@ -345,6 +444,167 @@ data: [DONE]
 
 - `llama-3-70b-instruct` — фактическая LLM, настроенная через `LLM_MODEL_NAME`
 - `rag-proxy` — виртуальный псевдоним модели. При использовании прокси применяет полный RAG-конвейер перед вызовом LLM
+
+---
+
+### `GET /v1/tools`
+
+Список доступных инструментов с опциональными фильтрами. RBAC: видимость фильтруется по роли пользователя.
+Инструменты поступают из SDK-регистрации (декоратор `@tool`), декларативных источников (YAML/JSON) и
+автообнаружения OpenAPI.
+
+**Требуется аутентификация:** Опционально
+
+#### Параметры запроса
+
+| Параметр   | Тип    | Обязательный | Описание                                                                     |
+|------------|--------|--------------|-------------------------------------------------------------------------------|
+| `category` | string | Нет          | Фильтр по категории инструмента                                               |
+| `tag`      | string | Нет          | Фильтр по одному тегу                                                         |
+| `provider` | string | Нет          | Фильтр по имени провайдера (например, `"sdk"`, `"declarative"`, `"openapi"`) |
+
+#### Схема ответа (200 OK)
+
+| Поле    | Тип     | Описание                                    |
+|---------|---------|---------------------------------------------|
+| `count` | integer | Число инструментов, соответствующих фильтрам |
+| `tools` | array   | Записи инструментов                          |
+
+Каждая запись инструмента:
+
+| Поле          | Тип    | Описание                          |
+|---------------|--------|-----------------------------------|
+| `name`        | string | Уникальное имя инструмента        |
+| `description` | string | Человекочитаемое описание         |
+| `category`    | string | Категория инструмента             |
+| `tags`        | array  | Теги для фильтрации               |
+| `version`     | string | Версия инструмента                |
+| `parameters`  | object | JSON Schema параметров инструмента |
+| `provider`    | string | Имя провайдера                    |
+
+```json
+{
+  "count": 3,
+  "tools": [
+    {
+      "name": "search_knowledge_base",
+      "description": "Search the indexed knowledge base using hybrid retrieval",
+      "category": "retrieval",
+      "tags": [
+        "search",
+        "internal"
+      ],
+      "version": "1.0.0",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "max_results": {
+            "type": "integer",
+            "default": 5
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "provider": "sdk"
+    }
+  ]
+}
+```
+
+#### Примеры cURL
+
+```bash
+# Список всех инструментов
+curl http://localhost:8080/v1/tools | jq '.'
+
+# Фильтр по категории и тегу
+curl "http://localhost:8080/v1/tools?category=retrieval&tag=search" | jq '.'
+
+# Фильтр по провайдеру
+curl "http://localhost:8080/v1/tools?provider=sdk" | jq '.'
+```
+
+---
+
+### `GET /v1/tools/{name}`
+
+Получение полных сведений об одном инструменте по имени. Никогда не раскрывает код обработчика. RBAC: возвращает
+403, если инструмент не виден роли пользователя.
+
+**Требуется аутентификация:** Опционально
+
+#### Параметры пути
+
+| Параметр | Тип    | Описание                              |
+|----------|--------|---------------------------------------|
+| `name`   | string | Точное имя инструмента (с учётом регистра) |
+
+#### Схема ответа (200 OK)
+
+| Поле              | Тип     | Описание                                                                    |
+|-------------------|---------|-----------------------------------------------------------------------------|
+| `name`            | string  | Уникальное имя инструмента                                                  |
+| `description`     | string  | Человекочитаемое описание                                                   |
+| `category`        | string  | Категория инструмента                                                       |
+| `tags`            | array   | Теги для фильтрации                                                         |
+| `version`         | string  | Версия инструмента                                                          |
+| `visibility`      | string  | Минимальная требуемая роль: `"admin"`, `"expert"`, `"user"`, `"read_only"`  |
+| `timeout_seconds` | integer | Таймаут выполнения                                                          |
+| `parameters`      | object  | JSON Schema параметров инструмента                                          |
+| `provider`        | string  | Имя провайдера                                                              |
+| `depends_on`      | array   | Имена зависимостей инструмента для порядка параллельного выполнения          |
+
+```json
+{
+  "name": "search_knowledge_base",
+  "description": "Search the indexed knowledge base using hybrid retrieval",
+  "category": "retrieval",
+  "tags": [
+    "search",
+    "internal"
+  ],
+  "version": "1.0.0",
+  "visibility": "read_only",
+  "timeout_seconds": 30,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query"
+      },
+      "max_results": {
+        "type": "integer",
+        "default": 5
+      }
+    },
+    "required": [
+      "query"
+    ]
+  },
+  "provider": "sdk",
+  "depends_on": []
+}
+```
+
+#### Ошибки
+
+| HTTP Status | Описание                            |
+|-------------|-------------------------------------|
+| **403**     | `"Tool not visible to your role"`   |
+| **404**     | `"Tool 'unknown_tool' not found"`   |
+
+#### Пример cURL
+
+```bash
+curl http://localhost:8080/v1/tools/search_knowledge_base | jq '.'
+```
 
 ---
 
@@ -481,6 +741,63 @@ Prometheus-метрики в формате OpenMetrics.
 
 ---
 
+### `POST /v1/auth/register`
+
+Регистрация новой учётной записи. Сохраняет пользователя с bcrypt-хешированным паролем в SQLite. Ограничение:
+3 регистрации с одного IP в минуту.
+
+**Требуется аутентификация:** Нет
+
+#### Схема запроса
+
+| Поле       | Тип    | Обязательное | Ограничения    | Описание                                     |
+|------------|--------|--------------|----------------|----------------------------------------------|
+| `username` | string | Да           | 2–64 символа   | Желаемое имя пользователя                    |
+| `password` | string | Да           | 8–128 символов | Пароль (bcrypt-хешируется при сохранении)    |
+| `email`    | string | Нет          | —              | Опциональный адрес электронной почты         |
+
+```json
+{
+  "username": "alice",
+  "password": "s3cur3P@ssw0rd!",
+  "email": "alice@example.com"
+}
+```
+
+#### Схема ответа (201 Created)
+
+| Поле         | Тип    | Описание                                     |
+|--------------|--------|----------------------------------------------|
+| `user_id`    | string | Уникальный идентификатор пользователя (UUID) |
+| `username`   | string | Подтверждённое имя пользователя              |
+| `created_at` | string | Метка времени создания в формате ISO 8601    |
+
+```json
+{
+  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "username": "alice",
+  "created_at": "2026-07-06T14:30:00Z"
+}
+```
+
+#### Ошибки
+
+| HTTP Status | Описание                                                     |
+|-------------|--------------------------------------------------------------|
+| **400**     | `"Registration is not enabled. Set AUTH_ENABLED=true."`      |
+| **409**     | `"Username 'alice' already exists"`                          |
+| **429**     | `"Too many registration attempts. Try again in N seconds."`  |
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "password": "s3cur3P@ssw0rd!", "email": "alice@example.com"}'
+```
+
+---
+
 ### `POST /v1/auth/login`
 
 Генерация JWT-токена по учётным данным.
@@ -524,6 +841,51 @@ Prometheus-метрики в формате OpenMetrics.
   "token": "string (обязательно)"
 }
 ```
+
+### `POST /v1/auth/logout`
+
+Отзыв refresh-токенов и опциональное внесение текущего access-токена в чёрный список.
+
+**Требуется аутентификация:** Опционально (использует `get_optional_auth_context`)
+
+#### Схема запроса
+
+| Поле            | Тип     | Обязательное | Описание                                                       |
+|-----------------|---------|--------------|----------------------------------------------------------------|
+| `refresh_token` | string  | Нет          | Отозвать конкретный refresh-токен                              |
+| `all_sessions`  | boolean | Нет          | Отозвать ВСЕ refresh-токены аутентифицированного пользователя  |
+
+```json
+{
+  "refresh_token": "dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4tZXhhbXBsZQ...",
+  "all_sessions": false
+}
+```
+
+#### Схема ответа (200 OK)
+
+| Поле      | Тип    | Описание                        |
+|-----------|--------|---------------------------------|
+| `status`  | string | Всегда `"ok"`                   |
+| `message` | string | Человекочитаемое подтверждение  |
+
+```json
+{
+  "status": "ok",
+  "message": "Logged out successfully"
+}
+```
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/logout \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -d '{"all_sessions": true}'
+```
+
+---
 
 ### `GET /v1/auth/me`
 
@@ -626,6 +988,590 @@ Authorization: Bearer <admin-токен>
 ```bash
 curl -X POST http://localhost:8080/v1/admin/warmup \
   -H "Authorization: Bearer <admin-токен>"
+```
+
+---
+
+### `GET /v1/widget`
+
+Отдаёт встраиваемую HTML-страницу чат-виджета RAG. Виджет подключается к `/v1/chat/completions` через SSE-поток.
+
+**Требуется аутентификация:** Нет
+
+#### Ответ
+
+Возвращает HTML-страницу с автономным чат-интерфейсом. Можно открыть напрямую в браузере или встроить через iframe.
+
+#### Пример cURL
+
+```bash
+curl http://localhost:8080/v1/widget
+```
+
+#### Пример HTML-встраивания
+
+```html
+<!-- Полностраничное встраивание через iframe -->
+<iframe
+        src="http://localhost:8080/v1/widget"
+        width="720"
+        height="560"
+        frameborder="0"
+        style="border-radius: 8px;">
+</iframe>
+```
+
+---
+
+### `GET /v1/widget.js`
+
+Отдаёт автономный JavaScript чат-виджета RAG. Можно встроить в любую страницу для полного чат-интерфейса.
+
+**Требуется аутентификация:** Нет
+
+#### Ответ
+
+Возвращает `application/javascript` — скрипт инициализации виджета.
+
+#### Пример встраивания
+
+```html
+
+<script src="http://localhost:8080/v1/widget.js"></script>
+<div id="rag-chat"></div>
+<script>
+    RAGChatWidget.init({
+      container: 'rag-chat',
+      apiUrl: 'http://localhost:8080/v1',
+      placeholder: 'Ask me anything...',
+      theme: 'dark'
+    });
+</script>
+```
+
+#### Пример cURL
+
+```bash
+curl http://localhost:8080/v1/widget.js
+```
+
+---
+
+### `POST /v1/admin/models/train`
+
+Запуск задачи обучения модели (SLM, LLM или Reranker). Запускает асинхронное обучение и немедленно возвращает
+`job_id`. Опрашивайте `/v1/admin/models/status/{job_id}` для отслеживания завершения.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема запроса
+
+| Поле            | Тип     | Обязательное | По умолчанию         | Описание                                                                                            |
+|-----------------|---------|--------------|----------------------|-----------------------------------------------------------------------------------------------------|
+| `trainer_type`  | string  | Да           | —                    | Тип модели для обучения: `"slm"`, `"llm"`, `"reranker"`                                             |
+| `base_model`    | string  | Нет          | `""`                 | Имя базовой модели или HuggingFace ID (при пустом значении используются SLM_MODEL_NAME/LLM_MODEL_NAME) |
+| `profile`       | string  | Нет          | `"dev"`              | Профиль обучения: `"dev"` (быстрый, малый), `"ci"` (средний), `"prod"` (полный)                     |
+| `data_dir`      | string  | Нет          | `"./data/training/"` | Каталог с обучающими наборами данных                                                                |
+| `epochs`        | integer | Нет          | `3`                  | Количество эпох обучения                                                                             |
+| `batch_size`    | integer | Нет          | `8`                  | Размер батча обучения                                                                                |
+| `learning_rate` | float   | Нет          | `2e-4`               | Скорость обучения                                                                                    |
+| `use_lora`      | boolean | Нет          | `true`               | Использовать LoRA/QLoRA для эффективного по памяти дообучения                                        |
+
+```json
+{
+  "trainer_type": "slm",
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "profile": "dev",
+  "epochs": 3,
+  "batch_size": 4,
+  "learning_rate": 2e-4,
+  "use_lora": true
+}
+```
+
+#### Схема ответа (200 OK)
+
+| Поле           | Тип    | Описание                                                                 |
+|----------------|--------|--------------------------------------------------------------------------|
+| `job_id`       | string | Уникальный ID задачи для опроса статуса (формат: `train-<12_hex_chars>`) |
+| `trainer_type` | string | Тип, подтверждённый из запроса                                           |
+| `status`       | string | Начальный статус: `"running"`                                            |
+| `message`      | string | Человекочитаемое подтверждение                                           |
+
+```json
+{
+  "job_id": "train-a1b2c3d4e5f6",
+  "trainer_type": "slm",
+  "status": "running",
+  "message": "Training job train-a1b2c3d4e5f6 started"
+}
+```
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/models/train \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -d '{
+    "trainer_type": "slm",
+    "profile": "dev",
+    "epochs": 3
+  }'
+```
+
+---
+
+### `GET /v1/admin/models/status/{job_id}`
+
+Проверка прогресса задачи обучения и финальных метрик.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Параметры пути
+
+| Параметр | Тип    | Описание                                              |
+|----------|--------|-------------------------------------------------------|
+| `job_id` | string | ID задачи, возвращённый из `POST /v1/admin/models/train` |
+
+#### Схема ответа (200 OK)
+
+| Поле            | Тип    | Описание                                                |
+|-----------------|--------|---------------------------------------------------------|
+| `job_id`        | string | ID задачи                                               |
+| `trainer_type`  | string | Тип: `"slm"`, `"llm"`, `"reranker"`                     |
+| `status`        | string | `"queued"`, `"running"`, `"completed"` или `"failed"`   |
+| `config`        | object | Использованная конфигурация обучения                    |
+| `metrics`       | object | Метрики обучения (заполняются по завершении)            |
+| `artifact_uri`  | string | Путь к артефактам обученной модели (по завершении)      |
+| `started_at`    | string | Метка времени начала в формате ISO 8601                 |
+| `completed_at`  | string | Метка времени завершения в формате ISO 8601             |
+| `error_message` | string | Сведения об ошибке (при сбое)                           |
+
+**Выполняется:**
+
+```json
+{
+  "job_id": "train-a1b2c3d4e5f6",
+  "trainer_type": "slm",
+  "status": "running",
+  "config": {
+    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "profile": "dev",
+    "epochs": 3
+  },
+  "metrics": {},
+  "started_at": "2026-07-06T14:30:00Z",
+  "completed_at": null,
+  "error_message": null
+}
+```
+
+**Завершено:**
+
+```json
+{
+  "job_id": "train-a1b2c3d4e5f6",
+  "trainer_type": "slm",
+  "status": "completed",
+  "config": {
+    "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
+    "profile": "dev",
+    "epochs": 3
+  },
+  "metrics": {
+    "accuracy": 0.923,
+    "f1_score": 0.91,
+    "eval_loss": 0.34
+  },
+  "artifact_uri": "./models/slm_train-a1b2c3d4e5f6",
+  "started_at": "2026-07-06T14:30:00Z",
+  "completed_at": "2026-07-06T14:45:30Z",
+  "error_message": null
+}
+```
+
+**Ошибка:**
+
+```json
+{
+  "job_id": "train-a1b2c3d4e5f6",
+  "trainer_type": "slm",
+  "status": "failed",
+  "error_message": "CUDA out of memory. Tried to allocate 2.0 GiB",
+  "completed_at": "2026-07-06T14:31:02Z"
+}
+```
+
+#### Ошибки
+
+| HTTP Status | Описание                                |
+|-------------|-----------------------------------------|
+| **404**     | `"Training job 'train-xyz' not found"`  |
+
+#### Пример cURL
+
+```bash
+curl http://localhost:8080/v1/admin/models/status/train-a1b2c3d4e5f6 \
+  -H "Authorization: Bearer eyJhbGciOi..."
+```
+
+---
+
+### `GET /v1/admin/models`
+
+Список всех зарегистрированных моделей с версиями, статусами и информацией о продакшен-версии.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема ответа (200 OK)
+
+```json
+{
+  "models": {
+    "slm": {
+      "versions": [
+        {
+          "version": "v1.0.0",
+          "status": "production",
+          "artifact_path": "s3://rag-artifacts/slm/v1.0.0",
+          "metrics": {
+            "accuracy": 0.923,
+            "f1_score": 0.91
+          },
+          "created_at": "2026-07-01T10:00:00Z"
+        },
+        {
+          "version": "v1.1.0",
+          "status": "staging",
+          "artifact_path": "s3://rag-artifacts/slm/v1.1.0",
+          "metrics": {
+            "accuracy": 0.941,
+            "f1_score": 0.93
+          },
+          "created_at": "2026-07-06T14:45:30Z"
+        }
+      ],
+      "production_version": "v1.0.0"
+    },
+    "reranker": {
+      "versions": [
+        {
+          "version": "v1.0.0",
+          "status": "production",
+          "artifact_path": "./models/reranker_v1",
+          "metrics": {
+            "mrr": 0.85,
+            "recall_at_10": 0.78
+          },
+          "created_at": "2026-06-15T08:30:00Z"
+        }
+      ],
+      "production_version": "v1.0.0"
+    }
+  }
+}
+```
+
+#### Пример cURL
+
+```bash
+curl http://localhost:8080/v1/admin/models \
+  -H "Authorization: Bearer eyJhbGciOi..."
+```
+
+---
+
+### `POST /v1/admin/models/promote`
+
+Продвижение версии модели по цепочке staging → canary → production.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема запроса
+
+| Поле         | Тип    | Обязательное | Описание                                                         |
+|--------------|--------|--------------|------------------------------------------------------------------|
+| `model_name` | string | Да           | Идентификатор модели (например, `"slm"`, `"llm"`, `"reranker"`)  |
+| `version`    | string | Да           | Версия для продвижения (например, `"v1.1.0"`)                   |
+
+```json
+{
+  "model_name": "slm",
+  "version": "v1.1.0"
+}
+```
+
+#### Схема ответа (200 OK)
+
+| Поле              | Тип    | Описание                  |
+|-------------------|--------|---------------------------|
+| `model_name`      | string | Идентификатор модели      |
+| `version`         | string | Продвинутая версия        |
+| `previous_status` | string | Статус до продвижения     |
+| `new_status`      | string | Статус после продвижения  |
+
+```json
+{
+  "model_name": "slm",
+  "version": "v1.1.0",
+  "previous_status": "staging",
+  "new_status": "production"
+}
+```
+
+#### Ошибки
+
+| HTTP Status | Описание                                     |
+|-------------|----------------------------------------------|
+| **404**     | `"Model 'slm' version 'v99.0.0' not found"`  |
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/models/promote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -d '{"model_name": "slm", "version": "v1.1.0"}'
+```
+
+---
+
+### `POST /v1/admin/models/rollback`
+
+Откат к предыдущей продакшен-версии модели.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема запроса
+
+| Поле         | Тип    | Обязательное | Описание                                                         |
+|--------------|--------|--------------|------------------------------------------------------------------|
+| `model_name` | string | Да           | Идентификатор модели (например, `"slm"`, `"llm"`, `"reranker"`)  |
+
+```json
+{
+  "model_name": "slm"
+}
+```
+
+#### Схема ответа (200 OK)
+
+| Поле               | Тип    | Описание                              |
+|--------------------|--------|---------------------------------------|
+| `model_name`       | string | Идентификатор модели                  |
+| `version`          | string | Версия, к которой выполнен откат      |
+| `previous_version` | string | Версия, ранее бывшая продакшеном      |
+| `status`           | string | Статус версии, к которой выполнен откат |
+
+```json
+{
+  "model_name": "slm",
+  "version": "v1.0.0",
+  "previous_version": "v1.1.0",
+  "status": "production"
+}
+```
+
+#### Ошибки
+
+| HTTP Status | Описание                                                                     |
+|-------------|------------------------------------------------------------------------------|
+| **400**     | `"No previous version to rollback to"`                                       |
+| **404**     | `"Model 'unknown' not found"` или `"No production version for model 'slm'"`  |
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/models/rollback \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -d '{"model_name": "slm"}'
+```
+
+---
+
+### `POST /v1/admin/models/evaluate`
+
+Оценка метрик качества модели относительно настроенных порогов (eval gate). Возвращает статус pass/fail с
+перечнями сбоев и предупреждений.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема запроса
+
+| Поле         | Тип    | Обязательное | Описание                                                  |
+|--------------|--------|--------------|-----------------------------------------------------------|
+| `model_name` | string | Да           | Идентификатор модели                                      |
+| `version`    | string | Нет          | Оцениваемая версия (по умолчанию: `"unknown"`)            |
+| `metrics`    | object | Да           | Пары ключ-значение: имя метрики → значение float          |
+
+```json
+{
+  "model_name": "slm",
+  "version": "v1.1.0",
+  "metrics": {
+    "accuracy": 0.941,
+    "weighted_f1": 0.93,
+    "mrr": 0.72,
+    "recall_at_10": 0.68,
+    "rouge_l_f1": 0.41,
+    "eval_loss": 0.34
+  }
+}
+```
+
+#### Схема ответа (200 OK)
+
+| Поле         | Тип    | Описание                                                                       |
+|--------------|--------|--------------------------------------------------------------------------------|
+| `model_name` | string | Идентификатор модели                                                           |
+| `version`    | string | Оценённая версия                                                               |
+| `status`     | string | `"PASS"`, `"FAIL"` или `"WARN"`                                                |
+| `failures`   | array  | Список проваленных проверок порогов (например, `"recall_at_10: 0.68 < 0.65"`) |
+| `warnings`   | array  | Список проверок порогов уровня предупреждения                                  |
+| `metrics`    | object | Возвращённые метрики                                                           |
+
+```json
+{
+  "model_name": "slm",
+  "version": "v1.1.0",
+  "status": "PASS",
+  "failures": [],
+  "warnings": [],
+  "metrics": {
+    "accuracy": 0.941,
+    "weighted_f1": 0.93,
+    "mrr": 0.72,
+    "recall_at_10": 0.68,
+    "rouge_l_f1": 0.41,
+    "eval_loss": 0.34
+  }
+}
+```
+
+**Пороги eval gate по умолчанию:**
+
+| Метрика        | Порог  | Оператор | Серьёзность |
+|----------------|--------|----------|-------------|
+| `accuracy`     | ≥ 0.90 | gte      | fail        |
+| `weighted_f1`  | ≥ 0.85 | gte      | fail        |
+| `mrr`          | ≥ 0.70 | gte      | fail        |
+| `recall_at_10` | ≥ 0.65 | gte      | fail        |
+| `rouge_l_f1`   | ≥ 0.35 | gte      | fail        |
+| `eval_loss`    | ≤ 1.0  | lte      | warn        |
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/models/evaluate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -d '{
+    "model_name": "slm",
+    "version": "v1.1.0",
+    "metrics": {"accuracy": 0.941, "weighted_f1": 0.93, "mrr": 0.72}
+  }'
+```
+
+---
+
+### `POST /v1/admin/models/canary/split`
+
+Настройка распределения canary-трафика для постепенного развёртывания. Устанавливает долю трафика, направляемую на
+canary-версию.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема запроса
+
+| Поле            | Тип    | Обязательное | Описание                                                                          |
+|-----------------|--------|--------------|-----------------------------------------------------------------------------------|
+| `model_name`    | string | Да           | Идентификатор модели                                                              |
+| `traffic_split` | float  | Да           | Доля трафика на canary-версию (0.0–1.0). 0.0 = весь стабильный, 1.0 = весь canary |
+
+```json
+{
+  "model_name": "slm",
+  "traffic_split": 0.25
+}
+```
+
+#### Схема ответа (200 OK)
+
+| Поле            | Тип    | Описание                                          |
+|-----------------|--------|---------------------------------------------------|
+| `model_name`    | string | Идентификатор модели                              |
+| `traffic_split` | float  | Доля canary-трафика                               |
+| `status`        | string | Фаза canary: `"idle"` (0.0), `"ramp"` (>0.0)      |
+
+```json
+{
+  "model_name": "slm",
+  "traffic_split": 0.25,
+  "status": "ramp"
+}
+```
+
+**Типовые фазы canary-развёртывания:**
+
+| Фаза   | Доля | Длительность | Описание                   |
+|--------|------|--------------|----------------------------|
+| Idle   | 0.0  | —            | Нет canary-трафика         |
+| Фаза 1 | 5%   | 5 мин        | Начальный смоук-тест       |
+| Фаза 2 | 25%  | 10 мин       | Расширенная валидация      |
+| Фаза 3 | 50%  | 15 мин       | Половина трафика           |
+| Фаза 4 | 75%  | 20 мин       | Почти полное развёртывание |
+| Full   | 100% | —            | Полное продвижение         |
+
+Длительности фаз настраиваются через переменные окружения `CANARY_PHASE_DURATION_*`.
+
+#### Пример cURL
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/models/canary/split \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOi..." \
+  -d '{"model_name": "slm", "traffic_split": 0.25}'
+```
+
+---
+
+### `GET /v1/admin/models/canary/status`
+
+Получение текущего статуса canary-развёртывания и метрик для всех моделей.
+
+**Требуется аутентификация:** Да (роль ADMIN)
+
+#### Схема ответа (200 OK)
+
+```json
+{
+  "canary_models": {
+    "slm": {
+      "traffic_split": 0.25,
+      "stable_traffic": 0.75,
+      "phase": "ramp",
+      "stable_version": "v1.0.0",
+      "canary_version": "v1.1.0"
+    }
+  }
+}
+```
+
+| Поле              | Тип    | Описание                                                |
+|-------------------|--------|---------------------------------------------------------|
+| `traffic_split`   | float  | Текущая доля canary-трафика                             |
+| `stable_traffic`  | float  | Текущая доля стабильного трафика (1.0 - traffic_split)  |
+| `phase`           | string | `"idle"` или `"ramp"`                                   |
+| `stable_version`  | string | Текущая стабильная (продакшен) версия                   |
+| `canary_version`  | string | Развёртываемая canary-версия                            |
+
+#### Пример cURL
+
+```bash
+curl http://localhost:8080/v1/admin/models/canary/status \
+  -H "Authorization: Bearer eyJhbGciOi..."
 ```
 
 ---
@@ -878,6 +1824,36 @@ HTTP-заголовки в каждом ответе (при активном о
 | `SLM_MODEL_NAME` | (пусто)      | Имя SLM-модели                                                                                |
 | `SLM_API_KEY`    | (пусто)      | API-ключ для SLM                                                                              |
 | `SLM_MAX_TOKENS` | `256`        | Максимум токенов для ответов SLM                                                              |
+### Уверенность и самокоррекция
+
+| Переменная                    | Тип     | По умолчанию | Описание                                                         |
+|-------------------------------|---------|--------------|-------------------------------------------------------------------|
+| `CONFIDENCE_THRESHOLD`        | float   | `0.5`        | Порог, ниже которого ответы помечаются на проверку                |
+| `NLI_GROUNDING_ENABLED`       | boolean | `true`       | Включить NLI-обоснование ответа (cosine + entailment)             |
+| `SELF_CRITIQUE_ENABLED`       | boolean | `true`       | Включить шаг самокритики (self-reflection)                        |
+| `MAX_VERIFY_LOOPS`            | integer | `2`          | Максимум циклов корректирующей повторной генерации                |
+| `HYDE_ENABLED`                | boolean | `true`       | Включить расширение запроса HyDE                                  |
+| `REFLECTION_ENABLED`          | boolean | `true`       | Включить самокритику в конвейере LangGraph                        |
+| `CRAG_DECOMPOSITION_ENABLED`  | boolean | `true`       | Включить CRAG-оценку качества поиска                              |
+| `REORDER_ENABLED`             | boolean | `true`       | Включить LongContextReorder                                       |
+| `COMPRESSION_STRATEGY`        | string  | `keyword`    | Стратегия сжатия контекста: `"keyword"`, `"perplexity"`, `"none"` |
+| `HALLUCINATION_CHECK_ENABLED` | boolean | `false`      | Включить полный конвейер детекции галлюцинаций                    |
+| `NLI_MODEL_ENABLED`           | boolean | `false`      | Включить отдельную NLI-модель для обоснования                     |
+
+### Кэш
+
+| Переменная  | Тип     | По умолчанию             | Описание                   |
+|-------------|---------|--------------------------|----------------------------|
+| `USE_REDIS` | boolean | `false`                  | Включить кэширование Redis |
+| `REDIS_URL` | string  | `redis://localhost:6379` | Строка подключения Redis   |
+
+### Агентная оркестрация (LangGraph)
+
+| Переменная      | Тип     | По умолчанию | Описание                                                   |
+|-----------------|---------|--------------|------------------------------------------------------------|
+| `USE_LANGGRAPH` | boolean | `false`      | Включить агентную оркестрацию на графе состояний LangGraph |
+
+
 
 ---
 

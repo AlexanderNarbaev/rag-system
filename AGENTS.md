@@ -354,7 +354,8 @@ RAG-specific parameters on `/v1/chat/completions`:
 - `rag_skip_generation` — search-only mode (federation)
 - `rag_return_chunks` — return retrieved chunks in response
 - `rag_top_k` — override number of chunks after rerank
-- Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`
+- Response extensions: `rag_feedback_id`, `rag_confidence`, `rag_sources`, `rag_stage_timings_ms`
+  (per-stage latency breakdown, non-streaming)
 
 ## Configuration
 

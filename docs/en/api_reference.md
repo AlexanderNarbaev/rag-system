@@ -479,6 +479,7 @@ primary endpoint for all RAG queries.
   "rag_force_refresh": "boolean (default: false)",
   "rag_skip_generation": "boolean (default: false)",
   "rag_return_chunks": "boolean (default: false)",
+  "rag_stage_timings_ms": "object | null — per-stage latency breakdown {retrieval_ms, rerank_ms, generation_ms} (non-streaming only)",
   "rag_top_k": "integer (optional)"
 }
 ```
@@ -510,6 +511,7 @@ These parameters extend the standard OpenAI schema. They are silently ignored by
 | `rag_skip_generation` | boolean | No       | `false` | Skip LLM generation entirely, return only retrieved chunks                                                                                                                                             |
 | `rag_return_chunks`   | boolean | No       | `false` | Include full chunk text bodies in the response                                                                                                                                                         |
 | `rag_top_k`           | integer | No       | —       | Override the default `MAX_CHUNKS_RETRIEVAL` for this request only                                                                                                                                      |
+| —                     | —       | —        | —       | **Response extension:** `rag_stage_timings_ms` (object \| null) — per-stage latency breakdown `{retrieval_ms, rerank_ms, generation_ms}`, non-streaming responses only                                 |
 
 #### Response Schema (200 OK — Non-Streaming)
 
@@ -557,6 +559,12 @@ These parameters extend the standard OpenAI schema. They are silently ignored by
 | `rag_feedback_id` | string | Unique ID for submitting expert feedback via `/v1/feedback`. Generated per response. Format: `fbk_<unix_timestamp>_<random_hex>`                                                                                                       |
 | `rag_confidence`  | float  | Confidence score (0.0–1.0). Based on context sufficiency, answer length vs. context ratio, and uncertainty phrase detection. **Interpretation:** ≥0.8 = high confidence, 0.5–0.8 = moderate (should verify), <0.5 = low (needs review) |
 | `rag_sources`     | array  | Retrieved chunks used to generate the response                                                                                                                                                                                         |
+| `ragas_scores`    | object | RAGAS evaluation metrics: `faithfulness`, `answer_relevance`, `context_relevance`, `overall` (each 0.0–1.0). Present when retrieval-quality evaluation is enabled.                                                                       |
+| `rag_knowledge_status` | string | Knowledge grounding status (FR-144 taxonomy): `sufficient`, `partial`, `insufficient`, `absent`.                                                                                                                                      |
+| `rag_source_count` | integer | Number of retrieved sources used for the response.                                                                                                                                                                                    |
+| `rag_clarification_needed` | boolean | Whether a clarifying question to the user is required (`true` when knowledge is insufficient or ambiguous).                                                                                                                           |
+| `rag_clarifying_questions` | array | List of clarifying questions, present when `rag_clarification_needed=true`.                                                                                                                                                           |
+| `rag_stage_timings_ms` | object | Per-stage latency breakdown `{retrieval_ms, rerank_ms, generation_ms}` in ms. Non-streaming responses only (FR-179).                                                                                                                   |
 
 #### `rag_sources` Entry Schema
 

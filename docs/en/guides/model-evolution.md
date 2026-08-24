@@ -1820,3 +1820,12 @@ pip install safetensors
 - [Best Practices Checklist](best-practices-checklist.md) — production readiness dimensions
 - [Access Control & RBAC](access-control-rbac.md) — admin role required for all model evolution endpoints
 - [Troubleshooting](troubleshooting.md) — general system troubleshooting
+
+## Standalone Service Duplication — Deprecation Decision
+
+`model_evolution_service/` historically duplicated `proxy/app/model_evolution/` (partly byte-identical).
+**Decision (2026-08 audit): `proxy/app/model_evolution/` is the single source of truth.** The standalone
+tree is frozen for feature work; changes are ported only to keep the tree-parity sync test green
+(`tests/proxy/test_model_evolution_eval_gate_sync.py`). Full removal is tagged `[STRATEGIC_NEEDED]`
+(protected-zone adjacent) and tracked for a future release; until then both trees must receive identical
+additions — see `value_score()` in `eval_gate.py` as the reference example.

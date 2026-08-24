@@ -225,6 +225,8 @@ SLM_LOCAL_PORT=8081
 |---------------------------|------|---------|-----------------------------------------------|
 | `MAX_CHUNKS_RETRIEVAL`    | int  | `50`    | Chunks fetched from Qdrant before reranking.  |
 | `MAX_CHUNKS_AFTER_RERANK` | int  | `20`    | Chunks passed to LLM context after reranking. |
+| `RAG_ADAPTIVE_TOP_K`      | bool | `false` | Knee-based adaptive top-k on rerank scores; falls back to static `rag_top_k` on flat/short curves (FR-178). |
+| `RAG_ADAPTIVE_TOP_K_MIN`  | int  | `3`     | Floor for adaptive top-k results (never returns fewer chunks than this when the flag is on). |
 
 **Example:**
 
