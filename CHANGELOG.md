@@ -9,57 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Real evaluation metrics in `LLMTrainer` (sacrebleu BLEU-1/4, rouge-score ROUGE-L, bert-score F1) with lazy
-  imports and graceful fallback; mock mode is explicitly flagged with a `mock: 1.0` metric
-- `EventProcessor` for the ETL event pipeline: webhook events now flow through chunking → enrichment → Qdrant
-  indexing with retry/no-ack semantics (previously consumer handlers were stubs)
-- Working `DeclarativeProvider` / `OpenAPIProvider` discovery in the tool registry (were returning empty lists)
-- LLM-driven OpenAPI tool discovery via SLM with explicit degradation to an empty selection
-- NLI entailment signal in answer grounding (combined with cosine similarity, `NLI_GROUNDING_ENABLED` gated)
-- Sync test guarding parity of the two `eval_gate.py` trees (proxy vs standalone service)
-- `etl/.env.example` template, `dashboard/Dockerfile`, `etl/model_cache/` staging dir, `requirements-docs.txt`
-  with pinned documentation dependencies
-- Russian translations for api/, architecture/, operations/, audit/, security/ docs; English translations for
-  `requirements/` (full EN/RU documentation parity)
-- Docs site: logo/favicon, Russian nav translations, language alternates fixed
-- Project logo asset (`docs/assets/logo.svg`) and export script for training datasets
-  (`scripts/export_training_datasets.py` with unit tests under `tests/scripts/`)
+- Research sources & best-practices integration guide (EN/RU) cataloguing 36 audited external sources with
+  implementation-status mapping (✅/🟡/📋) and a prioritized adoption backlog
+  (`docs/en|ru/guides/research-sources-and-best-practices.md`)
+- `make docs-build` / `make docs-serve` targets mirroring the GitHub Pages CI build command
+- CHANGELOG history normalized: cumulative system snapshot moved out of the version sequence; version
+  heading style unified (`X.Y.Z`, no `v` prefix); ordering now strictly newest-first
 
-### Fixed
+---
 
-- Full test-suite isolation: `make test` now runs unit/integration, e2e, performance, and resilience tests in
-  separate pytest processes, preventing `sys.modules`/`MagicMock` pollution between test groups
-- 5 performance tests missing the `benchmark` fixture now pass after adding `pytest-benchmark>=4.0.0` to dev
-  dependencies
-- SacreBLEU fake objects in `tests/proxy/test_llm_trainer_unit.py` and `tests/proxy/test_llm_trainer_extended.py`
-  updated to match the production `sacrebleu.BLEU(max_ngram_order=...).corpus_score(...)` API
-- Security audit: switched `requirements-proxy.txt` from full `mlflow` to `mlflow-skinny` and pinned
-  `cryptography>=50.0.0`, resolving PYSEC-2026-3552 while keeping Python 3.14 compatibility
-- Migration manager now imports `find_spec` at module level so tests can reliably patch Neo4j
-  availability; corresponding migration tests updated
-- SLM trainer unit test no longer triggers CUDA OOM when asserting missing-dataset failure path
-- 6 Redis cache tests failed in full-suite runs due to `sys.modules` pollution from admin test modules —
-  tests now inject a fake `redis`/`redis.asyncio` pair via `patch.dict`
-- `proxy/Dockerfile`: broken `COPY .env.example` (missing file) and wrong module path in `CMD`
-  (`app.main:app` → `proxy.app.main:app` + `PYTHONPATH`)
-- `etl/Dockerfile.etl`: `python:3.14-slim` → `3.12-slim`; model cache COPY now uses an in-context directory
-- HA compose was an invalid project (fixed `container_name` × `deploy.replicas` conflict via `!reset`,
-  unpublished host port, `hitl-dashboard` build context `../hitl_dashboard` → `../dashboard`)
-- Base compose was invalid with the override file (missing `hitl-dashboard` service definition)
-- `make setup`, `setup.sh`, `install.sh` referenced a non-existent root `.env.example`
-- CI: `tests/integration/test_minikube_e2e.py` now skips without `RAG_PROXY_URL` (was a guaranteed red job)
-- CI: mypy gate no longer `continue-on-error`, covers `proxy/ etl/` like `make typecheck`
-- CI: `download-artifact@v4` → `@v8`, bounded MinIO health wait, dead `proxy/.env` trigger removed,
-  duplicated pip-audit jobs removed from ci.yml, dead `safety check` removed, "SBOM" steps renamed to
-  vulnerability reports, `timeout-minutes` on all jobs
-- `LLMTrainer.train()` unified with the SLM/Reranker `train(config)` contract (the model-evolution workflow
-  called it with a config and crashed); silent dummy-dataset fallbacks replaced with explicit `FileNotFoundError`
-- Helm chart: `appVersion` 2.0.0, Qdrant image aligned to v1.18.2
-- mkdocs: fixed `extra.alternate` (404 on `/en/`), broken diagram SVGs on the RU site, broken relative links
-  (`../adr/`, `../diagrams/`, `#end-to-end-latency` anchor), deprecated `uslugify` slugify
-- Russian comments/docstrings translated to English across proxy/, etl/, scripts/ (project language rule)
+## System Snapshot - 2026-07-26
 
-## [1.0.0] - 2026-07-26
+Cumulative capability summary at the v2.0.0 finalization checkpoint (not a separate release; individual
+changes are itemized in the milestone entries below). The product release line is **2.0.x**; `v2.1.0`–
+`v2.6.0` entries record internal wave milestones leading to it.
 
 ### Added
 
@@ -110,7 +73,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Helm chart for K8s deployment
 - 3-component architecture: ETL, Proxy, Model Evolution
 
-## [v2.6.0] - 2026-07-18
+### Pre-release quality-gate remediation
+
+**Added**
+
+- Real evaluation metrics in `LLMTrainer` (sacrebleu BLEU-1/4, rouge-score ROUGE-L, bert-score F1) with lazy
+  imports and graceful fallback; mock mode is explicitly flagged with a `mock: 1.0` metric
+- `EventProcessor` for the ETL event pipeline: webhook events now flow through chunking → enrichment → Qdrant
+  indexing with retry/no-ack semantics (previously consumer handlers were stubs)
+- Working `DeclarativeProvider` / `OpenAPIProvider` discovery in the tool registry (were returning empty lists)
+- LLM-driven OpenAPI tool discovery via SLM with explicit degradation to an empty selection
+- NLI entailment signal in answer grounding (combined with cosine similarity, `NLI_GROUNDING_ENABLED` gated)
+- Sync test guarding parity of the two `eval_gate.py` trees (proxy vs standalone service)
+- `etl/.env.example` template, `dashboard/Dockerfile`, `etl/model_cache/` staging dir, `requirements-docs.txt`
+  with pinned documentation dependencies
+- Russian translations for api/, architecture/, operations/, audit/, security/ docs; English translations for
+  `requirements/` (full EN/RU documentation parity)
+- Docs site: logo/favicon, Russian nav translations, language alternates fixed
+- Project logo asset (`docs/assets/logo.svg`) and export script for training datasets
+  (`scripts/export_training_datasets.py` with unit tests under `tests/scripts/`)
+
+**Fixed**
+
+- Full test-suite isolation: `make test` now runs unit/integration, e2e, performance, and resilience tests in
+  separate pytest processes, preventing `sys.modules`/`MagicMock` pollution between test groups
+- 5 performance tests missing the `benchmark` fixture now pass after adding `pytest-benchmark>=4.0.0` to dev
+  dependencies
+- SacreBLEU fake objects in `tests/proxy/test_llm_trainer_unit.py` and `tests/proxy/test_llm_trainer_extended.py`
+  updated to match the production `sacrebleu.BLEU(max_ngram_order=...).corpus_score(...)` API
+- Security audit: switched `requirements-proxy.txt` from full `mlflow` to `mlflow-skinny` and pinned
+  `cryptography>=50.0.0`, resolving PYSEC-2026-3552 while keeping Python 3.14 compatibility
+- Migration manager now imports `find_spec` at module level so tests can reliably patch Neo4j
+  availability; corresponding migration tests updated
+- SLM trainer unit test no longer triggers CUDA OOM when asserting missing-dataset failure path
+- 6 Redis cache tests failed in full-suite runs due to `sys.modules` pollution from admin test modules —
+  tests now inject a fake `redis`/`redis.asyncio` pair via `patch.dict`
+- `proxy/Dockerfile`: broken `COPY .env.example` (missing file) and wrong module path in `CMD`
+  (`app.main:app` → `proxy.app.main:app` + `PYTHONPATH`)
+- `etl/Dockerfile.etl`: `python:3.14-slim` → `3.12-slim`; model cache COPY now uses an in-context directory
+- HA compose was an invalid project (fixed `container_name` × `deploy.replicas` conflict via `!reset`,
+  unpublished host port, `hitl-dashboard` build context `../hitl_dashboard` → `../dashboard`)
+- Base compose was invalid with the override file (missing `hitl-dashboard` service definition)
+- `make setup`, `setup.sh`, `install.sh` referenced a non-existent root `.env.example`
+- CI: `tests/integration/test_minikube_e2e.py` now skips without `RAG_PROXY_URL` (was a guaranteed red job)
+- CI: mypy gate no longer `continue-on-error`, covers `proxy/ etl/` like `make typecheck`
+- CI: `download-artifact@v4` → `@v8`, bounded MinIO health wait, dead `proxy/.env` trigger removed,
+  duplicated pip-audit jobs removed from ci.yml, dead `safety check` removed, "SBOM" steps renamed to
+  vulnerability reports, `timeout-minutes` on all jobs
+- `LLMTrainer.train()` unified with the SLM/Reranker `train(config)` contract (the model-evolution workflow
+  called it with a config and crashed); silent dummy-dataset fallbacks replaced with explicit `FileNotFoundError`
+- Helm chart: `appVersion` 2.0.0, Qdrant image aligned to v1.18.2
+- mkdocs: fixed `extra.alternate` (404 on `/en/`), broken diagram SVGs on the RU site, broken relative links
+  (`../adr/`, `../diagrams/`, `#end-to-end-latency` anchor), deprecated `uslugify` slugify
+- Russian comments/docstrings translated to English across proxy/, etl/, scripts/ (project language rule)
+
+## [2.6.0] - 2026-07-18
 
 This release covers Wave 19: Semantic Cache with intelligent TTL, RAGAS metrics
 integration, code quality hardening, and team state persistence.
@@ -141,7 +158,7 @@ integration, code quality hardening, and team state persistence.
 - Code quality: 23 lint errors and 8 format violations resolved across proxy and
   ETL modules
 
-## [v2.5.0] - 2026-07-18
+## [2.5.0] - 2026-07-18
 
 This release covers Waves 14-18: monitoring enhancements, test coverage boost,
 security hardening, ETL extractor tests, CI stabilization, contextual retrieval,
@@ -202,7 +219,7 @@ BGE-Reranker-v2-m3 upgrade, and code quality fixes.
 - **Lint errors:** 17 ruff lint violations resolved across proxy and ETL modules
 - **Format violations:** 13 files reformatted to pass `ruff format --check`
 
-## [v2.4.0] - 2026-07-18
+## [2.4.0] - 2026-07-18
 
 This release addresses MEDIUM-priority gaps across Waves 10-13: conversational context,
 admin analytics, feedback hardening, i18n, response compression, progressive retrieval,
@@ -255,7 +272,7 @@ and vLLM monitoring.
 - Compliance requirements document updated: 13 FRs marked MET, 1 marked PARTIAL,
   status summary table added
 
-## [v2.3.0] - 2026-07-17
+## [2.3.0] - 2026-07-17
 
 ### Added
 
@@ -290,7 +307,7 @@ and vLLM monitoring.
   corruption under concurrent ETL worker access. Added stale lock recovery (auto-release
   locks older than 10 minutes).
 
-## [v2.2.0] - 2026-07-17
+## [2.2.0] - 2026-07-17
 
 ### Changed
 
@@ -304,7 +321,7 @@ and vLLM monitoring.
   corruption under concurrent ETL worker access. Added stale lock recovery (auto-release
   locks older than 10 minutes).
 
-## [v2.1.0] - 2026-07-17
+## [2.1.0] - 2026-07-17
 
 This release completes all 5 waves of the S4-2026 sprint: Foundation Fixes, Quality Push,
 Infrastructure, Polish, and Final Validation. See `docs/en/guides/sprint-plan-2026-s4.md`
@@ -393,7 +410,7 @@ for the full sprint plan.
 - Secrets rotation automation (kubectl + External Secrets Operator)
 - Final security audit passed with zero findings
 
-## [v2.0.0] - 2026-06-26
+## [2.0.0] - 2026-06-26
 
 ### Added
 
@@ -415,7 +432,7 @@ for the full sprint plan.
 - OpenAPI auto-discovery for tool registration
 - Model evolution pipeline (LoRA/QLoRA fine-tuning, EvalGate, canary deployment)
 
-## [v1.0.0] - 2026-03-01
+## [1.0.0] - 2026-03-01
 
 ### Added
 

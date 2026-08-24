@@ -213,6 +213,12 @@ docs: ## Show documentation locations
 	@echo "  AGENTS.md:    project structure and conventions"
 	@echo "  README.md:    project overview"
 
+docs-build: ## Build the bilingual MkDocs site (mirrors GitHub Pages CI)
+	$(PYTHON) -m mkdocs build --strict --clean --site-dir site
+
+docs-serve: ## Serve the docs site locally for preview (http://localhost:8000)
+	$(PYTHON) -m mkdocs serve
+
 export-openapi: ## Export OpenAPI spec + generate API docs
 	@cd $(ROOT) && $(PYTHON) scripts/export_openapi.py
 

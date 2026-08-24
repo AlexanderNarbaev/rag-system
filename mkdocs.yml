@@ -70,6 +70,7 @@ nav:
       - "Agentic Tools - SDK": guides/agentic-tools-sdk.md
       - "Agentic Tools - Declarative": guides/agentic-tools-declarative.md
       - "Agentic Tools - OpenAPI": guides/agentic-tools-openapi.md
+      - "Research Sources & Best Practices": guides/research-sources-and-best-practices.md
       - Integration with OpenCode: guides/integration-opencode.md
       - Development Roadmap: guides/roadmap.md
       - Configuration Reference: guides/configuration-reference.md

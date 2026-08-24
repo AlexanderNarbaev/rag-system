@@ -1,13 +1,17 @@
 {
-  "last_commit": "fe1b65d",
-  "timestamp": "2026-07-26T20:52:00+03:00",
-  "wave": 20,
+  "last_commit": "pending-wave21",
+  "timestamp": "2026-08-24T17:51:50.507694+00:00",
+  "wave": 21,
   "tests_passed": 27,
   "coverage": null,
   "status": "active",
-  "active_task": "ETL integration and smoke tests",
+  "active_task": "Audit wave 21: research integration + docs/changelog normalization",
   "verification": {
-    "ruff": "passed for tests/etl and tests/integration/test_etl_e2e.py; shell validated with bash -n",
-    "pytest": "27 passed with --no-cov"
-  }
+    "ruff": "0 errors (proxy etl tests scripts tui mcp_server dashboard model_evolution_service)",
+    "format": "503 files already formatted (clean)",
+    "mypy": "Success: no issues found in 179 source files",
+    "mkdocs_strict": "EXIT=0, EN+RU research guide pages generated",
+    "pytest_subset": "running: retrieval+rerank+token_optimizer"
+  },
+  "notes": "36 external sources catalogued in docs/*/guides/research-sources-and-best-practices.md; CHANGELOG normalized; make docs-build/docs-serve added"
 }

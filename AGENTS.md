@@ -438,6 +438,7 @@ Full bilingual docs under `docs/en/` and `docs/ru/` (MkDocs source; rendered sit
 | `docs/en/guides/agentic-tools-sdk.md`          | `@tool` decorator, `ToolBuilder`, `ToolContext`       |
 | `docs/en/guides/agentic-tools-declarative.md`  | YAML/JSON declarative tool definitions                |
 | `docs/en/guides/agentic-tools-openapi.md`      | OpenAPI/Swagger auto-discovery                        |
+| `docs/en/guides/research-sources-and-best-practices.md` | External research catalog + practice adoption status (EN/RU) |
 | `docs/en/guides/deployment-guide.md`           | Deployment and operations                             |
 | `docs/en/guides/operations-guide.md`           | Operational procedures                                |
 | `docs/en/guides/integration-opencode.md`       | OpenCode IDE integration                              |
