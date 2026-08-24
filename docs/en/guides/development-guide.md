@@ -268,6 +268,23 @@ class TestExample:
         # ...
 ```
 
+### Test Isolation Strategy
+
+The suite is **hermetic by default** — no external service is required for `make test`:
+
+| Layer | Mechanism | Notes |
+|-------|-----------|-------|
+| Unit (`tests/proxy`, `tests/etl`) | `unittest.mock` / `MagicMock` / `AsyncMock`; optional deps injected into `sys.modules` | Qdrant, Redis, Neo4j, LLM are always faked; both success and failure paths tested |
+| Integration (`tests/integration`) | In-process FastAPI `TestClient` with patched auth/RBAC/embedder and fabricated Qdrant points | Validates wiring and contracts without containers |
+| Live-service paths | Env-gated: minikube e2e (`make test-minikube`, needs `RAG_PROXY_URL`) and marked `e2e`/`chaos` suites | Skipped silently when env vars absent — run explicitly before releases |
+| Full-suite isolation | Each test group runs in a separate pytest process via `make test` | Prevents `sys.modules`/mock pollution across groups |
+
+**testcontainers decision:** we deliberately do *not* use testcontainers/docker-compose inside unit or
+integration runs. Rationale: air-gapped CI environments cannot pull images at test time, container startup
+dominates runtime for ~254 test files, and the mocked layers already cover contract correctness. Adopt
+testcontainers only if a regression class appears that mocks structurally cannot catch (e.g., real Qdrant
+query DSL changes); then gate it behind an opt-in marker so default CI stays hermetic.
+
 ---
 
 ## 4. Code Style
