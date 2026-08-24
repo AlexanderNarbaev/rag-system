@@ -5,7 +5,7 @@
 #   python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 #   and the cache copied to /model_cache at build time (see below)
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Install system dependencies (for compiling some packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
