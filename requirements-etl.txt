@@ -11,7 +11,7 @@ pyyaml>=6.0
 
 # ── Vector database & embeddings ──────────────────────────────────────────────
 qdrant-client>=1.18.0,<2.0.0
-sentence-transformers>=5.6.0,<6.0.0
+sentence-transformers>=5.6.0,<7.0.0
 
 # ── NLP & entity extraction ───────────────────────────────────────────────────
 spacy>=3.8.13
